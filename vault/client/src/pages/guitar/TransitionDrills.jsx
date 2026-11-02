@@ -1,27 +1,38 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
+import { suggestProgressions, explainPair, pairSummary } from './progressions.mjs';
+import { GlossText } from './GlossaryTerm';
 
 const DRILL_SECONDS = 60;
 const COUNTDOWN_SECONDS = 3;
+const SHOWN_AT_FIRST = 4;
 
-function ago(iso) {
-  if (!iso) return 'never';
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  return days <= 0 ? 'today' : `${days}d ago`;
-}
+const loopText = (chords) => `${chords.join(' → ')} → back to ${chords[0]}`;
 
-/** The one-minute drill: switch between two chords, tap for every clean change, the score is saved at the end. */
-function DrillRunner({ pair, best, onClose, onSaved }) {
+/**
+ * The one-minute drill. Choose what to practise (just the two chords, or a progression that goes between them), then go round it for a
+ * minute tapping each clean change. The score is saved against the pair at the end.
+ */
+function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
   const addToast = useToastStore(s => s.addToast);
-  const [phase, setPhase] = useState('ready');   // ready | countdown | running | saved
+  const ideas = useMemo(() => suggestProgressions(pair.a, pair.b, known), [pair.a, pair.b, known]);
+  const [choice, setChoice] = useState('pair');            // 'pair' or a suggestion id
+  const [showAll, setShowAll] = useState(false);
+  const [phase, setPhase] = useState('ready');             // ready | countdown | running | saved
   const [left, setLeft] = useState(DRILL_SECONDS);
   const [count, setCount] = useState(0);
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const countRef = useRef(0);
   const timerRef = useRef(null);
+  // The best before this minute started: the list refreshes the moment the score is saved, so comparing with the live value would always say "level"
+  const bestBefore = useRef(bestNow);
+  const best = phase === 'ready' ? bestNow : bestBefore.current;
+
+  const picked = ideas.items.find(i => i.id === choice) || null;
+  const sequence = picked ? picked.chords : [pair.a, pair.b];
 
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   useEffect(() => stopTimer, []);
@@ -31,13 +42,16 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
     const changes = countRef.current;
     setPhase('saved');
     try {
-      const res = await api.post('/api/guitar/transitions/score', { a: pair.a, b: pair.b, changes, seconds: DRILL_SECONDS });
+      const body = { a: pair.a, b: pair.b, changes, seconds: DRILL_SECONDS };
+      if (sequence.length > 2 || sequence.join() !== [pair.a, pair.b].join()) body.progression = sequence;
+      const res = await api.post('/api/guitar/transitions/score', body);
       if (!res.ok) throw new Error((await res.json()).error);
       onSaved(changes);
     } catch (e) { addToast(e.message, 'error'); }
-  }, [pair.a, pair.b, onSaved, addToast]);
+  }, [pair.a, pair.b, sequence, onSaved, addToast]);
 
   const start = () => {
+    bestBefore.current = bestNow;
     countRef.current = 0;
     setCount(0);
     setLeft(DRILL_SECONDS);
@@ -70,9 +84,12 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, tap]);
 
-  const target = count % 2 === 0 ? pair.b : pair.a; // the chord to change to next
-  const from = count % 2 === 0 ? pair.a : pair.b;
+  const n = sequence.length;
+  const from = sequence[count % n];
+  const target = sequence[(count + 1) % n];
   const beat = best != null && count > best;
+  const shown = showAll ? ideas.items : ideas.items.slice(0, SHOWN_AT_FIRST);
+  const why = explainPair(pair.a, pair.b);
 
   return (
     <div className="rounded-xl border p-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
@@ -87,9 +104,55 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
       {phase === 'ready' && (
         <>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            One minute. Switch between {pair.a} and {pair.b}. Tap the big button (or press Space) each time you land the new chord cleanly.
-            {best != null ? ` Your best is ${best} a minute.` : ''}
+            Choose what to practise for the minute. Tap the big button (or press Space) each time you land the next chord cleanly.
+            {best != null ? ` Your best for this pair is ${best} a minute.` : ''}
           </p>
+
+          <div className="flex flex-col gap-2" role="radiogroup" aria-label="What to practise">
+            <Tooltip text={GT.drillJustPair}>
+              <button type="button" role="radio" aria-checked={choice === 'pair'} onClick={() => setChoice('pair')}
+                className="text-left rounded-lg border px-3 py-2 hover:opacity-70 transition-opacity duration-200"
+                style={{ borderColor: choice === 'pair' ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                <span className="text-sm font-medium">Just {pair.a} and {pair.b}</span>
+                <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>Back and forth: {pair.a} → {pair.b} → back to {pair.a}.</span>
+              </button>
+            </Tooltip>
+          </div>
+
+          {ideas.items.length > 0 ? (
+            <>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                Or get from {pair.a} to {pair.b} through other chords
+              </p>
+              {why && <p className="text-xs" style={{ color: 'var(--color-muted)' }}><GlossText text={`${why} These are well-known progressions in that key that contain both chords.`} /></p>}
+              <div className="flex flex-col gap-2" role="radiogroup" aria-label="Progressions between the two chords">
+                {shown.map(i => (
+                  <Tooltip text={GT.drillProgression} key={i.id}>
+                    <button type="button" role="radio" aria-checked={choice === i.id} onClick={() => setChoice(i.id)}
+                      className="text-left rounded-lg border px-3 py-2 hover:opacity-70 transition-opacity duration-200"
+                      style={{ borderColor: choice === i.id ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                      <span className="text-sm font-mono font-semibold">{loopText(i.chords)}</span>
+                      <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {i.name}, {i.numerals} in {i.key}.{' '}
+                        {i.newChords.length === 0 ? 'You can play all of these.' : `New to learn: ${i.newChords.join(', ')}.`}
+                      </span>
+                    </button>
+                  </Tooltip>
+                ))}
+              </div>
+              {ideas.items.length > SHOWN_AT_FIRST && (
+                <Tooltip text={GT.drillMore}>
+                  <button onClick={() => setShowAll(s => !s)} className="text-xs px-2.5 py-1 rounded-lg border self-start hover:opacity-70 transition-opacity duration-200"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    {showAll ? 'Show fewer ideas' : `Show ${ideas.items.length - SHOWN_AT_FIRST} more ideas`}
+                  </button>
+                </Tooltip>
+              )}
+            </>
+          ) : (
+            ideas.reason && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{ideas.reason}</p>
+          )}
+
           <Tooltip text={GT.startMinute}>
             <button onClick={start} className="px-4 py-2 text-sm rounded-lg font-medium hover:opacity-70 transition-opacity duration-200 self-start"
               style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>Start the minute</button>
@@ -100,7 +163,7 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
       {phase === 'countdown' && (
         <>
           <p className="text-center font-bold" style={{ fontSize: '4rem', color: 'var(--color-primary)' }} aria-live="polite">{countdown}</p>
-          <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>Get your fingers on {pair.a}.</p>
+          <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>Get your fingers on {sequence[0]}. Going round: {loopText(sequence)}.</p>
           <Tooltip text={GT.cancelDrill}>
             <button onClick={cancel} className="text-xs px-2 py-1 rounded border self-center hover:opacity-70 transition-opacity duration-200"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
@@ -114,6 +177,14 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
             <span>{left}s left</span>
             <span>{best != null ? `Best ${best}` : 'First try'}</span>
           </div>
+          {n > 2 && (
+            <div className="flex items-center gap-1 justify-center flex-wrap" aria-hidden="true">
+              {sequence.map((c, i) => (
+                <span key={i} className="text-xs font-mono px-2 py-0.5 rounded"
+                  style={{ background: i === (count + 1) % n ? 'var(--color-primary)' : 'transparent', color: i === (count + 1) % n ? 'var(--color-on-primary, #fff)' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>{c}</span>
+              ))}
+            </div>
+          )}
           <Tooltip text={GT.countChange}>
             <button onClick={tap} aria-label={`Count a clean change to ${target}`}
               className="rounded-xl py-8 flex flex-col items-center gap-1 hover:opacity-70 transition-opacity duration-200"
@@ -133,7 +204,7 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
       {phase === 'saved' && (
         <>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            <strong>{count}</strong> clean changes in a minute.
+            <strong>{count}</strong> clean changes in a minute{n > 2 ? `, going round ${sequence.join(' → ')}` : ''}.
             {best == null ? ' That is your first score.' : count > best ? ` New best, up from ${best}.` : count === best ? ' Level with your best.' : ` Your best is ${best}.`}
           </p>
           <Tooltip text={GT.againDrill}>
@@ -150,12 +221,17 @@ function DrillRunner({ pair, best, onClose, onSaved }) {
 export default function TransitionDrills({ initialPair, onChanged }) {
   const [rows, setRows] = useState(null);
   const [pair, setPair] = useState(initialPair || null);
+  const [known, setKnown] = useState(() => new Set());
 
   const load = useCallback(() => {
     api.get('/api/guitar/transitions').then(r => r.json()).then(d => setRows(Array.isArray(d) ? d : [])).catch(() => setRows([]));
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (initialPair) setPair(initialPair); }, [initialPair]);
+  // The chords you have ticked as playable, so a suggestion can say which chords are new to you
+  useEffect(() => {
+    api.get('/api/guitar-play/my-chords').then(r => r.json()).then(d => setKnown(new Set(Array.isArray(d.known) ? d.known : []))).catch(() => {});
+  }, []);
 
   if (!rows) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   const best = pair ? rows.find(r => r.a === pair.a && r.b === pair.b)?.bestRate ?? null : null;
@@ -163,11 +239,11 @@ export default function TransitionDrills({ initialPair, onChanged }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-        These are the chord changes your own songs ask for most, with the ones you are slowest at first. Aim for 30 clean changes in a minute,
-        then a pair drops out of Today.
+        These are the chord changes your own songs ask for most, with the ones you are slowest at first. Press Drill to practise a change for a minute,
+        either just the two chords or a progression that goes between them through other chords. At 30 clean changes in a minute a pair drops out of Today.
       </p>
       {pair && (
-        <DrillRunner key={`${pair.a}|${pair.b}`} pair={pair} best={best} onClose={() => setPair(null)}
+        <DrillRunner key={`${pair.a}|${pair.b}`} pair={pair} best={best} known={known} onClose={() => setPair(null)}
           onSaved={() => { load(); onChanged?.(); }} />
       )}
       {rows.length === 0 ? (
@@ -181,12 +257,7 @@ export default function TransitionDrills({ initialPair, onChanged }) {
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{r.a} ↔ {r.b}</p>
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                  {r.count} {r.count === 1 ? 'change' : 'changes'} across {r.songCount} {r.songCount === 1 ? 'song' : 'songs'}
-                  {r.lastRate != null
-                    ? ` · last ${r.lastRate} a minute (best ${r.bestRate}) · ${ago(r.lastPlayedAt)}`
-                    : ' · not drilled yet'}
-                </p>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{pairSummary(r)}</p>
               </div>
               <Tooltip text={GT.drill}>
                 <button onClick={() => setPair({ a: r.a, b: r.b })}

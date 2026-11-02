@@ -4614,6 +4614,8 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_transition_scores_user ON guitar_transition_scores ("userId", "playedAt" DESC)`);
+  // The progression gone round for a score (for example "A>D>E"), when the drill was more than the two chords
+  await pool.query(`ALTER TABLE guitar_transition_scores ADD COLUMN IF NOT EXISTS progression TEXT`);
 
   // Set lists for gig mode, and ear training rounds
   await pool.query(`

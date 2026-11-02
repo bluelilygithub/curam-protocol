@@ -25,6 +25,8 @@ checkGuide({
     ['tempo', 'does', /without changing the pitch/, 'slowdown keeps the pitch'],
     ['tempo', 'notes', /not locked to the recording/, 'the click is not synced'],
     ['minute-drill', 'notes', /tapping/, 'drills are counted by tapping'],
+    ['minute-drill', 'does', /suggested progression/, 'the drill offers progressions between the two chords'],
+    ['drills', 'does', /how many times your songs switch/, 'the card explains what the count means'],
     ['weekly-review', 'does', /AI only writes the sentences/, 'AI only writes the wording'],
     ['session-builder', 'does', /adds up to the time you chose/, 'the plan adds up to the time'],
     ['explain-song', 'notes', /chart only/, 'explain reads the chart, not the recording'],

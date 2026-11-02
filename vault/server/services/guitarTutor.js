@@ -25,8 +25,8 @@ const CATALOG = [
     does: 'The tab for ear training with your own songs. Choose Name the chord or Name the numeral, then press Start a round of 10. You hear a chord and pick its name from four choices, or you hear the key chord and then another chord from one of your songs and pick its Roman numeral. The chords you miss come up more often, and your scores and most-missed chords are kept.',
     notes: 'The sound comes from a synth built into Vault, not from the recording. It uses the chords and keys of your own songs, so it needs a few songs with chords on their charts.' },
   { id: 'drills', label: 'Drills', group: 'Practise',
-    does: 'The tab that lists the chord changes your own songs use most, worst first, with how often each appears, your last score and your best. Press Drill on one to start the one-minute drill.',
-    notes: 'A change that appears only once in your songs is not listed. G to C and C to G count as one pair.' },
+    does: 'The tab that lists the chord changes your own songs use most, worst first. Each card says in words how many times your songs switch between the two chords and in how many songs, and what your last one-minute score and best are. Press Drill on one to open it.',
+    notes: 'A change that appears only once in your songs is not listed. G to C and C to G count as one pair. Finger patterns (which fingers can stay put) are not shown yet.' },
   { id: 'library', label: 'Library', group: 'Songs',
     does: 'The tab where songs are added and listed. Each song shows its key, tempo, length, a status badge and a status choice, with I played this and Remove.',
     notes: 'Open a song by clicking its row once the chords are ready.' },
@@ -112,8 +112,8 @@ const CATALOG = [
     does: 'The Play mode button in the Player bar (or Play on a set list) opens a big full-screen chart for performing, with the current chord highlighted. Play moves along at the song tempo, staying a set number of beats (2, 4 or 8) on each chord; the minus and plus buttons change the tempo and A- and A+ change the text size. You can also move one chord at a time with the arrow keys or Page Up and Page Down, so a foot pedal or Bluetooth page turner works. In a set list there are Previous song and Next song buttons (N and P keys).',
     notes: 'It follows a set tempo or your key presses; it does not listen to you play. The screen is kept awake where the browser allows it.' },
   { id: 'minute-drill', label: 'One-minute drill', group: 'Practise',
-    does: 'In Drills, press Drill on a pair of chords. After a 3-second countdown, switch between the two chords for a minute and tap the big button (or press Space) each time you land the new chord cleanly. The score is saved, compared with your best, and a pair that reaches 30 clean changes a minute stops being suggested on Today.',
-    notes: 'You do the counting yourself by tapping; Vault does not listen to the guitar.' },
+    does: 'In Drills, press Drill on a pair of chords and choose what to practise: just the two chords back and forth, or a suggested progression that goes between them through other chords (for A and E, A D E, or A E F#m D, and so on). The suggestions are well-known progressions in the key the two chords share, they say which chords are new to you, and Show more ideas lists the rest. After a 3-second countdown, go round the loop for a minute and tap the big button (or press Space) each time you land the next chord cleanly; the screen shows the chord to change to. The score is saved against the pair, compared with your best, and a pair that reaches 30 clean changes a minute stops being suggested on Today.',
+    notes: 'You do the counting yourself by tapping; Vault does not listen to the guitar. If the two chords do not share a key it says so and offers only the two chords.' },
 ];
 
 const RULES = [

@@ -664,16 +664,25 @@ router.get('/transitions', async (req, res) => {
 
 router.post('/transitions/score', async (req, res) => {
   try {
-    const { a, b, changes, seconds } = req.body;
+    const { a, b, changes, seconds, progression } = req.body;
     if (!isChord(a) || !isChord(b) || a === b) return res.status(400).json({ error: 'Two different chords are needed' });
+    // A progression, if sent, is 2 to 8 real chords that include both of the pair
+    let loop = null;
+    if (progression != null) {
+      const list = Array.isArray(progression) ? progression : null;
+      if (!list || list.length < 2 || list.length > 8 || !list.every(isChord) || !list.includes(a) || !list.includes(b)) {
+        return res.status(400).json({ error: 'A progression needs 2 to 8 chords and must include both chords' });
+      }
+      loop = list.join('>');
+    }
     const n = Number(changes);
     const secs = seconds == null ? 60 : Number(seconds);
     if (!(Number.isInteger(n) && n >= 0 && n <= 300)) return res.status(400).json({ error: 'Changes must be a whole number from 0 to 300' });
     if (!(Number.isInteger(secs) && secs >= 10 && secs <= 300)) return res.status(400).json({ error: 'Seconds must be 10 to 300' });
     const [x, y] = orderPair(a, b);
     const { rows } = await pool.query(
-      `INSERT INTO guitar_transition_scores ("userId","chordA","chordB",changes,seconds) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.user.id, x, y, n, secs]);
+      `INSERT INTO guitar_transition_scores ("userId","chordA","chordB",changes,seconds,progression) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.id, x, y, n, secs, loop]);
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
