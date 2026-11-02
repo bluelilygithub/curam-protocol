@@ -14,6 +14,26 @@ class RuleError extends Error {
   }
 }
 
+/**
+ * Does `text` (a From/To header or an address) contain this case address? A person alias ("jo@acme.com") matches as a substring;
+ * a whole-organisation alias ("@acme.com") matches only that exact domain, not "@acme.com.au" or "@acme.community".
+ */
+function aliasMatches(alias, text) {
+  const a = String(alias || '').toLowerCase();
+  const t = String(text || '').toLowerCase();
+  if (!a) return false;
+  if (!a.startsWith('@')) return t.includes(a);
+  let from = 0;
+  for (;;) {
+    const i = t.indexOf(a, from);
+    if (i === -1) return false;
+    const next = t.charAt(i + a.length);
+    const after = t.charAt(i + a.length + 1);
+    if (!/[a-z0-9-]/.test(next) && !(next === '.' && /[a-z0-9]/.test(after))) return true;
+    from = i + 1;
+  }
+}
+
 function sha256(text) {
   return crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
 }
@@ -37,4 +57,4 @@ function canonicalJson(value) {
   return JSON.stringify(value === undefined ? null : value);
 }
 
-module.exports = { RuleError, sha256, norm, spanHash, canonicalJson };
+module.exports = { RuleError, aliasMatches, sha256, norm, spanHash, canonicalJson };

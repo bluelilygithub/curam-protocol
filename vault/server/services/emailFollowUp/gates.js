@@ -3,7 +3,7 @@
 // Gates that decide whether something may happen (case model §1, §6, §8, §10).
 // Pure: every input, including "now", is passed in.
 
-const { RuleError } = require('./common');
+const { RuleError, aliasMatches } = require('./common');
 
 /** Rule 1.1: a case exists because a human opened one and named the obligation. */
 function createCase(input, actor) {
@@ -28,7 +28,7 @@ function createCaseFromMessage() {
 function suggestCaseForMessage(message, cases) {
   const from = String(message.from || '').toLowerCase();
   const hit = (cases || []).find((c) => c.status !== 'closed' && c.status !== 'abandoned'
-    && (c.aliases || []).some((a) => from.includes(String(a).toLowerCase())));
+    && (c.aliases || []).some((a) => aliasMatches(a, from)));
   return hit
     ? { action: 'suggest', caseId: hit.id, needsAcceptance: true, attached: false }
     : { action: 'queue', attached: false };

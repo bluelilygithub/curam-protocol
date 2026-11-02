@@ -16,7 +16,7 @@ const CATALOG = [
     does: 'The New case button opens a form: a name, what is owed and by whom (both can be spoken), the email addresses of the people involved, the kind of matter, Relaxed or Strict checking, and optionally a CRM client to link it to. Open case creates it empty.',
     notes: 'A case needs a name and a sentence saying what is owed. Strict checking blocks any sentence it cannot back with a quote; Relaxed lets a draft go ahead once you accept the warning. Nothing is read from Gmail until you attach a thread.' },
   { id: 'people', label: 'People in the case', group: 'Inside a case',
-    does: 'The box at the top of a case holds the email addresses of the people involved, separated by commas. Save people stores them. They are used to find mail and to check your Sent folder.',
+    does: 'The box at the top of a case holds the email addresses of the people involved, separated by commas. Type a domain such as @acme.com to include everyone at that organisation. Save people stores them. They are used to find mail and to check your Sent folder.',
     notes: 'Add every address a person uses. Sent is checked across all of them, not one person at a time.' },
   { id: 'client-link', label: 'CRM client link', group: 'Inside a case',
     does: 'Under the case title, the client the case is linked to (if any) with an Open in CRM button that goes to that client\'s page, and a Change client button to link it to a different client or none. On the client\'s own CRM page, an Email follow-up section lists that client\'s cases, opens them, and starts a new case for the client.',

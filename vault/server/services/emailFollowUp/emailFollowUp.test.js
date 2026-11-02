@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
-const { RuleError, sha256, spanHash } = require('./common');
+const { RuleError, sha256, spanHash, aliasMatches } = require('./common');
 const { parseDeadline, localDate } = require('./deadlines');
 const ledger = require('./ledger');
 const { checkDraft } = require('./guard');
@@ -455,6 +455,13 @@ await (async function unit() {
     assert.ok(c.notVisible.some((x) => /phone|portal/i.test(x)) && c.notVisible.some((x) => /Sent mail has not been checked/.test(x)));
   });
 })();
+
+// A whole-organisation address ("@acme.com") matches that exact domain only.
+assert.strictEqual(aliasMatches('@acme.com', 'Jo <jo@acme.com>'), true);
+assert.strictEqual(aliasMatches('@acme.com', 'x@acme.com.au'), false);
+assert.strictEqual(aliasMatches('@acme.com', 'x@acme.community'), false);
+assert.strictEqual(aliasMatches('@acme.com', 'x@sub.acme.com'), false);
+assert.strictEqual(aliasMatches('jo@acme.com', 'Jo <JO@acme.com>'), true);
 
 if (failures.length) {
   console.error(`\n${failures.length} FAILURE(S)\n  - ${failures.join('\n  - ')}`);

@@ -9,7 +9,7 @@ const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const rateLimit = require('express-rate-limit');
 const { aiLimiter } = require('../middleware/aiRateLimit');
-const { RuleError } = require('../services/emailFollowUp/common');
+const { RuleError, aliasMatches } = require('../services/emailFollowUp/common');
 const ledgerLib = require('../services/emailFollowUp/ledger');
 const gates = require('../services/emailFollowUp/gates');
 const { checkDraft } = require('../services/emailFollowUp/guard');
@@ -635,7 +635,9 @@ router.post('/:id/rows/:rowId/draft', gmailLimiter, async (req, res) => {
     const can = gates.canDraft({ row, watermark: sweep, now: new Date().toISOString(), pendingDrafts: await store.pendingDraftCount(c.id), cap: DRAFT_CAP });
     if (!can.ok) return res.status(409).json({ error: can.blocks.map((b) => b.reason).join(' '), blocks: can.blocks });
 
-    const email = store.EMAIL_RE.test(String(row.party)) ? String(row.party).toLowerCase() : ((c.aliases || []).length === 1 ? c.aliases[0] : null);
+    // A draft goes to one person: the row's party, or the case's only person. A whole-organisation entry ("@acme.com") is not a person.
+    const personAliases = (c.aliases || []).filter((a) => !String(a).startsWith('@'));
+    const email = store.EMAIL_RE.test(String(row.party)) ? String(row.party).toLowerCase() : (personAliases.length === 1 && (c.aliases || []).length === 1 ? personAliases[0] : null);
     const cited = row.anchors.map((a) => sources.find((s) => s.id === a.sourceId)).filter(Boolean);
     const last = cited[cited.length - 1];
     const draft = buildNudgeDraft(row, {
@@ -650,7 +652,7 @@ router.post('/:id/rows/:rowId/draft', gmailLimiter, async (req, res) => {
     const notes = [];
     const since = row.requestDate ? new Date(row.requestDate).getTime() : 0;
     const sentTo = sources.filter((s) => s.channel === 'sent' && s.receivedAt && new Date(s.receivedAt).getTime() > since
-      && (email ? String(s.toAddr || '').toLowerCase().includes(email) : (c.aliases || []).some((a) => String(s.toAddr || '').toLowerCase().includes(a))));
+      && (email ? aliasMatches(email, s.toAddr) : (c.aliases || []).some((a) => aliasMatches(a, s.toAddr))));
     if (sentTo.length) {
       notes.push({ index: -2, verdict: 'needs_review', code: 'SENT_SINCE', rule: '10',
         message: `You have sent ${sentTo.length} message${sentTo.length === 1 ? '' : 's'} to this person since the request (${sentTo.slice(0, 3).map((s) => `"${s.subject || 'no subject'}"`).join(', ')}). Check none already answers this.` });

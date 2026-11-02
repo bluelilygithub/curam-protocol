@@ -11,13 +11,16 @@ const { extractAttachmentText, planAttachment } = require('./attachmentText');
 const { ocrPages } = require('./ocrPdf');
 
 const EMAIL_RE = /^[^\s@()"<>,;]+@[^\s@()"<>,;]+\.[^\s@()"<>,;]+$/;
+// A whole organisation: "acme.com" or "@acme.com", kept as "@acme.com". Gmail's from:@acme.com / to:@acme.com match every address at that domain.
+const DOMAIN_RE = /^@?([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 const MAX_SOURCE_CHARS = 60000;
 
 function cleanAliases(list) {
   const out = [];
   for (const a of Array.isArray(list) ? list : []) {
     const v = String(a || '').trim().toLowerCase();
-    if (EMAIL_RE.test(v) && !out.includes(v)) out.push(v);
+    const entry = EMAIL_RE.test(v) ? v : (DOMAIN_RE.test(v) ? `@${v.replace(/^@/, '')}` : null);
+    if (entry && !out.includes(entry)) out.push(entry);
   }
   return out.slice(0, 20);
 }
@@ -658,7 +661,7 @@ async function latestApproval(draftId) {
 }
 
 module.exports = {
-  EMAIL_RE, cleanAliases, listCases, liveNoteId, createCaseNote, clientName, getCase, insertCase, withLedger, patchCase,
+  EMAIL_RE, DOMAIN_RE, cleanAliases, listCases, liveNoteId, createCaseNote, clientName, getCase, insertCase, withLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
   attachThread, suggestThreads, previewThread, fetchAttachments, setThreadAside, detachThread, deletePreview, deleteCase, runSentSweep, latestSweep, freshInbound, ownerEmail,
   addQuestion, listQuestions, addSummary, listSummaries,

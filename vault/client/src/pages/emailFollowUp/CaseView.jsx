@@ -689,7 +689,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
       <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="ef-people">
         <div className="flex flex-wrap items-center gap-2">
           <Tooltip text={EF_TIPS.people}>
-            <input className={`${FIELD} flex-1 min-w-[14rem] text-xs`} style={FIELD_STYLE} aria-label="People in this case" value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Email addresses of the people in this case, comma separated" />
+            <input className={`${FIELD} flex-1 min-w-[14rem] text-xs`} style={FIELD_STYLE} aria-label="People in this case" value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Email addresses or @domain of the people in this case, comma separated" />
           </Tooltip>
           <Btn small tip={EF_TIPS.savePeople} onClick={async () => { const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { aliases: aliases.split(',').map((x) => x.trim()).filter(Boolean) }), 'Saved.'); if (r.ok) reload(); }}>Save people</Btn>
         </div>

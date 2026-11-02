@@ -155,7 +155,7 @@ export default function EmailFollowUpPage() {
                   <Tooltip text={EF_TIPS.caseTitle}><div><VoiceInput value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="Name it (for example: Acme Q3 BAS documents)" /></div></Tooltip>
                   <Tooltip text={EF_TIPS.caseObligation}><div><VoiceInput value={form.obligation} onChange={(v) => setForm({ ...form, obligation: v })} placeholder="What is owed? (for example: Acme owes bank statements and the Q3 ledger)" /></div></Tooltip>
                   <Tooltip text={EF_TIPS.caseAliases}>
-                    <input className={`${FIELD} w-full`} style={FIELD_STYLE} aria-label="Email addresses of the people involved" placeholder="Email addresses of the people involved, comma separated" value={form.aliases} onChange={(e) => setForm({ ...form, aliases: e.target.value })} />
+                    <input className={`${FIELD} w-full`} style={FIELD_STYLE} aria-label="Email addresses of the people involved" placeholder="Email addresses (or @domain for a whole organisation), comma separated" value={form.aliases} onChange={(e) => setForm({ ...form, aliases: e.target.value })} />
                   </Tooltip>
                   <div className="grid sm:grid-cols-3 gap-3">
                     <Tooltip text={EF_TIPS.caseKind}>
