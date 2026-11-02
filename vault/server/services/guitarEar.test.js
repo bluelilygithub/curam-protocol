@@ -11,6 +11,9 @@ assert.strictEqual(Object.keys(cleanMisses(Object.fromEntries(Array.from({ lengt
 // A round
 assert.strictEqual(checkRound({ mode: 'chords', correct: 7, total: 10, misses: { Am: 2 } }).ok, true);
 assert.strictEqual(checkRound({ mode: 'guess', correct: 1, total: 2 }).ok, false);
+for (const mode of ['quality', 'progression', 'bass']) assert.strictEqual(checkRound({ mode, correct: 3, total: 10 }).ok, true, mode);
+assert.deepStrictEqual(checkRound({ mode: 'progression', correct: 1, total: 4, misses: { 'I V vi IV': 2, 'ii V I': 1, 'nonsense words': 1 } }).value.misses, { 'I V vi IV': 2, 'ii V I': 1 });
+assert.deepStrictEqual(checkRound({ mode: 'quality', correct: 1, total: 4, misses: { Em: 2, Major: 1 } }).value.misses, { Em: 2 }, 'a miss is a chord name, not a word');
 assert.strictEqual(checkRound({ mode: 'chords', correct: 11, total: 10 }).ok, false);
 assert.strictEqual(checkRound({ mode: 'chords', correct: -1, total: 10 }).ok, false);
 assert.strictEqual(checkRound({ mode: 'chords', correct: 0, total: 0 }).ok, false);

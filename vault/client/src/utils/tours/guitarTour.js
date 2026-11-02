@@ -63,8 +63,8 @@ export function startGuitarTour({ goTab } = {}) {
 
   tour.addStep({
     id: 'guitar-tabs',
-    title: 'Four tabs',
-    text: 'Today is what to play next. Drills is for chord changes. Library is where songs live. Player is the chart and tools for the song you have open.',
+    title: 'Eight tabs',
+    text: 'Today is what to play next. Learn shows what you can already play. Coach reviews your week and builds a session. Drills is for chord changes, Ear is ear training and Strum is strumming with a backing band. Library is where songs live and Player is the chart for the song you have open.',
     attachTo: { element: '[data-tour="guitar-tabs"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-tabs', 'Today', '[data-tour="guitar-tabs"]'),
     when: { show() { injectStepCounter(2); } },
@@ -174,7 +174,7 @@ export function startGuitarTour({ goTab } = {}) {
   tour.addStep({
     id: 'guitar-ear',
     title: 'Ear training',
-    text: 'You hear a chord from one of your own songs and name it, or hear the key chord and then another and name its Roman numeral. Rounds are ten questions, the chords you miss come up more often, and your scores are kept.',
+    text: 'Choose a round: major or minor, name the chord, find the bass note, name the Roman numeral, or name the progression. You hear chords from your own songs, rounds are ten questions, the chords you miss come up more often, and your scores are kept.',
     attachTo: { element: '[data-tour="guitar-ear"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-ear', 'Ear', '[data-tour="guitar-ear"]'),
     when: { show() { injectStepCounter(13); } },

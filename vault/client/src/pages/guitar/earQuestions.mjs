@@ -2,6 +2,7 @@
 // `rng` is Math.random by default and can be a seeded function in tests.
 
 import { analyseChord, parseKey, estimateKey, chordName, rootSemi, NAMES } from './theory.mjs';
+import { PROGRESSION_LIBRARY } from './progressions.mjs';
 
 export const ROUND_LENGTH = 10;
 export const OPTIONS = 4;
@@ -131,13 +132,75 @@ export function numeralQuestion({ songs, missed = {}, rng = Math.random }) {
   };
 }
 
-/** answers: [{ answer, picked }] -> what is saved at the end of a round. */
+/**
+ * One "major or minor?" question: a plain major or minor chord from the person's songs (or a common one when their songs have none of that
+ * kind). The only difference between the pair is the 3rd, so `compare` is the same root as major then minor for the "hear both" button.
+ * Misses are counted against the chord (`key`), so a chord that fooled you comes up again.
+ */
+export function qualityQuestion({ chords, missed = {}, rng = Math.random }) {
+  const wantMinor = rng() < 0.5;
+  const quality = wantMinor ? 'm' : '';
+  const own = vocabulary(chords).filter(c => c.quality === quality);
+  const fallback = COMMON.filter(([, qual]) => qual === quality).map(([root, qual]) => ({ name: chordName(rootSemi(root), qual), root, quality: qual, count: 0 }));
+  const pool = own.length ? own : fallback;
+  const chord = pickWeighted(pool, c => (Math.sqrt(c.count) + 1) * (1 + 2 * (missed[c.name] || 0)), rng);
+  return {
+    mode: 'quality', answer: wantMinor ? 'Minor' : 'Major', options: ['Major', 'Minor'], key: chord.name, chordName: chord.name,
+    play: [{ root: chord.root, quality }],
+    compare: [{ root: chord.root, quality: '' }, { root: chord.root, quality: 'm' }],
+  };
+}
+
+/**
+ * One "which note is the bass?" question: a chord from the person's songs is played and they name its root, the lowest note. `bass` is the
+ * root alone for the "hear the bass note" hint. The wrong choices are the roots of the person's other chords (common chords fill the gap).
+ */
+export function bassQuestion({ chords, missed = {}, rng = Math.random }) {
+  const pool = vocabulary(chords);
+  const have = new Set(pool.map(c => c.name));
+  for (const [root, quality] of COMMON) {
+    const name = chordName(rootSemi(root), quality);
+    if (pool.length >= 8) break;
+    if (!have.has(name)) { pool.push({ name, root, quality, count: 0 }); have.add(name); }
+  }
+  const own = pool.filter(c => c.count > 0);
+  const answer = pickWeighted(own.length ? own : pool, c => (Math.sqrt(c.count) + 1) * (1 + 2 * (missed[c.name] || 0)), rng);
+  const rootOf = (c) => NAMES[rootSemi(c.root)];
+  const correct = rootOf(answer);
+  const roots = [...new Set(pool.map(rootOf))].filter(r => r !== correct);
+  const options = [correct, ...shuffle(roots, rng).slice(0, OPTIONS - 1)];
+  return {
+    mode: 'bass', answer: correct, options: shuffle(options, rng), key: answer.name, chordName: answer.name,
+    play: [{ root: answer.root, quality: answer.quality }], bass: { root: correct },
+  };
+}
+
+/**
+ * One "which progression is this?" question: the key chord, then a well-known progression in that key (a chord every second). The key is one
+ * of the person's songs' keys when they have any, otherwise a friendly one. The choices are other progressions in the same mode.
+ */
+export function progressionQuestion({ songs, missed = {}, rng = Math.random }) {
+  const keys = (songs || []).map(keyOfSong).filter(Boolean);
+  const key = keys.length ? keys[Math.floor(rng() * keys.length)] : { tonic: [0, 2, 4, 7, 9][Math.floor(rng() * 5)], mode: 'major' };
+  const list = PROGRESSION_LIBRARY[key.mode === 'minor' ? 'minor' : 'major'];
+  const answer = pickWeighted(list, p => 1 + 2 * (missed[p.numerals] || 0), rng);
+  const others = shuffle(list.filter(p => p.numerals !== answer.numerals), rng).slice(0, OPTIONS - 1);
+  const chordsOf = (p) => p.steps.map(([semi, qual]) => ({ root: NAMES[(((key.tonic + semi) % 12) + 12) % 12], quality: qual }));
+  const tonic = { root: NAMES[key.tonic], quality: key.mode === 'minor' ? 'm' : '' };
+  return {
+    mode: 'progression', answer: answer.numerals, options: shuffle([answer, ...others].map(p => p.numerals), rng), key: answer.numerals,
+    play: [tonic, ...chordsOf(answer)], step: 1.0, keyLabel: `${NAMES[key.tonic]} ${key.mode}`,
+    progressionName: answer.name, chordNames: chordsOf(answer).map(c => chordName(rootSemi(c.root), c.quality)),
+  };
+}
+
+/** answers: [{ answer, picked, key? }] -> what is saved at the end of a round. A miss is counted against `key` when a question has one. */
 export function scoreRound(answers) {
   const misses = {};
   let correct = 0;
   for (const a of answers) {
     if (a.picked === a.answer) correct += 1;
-    else misses[a.answer] = (misses[a.answer] || 0) + 1;
+    else { const k = a.key || a.answer; misses[k] = (misses[k] || 0) + 1; }
   }
   return { correct, total: answers.length, misses };
 }

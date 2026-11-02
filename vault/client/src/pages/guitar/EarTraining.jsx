@@ -3,13 +3,33 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
-import { chordQuestion, numeralQuestion, scoreRound, missedCounts, ROUND_LENGTH } from './earQuestions.mjs';
-import { playChordSound, audioContextFrom } from './chordSound.js';
+import { chordQuestion, numeralQuestion, qualityQuestion, bassQuestion, progressionQuestion, scoreRound, missedCounts, ROUND_LENGTH } from './earQuestions.mjs';
+import { playChordSound, playRootNote, audioContextFrom } from './chordSound.js';
 
 const card = { borderColor: 'var(--color-border)', background: 'var(--color-surface)' };
 const btnPrimary = { background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' };
 const btnLine = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
-const MODES = [['chords', 'Name the chord', 'earChords'], ['numerals', 'Name the numeral', 'earNumerals']];
+const MODES = [
+  ['quality', 'Major or minor?', 'earQuality'],
+  ['chords', 'Name the chord', 'earChords'],
+  ['bass', 'Find the bass note', 'earBass'],
+  ['numerals', 'Name the numeral', 'earNumerals'],
+  ['progression', 'Name the progression', 'earProgression'],
+];
+const MODE_TEXT = {
+  quality: 'You hear one chord from your songs and say whether it is major or minor. The only difference is one note, the 3rd, and a minor chord sounds sadder.',
+  chords: 'You hear one chord and choose its name. Chords you miss come up more often.',
+  bass: 'You hear a chord and choose its lowest note, the root. You can ask to hear that note on its own.',
+  numerals: 'You hear the key chord, then another chord from one of your songs, and choose its Roman numeral (I, IV, V, vi and so on).',
+  progression: 'You hear the key chord, then a well-known run of chords, and choose which progression it was.',
+};
+const PROMPT = {
+  quality: 'Is this chord major or minor?',
+  chords: 'Which chord is this?',
+  bass: 'Which note is lowest in this chord?',
+  numerals: 'You hear the key chord, then another. Which numeral is the second chord?',
+  progression: 'You hear the key chord, then a progression. Which one is it?',
+};
 
 function Stats({ summary }) {
   if (!summary) return null;
@@ -53,16 +73,23 @@ export default function EarTraining() {
     loadSummary();
   }, [loadSummary]);
 
-  const play = useCallback((chords) => {
+  const play = useCallback((chords, step = 1.3) => {
     try {
       const ctx = audioContextFrom(ctxRef);
       let t = 0;
-      for (const c of chords) { playChordSound(ctx, c.root, c.quality, t); t += 1.3; }
+      for (const c of chords) { playChordSound(ctx, c.root, c.quality, t); t += step; }
     } catch (_) { addToast('Sound is not available in this browser', 'error'); }
+  }, [addToast]);
+
+  const playBass = useCallback((root) => {
+    try { playRootNote(audioContextFrom(ctxRef), root); } catch (_) { addToast('Sound is not available in this browser', 'error'); }
   }, [addToast]);
 
   const make = useCallback((answers) => {
     const missed = missedCounts(answers);
+    if (mode === 'quality') return qualityQuestion({ chords: material.chords, missed });
+    if (mode === 'bass') return bassQuestion({ chords: material.chords, missed });
+    if (mode === 'progression') return progressionQuestion({ songs: material.songs, missed });
     return mode === 'chords' ? chordQuestion({ chords: material.chords, missed }) : numeralQuestion({ songs: material.songs, missed });
   }, [mode, material]);
 
@@ -71,12 +98,12 @@ export default function EarTraining() {
     if (!question) { addToast('You need a song with a few chords in its key for numerals', 'error'); return; }
     setResult(null);
     setRound({ question, answers: [], picked: null });
-    setTimeout(() => play(question.play), 150);
+    setTimeout(() => play(question.play, question.step), 150);
   };
 
   const pick = (option) => {
     if (round.picked) return;
-    setRound(r => ({ ...r, picked: option, answers: [...r.answers, { answer: r.question.answer, picked: option }] }));
+    setRound(r => ({ ...r, picked: option, answers: [...r.answers, { answer: r.question.answer, picked: option, key: r.question.key }] }));
   };
 
   const finish = async (answers) => {
@@ -95,7 +122,7 @@ export default function EarTraining() {
     const question = make(round.answers);
     if (!question) { finish(round.answers); return; }
     setRound(r => ({ ...r, question, picked: null }));
-    setTimeout(() => play(question.play), 150);
+    setTimeout(() => play(question.play, question.step), 150);
   };
 
   if (!material) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
@@ -121,9 +148,7 @@ export default function EarTraining() {
             ))}
           </div>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            {mode === 'chords'
-              ? 'You hear one chord and choose its name. Chords you miss come up more often.'
-              : 'You hear the key chord, then another chord from one of your songs, and choose its Roman numeral (I, IV, V, vi and so on).'}
+            {MODE_TEXT[mode]}
           </p>
           <Tooltip text={GT.earStart}>
             <button onClick={start} className="self-start px-4 py-2 text-sm rounded-lg font-medium hover:opacity-70 transition-opacity duration-200" style={btnPrimary}>
@@ -145,17 +170,23 @@ export default function EarTraining() {
           <div className="flex items-center justify-between text-xs" style={{ color: 'var(--color-muted)' }}>
             <span>Question {Math.min(done + (revealed ? 0 : 1), ROUND_LENGTH)} of {ROUND_LENGTH}</span>
             {q.mode === 'numerals' && <span>Key of {q.keyLabel} · from {q.songTitle}</span>}
+            {q.mode === 'progression' && <span>Key of {q.keyLabel}</span>}
           </div>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            {q.mode === 'chords' ? 'Which chord is this?' : `You hear the key chord, then another. Which numeral is the second chord?`}
+            {PROMPT[q.mode]}
           </p>
           <div className="flex gap-2 flex-wrap">
             <Tooltip text={GT.earReplay}>
-              <button onClick={() => play(q.play)} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>
-                {q.mode === 'chords' ? 'Play again' : 'Play both again'}
+              <button onClick={() => play(q.play, q.step)} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>
+                {q.mode === 'numerals' ? 'Play both again' : q.mode === 'progression' ? 'Play it again' : 'Play again'}
               </button>
             </Tooltip>
-            {q.mode === 'numerals' && (
+            {q.mode === 'bass' && (
+              <Tooltip text={GT.earBassHint}>
+                <button onClick={() => playBass(q.bass.root)} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>Hear the bass note</button>
+              </Tooltip>
+            )}
+            {(q.mode === 'numerals' || q.mode === 'progression') && (
               <Tooltip text={GT.earTonic}>
                 <button onClick={() => play([q.play[0]])} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>Play the key chord</button>
               </Tooltip>
@@ -188,10 +219,30 @@ export default function EarTraining() {
               </Tooltip>
               {round.picked !== q.answer && (
                 <Tooltip text={GT.earReplay}>
-                  <button onClick={() => play(q.play)} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>Hear it again</button>
+                  <button onClick={() => play(q.play, q.step)} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>Hear it again</button>
+                </Tooltip>
+              )}
+              {q.mode === 'quality' && (
+                <Tooltip text={GT.earHearBoth}>
+                  <button onClick={() => play(q.compare, 1.6)} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>Hear major, then minor</button>
                 </Tooltip>
               )}
             </div>
+          )}
+          {revealed && q.mode === 'quality' && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              That was {q.chordName}. Major and minor share the same root and 5th; only the 3rd changes, and it is a half step lower in the minor.
+            </p>
+          )}
+          {revealed && q.mode === 'progression' && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              That was {q.progressionName}: {q.chordNames.join(', ')} in the key of {q.keyLabel}.
+            </p>
+          )}
+          {revealed && q.mode === 'bass' && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              The chord was {q.chordName}. A chord is named after its root, and the root is usually the lowest note.
+            </p>
           )}
           <Tooltip text={GT.earStop}>
             <button onClick={() => setRound(null)} className="self-start text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity duration-200" style={{ ...btnLine, color: 'var(--color-muted)' }}>Stop round</button>

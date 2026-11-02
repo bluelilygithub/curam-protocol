@@ -4640,12 +4640,21 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS guitar_ear_sessions (
       id          SERIAL PRIMARY KEY,
       "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      mode        TEXT NOT NULL CHECK (mode IN ('chords','numerals')),
+      mode        TEXT NOT NULL CHECK (mode IN ('chords','numerals','quality','progression','bass')),
       correct     INTEGER NOT NULL CHECK (correct >= 0),
       total       INTEGER NOT NULL CHECK (total BETWEEN 1 AND 100),
       misses      JSONB NOT NULL DEFAULT '{}'::jsonb,
       "playedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  // Ear rounds gained three modes after the table first shipped: widen the old two-mode check once
+  await pool.query(`
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'guitar_ear_sessions_mode_check' AND pg_get_constraintdef(oid) NOT LIKE '%progression%') THEN
+        ALTER TABLE guitar_ear_sessions DROP CONSTRAINT guitar_ear_sessions_mode_check;
+        ALTER TABLE guitar_ear_sessions ADD CONSTRAINT guitar_ear_sessions_mode_check CHECK (mode IN ('chords','numerals','quality','progression','bass'));
+      END IF;
+    EXCEPTION WHEN OTHERS THEN NULL; END $$
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_ear_sessions_user ON guitar_ear_sessions ("userId", "playedAt" DESC)`);
 

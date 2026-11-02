@@ -1,6 +1,6 @@
 // What the Guitar page is made of, the plain-words help for it, and the controls its guide (the round button) can point at. The ids are
 // the guide's catalogue (server/services/guitarTutor.js); node server/services/guitarTutor.test.js fails if the two lists drift apart.
-// The page's menu is its four tabs. `tool` on a guide entry says which tab its Open button switches to.
+// The page's menu is its eight tabs. `tool` on a guide entry says which tab its Open button switches to.
 
 export const GUITAR_TOOLS = [
   { id: 'today', label: 'Today', group: 'Practise', tab: 'Today' },
@@ -56,12 +56,12 @@ export const HOW_IT_WORKS = [
   ['Coach', 'Writes a short review of your last seven days from your own practice, loops and drills, builds a practice session of exactly the time you have from your own songs, and can explain the chords of a song and suggest what to practise. The numbers and the plan are worked out in Vault; AI only writes the wording.'],
   ['Backing band', 'On the Strum tab, drums and a bass play along with the arrows so practice feels like playing in a band. Choose a drum beat and a bass style, then the chords the bass follows: a well-known progression in a key you pick, or the chords of one of your songs, a bar each. The chord for the bar shows above the arrows. All of it is made in your browser.'],
   ['Strumming', 'Shows a strumming pattern as arrows that move with a click, so you can see which swings hit the strings and which are air swings. The pattern ladder starts with a down strum on every beat and adds one up strum at a time until you reach the full pattern. You can change the tempo while it plays, or match the tempo of one of your songs.'],
-  ['Ear training', 'Plays you a chord from your own songs and you name it, or plays the key chord and then another and you name its Roman numeral. Rounds are ten questions; the chords you miss come up more, and your scores are kept. The sound comes from a synth built into Vault, not from the recording.'],
+  ['Ear training', 'Five kinds of round, ten questions each. Major or minor plays a chord from your songs and you say which it is (then you can hear it as major and as minor to catch the one note that changes). Name the chord and Find the bass note use your own chords, and the bass round can play the lowest note on its own as a hint. Name the numeral plays the key chord and then another and you name its Roman numeral, and Name the progression plays the key chord and then a well-known run of chords such as I V vi IV. The chords you miss come up more, and your scores are kept. The sound comes from a synth built into Vault, not from the recording.'],
   ['Play mode and set lists', 'Play mode opens a big chart for performing. It moves along at the song tempo, or one chord at a time from the keyboard, and foot pedals and Bluetooth page turners work because they send arrow and Page keys. Set lists (in the Library) put songs in playing order and open them in play mode.'],
   ['Drills', 'Finds the chord changes your own songs use most, worst first, and says in plain words how often your songs make each one and how your drills are going. Press Drill and choose what to practise for the minute: just the two chords, or a progression that goes between them through other chords (for A and E, for example, A to D to E and back). Suggestions come from well-known progressions in the key the two chords share, and say which chords are new to you. Under the choices, Finger moves shows for every change which notes can stay held (ringed on small chord diagrams), which fingers slide or move and where to, and which lift or land, with a tip. Tap for every clean change and the score is kept.'],
 ];
 
-// Everything the guide can point at: the four tabs plus the controls inside them. `tool` is the tab the Open button switches to.
+// Everything the guide can point at: the eight tabs plus the controls inside them. `tool` is the tab the Open button switches to.
 export const GUIDE_TOOLS = [
   { id: 'today', label: 'Today', tool: 'today' },
   { id: 'learn', label: 'Learn', tool: 'learn' },

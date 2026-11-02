@@ -39,3 +39,21 @@ export function playChordSound(ctx, root, quality = '', delaySec = 0) {
   });
   return 1.8;
 }
+
+/** Just the root note of a chord, one octave, for the "hear the bass note" hint in ear training. Returns how many seconds it rings for. */
+export function playRootNote(ctx, root, delaySec = 0) {
+  const baseFreq = 82.41 * Math.pow(2, (NOTE_SEMI[root] ?? 0) / 12);
+  const t0 = ctx.currentTime + delaySec;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = baseFreq;
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(0.18, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.4);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 1.6);
+  return 1.5;
+}

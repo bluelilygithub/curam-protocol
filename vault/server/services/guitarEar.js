@@ -2,10 +2,13 @@
 
 // Ear training bookkeeping, pure code (no database): what a round may record, and the summary shown on the Ear tab.
 
-const MODES = ['chords', 'numerals'];
+const MODES = ['chords', 'numerals', 'quality', 'progression', 'bass'];
 const CHORD_RE = /^[A-G][#b]?(m|7|maj7|m7|dim|aug|sus2|sus4|dim7|m7b5)?$/;
 // A numeral as the theory module writes it: optional flat or sharp, Roman letters, then a quality mark
 const NUMERAL_RE = /^[b#]?(?:[ivIV]{1,3})(?:°7?|ø|\+|maj7|sus[24]|7)?(?:\/[b#]?[ivIV]{1,3})?$/;
+
+// A progression as its numerals with spaces, such as I V vi IV
+const PROGRESSION_RE = /^[b#]?[ivIV]{1,3}°?(?: [b#]?[ivIV]{1,3}°?){1,7}$/;
 
 /** The misses a round sends, cleaned: only chord names or numerals, small whole counts, at most 30 entries. */
 function cleanMisses(raw) {
@@ -13,7 +16,7 @@ function cleanMisses(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
   for (const [name, n] of Object.entries(raw).slice(0, 30)) {
     const count = Number(n);
-    if (!(CHORD_RE.test(name) || NUMERAL_RE.test(name))) continue;
+    if (!(CHORD_RE.test(name) || NUMERAL_RE.test(name) || PROGRESSION_RE.test(name))) continue;
     if (!Number.isInteger(count) || count < 1 || count > 100) continue;
     out[name] = count;
   }
@@ -22,7 +25,7 @@ function cleanMisses(raw) {
 
 /** Check a round before it is saved. Returns { ok, error?, value? }. */
 function checkRound({ mode, correct, total, misses }) {
-  if (!MODES.includes(mode)) return { ok: false, error: 'Mode must be chords or numerals' };
+  if (!MODES.includes(mode)) return { ok: false, error: 'Mode must be chords, numerals, quality, progression or bass' };
   const t = Number(total);
   const c = Number(correct);
   if (!(Number.isInteger(t) && t >= 1 && t <= 100)) return { ok: false, error: 'Total must be a whole number from 1 to 100' };

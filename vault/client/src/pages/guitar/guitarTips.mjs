@@ -151,6 +151,11 @@ export const GT = {
   // Ear training
   earChords: 'Chords: hear a chord and name it. The choices come from your own songs.',
   earNumerals: 'Numerals: hear the key chord, then a chord from one of your songs, and name its Roman numeral.',
+  earQuality: 'Major or minor: hear a chord from your songs and say whether it is major or minor. A great first ear test.',
+  earBass: 'Bass note: hear a chord and name its lowest note, the root. Press Hear the bass note if you want help.',
+  earProgression: 'Progression: hear the key chord and then a well-known run of chords, and say which one it was.',
+  earBassHint: 'Play just the lowest note of the chord, on its own.',
+  earHearBoth: 'Play the same chord as major and then as minor, so you can hear the one note that changes.',
   earStart: 'Start a round of 10 questions.',
   earReplay: 'Play the chord again.',
   earTonic: 'Play the key chord again: I in a major key, i in a minor key.',

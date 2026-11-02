@@ -1,0 +1,48 @@
+# Guitar
+
+Page `/guitar`, feature flag `guitar`. Learn songs, keep them sharp, practise the hard parts. Built in phases from the owner's wishlists (practice tracking, then a beginner-focused list). **Left-handed mode was declined by the owner: do not build or propose it.**
+
+## What it offers (eight tabs)
+
+- **Today**: a short queue for the time you have (a song to learn, a loop to work up, a song going rusty, a song to polish, a chord change to drill). Below it: milestones and "Is this normal?" notes. Press **I played this** to log minutes, how clean it was and a note. Songs have a status (Learning, Polishing, Ready); Polishing/Ready turn Rusty after 14 days unplayed (editable per song).
+- **Learn** ("what can I play"): tick the chords you can play cleanly. Shows songs that use only those chords, the next chord to learn and how many songs it unlocks, and a roadmap for a chosen song. Searchable glossary of guitar words.
+- **Coach**: weekly review of the last seven days, a practice session built to the minutes you have, and an explanation of a song's chords. Numbers and plans come from pure code; AI only writes the wording and is checked (numbers must be in the facts, no chord the song does not use) with plain template fallbacks.
+- **Drills**: the chord changes your songs use most, worst first, in plain words. A one-minute drill can be just the two chords or a progression between them through other chords (well-known progressions in their shared key, new chords flagged). **Finger moves** shows which notes stay held, which fingers slide or move, and which lift or land. Taps are scored and the best is kept.
+- **Ear**: five kinds of ten-question round, all from your own songs, with misses coming up more and scores kept. **Major or minor?** (a plain chord; after answering, "Hear major, then minor" plays the same root both ways to catch the one note that changes, the 3rd). **Name the chord** (four choices, with look-alike chords among them). **Find the bass note** (name the chord's root; "Hear the bass note" plays it alone as a hint). **Name the numeral** (key chord, then a chord from one of your songs, name its Roman numeral). **Name the progression** (key chord, then a well-known run of chords such as I V vi IV, a chord a second; the choices are other progressions in the same major or minor mode; the answer names the progression and its chords). Questions are pure code in `earQuestions.mjs` (`qualityQuestion`, `bassQuestion`, `progressionQuestion`); a miss is counted against the chord or progression (`key`), so what fooled you comes up again.
+- **Strum**: strumming arrows move with a click (solid = hits the strings, faint = air swing); a pattern ladder adds one up strum at a time; tempo can change live or match a song. **Backing band**: drums (rock, pop, ballad) and bass (roots, root and fifth, eighths) play along, one chord a bar, from a progression in a chosen key or the first eight chords of one of your songs. All sound is synthesised in the browser.
+- **Library**: add songs (Ultimate Guitar page, audio upload with chord detection, or a blank chart), set status, **set lists** in playing order.
+- **Player**: the chart, playback that follows along, transpose, capo, click a chord to hear it and see shapes, double-click to correct it. Key and Roman numerals (borrowed and leading chords marked), the easiest capo, **Make it easier** (same sound with a capo, or easier chord swaps), practice loops and the **tempo trainer** (slow without changing pitch, ramp after clean passes, count-in, click, speed chart), and **Play mode** (big chart for performing, tempo-follow or keyboard, pedals/page turners work as arrow/Page keys).
+
+Also: header (i) box, compass tour (Settings -> Guitar Tour, 15 steps), hover tip on every control, and the **Guitar guide** chat (round button). Inline glossary words (dotted underline) open a two-line explanation and a small drawing.
+
+## Ideas queue (from the owner's second list, order agreed)
+
+1. Ear additions: done (major or minor, progression ID, bass note). Interval ear rounds (3rd and 5th) not yet.
+2. Major and minor pairs drill (E/Em, A/Am).
+3. Barre chord ladder with a hold-clean timer.
+4. Sing-along key finder (the player picks a comfortable low and high note from a list; no microphone).
+5. Fingerpicking ladder on a verified mini-tab table.
+6. Gap click, measured by tapping, not the microphone.
+
+Parked: rhythm reading, CAGED, triads, pentatonic jam mode, 3/4 and 6/8 feels (new music data or a scheduler change each). Skipped: palm muting and hammer-on steps (cannot be judged without hearing or seeing the player).
+
+## Left out on purpose / not built
+
+Riff tab, teacher/parent views and private sharing (needs accounts and permissions designed first), live-microphone features (wait mode, string check, tuner), video recording, milestone clips and a streak counter. The backing band does not follow the player and is not in Play mode.
+
+## Where things live
+
+Server: `server/routes/guitar.js` (`/api/guitar`: songs, practice log, queue, loops, transitions), `guitarPlay.js` (`/api/guitar-play`: set lists, ear, my-chords, roadmap, milestones, tips), `guitarCoach.js` (`/api/guitar-coach`), `guitarTutor.js` (`/api/guitar-tutor`). Pure rules in `server/services/guitar*.js` (practice, transitions, coach, ear, playable, milestones), data loaders in `guitarData.js`, AI wording in `guitarCoachAi.js`. Ear rounds are saved in `guitar_ear_sessions` (`mode` is one of chords, numerals, quality, progression, bass; the old two-mode CHECK is widened once on boot). Tables in `server/db.js`: `guitar_practice_sessions`, `guitar_loop_runs`, `guitar_transition_scores`, `guitar_setlists`, `guitar_setlist_songs`, `guitar_ear_sessions`, `guitar_known_chords`, `guitar_milestones`, `guitar_dismissed_tips`, plus `learnStatus` and `rustyAfterDays` on `guitar_user_songs`. Every route is behind `requireFeature('guitar')`; AI routes also behind `aiLimiter`; models come from `getModelsForUser` (never hardcoded).
+
+Client: `client/src/pages/GuitarPage.jsx` and `client/src/pages/guitar/`. Logic is in pure `.mjs` modules with `node` tests (`theory`, `trainerRules`, `progressions`, `fingering`, `earQuestions`, `gigPlay`, `simplify`, `strumming`, `glossary`, `band`). Web Audio sound: `chordSound.js`, `bandSound.js`.
+
+## Rules to keep
+
+- **A component and a logic module must not share a name** (`EarTraining.jsx` vs `earTraining.mjs`): on Windows/Mac the import picks the `.mjs` and the page goes blank. `guitarTips.test.mjs` fails on a clash.
+- New route: add it to `server/testing/routeManifest.json` (and `ownershipBindings.json` for `:id` routes). The cross-user tests need a throwaway local DB.
+- New control: shared `Tooltip` with a tip in `guitarTips.mjs` (no native `title=""`), a `guitarTools.mjs` entry, a guide `CATALOG` entry, and the tour. Update the `HOW_IT_WORKS` text too. Tests: `node client/src/pages/guitar/guitarTips.test.mjs`, `node server/services/guitarTutor.test.js`.
+- The Player's own C7 fingering has wrong finger numbers; the verified table is `fingering.mjs` (the Player was left unchanged).
+
+## Tests
+
+`node client/src/pages/guitar/<name>.test.mjs` for each client module; `node server/services/guitar<Name>.test.js` for each server service; `npm run test:guides` for the guide registry.
