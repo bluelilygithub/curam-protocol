@@ -1,7 +1,8 @@
 import React from 'react';
 
 // ── Chord shape SVG diagram ───────────────────────────────────────────────────
-export default function ChordDiagram({ shape }) {
+// `anchors`: string numbers (0 = low E) whose note stays held in the next chord; they get a ring so it is not colour alone
+export default function ChordDiagram({ shape, anchors = [] }) {
   if (!shape) return null;
   const frets = shape.fretPositions;
   const fingers = shape.fingerPositions || [];
@@ -43,6 +44,7 @@ export default function ChordDiagram({ shape }) {
         if (rf < 1 || rf > fretCount) return null;
         return (
           <g key={s}>
+            {anchors.includes(s) && <circle cx={x} cy={yOf(rf)} r={10} fill="none" stroke="var(--color-text)" strokeWidth={1.5} strokeDasharray="2 2" />}
             <circle cx={x} cy={yOf(rf)} r={7} fill="var(--color-primary)" />
             {fingers[s] > 0 && (
               <text x={x} y={yOf(rf) + 3.5} textAnchor="middle" fontSize="8" fill="#fff" fontWeight="700">{fingers[s]}</text>

@@ -84,6 +84,7 @@ export const GT = {
   drillJustPair: 'Practise just these two chords, back and forth.',
   drillProgression: 'Practise going round this progression for the minute. It goes from the first chord to the second through other chords and then back.',
   drillMore: 'Show or hide the other progressions that go between these two chords.',
+  fingerShow: 'Show or hide which fingers stay down, move, lift and land for each change in this practice.',
   startMinute: 'Start a 3-second countdown, then one minute of switching between the two chords.',
   countChange: 'Tap each time you land the new chord cleanly. The Space bar does the same.',
   cancelDrill: 'Stop and go back without saving a score.',

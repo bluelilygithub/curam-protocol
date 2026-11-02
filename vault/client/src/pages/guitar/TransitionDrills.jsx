@@ -5,6 +5,8 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import { suggestProgressions, explainPair, pairSummary } from './progressions.mjs';
 import { GlossText } from './GlossaryTerm';
+import FingerMoves from './FingerMoves';
+import { describeChange } from './fingering.mjs';
 
 const DRILL_SECONDS = 60;
 const COUNTDOWN_SECONDS = 3;
@@ -21,6 +23,7 @@ function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
   const ideas = useMemo(() => suggestProgressions(pair.a, pair.b, known), [pair.a, pair.b, known]);
   const [choice, setChoice] = useState('pair');            // 'pair' or a suggestion id
   const [showAll, setShowAll] = useState(false);
+  const [showFingers, setShowFingers] = useState(true);
   const [phase, setPhase] = useState('ready');             // ready | countdown | running | saved
   const [left, setLeft] = useState(DRILL_SECONDS);
   const [count, setCount] = useState(0);
@@ -88,6 +91,9 @@ function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
   const from = sequence[count % n];
   const target = sequence[(count + 1) % n];
   const beat = best != null && count > best;
+  const hintFor = useMemo(() => Object.fromEntries(sequence.map((c, i) => [`${c}>${sequence[(i + 1) % sequence.length]}`, describeChange(c, sequence[(i + 1) % sequence.length])])), [sequence]);
+  const step = hintFor[`${from}>${target}`];
+  const hint = step && step.ok ? step.hint : '';
   const shown = showAll ? ideas.items : ideas.items.slice(0, SHOWN_AT_FIRST);
   const why = explainPair(pair.a, pair.b);
 
@@ -153,6 +159,14 @@ function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
             ideas.reason && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{ideas.reason}</p>
           )}
 
+          <Tooltip text={GT.fingerShow}>
+            <button onClick={() => setShowFingers(s => !s)} aria-expanded={showFingers}
+              className="text-xs px-2.5 py-1 rounded-lg border self-start hover:opacity-70 transition-opacity duration-200" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {showFingers ? 'Hide finger moves' : 'Show finger moves for this practice'}
+            </button>
+          </Tooltip>
+          {showFingers && <FingerMoves sequence={sequence} />}
+
           <Tooltip text={GT.startMinute}>
             <button onClick={start} className="px-4 py-2 text-sm rounded-lg font-medium hover:opacity-70 transition-opacity duration-200 self-start"
               style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>Start the minute</button>
@@ -194,6 +208,7 @@ function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
               <span className="font-mono text-lg" aria-live="off">{count}{beat ? ' · new best' : ''}</span>
             </button>
           </Tooltip>
+          {hint && <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>{from} to {target}: {hint}</p>}
           <Tooltip text={GT.stopDrill}>
             <button onClick={cancel} className="text-xs px-2 py-1 rounded border self-center hover:opacity-70 transition-opacity duration-200"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Stop without saving</button>

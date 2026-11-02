@@ -164,7 +164,7 @@ export function startGuitarTour({ goTab } = {}) {
   tour.addStep({
     id: 'guitar-drills',
     title: 'Chord change drills',
-    text: 'Drills lists the chord changes your own songs use most, worst first. Press Drill, then choose just the two chords or a progression that goes between them through other chords, and tap each clean change for a minute. Stuck on anything? Press the round button at the bottom right and ask the guide.',
+    text: 'Drills lists the chord changes your own songs use most, worst first. Press Drill, then choose just the two chords or a progression that goes between them through other chords. Finger moves shows which fingers can stay put, which slide and which lift, and then you tap each clean change for a minute. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-drills"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-drills', 'Drills', '[data-tour="guitar-drills"]'),
     when: { show() { injectStepCounter(12); } },
