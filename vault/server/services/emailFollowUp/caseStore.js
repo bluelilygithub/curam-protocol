@@ -9,6 +9,7 @@ const { sha256 } = require('./common');
 const { localDate } = require('./deadlines');
 const { extractAttachmentText, planAttachment } = require('./attachmentText');
 const { ocrPages } = require('./ocrPdf');
+const { extractBodyReadable } = require('./htmlText');
 
 const EMAIL_RE = /^[^\s@()"<>,;]+@[^\s@()"<>,;]+\.[^\s@()"<>,;]+$/;
 // A whole organisation: "acme.com" or "@acme.com", kept as "@acme.com". Gmail's from:@acme.com / to:@acme.com match every address at that domain.
@@ -227,7 +228,7 @@ function attachmentsOf(payload, out = []) {
   return out;
 }
 
-function messageToSource(msg, { getHeader, extractBody }) {
+function messageToSource(msg, { getHeader }) {
   const headers = msg.payload?.headers || [];
   const labels = msg.labelIds || [];
   const attachments = attachmentsOf(msg.payload);
@@ -241,7 +242,7 @@ function messageToSource(msg, { getHeader, extractBody }) {
     toAddr: [getHeader(headers, 'To'), getHeader(headers, 'Cc')].filter(Boolean).join(', '),
     messageIdHeader: getHeader(headers, 'Message-ID') || getHeader(headers, 'Message-Id') || null,
     receivedAt: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null,
-    text: extractBody(msg.payload) || '',
+    text: extractBodyReadable(msg.payload) || '', // styles dropped, paragraphs/lists/links/quotes kept (htmlText.js)
     attachments: attachments.map(({ filename, mimeType, size }) => ({ filename, mimeType, size })),
     parseStatus: 'parsed',
     parseReason: attachments.length ? `${attachments.length} attachment${attachments.length === 1 ? '' : 's'}: press "Get attachments" to read them` : null,
@@ -493,7 +494,7 @@ async function previewThread(userId, threadId) {
       subject: g.getHeader(h, 'Subject') || '',
       date: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : null,
       sent: (m.labelIds || []).includes('SENT'),
-      body: String(g.extractBody(m.payload) || '').replace(/\r/g, '').trim().slice(0, 2500),
+      body: String(extractBodyReadable(m.payload) || '').replace(/\r/g, '').trim().slice(0, 2500),
       attachments: attachmentsOf(m.payload).map((a) => a.filename),
     };
   });

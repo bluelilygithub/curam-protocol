@@ -21,6 +21,7 @@ const askModels = require('../services/emailFollowUp/modelResolver');
 const caseAsk = require('../services/emailFollowUp/caseAsk'); // called as caseAsk.askCase so a test can stand in for the model
 const store = require('../services/emailFollowUp/caseStore');
 const relationshipLib = require('../services/emailFollowUp/relationship');
+const { cleanStoredForDisplay } = require('../services/emailFollowUp/htmlText');
 const { resolveUserTimezone } = require('../services/fitness/timezone');
 
 const router = express.Router();
@@ -339,7 +340,9 @@ router.get('/:id/sources/:sourceId', async (req, res) => {
     if (!s) return res.status(404).json({ error: 'That message is not in this case.' });
     res.json({
       id: s.id, subject: s.subject || '', from: s.fromAddr || '', to: s.toAddr || '', channel: s.channel, receivedAt: s.receivedAt,
-      filename: s.filename || null, parseStatus: s.parseStatus, parseReason: s.parseReason || null, text: String(s.text || ''),
+      filename: s.filename || null, parseStatus: s.parseStatus, parseReason: s.parseReason || null,
+      // messages stored before the HTML was handled properly still carry their style rules: they are taken out of what is SHOWN only
+      text: cleanStoredForDisplay(s.text),
     });
   } catch (err) { fail(res, err); }
 });
