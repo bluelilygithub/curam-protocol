@@ -20,6 +20,7 @@ const extractMod = require('../services/emailFollowUp/extract'); // called as ex
 const askModels = require('../services/emailFollowUp/modelResolver');
 const caseAsk = require('../services/emailFollowUp/caseAsk'); // called as caseAsk.askCase so a test can stand in for the model
 const store = require('../services/emailFollowUp/caseStore');
+const relationshipLib = require('../services/emailFollowUp/relationship');
 const { resolveUserTimezone } = require('../services/fitness/timezone');
 
 const router = express.Router();
@@ -67,6 +68,7 @@ function guardSourcesOf(sources) {
 }
 
 function sourceLabel(s) {
+  if (s.kind === 'logged') return `${s.subject || 'Typed-in note'}${s.receivedAt ? ` (${new Date(s.receivedAt).toLocaleDateString('en-AU')})` : ''}`;
   const who = String(s.fromAddr || '').replace(/<.*>/, '').trim() || 'unknown sender';
   if (s.kind === 'document') return `Attachment "${s.filename || 'file'}" (${s.channel === 'sent' ? 'sent' : 'from'} ${who}${s.subject ? `: ${s.subject}` : ''})`;
   return `${s.channel === 'sent' ? 'Sent' : 'From'} ${who}${s.subject ? `: ${s.subject}` : ''}`;
@@ -229,7 +231,8 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const input = gates.createCase(req.body || {}, { type: 'human' }); // Rule 1.1: a person opens a case, naming the obligation
+    const privacy = relationshipLib.checkNewCase(req.body || {}); // refused matters, and the person's say-so that the mail may go to the AI
+    const input = { ...gates.createCase({ ...(req.body || {}), kind: privacy.kind }, { type: 'human' }), relationship: privacy.relationship }; // Rule 1.1: a person opens a case, naming the obligation
     const c = await store.insertCase(req.user.id, input, { aliases: req.body.aliases, clientId: Number(req.body.clientId) || null, projectId: Number(req.body.projectId) || null });
     res.status(201).json({ case: c });
   } catch (err) { fail(res, err); }
@@ -338,6 +341,35 @@ router.get('/:id/sources/:sourceId', async (req, res) => {
       id: s.id, subject: s.subject || '', from: s.fromAddr || '', to: s.toAddr || '', channel: s.channel, receivedAt: s.receivedAt,
       filename: s.filename || null, parseStatus: s.parseStatus, parseReason: s.parseReason || null, text: String(s.text || ''),
     });
+  } catch (err) { fail(res, err); }
+});
+
+// Something said outside email (a call, a text, in person), typed in by the person. It becomes a source like a message: Read puts the
+// promises in it into the ledger with a word-for-word quote, exactly as for email.
+router.post('/:id/log', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    if (!writable(c, res)) return;
+    if (await store.countLogged(c.id) >= relationshipLib.MAX_LOGGED_PER_CASE) return res.status(409).json({ error: `A case can hold ${relationshipLib.MAX_LOGGED_PER_CASE} typed-in notes. Remove one first.` });
+    const fields = relationshipLib.loggedSource(req.body || {}, { ownerEmail: await store.ownerEmail(req.user.id), now: new Date().toISOString() });
+    const out = await store.addSource(req.user.id, c.id, fields);
+    res.status(201).json({ id: out.id });
+  } catch (err) { fail(res, err); }
+});
+
+// Remove a typed-in note. Not once the ledger quotes it (set it aside instead of breaking a quote).
+router.delete('/:id/sources/:sourceId', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    if (!writable(c, res)) return;
+    const sourceId = Number(req.params.sourceId);
+    if (!Number.isInteger(sourceId)) return res.status(400).json({ error: 'Bad note.' });
+    if (JSON.stringify(c.ledger || []).includes(`"sourceId":${sourceId}`)) return res.status(409).json({ error: 'The ledger quotes this note, so it cannot be removed.' });
+    const done = await store.deleteLoggedSource(c.id, sourceId);
+    if (!done) return res.status(404).json({ error: 'Only a note you typed in can be removed here.' });
+    res.json({ ok: true });
   } catch (err) { fail(res, err); }
 });
 
@@ -657,6 +689,8 @@ router.post('/:id/rows/:rowId/draft', gmailLimiter, async (req, res) => {
     const cited = row.anchors.map((a) => sources.find((s) => s.id === a.sourceId)).filter(Boolean);
     const last = cited[cited.length - 1];
     const draft = buildNudgeDraft(row, {
+      relationship: c.relationship,
+      anchorSource: last || null,
       to: email ? [email] : [],
       subject: last && last.subject ? `Re: ${String(last.subject).replace(/^re:\s*/i, '')}` : undefined,
       inReplyTo: last && last.messageIdHeader ? last.messageIdHeader : null,
@@ -673,6 +707,8 @@ router.post('/:id/rows/:rowId/draft', gmailLimiter, async (req, res) => {
       notes.push({ index: -2, verdict: 'needs_review', code: 'SENT_SINCE', rule: '10',
         message: `You have sent ${sentTo.length} message${sentTo.length === 1 ? '' : 's'} to this person since the request (${sentTo.slice(0, 3).map((s) => `"${s.subject || 'no subject'}"`).join(', ')}). Check none already answers this.` });
     }
+    const tooSoon = relationshipLib.recentChaseNote(c.relationship, await store.listDrafts(c.id), row.id, new Date().toISOString());
+    if (tooSoon) notes.push({ index: -4, verdict: 'needs_review', code: 'RECENT_CHASE', rule: '10', message: tooSoon });
     if (!draft.to.length) notes.push({ index: -3, verdict: 'needs_review', code: 'NO_RECIPIENT', rule: '9.1', message: 'No recipient address is known for this person. Add one with Edit before copying.' });
     draft.notes = notes;
 

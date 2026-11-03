@@ -712,6 +712,12 @@
   "GET /api/email-follow-up/:id/sources/:sourceId": {
    "class": "authed"
   },
+  "DELETE /api/email-follow-up/:id/sources/:sourceId": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/log": {
+   "class": "authed"
+  },
   "GET /api/email-follow-up/:id/threads/:threadId/preview": {
    "class": "authed"
   },

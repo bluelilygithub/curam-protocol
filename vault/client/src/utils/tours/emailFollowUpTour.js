@@ -118,7 +118,7 @@ export function startEmailFollowUpTour() {
   tour.addStep({
     id: 'ef-limits',
     title: 'Good to know',
-    text: 'The tool cannot see phone calls, portals, other mailboxes, or anything that is only a photo. Scans are read by OCR, which can misread a figure, so check those against the original. The What was covered tab says so. Use it for accounting, freelance and job-search matters, not medical or mortgage ones. Stuck? Press the round button at the bottom right and ask the guide.',
+    text: 'The tool cannot see phone calls, texts, portals, other mailboxes, or anything that is only a photo, unless you type a call or conversation in with Log something said outside email on the Mail tab. Scans are read by OCR, which can misread a figure, so check those against the original. The What was covered tab says so. Use it where someone has promised something and you want a record, never for health, a mortgage or a legal dispute. Stuck? Press the round button at the bottom right and ask the guide.',
     when: { show() { injectStepCounter(8); } },
     buttons: [
       btnBack(),

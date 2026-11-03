@@ -84,7 +84,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-user': String(user || userA) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, body: await r.json().catch(() => ({})) };
   };
-  const newCase = async (extra = {}, user = userA) => (await call('POST', '/', { title: 'T', obligation: 'They owe items', aliases: ['p@client.test'], ...extra }, user)).body.case;
+  const newCase = async (extra = {}, user = userA) => (await call('POST', '/', { title: 'T', obligation: 'They owe items', aiConsent: true, aliases: ['p@client.test'], ...extra }, user)).body.case;
   const addMsg = (userId, caseId, i, ext = `m-${i}-${Math.random()}`) => store.addSource(userId, caseId, {
     channel: 'inbound', externalId: ext, threadId: `thread-${caseId}-${i}`, subject: `S${i}`, fromAddr: 'P <p@client.test>', toAddr: 'me@x.test', messageIdHeader: `<${ext}@x>`,
     receivedAt: new Date(Date.now() - (10 - i) * 3600000).toISOString(), text: `Hello. The client owes item-${i} and should send it.`,
@@ -97,15 +97,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     console.log('ownership');
     const clientA = (await pool.query(`INSERT INTO clients ("userId", name) VALUES ($1,'A client') RETURNING id`, [userA])).rows[0].id;
     const clientB = (await pool.query(`INSERT INTO clients ("userId", name) VALUES ($1,'B client') RETURNING id`, [userB])).rows[0].id;
-    let r = await call('POST', '/', { title: 'x', obligation: 'y', clientId: clientA }, userB);
+    let r = await call('POST', '/', { title: 'x', obligation: 'y', aiConsent: true, clientId: clientA }, userB);
     ok("another person's client is refused on create", r.status === 400, r);
-    r = await call('POST', '/', { title: 'x', obligation: 'y', clientId: clientB }, userB);
+    r = await call('POST', '/', { title: 'x', obligation: 'y', aiConsent: true, clientId: clientB }, userB);
     ok('your own client is accepted', r.status === 201 && r.body.case.clientId === clientB, r);
     const caseB = r.body.case;
     r = await call('PATCH', `/${caseB.id}`, { clientId: clientA }, userB);
     ok("another person's client is refused on patch", r.status === 400, r);
     const projA = (await pool.query(`INSERT INTO projects (name, "userId") VALUES ('A proj',$1) RETURNING id`, [userA])).rows[0].id;
-    r = await call('POST', '/', { title: 'x', obligation: 'y', projectId: projA }, userB);
+    r = await call('POST', '/', { title: 'x', obligation: 'y', aiConsent: true, projectId: projA }, userB);
     ok("another person's project is refused", r.status === 400, r);
     r = await call('GET', `/${caseB.id}`, null, userA);
     ok("another person cannot read the case", r.status === 404, r.status);

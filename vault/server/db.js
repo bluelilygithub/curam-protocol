@@ -1597,6 +1597,11 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_cases_user ON ef_cases ("userId", "updatedAt" DESC)`);
+    // Who the case is with (changes draft wording) and when the person confirmed its mail may go to the AI. Cases that existed before this
+    // were opened under the old fixed list of matters, so they count as confirmed on the day they were opened.
+    await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS relationship TEXT NOT NULL DEFAULT 'professional' CHECK (relationship IN ('professional','service','personal'))`);
+    await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "aiConsentAt" TIMESTAMPTZ`);
+    await client.query(`UPDATE ef_cases SET "aiConsentAt" = "createdAt" WHERE "aiConsentAt" IS NULL`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS ef_sources (
         id                SERIAL PRIMARY KEY,

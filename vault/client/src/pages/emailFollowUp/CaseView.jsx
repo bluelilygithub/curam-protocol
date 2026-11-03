@@ -39,6 +39,52 @@ function Btn({ children, onClick, primary, danger, disabled, tip, small, ...rest
   );
 }
 
+const LOG_HOW = [['phone', 'Phone call'], ['text', 'Text message'], ['person', 'In person'], ['other', 'Something else']];
+const LOG_FIELD = 'px-2.5 py-1.5 rounded-lg border text-xs outline-none';
+const LOG_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+// Something said outside email, typed in by the person. It joins the case like a message and Read puts its promises in the ledger.
+function LogForm({ caseId, reload, call }) {
+  const blank = { how: 'phone', who: '', saidBy: 'them', when: todayStr(), text: '' };
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState(blank);
+  const save = async () => {
+    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/log`, f), 'Saved. Press Read new messages to put its promises into the ledger.');
+    if (r.ok) { setF({ ...blank, when: todayStr() }); setOpen(false); reload(); }
+  };
+  if (!open) return <div><Btn small tip={EF_TIPS.logOpen} onClick={() => setOpen(true)}>Log something said outside email</Btn></div>;
+  return (
+    <div className="rounded-xl border p-3 space-y-2" style={CARD} data-guide="log-outside">
+      <h3 className="text-sm font-semibold">Something said outside email</h3>
+      <div className="flex flex-wrap gap-2">
+        <Tooltip text={EF_TIPS.logHow}>
+          <select className={LOG_FIELD} style={LOG_STYLE} aria-label="How it was said" value={f.how} onChange={(e) => setF({ ...f, how: e.target.value })}>
+            {LOG_HOW.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </Tooltip>
+        <Tooltip text={EF_TIPS.logSaidBy}>
+          <select className={LOG_FIELD} style={LOG_STYLE} aria-label="Who said it" value={f.saidBy} onChange={(e) => setF({ ...f, saidBy: e.target.value })}>
+            <option value="them">They said it</option>
+            <option value="me">I said it</option>
+          </select>
+        </Tooltip>
+        <Tooltip text={EF_TIPS.logWhen}>
+          <input type="date" className={LOG_FIELD} style={LOG_STYLE} aria-label="The day it was said" value={f.when} max={todayStr()} onChange={(e) => setF({ ...f, when: e.target.value })} />
+        </Tooltip>
+      </div>
+      <Tooltip text={EF_TIPS.logWho}><div><VoiceInput value={f.who} onChange={(v) => setF({ ...f, who: v })} placeholder="Who was it with? (a name)" /></div></Tooltip>
+      <Tooltip text={EF_TIPS.logText}>
+        <div><VoiceInput type="textarea" rows={3} append value={f.text} onChange={(v) => setF({ ...f, text: v })} placeholder="What was said or agreed? For example: Dave said he would fix the hot water by Friday 14 November." /></div>
+      </Tooltip>
+      <div className="flex gap-2">
+        <Btn small primary tip={EF_TIPS.logSave} disabled={!f.who.trim() || f.text.trim().length < 5} onClick={save}>Save</Btn>
+        <Btn small tip={EF_TIPS.logCancel} onClick={() => { setOpen(false); setF({ ...blank, when: todayStr() }); }}>Cancel</Btn>
+      </div>
+    </div>
+  );
+}
+
 function Badge({ children, color }) {
   return <span className="text-xs font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: color || 'var(--color-muted)' }}>{children}</span>;
 }
@@ -569,6 +615,11 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
     if (r.ok) reload();
   };
 
+  const removeLogged = async (sourceId) => {
+    const r = await call(() => api.delete(`/api/email-follow-up/${caseId}/sources/${sourceId}`), 'Removed.');
+    if (r.ok) reload();
+  };
+
   const toggleOpen = async (sourceId) => {
     if (opened[sourceId]) { setOpened((o) => { const n = { ...o }; delete n[sourceId]; return n; }); return; }
     setOpened((o) => ({ ...o, [sourceId]: 'loading' }));
@@ -638,6 +689,18 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         </div>
         <Badge>{c.profile === 'professional' ? 'strict' : 'relaxed'}</Badge>
         <Badge color={c.status === 'active' ? GOOD : undefined}>{c.status}</Badge>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs" data-guide="relationship">
+        <span style={{ color: 'var(--color-muted)' }}>Who this case is with:</span>
+        <Tooltip text={EF_TIPS.changeRelationship}>
+          <select className={LOG_FIELD} style={LOG_STYLE} aria-label="Who this case is with" value={c.relationship || 'professional'} disabled={locked}
+            onChange={async (e) => { const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { relationship: e.target.value }), 'Saved.'); if (r.ok) reload(); }}>
+            <option value="professional">Professional</option>
+            <option value="service">Service provider</option>
+            <option value="personal">Personal</option>
+          </select>
+        </Tooltip>
       </div>
 
       {/* The other half of the link to the CRM: this case's client, a way back to the client's page, and a way to change it. */}
@@ -791,6 +854,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
               ))}
             </div>
           )}
+          {!locked && <LogForm caseId={caseId} reload={reload} call={call} />}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Attached to this case</h3>
             {!messages.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No mail attached. Press "1. Find mail" above.</p>}
@@ -804,6 +868,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
                     {t.threadId && !locked && (aside
                       ? <Btn small tip={EF_TIPS.bringBack} onClick={() => threadAction(t.threadId, 'set-aside', { aside: false })}>Bring back</Btn>
                       : <Btn small tip={EF_TIPS.setAside} onClick={() => threadAction(t.threadId, 'set-aside', { aside: true })}>Set aside</Btn>)}
+                    {!t.threadId && t.msgs.length === 1 && t.msgs[0].kind === 'logged' && !locked && <Btn small tip={EF_TIPS.removeLogged} onClick={() => removeLogged(t.msgs[0].id)}>Remove</Btn>}
                     {t.threadId && !locked && removing !== t.threadId && <Btn small tip={EF_TIPS.removeThread} onClick={() => setRemoving(t.threadId)}>Remove</Btn>}
                     {removing === t.threadId && (
                       <>

@@ -28,12 +28,12 @@ function cleanAliases(list) {
 
 // ---------- cases ----------
 
-const CASE_COLS = `id, "userId", title, obligation, kind, profile, status, aliases, governing, ledger, "clientId", "projectId", "noteId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
+const CASE_COLS = `id, "userId", title, obligation, kind, profile, relationship, "aiConsentAt", status, aliases, governing, ledger, "clientId", "projectId", "noteId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
 
 /** A person's cases, newest first. `clientId` narrows to the cases linked to one CRM client (the client page lists them). */
 async function listCases(userId, { clientId = null } = {}) {
   const { rows } = await pool.query(
-    `SELECT c.id, c.title, c.obligation, c.kind, c.profile, c.status, c.aliases, c."clientId", c."projectId", c."closedAt", c."closeReason", c."createdAt", c."updatedAt",
+    `SELECT c.id, c.title, c.obligation, c.kind, c.profile, c.relationship, c.status, c.aliases, c."clientId", c."projectId", c."closedAt", c."closeReason", c."createdAt", c."updatedAt",
             (SELECT cl.name FROM clients cl WHERE cl.id=c."clientId" AND cl."userId"=c."userId") AS "clientName",
             jsonb_array_length(c.ledger) AS "rowCount",
             (SELECT COUNT(*) FROM ef_drafts d WHERE d."caseId"=c.id AND d.status='pending') AS "pendingDrafts",
@@ -107,9 +107,9 @@ async function insertCase(userId, c, extra) {
   const clientId = extra.clientId ? await ownedLink(userId, 'clients', extra.clientId) : null;
   const projectId = extra.projectId ? await ownedLink(userId, 'projects', extra.projectId) : null;
   const { rows } = await pool.query(
-    `INSERT INTO ef_cases ("userId", title, obligation, kind, profile, status, aliases, governing, "clientId", "projectId")
-     VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9) RETURNING ${CASE_COLS}`,
-    [userId, c.title, c.obligation, c.kind, c.profile, JSON.stringify(cleanAliases(extra.aliases)), JSON.stringify(c.governing || []), clientId, projectId]);
+    `INSERT INTO ef_cases ("userId", title, obligation, kind, profile, relationship, "aiConsentAt", status, aliases, governing, "clientId", "projectId")
+     VALUES ($1,$2,$3,$4,$5,$6,NOW(),'active',$7,$8,$9,$10) RETURNING ${CASE_COLS}`,
+    [userId, c.title, c.obligation, c.kind, c.profile, c.relationship || 'professional', JSON.stringify(cleanAliases(extra.aliases)), JSON.stringify(c.governing || []), clientId, projectId]);
   return rows[0];
 }
 
@@ -159,6 +159,7 @@ async function patchCase(userId, id, patch) {
     profileChanged = !!cur && cur.profile !== patch.profile;
     add('profile', patch.profile);
   }
+  if (patch.relationship !== undefined && ['professional', 'service', 'personal'].includes(patch.relationship)) add('relationship', patch.relationship);
   if (patch.clientId !== undefined) add('"clientId"', patch.clientId ? await ownedLink(userId, 'clients', patch.clientId) : null);
   if (patch.projectId !== undefined) add('"projectId"', patch.projectId ? await ownedLink(userId, 'projects', patch.projectId) : null);
   if (!sets.length) return getCase(userId, id);
@@ -198,6 +199,18 @@ async function addSource(userId, caseId, s) {
       s.messageIdHeader || null, s.receivedAt || null, sha256(text), text, JSON.stringify(s.attachments || []),
       s.parseStatus || 'parsed', s.parseReason || null, s.parentId || null, s.filename || null, s.mimeType || null, s.sizeBytes || null, s.parser || null]);
   return rows[0] ? { id: rows[0].id, created: true } : { id: null, created: false };
+}
+
+/** Something the person typed in about a call, text or conversation. Not Gmail: no externalId, so nothing de-duplicates it. */
+async function countLogged(caseId) {
+  const { rows } = await pool.query(`SELECT COUNT(*) AS n FROM ef_sources WHERE "caseId"=$1 AND kind='logged'`, [caseId]);
+  return Number(rows[0].n);
+}
+
+/** Remove a typed-in entry. Only those can be removed this way, and not once the ledger quotes them. */
+async function deleteLoggedSource(caseId, id) {
+  const { rows } = await pool.query(`DELETE FROM ef_sources WHERE "caseId"=$1 AND id=$2 AND kind='logged' RETURNING id`, [caseId, id]);
+  return rows.length > 0;
 }
 
 async function markExtracted(sourceId) {
@@ -663,7 +676,7 @@ async function latestApproval(draftId) {
 
 module.exports = {
   EMAIL_RE, DOMAIN_RE, cleanAliases, listCases, liveNoteId, createCaseNote, clientName, getCase, insertCase, withLedger, patchCase,
-  listSources, getSource, addSource, markExtracted,
+  listSources, getSource, addSource, markExtracted, countLogged, deleteLoggedSource,
   attachThread, suggestThreads, previewThread, fetchAttachments, setThreadAside, detachThread, deletePreview, deleteCase, runSentSweep, latestSweep, freshInbound, ownerEmail,
   addQuestion, listQuestions, addSummary, listSummaries,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,

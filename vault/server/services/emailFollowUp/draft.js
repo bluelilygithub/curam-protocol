@@ -6,10 +6,11 @@
 // The model's only job in this feature is reading messages into ledger rows (extract.js).
 
 const { RuleError } = require('./common');
+const { courtesyFor, sayingLeadIn } = require('./relationship');
 
 /**
  * @param {object} row ledger row (needs an anchor and the quoted span)
- * @param {{to: string[], cc?: string[], subject?: string, inReplyTo?: string, references?: string[], partyLabel?: string, threadIds?: string[]}} ctx
+ * @param {{to: string[], cc?: string[], subject?: string, inReplyTo?: string, references?: string[], partyLabel?: string, threadIds?: string[], relationship?: string, anchorSource?: object}} ctx
  */
 function buildNudgeDraft(row, ctx) {
   const anchor = row.anchors && row.anchors[row.anchors.length - 1];
@@ -20,7 +21,10 @@ function buildNudgeDraft(row, ctx) {
   // an email address is not a greeting: use it only when it is a name
   claims.push({ kind: 'courtesy', text: String(label).includes('@') ? 'Hi,' : `Hi ${label},` });
 
-  if (row.direction === 'i_owe') {
+  if (ctx.anchorSource && ctx.anchorSource.kind === 'logged') {
+    // something said by phone, in a text or in person: say so, rather than "you wrote"
+    claims.push({ kind: 'fact', text: `${sayingLeadIn(ctx.anchorSource, row.direction)}: "${row.quote}"`, anchor });
+  } else if (row.direction === 'i_owe') {
     claims.push({ kind: 'fact', text: `I wrote: "${row.quote}"`, anchor });
   } else {
     claims.push({ kind: 'fact', text: `You wrote: "${row.quote}"`, anchor });
@@ -37,9 +41,7 @@ function buildNudgeDraft(row, ctx) {
 
   claims.push({
     kind: 'courtesy',
-    text: row.direction === 'i_owe'
-      ? 'I will confirm once this is done. Thank you.'
-      : 'Could you let me know where this stands? Thank you.',
+    text: courtesyFor(ctx.relationship, row.direction),
   });
 
   const body = claims.map((c) => c.text).join('\n\n');

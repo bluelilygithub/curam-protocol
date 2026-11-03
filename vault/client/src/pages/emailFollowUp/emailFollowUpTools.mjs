@@ -49,13 +49,15 @@ export const HOW_IT_WORKS = [
   ['Drafts', 'A draft is fixed sentences around the row\'s own quoted words, checked against the email it came from. Anything the check cannot back up is blocked or flagged. You approve it, then copy it into your own mail program. The tool never sends.'],
   ['Copying is double-checked', 'Just before you copy, the tool looks in Gmail for new mail in the same threads. If the other person has written since, the draft goes back to waiting so you do not send something out of date.'],
   ['Attachments', 'Get attachments downloads the files on the attached mail (read-only) and reads the text of PDFs, Word and plain-text files, so an invoice\'s total and dates can become ledger rows too. A scanned PDF (a picture of a page) is read by OCR, which is a machine reading a picture of the page: it can misread a figure, so anything taken from a scan is marked and you are asked to check it against the original. Pictures and spreadsheets are kept in the list as "not read", with the reason. If an email and its attachment give two different figures, both rows stay open and you must say which is right before anything can be drafted.'],
-  ['What it cannot see', 'Phone calls, portals, other mailboxes, and anything that is only a photo, such as a picture of an invoice. The What was covered tab says so, and lists what you must check yourself. Use it for accounting, freelance and job-search matters, not medical or mortgage ones: the text of attached emails and documents is read by the AI.'],
+  ['What it cannot see', 'Phone calls, texts and conversations unless you type them in with Log something said outside email, portals, other mailboxes, and anything that is only a photo, such as a picture of an invoice. The What was covered tab says so, and lists what you must check yourself. Use it for matters where someone has promised to do something and you want a record: work, a landlord or tradie, a council, an insurer, a club, something you lent. Never for health, a mortgage or a legal dispute: the text of attached emails and documents is read by the AI, so you confirm that when you open a case.'],
 ];
 
 // Everything the guide can point at: the five places plus the controls inside them. `tool` is the place the Open button shows.
 export const GUIDE_TOOLS = [
   { id: 'cases', label: 'Your cases', tool: 'cases' },
   { id: 'new-case', label: 'New case', tool: 'cases' },
+  { id: 'relationship', label: 'Who this case is with', tool: 'mail' },
+  { id: 'log-outside', label: 'Log something said outside email', tool: 'mail' },
   { id: 'people', label: 'People in the case', tool: 'mail' },
   { id: 'client-link', label: 'CRM client link', tool: 'mail' },
   { id: 'case-note', label: 'Case note', tool: 'mail' },

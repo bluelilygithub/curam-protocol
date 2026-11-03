@@ -20,8 +20,21 @@ const KINDS = [
   ['accounting', 'Accounting: chasing documents for BAS, tax or year end'],
   ['freelance', 'Freelance: scope and deliverables'],
   ['job-search', 'Job search'],
+  ['home', 'Home: landlord, agent, strata, repairs'],
+  ['trades', 'Quotes and tradies: quote, start date, warranty'],
+  ['government', 'Council or government: applications, call-backs'],
+  ['insurance', 'Insurance or warranty claim'],
+  ['purchase', 'Purchase or return: refund, replacement, delivery'],
+  ['school-club', 'School, club or committee'],
+  ['personal', 'Friend, family or neighbour (something borrowed, promised or arranged)'],
   ['other', 'Something else'],
 ];
+const RELATIONSHIPS = [
+  ['professional', 'Professional: a client, supplier or employer'],
+  ['service', 'Service provider: a tradie, landlord, council, shop or insurer'],
+  ['personal', 'Personal: a friend, family, neighbour or club'],
+];
+const BLANK_FORM = { title: '', obligation: '', kind: 'accounting', profile: 'soft', relationship: 'professional', aiConsent: false, aliases: '', clientId: '' };
 const TABS = ['ledger', 'ask', 'mail', 'drafts', 'coverage'];
 
 export default function EmailFollowUpPage() {
@@ -37,7 +50,7 @@ export default function EmailFollowUpPage() {
   const [clients, setClients] = useState([]);
   const [clientsLoaded, setClientsLoaded] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
-  const [form, setForm] = useState({ title: '', obligation: '', kind: 'accounting', profile: 'soft', aliases: '', clientId: '' });
+  const [form, setForm] = useState(BLANK_FORM);
   const canUse = isAdmin || featureAccess.emailFollowUp === true;
   const isClosed = (c) => c.status === 'closed' || c.status === 'abandoned';
   const closedCount = (cases || []).filter(isClosed).length;
@@ -110,7 +123,7 @@ export default function EmailFollowUpPage() {
       const d = await r.json();
       if (!r.ok) { toast(d.error || 'Could not open the case.', 'error'); return; }
       setCreating(false);
-      setForm({ title: '', obligation: '', kind: 'accounting', profile: 'soft', aliases: '', clientId: '' });
+      setForm(BLANK_FORM);
       setParams({ case: String(d.case.id) });
       load();
     } catch { toast('Could not reach the server.', 'error'); }
@@ -157,10 +170,15 @@ export default function EmailFollowUpPage() {
                   <Tooltip text={EF_TIPS.caseAliases}>
                     <input className={`${FIELD} w-full`} style={FIELD_STYLE} aria-label="Email addresses of the people involved" placeholder="Email addresses (or @domain for a whole organisation), comma separated" value={form.aliases} onChange={(e) => setForm({ ...form, aliases: e.target.value })} />
                   </Tooltip>
-                  <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="grid sm:grid-cols-2 gap-3">
                     <Tooltip text={EF_TIPS.caseKind}>
                       <select className={FIELD} style={FIELD_STYLE} aria-label="Kind of matter" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
                         {KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </Tooltip>
+                    <Tooltip text={EF_TIPS.caseRelationship}>
+                      <select className={FIELD} style={FIELD_STYLE} aria-label="Who the case is with" value={form.relationship} onChange={(e) => setForm({ ...form, relationship: e.target.value })}>
+                        {RELATIONSHIPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </Tooltip>
                     <Tooltip text={EF_TIPS.caseProfile}>
@@ -176,9 +194,15 @@ export default function EmailFollowUpPage() {
                       </select>
                     </Tooltip>
                   </div>
+                  <Tooltip text={EF_TIPS.caseConsent}>
+                    <label className="flex items-start gap-2 text-xs leading-relaxed w-fit" style={{ color: 'var(--color-text)' }}>
+                      <input type="checkbox" className="mt-0.5" checked={form.aiConsent} onChange={(e) => setForm({ ...form, aiConsent: e.target.checked })} />
+                      <span>This case is not about health or medical matters, a mortgage or loan application, or a legal dispute, and its emails may be sent to the AI to be read.</span>
+                    </label>
+                  </Tooltip>
                   <div className="flex gap-2">
                     <Tooltip text={EF_TIPS.openCase}>
-                      <button type="button" onClick={create} disabled={!form.title.trim() || !form.obligation.trim()} className="rounded-lg px-3.5 py-1.5 text-sm font-medium hover:opacity-70 disabled:opacity-40 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>Open case</button>
+                      <button type="button" onClick={create} disabled={!form.title.trim() || !form.obligation.trim() || !form.aiConsent} className="rounded-lg px-3.5 py-1.5 text-sm font-medium hover:opacity-70 disabled:opacity-40 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>Open case</button>
                     </Tooltip>
                     <Tooltip text={EF_TIPS.cancelCase}>
                       <button type="button" onClick={() => setCreating(false)} className="rounded-lg px-3.5 py-1.5 text-sm border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)' }}>Cancel</button>

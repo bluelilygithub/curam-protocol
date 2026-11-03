@@ -132,7 +132,7 @@ async function extractFromSource(userId, source, ctx, deps = {}) {
 
   const text = clean(source.text, MAX_TEXT);
   if (text.trim().length < 3) return { mentions: [], dropped: [] };
-  const what = source.kind === 'document' ? `ATTACHMENT "${clean(source.filename, 120)}" of an email that was ${source.channel === 'sent' ? 'SENT BY' : 'RECEIVED by'} the mailbox owner` : `Message is ${source.channel === 'sent' ? 'SENT BY the mailbox owner' : 'RECEIVED by the mailbox owner'}`;
+  const what = source.kind === 'logged' ? `Message is a NOTE the mailbox owner typed about something said outside email (${clean(source.subject, 120)}). It was said by ${source.channel === 'sent' ? 'the mailbox owner' : 'the other person'}. Only what is written below was said or agreed.` : source.kind === 'document' ? `ATTACHMENT "${clean(source.filename, 120)}" of an email that was ${source.channel === 'sent' ? 'SENT BY' : 'RECEIVED by'} the mailbox owner` : `Message is ${source.channel === 'sent' ? 'SENT BY the mailbox owner' : 'RECEIVED by the mailbox owner'}`;
   const header = `Mailbox owner: ${ctx.ownerEmail || 'unknown'}\nCase: ${clean(ctx.obligation, 300)}\n${what}\nFrom: ${clean(source.fromAddr, 200)}\nTo: ${clean(source.toAddr, 300)}\nDate: ${source.receivedAt}`;
   const prompt = `${header}\n\n<email>\n${text}\n</email>`;
 
