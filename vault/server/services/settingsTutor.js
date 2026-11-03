@@ -22,7 +22,7 @@ const CATALOG = [
     notes: 'After 30 days an item is gone for good.' },
   { id: 'Vault Shelf', label: 'Vault Shelf', group: 'You',
     does: 'Settings, Vault Shelf: make, name and revoke the keys that connect the Vault Shelf Windows clipboard app to your Vault. A key is shown once when it is made, and each key can be limited to Notes, Invoice Review, the CRM inbox or the sensitive-data check.',
-    notes: 'Only shows for a member when an admin has switched the Vault Shelf feature on for them (Settings, Feature Access, or the member\'s own Features). A key can never do more than the person\'s own account may do. If a key is lost, revoke it and make a new one: the old key cannot be shown again.' },
+    notes: 'Only shows for a member when an admin has switched the Vault Shelf feature on for them (Settings, Feature Access, or the member\'s own Features). A key can never do more than the person\'s own account may do. If a key is lost, revoke it and make a new one: the old key cannot be shown again. This section only makes keys; the Windows app itself (shortcuts, Start with Windows) is set inside the app: see the Vault Shelf rules.' },
   { id: 'Goals', label: 'Goals', group: 'You',
     does: 'Settings, Goals: how goals and their reviews work. Admin only.', notes: 'Admin only.' },
   { id: 'Tours', label: 'Tours', group: 'You',
@@ -37,6 +37,9 @@ const CATALOG = [
     does: 'Settings, Amazon Search: which Amazon store Product Scout searches. Admin only.', notes: 'Admin only. A server setting can fix the store, in which case it cannot be changed here.' },
   { id: 'Topic Research', label: 'Topic Research', group: 'AI and tools',
     does: 'Settings, Topic Research: which AI model writes Topic Research briefs and which one gives a second opinion on structure. Admin only.', notes: 'Admin only. Empty means the workspace default model.' },
+  { id: 'Email Follow-Up', label: 'Email Follow-Up', group: 'AI and tools',
+    does: 'Settings, Email Follow-Up: which AI model writes the Summary and answers the questions in Email Follow-Up cases. Choose one from the connected model list, or leave it on the workspace default. Admin only.',
+    notes: 'Admin only. Empty means the workspace default model. Reading emails into a case\'s ledger is not affected: it always uses the lighter background model. If answers feel thin, choose a more capable model here.' },
   { id: 'Shares', label: 'Shares (alerts)', group: 'AI and tools',
     does: 'Settings, Shares: the Daily Drop Alert. Holdings falling by at least this percent against the previous close email the admin address on each hourly market check. 0 sends the daily movement after every check (test mode). Admin only.',
     notes: 'Admin only.' },
@@ -90,6 +93,10 @@ const RULES = [
   'The model list and default under AI & Chat decide which AI model each tool uses; tools do not have their own hard-coded model.',
   'Sections marked Admin only do not appear for a member at all.',
   'The Open buttons in this chat only take you to a section; they never change a setting.',
+  'Vault Shelf is a separate Windows program on the person\'s own PC, not part of this website. It lives in the tray (the icon near the clock, possibly under the ^ arrow) and is opened with a keyboard shortcut: Ctrl+Shift+Space opens the clipboard shelf and Ctrl+Alt+Space opens the quick launcher of Vault tools. Both can be changed in the Shelf\'s own Settings (tray icon, Settings). The Fn key can never be part of a shortcut.',
+  'Vault Shelf only works while the program is running. It does NOT start by itself after a restart unless Start with Windows is ticked in the Shelf\'s own Settings (tray icon, then Settings). If the shortcut stops working after a reboot, the usual cause is that the program is not running: start Vault Shelf from the Start menu, then tick Start with Windows so it opens quietly in the tray at sign-in.',
+  'Other reasons a Vault Shelf shortcut does nothing: another program already owns that key combination (a notice appears at the tray; click the tray icon instead or record a different shortcut in the Shelf\'s Settings); an older copy is still running, because only one copy can run at a time (right-click its tray icon, Exit, then start it again); or monitoring is paused. The Shelf keeps a plain log at %LOCALAPPDATA%\\VaultShelf\\vaultshelf.log saying whether it started and whether each shortcut was registered or refused; it never contains anything copied.',
+  'Installing or updating Vault Shelf: the Open Shelf button in the top bar (Windows desktop, when an admin has switched it on in Settings, Vault Shelf) gets the installer. Quit the running Shelf first (tray icon, Exit), then run the installer; it installs for the person only and needs no administrator. The installer is not code-signed, so Windows may show a blue warning: choose More info, then Run anyway, or unblock the downloaded file.',
 ];
 
 const NOT_POSSIBLE = [
@@ -99,12 +106,13 @@ const NOT_POSSIBLE = [
   'Letting the public sign up on their own.',
   'Giving a member a feature the whole workspace has switched off.',
   'Seeing any setting\'s current value: this chat cannot see them; it only points to the section.',
+  'Checking from here whether Vault Shelf is running on a PC, or starting it: this chat cannot see the person\'s computer. It can only say what to look for.',
 ];
 
 const SYSTEM = `You are the guide to Settings and the Admin page in Vault, a private AI workspace shared by a small group of people. A person says, in everyday words, what they want to change or check, and you point them to the right section, in order, and explain what it does.
 
 Rules:
-- Use ONLY the sections and rules given below. Never invent a setting or a button, and never promise something the notes say Vault cannot do.
+- Use ONLY the sections and rules given below (including the rules about the Vault Shelf Windows program, which sits just outside Vault and has its own Settings). Never invent a setting or a button, and never promise something the notes say Vault cannot do.
 - You cannot see any setting, key, password, user or usage figure. Never state or guess them.
 - Many sections are for admins only. If the answer needs an admin-only section, say it is for the admin and who can do it; do not tell a member to look for something they will not see.
 - Be plain and short, as to a friend who is not technical. Explain any unusual word in a few everyday words the first time you use it.
