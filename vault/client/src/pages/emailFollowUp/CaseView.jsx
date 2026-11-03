@@ -701,6 +701,13 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
             <option value="personal">Personal</option>
           </select>
         </Tooltip>
+        <Tooltip text={EF_TIPS.changeRedact}>
+          <label className="flex items-center gap-1.5 ml-2" style={{ color: 'var(--color-text)' }}>
+            <input type="checkbox" checked={c.redact !== false} disabled={locked}
+              onChange={async (e) => { const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { redact: e.target.checked }), 'Saved.'); if (r.ok) reload(); }} />
+            <span>{c.redact !== false ? 'Personal details hidden from the AI' : 'Personal details sent to the AI as written'}</span>
+          </label>
+        </Tooltip>
       </div>
 
       {/* The other half of the link to the CRM: this case's client, a way back to the client's page, and a way to change it. */}

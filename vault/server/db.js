@@ -1602,6 +1602,8 @@ async function initSchema() {
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS relationship TEXT NOT NULL DEFAULT 'professional' CHECK (relationship IN ('professional','service','personal'))`);
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "aiConsentAt" TIMESTAMPTZ`);
     await client.query(`UPDATE ef_cases SET "aiConsentAt" = "createdAt" WHERE "aiConsentAt" IS NULL`);
+    // Hide personal details (phone numbers, addresses, ID and bank numbers, other people's email addresses) before the AI reads the mail. On by default.
+    await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS redact BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS ef_sources (
         id                SERIAL PRIMARY KEY,

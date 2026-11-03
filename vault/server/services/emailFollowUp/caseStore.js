@@ -28,7 +28,7 @@ function cleanAliases(list) {
 
 // ---------- cases ----------
 
-const CASE_COLS = `id, "userId", title, obligation, kind, profile, relationship, "aiConsentAt", status, aliases, governing, ledger, "clientId", "projectId", "noteId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
+const CASE_COLS = `id, "userId", title, obligation, kind, profile, relationship, "aiConsentAt", redact, status, aliases, governing, ledger, "clientId", "projectId", "noteId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
 
 /** A person's cases, newest first. `clientId` narrows to the cases linked to one CRM client (the client page lists them). */
 async function listCases(userId, { clientId = null } = {}) {
@@ -107,9 +107,9 @@ async function insertCase(userId, c, extra) {
   const clientId = extra.clientId ? await ownedLink(userId, 'clients', extra.clientId) : null;
   const projectId = extra.projectId ? await ownedLink(userId, 'projects', extra.projectId) : null;
   const { rows } = await pool.query(
-    `INSERT INTO ef_cases ("userId", title, obligation, kind, profile, relationship, "aiConsentAt", status, aliases, governing, "clientId", "projectId")
-     VALUES ($1,$2,$3,$4,$5,$6,NOW(),'active',$7,$8,$9,$10) RETURNING ${CASE_COLS}`,
-    [userId, c.title, c.obligation, c.kind, c.profile, c.relationship || 'professional', JSON.stringify(cleanAliases(extra.aliases)), JSON.stringify(c.governing || []), clientId, projectId]);
+    `INSERT INTO ef_cases ("userId", title, obligation, kind, profile, relationship, "aiConsentAt", redact, status, aliases, governing, "clientId", "projectId")
+     VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7,'active',$8,$9,$10,$11) RETURNING ${CASE_COLS}`,
+    [userId, c.title, c.obligation, c.kind, c.profile, c.relationship || 'professional', c.redact !== false, JSON.stringify(cleanAliases(extra.aliases)), JSON.stringify(c.governing || []), clientId, projectId]);
   return rows[0];
 }
 
@@ -159,6 +159,7 @@ async function patchCase(userId, id, patch) {
     profileChanged = !!cur && cur.profile !== patch.profile;
     add('profile', patch.profile);
   }
+  if (typeof patch.redact === 'boolean') add('redact', patch.redact);
   if (patch.relationship !== undefined && ['professional', 'service', 'personal'].includes(patch.relationship)) add('relationship', patch.relationship);
   if (patch.clientId !== undefined) add('"clientId"', patch.clientId ? await ownedLink(userId, 'clients', patch.clientId) : null);
   if (patch.projectId !== undefined) add('"projectId"', patch.projectId ? await ownedLink(userId, 'projects', patch.projectId) : null);

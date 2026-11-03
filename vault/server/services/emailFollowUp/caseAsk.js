@@ -11,6 +11,7 @@
 // Same `deps` ({ getModels, callModel, logUsage }) shape as extract.js, so tests run without a model.
 
 const { locateQuote } = require('./extract');
+const { createRedactor, PLACEHOLDER_NOTE } = require('./redact');
 
 const TOTAL_BUDGET_CHARS = 350000;   // about 90k tokens of correspondence per request
 const MIN_PER_SOURCE = 2500;         // never cut a source below this unless it is shorter already
@@ -295,14 +296,23 @@ function guardCorpus(corpus) {
   if (!corpus.count) throw Object.assign(new Error('There is nothing to read yet. Attach a thread under Mail first (and press Get attachments if it has files).'), { status: 400 });
 }
 
+// Hide personal details on the way to the model and put them back in its reply (see redact.js). Quotes are then checked against the
+// original text. Only when the case says so (redact === true), so a caller that does not know about it behaves as before.
+function redactorFor(c, corpus) {
+  if (!c || c.redact !== true) return null;
+  return createRedactor({ keep: [corpus.ownerEmail, ...(c.aliases || [])] });
+}
+
 async function summariseCase(userId, c, corpus, deps = {}) {
   guardCorpus(corpus);
   const call = deps.callModel || require('../callModel').callModel;
   const log = deps.logUsage || require('../../utils/logUsage').logUsage;
   const modelId = await modelFor(userId, deps);
-  const result = await call(modelId, buildSummaryPrompt(corpus, c), { system: SUMMARY_SYSTEM, maxTokens: 6500, returnUsage: true, timeoutMs: SUMMARY_TIMEOUT_MS });
+  const rd = redactorFor(c, corpus);
+  const prompt = rd ? rd.redact(buildSummaryPrompt(corpus, c)) : buildSummaryPrompt(corpus, c);
+  const result = await call(modelId, prompt, { system: rd && rd.count() ? `${SUMMARY_SYSTEM}\n\n${PLACEHOLDER_NOTE}` : SUMMARY_SYSTEM, maxTokens: 6500, returnUsage: true, timeoutMs: SUMMARY_TIMEOUT_MS });
   log({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'email_follow_up_summary' });
-  const summary = normalizeSummary(String(result.text || ''), corpus);
+  const summary = normalizeSummary(rd ? rd.restore(String(result.text || ''), { json: true }) : String(result.text || ''), corpus);
   if (!summary) throw Object.assign(new Error('The AI answered in a form that could not be read. Please try again.'), { status: 502 });
   summary.model = result.model || modelId; // kept with the saved summary
   return summary;
@@ -315,9 +325,11 @@ async function askCase(userId, c, corpus, question, history, deps = {}) {
   const call = deps.callModel || require('../callModel').callModel;
   const log = deps.logUsage || require('../../utils/logUsage').logUsage;
   const modelId = await modelFor(userId, deps);
-  const result = await call(modelId, buildAskPrompt(corpus, c, q, history), { system: ASK_SYSTEM, maxTokens: 4000, returnUsage: true, timeoutMs: ASK_TIMEOUT_MS });
+  const rd = redactorFor(c, corpus);
+  const prompt = rd ? rd.redact(buildAskPrompt(corpus, c, q, history)) : buildAskPrompt(corpus, c, q, history);
+  const result = await call(modelId, prompt, { system: rd && rd.count() ? `${ASK_SYSTEM}\n\n${PLACEHOLDER_NOTE}` : ASK_SYSTEM, maxTokens: 4000, returnUsage: true, timeoutMs: ASK_TIMEOUT_MS });
   log({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'email_follow_up_ask' });
-  const answer = normalizeAnswer(String(result.text || ''), corpus);
+  const answer = normalizeAnswer(rd ? rd.restore(String(result.text || ''), { json: true }) : String(result.text || ''), corpus);
   if (!answer) throw Object.assign(new Error('The AI did not answer. Please try again.'), { status: 502 });
   answer.model = result.model || modelId; // kept with the saved question, so a weak answer can be traced to the model that gave it
   return answer;

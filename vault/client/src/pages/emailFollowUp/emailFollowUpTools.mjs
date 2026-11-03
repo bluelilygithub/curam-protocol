@@ -57,6 +57,7 @@ export const GUIDE_TOOLS = [
   { id: 'cases', label: 'Your cases', tool: 'cases' },
   { id: 'new-case', label: 'New case', tool: 'cases' },
   { id: 'relationship', label: 'Who this case is with', tool: 'mail' },
+  { id: 'hide-details', label: 'Hide personal details from the AI', tool: 'mail' },
   { id: 'log-outside', label: 'Log something said outside email', tool: 'mail' },
   { id: 'people', label: 'People in the case', tool: 'mail' },
   { id: 'client-link', label: 'CRM client link', tool: 'mail' },

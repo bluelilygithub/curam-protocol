@@ -34,7 +34,7 @@ const RELATIONSHIPS = [
   ['service', 'Service provider: a tradie, landlord, council, shop or insurer'],
   ['personal', 'Personal: a friend, family, neighbour or club'],
 ];
-const BLANK_FORM = { title: '', obligation: '', kind: 'accounting', profile: 'soft', relationship: 'professional', aiConsent: false, aliases: '', clientId: '' };
+const BLANK_FORM = { title: '', obligation: '', kind: 'accounting', profile: 'soft', relationship: 'professional', redact: true, aiConsent: false, aliases: '', clientId: '' };
 const TABS = ['ledger', 'ask', 'mail', 'drafts', 'coverage'];
 
 export default function EmailFollowUpPage() {
@@ -194,6 +194,12 @@ export default function EmailFollowUpPage() {
                       </select>
                     </Tooltip>
                   </div>
+                  <Tooltip text={EF_TIPS.caseRedact}>
+                    <label className="flex items-start gap-2 text-xs leading-relaxed w-fit" style={{ color: 'var(--color-text)' }}>
+                      <input type="checkbox" className="mt-0.5" checked={form.redact} onChange={(e) => setForm({ ...form, redact: e.target.checked })} />
+                      <span>Hide personal details from the AI: phone numbers, street addresses, bank, card, tax file and Medicare numbers, and other people's email addresses. Names are not hidden.</span>
+                    </label>
+                  </Tooltip>
                   <Tooltip text={EF_TIPS.caseConsent}>
                     <label className="flex items-start gap-2 text-xs leading-relaxed w-fit" style={{ color: 'var(--color-text)' }}>
                       <input type="checkbox" className="mt-0.5" checked={form.aiConsent} onChange={(e) => setForm({ ...form, aiConsent: e.target.checked })} />

@@ -66,6 +66,8 @@ export const EF_TIPS = {
   hideMail: 'Close this message.',
   caseRelationship: 'Who the case is with. It changes the wording of follow-up drafts (gentler for a friend or neighbour) and how soon a second chase is flagged. It never changes what a draft is checked against.',
   changeRelationship: 'Change who this case is with. Drafts you make from now on use the new wording.',
+  caseRedact: 'Phone numbers, addresses, bank, card, tax file and Medicare numbers and email addresses of other people are hidden from the AI, then shown again in what you see. Names are not hidden. On by default.',
+  changeRedact: 'Turn hiding of personal details from the AI on or off for this case. It applies every time the AI reads from now on.',
   caseConsent: 'Tick to confirm the case is not about health, a mortgage or a legal dispute, and that its emails may be sent to the AI to be read. Those matters are never read by this tool.',
   logOpen: 'Type in something said outside email: a phone call, a text or a conversation. It is kept with the case and read into the ledger like an email.',
   logHow: 'How it was said: a phone call, a text message, in person or something else.',

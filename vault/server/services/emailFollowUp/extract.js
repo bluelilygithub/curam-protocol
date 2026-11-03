@@ -11,6 +11,7 @@
 
 const { parseDeadline } = require('./deadlines');
 const { spanHash, sha256 } = require('./common');
+const { createRedactor, PLACEHOLDER_NOTE } = require('./redact');
 const { KINDS, DIRECTIONS, CLAIM_TYPES } = require('./ledger');
 
 const MAX_TEXT = 20000;
@@ -134,11 +135,16 @@ async function extractFromSource(userId, source, ctx, deps = {}) {
   if (text.trim().length < 3) return { mentions: [], dropped: [] };
   const what = source.kind === 'logged' ? `Message is a NOTE the mailbox owner typed about something said outside email (${clean(source.subject, 120)}). It was said by ${source.channel === 'sent' ? 'the mailbox owner' : 'the other person'}. Only what is written below was said or agreed.` : source.kind === 'document' ? `ATTACHMENT "${clean(source.filename, 120)}" of an email that was ${source.channel === 'sent' ? 'SENT BY' : 'RECEIVED by'} the mailbox owner` : `Message is ${source.channel === 'sent' ? 'SENT BY the mailbox owner' : 'RECEIVED by the mailbox owner'}`;
   const header = `Mailbox owner: ${ctx.ownerEmail || 'unknown'}\nCase: ${clean(ctx.obligation, 300)}\n${what}\nFrom: ${clean(source.fromAddr, 200)}\nTo: ${clean(source.toAddr, 300)}\nDate: ${source.receivedAt}`;
-  const prompt = `${header}\n\n<email>\n${text}\n</email>`;
+  // Personal details are swapped for placeholders on the way out and swapped back in the reply, so a quote is still checked against the
+  // original text word for word. The owner's address and the case's people stay, because the model needs them to tell who owes what.
+  const rd = ctx.redact ? createRedactor({ keep: [ctx.ownerEmail, ...(ctx.keep || [])] }) : null;
+  const prompt = rd ? rd.redact(`${header}\n\n<email>\n${text}\n</email>`) : `${header}\n\n<email>\n${text}\n</email>`;
+  const system = rd && rd.count() ? `${SYSTEM}\n\n${PLACEHOLDER_NOTE}` : SYSTEM;
 
-  const result = await call(modelId, prompt, { system: SYSTEM, maxTokens: 2500, returnUsage: true, timeoutMs: 90000 });
+  const result = await call(modelId, prompt, { system, maxTokens: 2500, returnUsage: true, timeoutMs: 90000 });
   log({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'email_follow_up_extract' });
-  return normalizeMentions(String(result.text || ''), { ...source, text }, ctx);
+  const reply = String(result.text || '');
+  return normalizeMentions(rd ? rd.restore(reply, { json: true }) : reply, { ...source, text }, ctx);
 }
 
 module.exports = { SYSTEM, locateQuote, normalizeMentions, extractFromSource };

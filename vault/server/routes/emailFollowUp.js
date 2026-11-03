@@ -232,7 +232,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const privacy = relationshipLib.checkNewCase(req.body || {}); // refused matters, and the person's say-so that the mail may go to the AI
-    const input = { ...gates.createCase({ ...(req.body || {}), kind: privacy.kind }, { type: 'human' }), relationship: privacy.relationship }; // Rule 1.1: a person opens a case, naming the obligation
+    const input = { ...gates.createCase({ ...(req.body || {}), kind: privacy.kind }, { type: 'human' }), relationship: privacy.relationship, redact: req.body.redact !== false }; // Rule 1.1: a person opens a case, naming the obligation
     const c = await store.insertCase(req.user.id, input, { aliases: req.body.aliases, clientId: Number(req.body.clientId) || null, projectId: Number(req.body.projectId) || null });
     res.status(201).json({ case: c });
   } catch (err) { fail(res, err); }
@@ -440,7 +440,7 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
     for (const s of sources.slice(0, EXTRACT_BATCH)) {
       let out;
       try {
-        out = await extractMod.extractFromSource(req.user.id, { ...s, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : new Date().toISOString() }, { tz: timezone, ownerEmail: owner, obligation: c.obligation });
+        out = await extractMod.extractFromSource(req.user.id, { ...s, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : new Date().toISOString() }, { tz: timezone, ownerEmail: owner, obligation: c.obligation, redact: c.redact === true, keep: c.aliases || [] });
       } catch (err) {
         if (!summary.read) throw err;
         summary.stopped = err && err.message ? String(err.message).slice(0, 160) : 'the AI did not answer';
