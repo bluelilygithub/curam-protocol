@@ -3,14 +3,10 @@
 
 export const GT = {
   // Tabs
-  tabToday: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
-  tabCoach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
+  tabCoach: 'Coach: a practice session built to the time you have.',
   tabStrum: 'Strum: strumming arrows that move with the beat, and a ladder that builds up to a full pattern.',
-  tabEar: 'Ear: train your ear on the chords and keys of your own songs.',
-  tabLearn: 'Learn: tick the chords you can play, see which songs you can already play, and what to learn next.',
   tabDrills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
-  tabLibrary: 'Library: add songs and say how well you know each one.',
-  tabPlayer: 'Player: the chord chart for the open song, with playback, loops, the key and the capo.',
+  tabLibrary: 'Library: add songs, say how well you know each one, and open one to play along.',
 
   // Today and the practice log
   startDrill: 'Open this chord change in Drills and start the one-minute drill.',
@@ -132,6 +128,7 @@ export const GT = {
 
   // Glossary
   glossTerm: 'Press for a short explanation of this word.',
+  allSongs: 'Go back to the list of all your songs.',
   glossSearch: 'Search the words guitarists use and what they mean.',
 
   // Make it easier

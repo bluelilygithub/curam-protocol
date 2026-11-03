@@ -14,9 +14,9 @@ const btnLine = { borderColor: 'var(--color-border)', color: 'var(--color-text)'
 /**
  * Major and minor pairs: E and Em, A and Am, D and Dm. In each pair one note changes (the 3rd), so the drill is moving one finger back and
  * forth. Shows the two shapes with the changing note in words, plays them one after the other, starts the one-minute drill on the pair,
- * and sends you to the "Major or minor?" ear round. `onDrill({ a, b })` starts the drill; `onOpenEar` switches to the Ear tab.
+ * `onDrill({ a, b })` starts the drill.
  */
-export default function MajorMinorPairs({ onDrill, onOpenEar, refreshKey }) {
+export default function MajorMinorPairs({ onDrill, refreshKey }) {
   const [bests, setBests] = useState([]);
   const ctxRef = useRef(null);
 
@@ -75,11 +75,6 @@ export default function MajorMinorPairs({ onDrill, onOpenEar, refreshKey }) {
           </div>
         );
       })}
-      <Tooltip text={GT.pairsEar}>
-        <button onClick={onOpenEar} className="self-start text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200" style={btnLine}>
-          Test your ear: major or minor?
-        </button>
-      </Tooltip>
     </section>
   );
 }

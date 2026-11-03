@@ -20,13 +20,11 @@ import SimplifyPanel from './guitar/SimplifyPanel';
 import { simplifySong, thinChanges } from './guitar/simplify.mjs';
 import TransitionDrills from './guitar/TransitionDrills';
 import CoachView from './guitar/CoachView';
-import LearnView from './guitar/LearnView';
-import EarTraining from './guitar/EarTraining';
 import StrumTrainer from './guitar/StrumTrainer';
 import FingerpickLadder from './guitar/FingerpickLadder';
 import GapClick from './guitar/GapClick';
-import { GentleTips, MilestonesCard } from './guitar/ProgressCards';
 import GigMode from './guitar/GigMode';
+import GlossaryList from './guitar/GlossaryList';
 import SetLists from './guitar/SetLists';
 import ExplainDialog from './guitar/ExplainDialog';
 import { analyseSong, shapeAtCapo } from './guitar/theory.mjs';
@@ -557,94 +555,17 @@ function PracticeDialog({ song, loop, onClose, onSaved }) {
   );
 }
 
-/** Today: "I have 20 minutes, what should I do?" */
-function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
-  const [queue, setQueue] = useState(null);
-  const [logging, setLogging] = useState(null); // { song, loop }
-  const [saved, setSaved] = useState(0);         // bumped when a practice is logged, so the milestones and tips look again
-
-  const load = useCallback(() => {
-    api.get('/api/guitar/practice/queue').then(r => r.json()).then(d => setQueue(d))
-      .catch(() => setQueue({ items: [], week: { sessions: 0, minutes: 0 } }));
-  }, []);
-  useEffect(() => { load(); }, [load, refreshKey]);
-
-  if (!queue) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
-  const songOf = (id) => songs.find(s => s.id === id);
-  const KIND = { learning: 'Learn', loop: 'Work up a loop', rusty: 'Revive', polishing: 'Polish', transition: 'Chord change drill' };
-
-  return (
-    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:gap-x-6 xl:gap-y-0 xl:items-start">
-      <div className="min-w-0 xl:col-start-2 xl:row-start-1 empty:hidden xl:[&:not(:empty)]:mb-4"><GentleTips refreshKey={`${refreshKey}-${saved}`} /></div>
-      <div className="min-w-0 flex flex-col gap-4 xl:col-start-1 xl:row-start-1 xl:row-span-2">
-      <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-        This week: {queue.week.sessions} {queue.week.sessions === 1 ? 'session' : 'sessions'}
-        {queue.week.minutes ? `, ${queue.week.minutes} min logged` : ''}.
-      </p>
-      {queue.items.length === 0 ? (
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-          Nothing due. Songs you are learning, polishing or letting go rusty will show up here. Set a song's status in the Library tab.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {queue.items.map((it, i) => {
-            const song = songOf(it.songId);
-            return (
-              <div key={`${it.kind}-${it.songId}-${i}`} className="rounded-xl border p-4 flex items-center gap-3 flex-wrap"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{KIND[it.kind]}</p>
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                    {it.title}{it.loopName ? ` · ${it.loopName}` : ''}
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                    {it.reason}{it.daysIdle != null ? ` · last played ${it.daysIdle === 0 ? 'today' : `${it.daysIdle}d ago`}` : ''}
-                  </p>
-                </div>
-                {it.kind === 'transition' ? (
-                  <Tooltip text={GT.startDrill}>
-                    <button onClick={() => onStartDrill({ a: it.a, b: it.b })}
-                      className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
-                      style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>Start drill</button>
-                  </Tooltip>
-                ) : (
-                  <>
-                    <PracticeBadge state={it.state} />
-                    {song && (
-                      <Tooltip text={GT.openSong}>
-                        <button onClick={() => onOpenSong(song)}
-                          className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Open</button>
-                      </Tooltip>
-                    )}
-                    <Tooltip text={GT.played}>
-                      <button onClick={() => setLogging({ song: { id: it.songId, title: it.title }, loop: it.loopId ? { id: it.loopId, name: it.loopName } : null })}
-                        className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
-                        style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
-                    </Tooltip>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      </div>
-      <div className="min-w-0 xl:col-start-2 xl:row-start-2"><MilestonesCard refreshKey={`${refreshKey}-${saved}`} onTipsChange={() => setSaved(n => n + 1)} /></div>
-      {logging && <PracticeDialog song={logging.song} loop={logging.loop} onClose={() => setLogging(null)} onSaved={() => { load(); setSaved(n => n + 1); onPlayed?.(); }} />}
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Today', 'Learn', 'Coach', 'Drills', 'Ear', 'Strum', 'Library', 'Player'];
+const TABS = ['Coach', 'Drills', 'Strum', 'Library'];
 
 export default function GuitarPage() {
   const getIcon = useIcon();
   const info = useToolInfoModal('vault_guitar_info_seen');
   const [params, setParams] = useSearchParams();
-  const [tab, setTab]           = useState('Today');
+  const [tab, setTab]           = useState('Coach');
   const [practiceDialog, setPracticeDialog] = useState(null); // song being logged from Library / Player
+  const [showPlayer, setShowPlayer] = useState(false);   // a song is open inside Library
+  const [showWords, setShowWords] = useState(false);     // the "Words guitarists use" list
   const [practiceTick, setPracticeTick]     = useState(0);
   const [songs, setSongs]       = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -788,7 +709,7 @@ export default function GuitarPage() {
     setActiveSong(song);
     setTranspose(song.transposeOffset ?? 0);
     setCapoFret(song.capoOverride ?? 0); // Capo does not rewrite chart chord names
-    setTab('Player');
+    setTab('Library'); setShowPlayer(true);
     setKeyChoice('auto');
     setEasyMode('off'); setEasyFewer(false);
     setLoopActive(null); // a loop belongs to one song; also puts the speed back to normal
@@ -871,9 +792,9 @@ export default function GuitarPage() {
   }, [chords, autoScroll, loopActive]);
 
   useEffect(() => {
-    if (tab === 'Player' && activeSong?.status === 'done' && playerRef.current) startRaf();
+    if (tab === 'Library' && showPlayer && activeSong?.status === 'done' && playerRef.current) startRaf();
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [tab, activeSong, startRaf]);
+  }, [tab, showPlayer, activeSong, startRaf]);
 
   const onPlayerReady = () => { startRaf(); };
 
@@ -1094,11 +1015,18 @@ export default function GuitarPage() {
                 {getIcon('compass', { size: 16 })}
               </button>
             </Tooltip>
+            <Tooltip text={GT.glossSearch}>
+              <button type="button" onClick={() => setShowWords(true)}
+                className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 transition-opacity duration-200"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                Words guitarists use
+              </button>
+            </Tooltip>
           </div>
           <div className="flex gap-0" data-tour="guitar-tabs">
             {TABS.map(t => (
               <Tooltip text={tabTip(t)} key={t}>
-                <button onClick={() => setTab(t)}
+                <button onClick={() => { if (t === 'Library') setShowPlayer(false); setTab(t); }}
                   className="text-sm px-4 py-2 border-b-2 transition-colors flex-shrink-0"
                   style={{
                     background: 'transparent',
@@ -1113,21 +1041,6 @@ export default function GuitarPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* ── Today tab ────────────────────────────────────────────────── */}
-        {tab === 'Today' && (
-          <div className="p-6 max-w-[1700px]" data-tour="guitar-today">
-            <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()}
-              onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }} />
-          </div>
-        )}
-
-        {/* ── Learn tab ────────────────────────────────────────────────── */}
-        {tab === 'Learn' && (
-          <div className="p-6 max-w-[1700px]" data-tour="guitar-learn">
-            <LearnView songs={songs} onOpenSong={openSong} />
-          </div>
-        )}
-
         {/* ── Coach tab ────────────────────────────────────────────────── */}
         {tab === 'Coach' && (
           <div className="p-6 max-w-[1700px]">
@@ -1140,14 +1053,7 @@ export default function GuitarPage() {
         {/* ── Drills tab ───────────────────────────────────────────────── */}
         {tab === 'Drills' && (
           <div className="p-6 max-w-[1700px]" data-tour="guitar-drills">
-            <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} onOpenEar={() => setTab('Ear')} />
-          </div>
-        )}
-
-        {/* ── Ear tab ──────────────────────────────────────────────────── */}
-        {tab === 'Ear' && (
-          <div className="p-6 max-w-5xl" data-tour="guitar-ear">
-            <EarTraining />
+            <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} />
           </div>
         )}
 
@@ -1163,7 +1069,7 @@ export default function GuitarPage() {
         )}
 
         {/* ── Library tab ──────────────────────────────────────────────── */}
-        {tab === 'Library' && (
+        {tab === 'Library' && !showPlayer && (
           <div className="p-6 max-w-[1700px] flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:gap-x-6 xl:items-start">
             {/* Add song — three modes */}
             <div data-tour="guitar-add" className="min-w-0 xl:col-start-1 xl:row-start-1">
@@ -1372,12 +1278,17 @@ export default function GuitarPage() {
           </div>
         )}
 
-        {/* ── Player tab ───────────────────────────────────────────────── */}
-        {tab === 'Player' && (
+        {/* ── Library tab, a song opened (the player) ───────────────────── */}
+        {tab === 'Library' && showPlayer && (
           <div className="p-4 flex flex-col gap-4 max-w-[1700px]">
+            <Tooltip text={GT.allSongs}><button type="button" onClick={() => setShowPlayer(false)}
+              className="self-start text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
+              ← All songs
+            </button></Tooltip>
             {!activeSong ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                Select a song from the Library tab.
+                Choose a song from the list.
               </p>
             ) : (
               <>
@@ -1720,6 +1631,11 @@ export default function GuitarPage() {
             ))}
           </div>
         </ToolInfoModal>
+      )}
+      {showWords && (
+        <Dialog title="Words guitarists use" size="xl" onClose={() => setShowWords(false)}>
+          <div className="p-2"><GlossaryList /></div>
+        </Dialog>
       )}
       {gig && <GigMode queue={gig.queue} startIndex={gig.startIndex} onClose={() => setGig(null)} />}
       {explaining && <ExplainDialog song={explaining.song} analysis={explaining.analysis} onClose={() => setExplaining(null)} />}

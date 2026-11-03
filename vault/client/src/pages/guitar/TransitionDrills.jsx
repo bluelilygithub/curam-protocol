@@ -235,7 +235,7 @@ function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
 }
 
 /** Drills tab: the chord changes your own songs use most, worst first, and the one-minute drill. */
-export default function TransitionDrills({ initialPair, onChanged, onOpenEar }) {
+export default function TransitionDrills({ initialPair, onChanged }) {
   const [rows, setRows] = useState(null);
   const [pair, setPair] = useState(initialPair || null);
   const [known, setKnown] = useState(() => new Set());
@@ -265,7 +265,7 @@ export default function TransitionDrills({ initialPair, onChanged, onOpenEar }) 
           onSaved={() => { load(); setSavedTick(t => t + 1); onChanged?.(); }} />
       )}
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-2 xl:items-start">
-        <MajorMinorPairs onDrill={setPair} onOpenEar={onOpenEar} refreshKey={savedTick} />
+        <MajorMinorPairs onDrill={setPair} refreshKey={savedTick} />
         <BarreLadder />
       </div>
       {rows.length === 0 ? (

@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
 import { GT, FOCUS_TIPS } from './guitarTips.mjs';
 import { GlossText } from './GlossaryTerm';
+import { routeStages } from './coachRoute.mjs';
 
 const MINUTES = [15, 20, 30, 45, 60];
 const FOCUS = [
@@ -19,6 +20,25 @@ const card = { borderColor: 'var(--color-border)', background: 'var(--color-surf
 const btnPrimary = { background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' };
 const btnLine = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
+function RouteBlock({ block }) {
+  const r = routeStages(block.a, block.b, block.minutes);
+  return (
+    <div className="flex flex-col gap-1.5 mt-1.5" data-route>
+      {r.pick && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Route in {r.pick.key} ({r.pick.numerals}): <strong style={{ color: 'var(--color-text)' }}>{r.route.join(' → ')}</strong>
+          {r.pick.inBetween.length > 0 ? `. Chords between: ${r.pick.inBetween.join(', ')}.` : '.'}
+        </p>
+      )}
+      {r.stages.map((st, i) => (
+        <p key={i} className="text-xs" style={{ color: 'var(--color-text)' }}>
+          <span className="font-mono" style={{ color: 'var(--color-primary)' }}>{st.minutes} min</span> · <GlossText text={st.text} />
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function Source({ source }) {
   return (
     <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -29,28 +49,14 @@ function Source({ source }) {
   );
 }
 
-/** Coach tab: the weekly review and the practice session builder. The numbers and the plan are worked out in code; AI only writes the wording. */
+/** Coach tab: the practice session builder. The numbers and the plan are worked out in code; AI only writes the wording. */
 export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
   const addToast = useToastStore(s => s.addToast);
-  const [review, setReview] = useState(null);
-  const [reviewing, setReviewing] = useState(false);
   const [minutes, setMinutes] = useState(30);
   const [focus, setFocus] = useState([]);
   const [note, setNote] = useState('');
   const [plan, setPlan] = useState(null);
   const [building, setBuilding] = useState(false);
-
-  const writeReview = useCallback(async () => {
-    if (reviewing) return;
-    setReviewing(true);
-    try {
-      const res = await api.get('/api/guitar-coach/week');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setReview(data);
-    } catch (e) { addToast(e.message, 'error'); }
-    finally { setReviewing(false); }
-  }, [reviewing, addToast]);
 
   const build = async () => {
     if (building) return;
@@ -66,43 +72,11 @@ export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
 
   const toggle = (k) => setFocus(f => (f.includes(k) ? f.filter(x => x !== k) : [...f, k]));
   const songOf = (id) => songs.find(s => s.id === id);
-  const f = review?.facts;
 
   return (
-    <div className="flex flex-col gap-6 xl:grid xl:grid-cols-2 xl:items-start">
-      {/* Weekly review */}
-      <section className="rounded-xl border p-4 flex flex-col gap-3" style={card} data-tour="guitar-coach">
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>This week</h2>
-        {!review && (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            A short review of your last seven days: time played, loops you sped up, chord changes that are stalling and songs going rusty.
-          </p>
-        )}
-        <Tooltip text={GT.coachReview}>
-          <button onClick={writeReview} disabled={reviewing}
-            className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40 hover:opacity-70 transition-opacity duration-200" style={btnPrimary}>
-            {reviewing ? 'Writing…' : review ? 'Write it again' : 'Write my review'}
-          </button>
-        </Tooltip>
-        {review && (
-          <>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}><GlossText text={review.review} /></p>
-            <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-              <span>{f.sessions} {f.sessions === 1 ? 'session' : 'sessions'}</span>
-              <span>· {f.minutes} min logged</span>
-              {f.loops.filter(l => l.improved).map(l => (
-                <span key={`${l.title}-${l.loopName}`}>· {l.title} {l.loopName}: {l.fromBpm != null ? `${l.fromBpm} to ${l.toBpm} bpm` : `${l.fromPct}% to ${l.toPct}%`}</span>
-              ))}
-              {f.stalled.map(s => <span key={s.pair}>· {s.pair} stalling at {s.rate} a minute</span>)}
-              {f.rusty.length > 0 && <span>· rusty: {f.rusty.join(', ')}</span>}
-            </div>
-            <Source source={review.source} />
-          </>
-        )}
-      </section>
-
+    <div className="flex flex-col gap-6 max-w-3xl">
       {/* Session builder */}
-      <section className="rounded-xl border p-4 flex flex-col gap-3" style={card}>
+      <section className="rounded-xl border p-4 flex flex-col gap-3" style={card} data-tour="guitar-coach">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Build a session</h2>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Time I have</span>
@@ -147,8 +121,8 @@ export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
                   <span className="text-sm font-mono w-14 flex-shrink-0" style={{ color: 'var(--color-primary)' }}>{b.minutes} min</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{KIND[b.kind]}</p>
-                    <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{b.title}{b.loopName ? ` · ${b.loopName}` : ''}</p>
-                    {b.tip && <p className="text-xs" style={{ color: 'var(--color-muted)' }}><GlossText text={b.tip} /></p>}
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{b.kind === 'transitions' ? `${b.a} to ${b.b}` : b.title}{b.loopName ? ` · ${b.loopName}` : ''}</p>
+                    {b.kind === 'transitions' ? <RouteBlock block={b} /> : b.tip && <p className="text-xs" style={{ color: 'var(--color-muted)' }}><GlossText text={b.tip} /></p>}
                   </div>
                   {b.kind === 'transitions' ? (
                     <Tooltip text={GT.startDrill}>

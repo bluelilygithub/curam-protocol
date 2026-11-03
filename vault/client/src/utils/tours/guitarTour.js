@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_guitar_completed';
 
-const TOTAL_STEPS = 15;
+const TOTAL_STEPS = 12;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -29,7 +29,7 @@ function safeBeforeShow(tour, stepId, selector) {
   }
 }
 
-/** goTab(name) switches the page to a tab ('Today', 'Drills', 'Library', 'Player'). */
+/** goTab(name) switches the page to a tab ('Coach', 'Drills', 'Strum', 'Library'). */
 export function startGuitarTour({ goTab } = {}) {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
 
@@ -63,10 +63,10 @@ export function startGuitarTour({ goTab } = {}) {
 
   tour.addStep({
     id: 'guitar-tabs',
-    title: 'Eight tabs',
-    text: 'Today is what to play next. Learn shows what you can already play. Coach reviews your week and builds a session. Drills is for chord changes, Ear is ear training and Strum is strumming with a backing band. Library is where songs live and Player is the chart for the song you have open.',
+    title: 'Four tabs',
+    text: 'Coach builds a practice session for the time you have. Drills is for chord changes, Strum is strumming with a backing band, and Library holds your songs: press one to open its chart. Words guitarists use, at the top, explains any term.',
     attachTo: { element: '[data-tour="guitar-tabs"]', on: 'bottom' },
-    beforeShowPromise: onTab('guitar-tabs', 'Today', '[data-tour="guitar-tabs"]'),
+    beforeShowPromise: onTab('guitar-tabs', 'Coach', '[data-tour="guitar-tabs"]'),
     when: { show() { injectStepCounter(2); } },
     buttons: [btnBack(), btnNext],
   });
@@ -92,32 +92,12 @@ export function startGuitarTour({ goTab } = {}) {
   });
 
   tour.addStep({
-    id: 'guitar-today',
-    title: 'Today',
-    text: 'A short list for the time you have: a song you are learning, a loop to work up, a song going rusty, a song to polish and a chord change to drill. Below it are your milestones, worked out from what you have really done, and a note that says whether something hard is normal when it fits. There is no streak to keep.',
-    attachTo: { element: '[data-tour="guitar-today"]', on: 'bottom' },
-    beforeShowPromise: onTab('guitar-today', 'Today', '[data-tour="guitar-today"]'),
-    when: { show() { injectStepCounter(5); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  tour.addStep({
-    id: 'guitar-learn',
-    title: 'What can I play?',
-    text: 'Tick the chords you can play cleanly. Vault then shows which of your songs use only those chords, which chord to learn next and how many songs it opens up, and, for a song you want to play, the chords to learn first. Words with a dotted underline, like capo or barre, explain themselves when you press them, and the full list is at the bottom of this tab.',
-    attachTo: { element: '[data-tour="guitar-learn"]', on: 'bottom' },
-    beforeShowPromise: onTab('guitar-learn', 'Learn', '[data-tour="guitar-learn"]'),
-    when: { show() { injectStepCounter(6); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  tour.addStep({
     id: 'guitar-chart',
     title: 'The chord chart',
-    text: 'Open a song to see its chart. Click a chord to hear it and see its shapes, double-click one to correct it, and transpose or set a capo above. Open a song from the Library first to see this.',
+    text: 'Open a song to see its chart. Click a chord to hear it and see its shapes, double-click one to correct it, and transpose or set a capo above. Press a song in the Library to open it.',
     attachTo: { element: '[data-tour="guitar-chart"]', on: 'right' },
-    beforeShowPromise: onTab('guitar-chart', 'Player', '[data-tour="guitar-chart"]'),
-    when: { show() { injectStepCounter(7); } },
+    beforeShowPromise: onTab('guitar-chart', 'Library', '[data-tour="guitar-chart"]'),
+    when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -126,8 +106,8 @@ export function startGuitarTour({ goTab } = {}) {
     title: 'Key, numerals and capo',
     text: 'This box shows the song\'s key, puts a Roman numeral under each chord, marks chords that borrow from elsewhere, and suggests the capo that leaves the fewest barre chords. The key is a guess, so change it if the numerals look wrong. Under it, you can tell Vault the lowest and highest notes you can sing and it suggests the key that suits your voice.',
     attachTo: { element: '[data-tour="guitar-theory"]', on: 'left' },
-    beforeShowPromise: onTab('guitar-theory', 'Player', '[data-tour="guitar-theory"]'),
-    when: { show() { injectStepCounter(8); } },
+    beforeShowPromise: onTab('guitar-theory', 'Library', '[data-tour="guitar-theory"]'),
+    when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -136,8 +116,8 @@ export function startGuitarTour({ goTab } = {}) {
     title: 'Make it easier',
     text: 'Choose Same sound to move the capo so there are fewer barre chords, or Easier chords to swap hard chords for easy ones (F becomes Fmaj7). The chart then shows the shapes to finger, with the chord it sounds as underneath. It says what changes in the sound.',
     attachTo: { element: '[data-tour="guitar-simplify"]', on: 'left' },
-    beforeShowPromise: onTab('guitar-simplify', 'Player', '[data-tour="guitar-simplify"]'),
-    when: { show() { injectStepCounter(9); } },
+    beforeShowPromise: onTab('guitar-simplify', 'Library', '[data-tour="guitar-simplify"]'),
+    when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -146,18 +126,18 @@ export function startGuitarTour({ goTab } = {}) {
     title: 'Loops and the tempo trainer',
     text: 'Save a section as a loop, then slow it down without changing the pitch. Start at 70% and tap Clean after each clean pass: after a few in a row the speed goes up. Your best speeds are charted.',
     attachTo: { element: '[data-tour="guitar-loops"]', on: 'left' },
-    beforeShowPromise: onTab('guitar-loops', 'Player', '[data-tour="guitar-loops"]'),
-    when: { show() { injectStepCounter(10); } },
+    beforeShowPromise: onTab('guitar-loops', 'Library', '[data-tour="guitar-loops"]'),
+    when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'guitar-coach',
     title: 'Your coach',
-    text: 'Write a short review of your last seven days, or tell it how long you have and it builds a session from your own songs, loops and chord changes. The numbers and the plan come from your practice; AI only writes the wording.',
+    text: 'Tell it how long you have and it builds a session from your own songs, loops and chord changes. A chord change comes as a route through the chords between the two, slowly first and then faster. The plan comes from your practice; AI only writes the wording.',
     attachTo: { element: '[data-tour="guitar-coach"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-coach', 'Coach', '[data-tour="guitar-coach"]'),
-    when: { show() { injectStepCounter(11); } },
+    when: { show() { injectStepCounter(9); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -167,17 +147,7 @@ export function startGuitarTour({ goTab } = {}) {
     text: 'Drills lists the chord changes your own songs use most, worst first. Above them, Major and minor pairs shows the one note that changes between E and Em, A and Am, and D and Dm. Under it, the Barre chord ladder takes the barre chord in five steps, each cleared with three clean ten-second holds. Press Drill, then choose just the two chords or a progression that goes between them through other chords. Finger moves shows which fingers can stay put, which slide and which lift, and then you tap each clean change for a minute. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-drills"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-drills', 'Drills', '[data-tour="guitar-drills"]'),
-    when: { show() { injectStepCounter(12); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  tour.addStep({
-    id: 'guitar-ear',
-    title: 'Ear training',
-    text: 'Choose a round: major or minor, name the chord, find the bass note, name the Roman numeral, or name the progression. You hear chords from your own songs, rounds are ten questions, the chords you miss come up more often, and your scores are kept.',
-    attachTo: { element: '[data-tour="guitar-ear"]', on: 'bottom' },
-    beforeShowPromise: onTab('guitar-ear', 'Ear', '[data-tour="guitar-ear"]'),
-    when: { show() { injectStepCounter(13); } },
+    when: { show() { injectStepCounter(10); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -187,17 +157,17 @@ export function startGuitarTour({ goTab } = {}) {
     text: 'The arrows show your strumming pattern in time with a click. Your arm swings down on every beat and up in between; solid arrows hit the strings, faint ones are air swings. The ladder starts with a down on every beat and adds one up strum at a time, and a backing band of drums and bass can play along on a chord loop. Below it, the fingerpicking ladder teaches picking one string at a time, from the thumb alone up to Travis picking, with a small tab that lights up in time. At the bottom, the gap click turns the metronome off in gaps while you tap, to show whether your own beat holds steady.',
     attachTo: { element: '[data-tour="guitar-strum"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-strum', 'Strum', '[data-tour="guitar-strum"]'),
-    when: { show() { injectStepCounter(14); } },
+    when: { show() { injectStepCounter(11); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'guitar-setlists',
     title: 'Set lists and play mode',
-    text: 'Put songs in playing order in a set list, then press Play for a big chart that follows the song at its tempo. The Play mode button in the Player does the same for one song. Arrow keys and Page keys move through it, so a foot pedal or page turner works. Stuck on anything? Press the round button at the bottom right and ask the guide.',
+    text: 'Put songs in playing order in a set list, then press Play for a big chart that follows the song at its tempo. The Play mode button on an open song does the same for one song. Arrow keys and Page keys move through it, so a foot pedal or page turner works. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-setlists"]', on: 'top' },
     beforeShowPromise: onTab('guitar-setlists', 'Library', '[data-tour="guitar-setlists"]'),
-    when: { show() { injectStepCounter(15); } },
+    when: { show() { injectStepCounter(12); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },
