@@ -252,7 +252,7 @@ export default function DevicePreviewPage() {
               {screens.map((d) => {
                 const l = cardLayout(d, { zoom, landscape });
                 return (
-                  <figure key={d.id} className="flex-shrink-0 m-0">
+                  <figure key={d.id} className="flex-shrink-0 m-0 first:ml-auto last:mr-auto">
                     <figcaption className="text-xs mb-1.5" style={{ color: 'var(--color-text)' }}>
                       <span className="font-medium">{d.label}</span> <span style={{ color: 'var(--color-muted)' }}>{l.width} x {l.height}{l.scale < 1 ? `, shown at ${Math.round(l.scale * 100)}%` : ''}</span>
                     </figcaption>
