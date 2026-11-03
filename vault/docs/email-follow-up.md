@@ -104,6 +104,8 @@ A button never does unlimited work in one request. The ones that can have more t
 
 **Check Sent in detail.** Each press reads one page of Sent. A failure part-way is recorded as an error and the next press starts again, but messages already stored are not downloaded twice. Once a check has finished, a later check only searches the recent tail (from an hour before the last one) as long as it covers the same addresses and reaches back at least as far as the case now needs; adding an address to the case, or attaching older mail, makes the next check look back over the whole window again. (It used to stop at 300 sent messages with "narrow the case first", with no way to narrow it, which left drafting blocked for good on a long-running client.) Draft follow-up starts the check itself if it is stale; on a big Sent folder it says the check takes a few steps and drafts nothing until you have pressed Check Sent through to the end.
 
+**Reading an attached message (2026-11-04).** On the Mail tab each attached message, and each attachment read as text, has a **Read** button that opens its stored text inline (`GET /api/email-follow-up/:id/sources/:sourceId`, owner-checked through the case, no Gmail call, plain text only). It shows the text the AI actually reads, so a wrong extraction is visible. Looking changes nothing.
+
 **Rate limit.** Every route that calls Gmail (Find mail, preview, attach, Get attachments, Check Sent, drafting, copying) is limited to 60 a minute per person; Read has its own AI limit.
 
 ## Route and storage test

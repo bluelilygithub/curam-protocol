@@ -709,6 +709,9 @@
   "POST /api/email-follow-up/:id/threads/:threadId/detach": {
    "class": "authed"
   },
+  "GET /api/email-follow-up/:id/sources/:sourceId": {
+   "class": "authed"
+  },
   "GET /api/email-follow-up/:id/threads/:threadId/preview": {
    "class": "authed"
   },

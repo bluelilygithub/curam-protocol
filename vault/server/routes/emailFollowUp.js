@@ -325,6 +325,22 @@ router.get('/:id/threads/:threadId/preview', gmailLimiter, async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// Read one attached message (or attachment) as stored with the case: plain text, no Gmail call. Nothing is changed by looking.
+router.get('/:id/sources/:sourceId', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    const sourceId = Number(req.params.sourceId);
+    if (!Number.isInteger(sourceId)) return res.status(400).json({ error: 'Bad message.' });
+    const s = await store.getSource(c.id, sourceId);
+    if (!s) return res.status(404).json({ error: 'That message is not in this case.' });
+    res.json({
+      id: s.id, subject: s.subject || '', from: s.fromAddr || '', to: s.toAddr || '', channel: s.channel, receivedAt: s.receivedAt,
+      filename: s.filename || null, parseStatus: s.parseStatus, parseReason: s.parseReason || null, text: String(s.text || ''),
+    });
+  } catch (err) { fail(res, err); }
+});
+
 // Set a thread aside (kept, so anything that cites it still resolves, but no longer read) or bring it back.
 router.post('/:id/threads/:threadId/set-aside', async (req, res) => {
   try {

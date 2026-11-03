@@ -62,6 +62,8 @@ export const EF_TIPS = {
   tabCoverage: 'What the tool read, what it could not see, and what you must check yourself.',
   preview: 'Read the emails in this thread here before deciding. Nothing is attached or saved by looking.',
   hidePreview: 'Close the preview.',
+  readMail: 'Read this message as it is stored with the case. This is the text the AI reads. Nothing is changed by looking.',
+  hideMail: 'Close this message.',
   attach:'Attach every message in this thread to the case. You can then read them into the ledger.',
   // ledger rows
   draftFollowup: 'Writes follow-up text from this row\'s own quoted words. If you are chasing someone it checks your Sent folder first. Nothing is sent.',

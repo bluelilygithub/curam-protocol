@@ -473,6 +473,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [aliases, setAliases] = useState('');
   const [lastRead, setLastRead] = useState(null);
   const [previews, setPreviews] = useState({}); // threadId -> 'loading' | messages[]
+  const [opened, setOpened] = useState({}); // sourceId -> 'loading' | the stored message
   const [lastAtt, setLastAtt] = useState(null);
   const navigate = useNavigate();
   const [editClient, setEditClient] = useState(false);
@@ -566,6 +567,27 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
     const r = await call(() => api.post(`/api/email-follow-up/${caseId}/threads/${threadId}/${what}`, body || {}));
     setRemoving('');
     if (r.ok) reload();
+  };
+
+  const toggleOpen = async (sourceId) => {
+    if (opened[sourceId]) { setOpened((o) => { const n = { ...o }; delete n[sourceId]; return n; }); return; }
+    setOpened((o) => ({ ...o, [sourceId]: 'loading' }));
+    const r = await call(() => api.get(`/api/email-follow-up/${caseId}/sources/${sourceId}`));
+    setOpened((o) => { const n = { ...o }; if (r.ok) n[sourceId] = r.data; else delete n[sourceId]; return n; });
+  };
+
+  const OpenedText = ({ id }) => {
+    const m = opened[id];
+    if (!m) return null;
+    if (m === 'loading') return <p style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+    return (
+      <div className="rounded-lg p-3 space-y-1 max-h-96 overflow-y-auto" style={{ background: 'var(--color-surface)' }}>
+        {(m.from || m.to) && <p className="font-medium">{m.channel === 'sent' ? 'You sent' : 'From'} {m.from}{m.to ? ` · to ${m.to}` : ''}</p>}
+        {m.subject && <p style={{ color: 'var(--color-muted)' }}>{m.subject}</p>}
+        {m.parseStatus !== 'parsed' && <p style={{ color: WARN }}>{m.parseReason || 'This could not be read as text.'}</p>}
+        <p className="whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{m.text || '(no text)'}</p>
+      </div>
+    );
   };
 
   const togglePreview = async (threadId) => {
@@ -792,12 +814,21 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
                   </div>
                   {t.msgs.map((s) => (
                     <div key={s.id} className="text-xs space-y-1 pl-3 border-l-2" style={{ borderColor: 'var(--color-border)' }}>
-                      <p className="font-medium">{s.label}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium flex-1 min-w-0">{s.label}</p>
+                        <Btn small tip={opened[s.id] ? EF_TIPS.hideMail : EF_TIPS.readMail} onClick={() => toggleOpen(s.id)}>{opened[s.id] ? 'Close' : 'Read'}</Btn>
+                      </div>
+                      <OpenedText id={s.id} />
                       <p style={{ color: 'var(--color-muted)' }}>{s.receivedAt ? new Date(s.receivedAt).toLocaleString() : 'no date'} · {s.extractedAt ? 'read' : aside ? 'not read' : 'not read yet'}{s.parseReason ? ` · ${s.parseReason}` : ''}</p>
                       {docsOf(s.id).map((d) => (
-                        <p key={d.id} className="pl-3 border-l-2" style={{ borderColor: 'var(--color-border)', color: d.parseStatus === 'failed' ? BAD : d.parseStatus === 'parsed' ? GOOD : 'var(--color-muted)' }}>
+                        <div key={d.id} className="space-y-1"><p className="pl-3 border-l-2" style={{ borderColor: 'var(--color-border)', color: d.parseStatus === 'failed' ? BAD : d.parseStatus === 'parsed' ? GOOD : 'var(--color-muted)' }}>
                           {d.filename || 'file'} — {d.parseStatus === 'parsed' ? `read${/tesseract/.test(d.parser || '') ? ' by OCR (check the figures)' : ''}${d.extractedAt ? ' into the ledger' : ', not yet read into the ledger'}` : d.parseStatus === 'failed' ? `could not be read: ${d.parseReason}` : `not read: ${d.parseReason}`}
                         </p>
+                          {d.parseStatus === 'parsed' && (
+                            <div className="pl-3"><Btn small tip={opened[d.id] ? EF_TIPS.hideMail : EF_TIPS.readMail} onClick={() => toggleOpen(d.id)}>{opened[d.id] ? 'Close' : 'Read text'}</Btn></div>
+                          )}
+                          <OpenedText id={d.id} />
+                        </div>
                       ))}
                     </div>
                   ))}
