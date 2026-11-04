@@ -5,6 +5,7 @@ require('./notes');
 require('./tasks'); // tasks and goals
 require('./chats');
 require('./routeTracks');
+require('./domainSets');
 require('./graphicsRecipes');
 require('./topicResearch');
 require('./passwordVault');

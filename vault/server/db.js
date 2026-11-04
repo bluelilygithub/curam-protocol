@@ -1131,6 +1131,19 @@ async function initSchema() {
     `);
     // turn-by-turn directions that came with a planned route: [{ text, distanceM, durationS, type, pos:[lng,lat] }], null for a drawn or edited line
     await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS cues JSONB`);
+    // Domain page: a saved "set" is one business idea with the names, the preferred name and every tool's result (services/domainSets.js)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS domain_sets (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        preferred   TEXT,
+        data        JSONB NOT NULL DEFAULT '{}',
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_domain_sets_user ON domain_sets ("userId", "updatedAt" DESC)`);
     await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS favourite BOOLEAN NOT NULL DEFAULT FALSE`);
     // ── Graphics saved recipes: a named list of editing steps (settings only, never pictures) that can be re-run on any image or batch ──
     await client.query(`

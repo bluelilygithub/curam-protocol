@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
+const { pool } = require('../db');
+const sets = require('../services/domainSets');
 
 const DOMSCAN_BASE = 'https://domscan.net/v1';
 
@@ -10,6 +12,83 @@ function key() {
   if (!k) throw new Error('DOMSCAN_API_KEY environment variable is not set on this server. Add it in Railway → Variables and redeploy.');
   return k;
 }
+
+// ── Saved sets ──────────────────────────────────────────────
+// A set is one business idea kept with its names, preferred name and every tool's result, to come back to. Named routes, before any /:id.
+
+const SET_COLS = 'id, name, preferred, data, "createdAt", "updatedAt"';
+const setFail = (res, err) => res.status(err && err.status ? err.status : 500).json({ error: err && err.status ? err.message : 'Something went wrong. Please try again.' });
+const setId = (req) => { const n = Number(req.params.id); return Number.isInteger(n) && n > 0 ? n : null; };
+
+router.get('/sets', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT ${SET_COLS} FROM domain_sets WHERE "userId"=$1 ORDER BY "updatedAt" DESC LIMIT 200`, [req.user.id]);
+    res.json({ sets: rows.map(sets.summarise) });
+  } catch (err) { setFail(res, err); }
+});
+
+router.post('/sets', async (req, res) => {
+  try {
+    const name = sets.cleanSetName(req.body && req.body.name);
+    const data = sets.cleanSetData(req.body && req.body.data);
+    const { rows: n } = await pool.query('SELECT COUNT(*) AS n FROM domain_sets WHERE "userId"=$1', [req.user.id]);
+    if (Number(n[0].n) >= sets.MAX_SETS_PER_USER) return res.status(409).json({ error: `You have ${sets.MAX_SETS_PER_USER} saved sets. Delete some to save another.` });
+    const { rows } = await pool.query(
+      `INSERT INTO domain_sets ("userId", name, preferred, data) VALUES ($1,$2,$3,$4) RETURNING ${SET_COLS}`,
+      [req.user.id, name, data.preferred || null, JSON.stringify(data)]);
+    res.status(201).json({ set: { ...sets.summarise(rows[0]), data: rows[0].data } });
+  } catch (err) { setFail(res, err); }
+});
+
+router.get('/sets/:id', async (req, res) => {
+  try {
+    const id = setId(req);
+    if (!id) return res.status(400).json({ error: 'Bad set.' });
+    const { rows } = await pool.query(`SELECT ${SET_COLS} FROM domain_sets WHERE id=$1 AND "userId"=$2`, [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'That set was not found.' });
+    res.json({ set: { ...sets.summarise(rows[0]), data: rows[0].data } });
+  } catch (err) { setFail(res, err); }
+});
+
+router.put('/sets/:id', async (req, res) => {
+  try {
+    const id = setId(req);
+    if (!id) return res.status(400).json({ error: 'Bad set.' });
+    const name = sets.cleanSetName(req.body && req.body.name);
+    const data = sets.cleanSetData(req.body && req.body.data);
+    const { rows } = await pool.query(
+      `UPDATE domain_sets SET name=$1, preferred=$2, data=$3, "updatedAt"=NOW() WHERE id=$4 AND "userId"=$5 RETURNING ${SET_COLS}`,
+      [name, data.preferred || null, JSON.stringify(data), id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'That set was not found.' });
+    res.json({ set: { ...sets.summarise(rows[0]), data: rows[0].data } });
+  } catch (err) { setFail(res, err); }
+});
+
+// Deleting goes to the shared 30-day recycle bin, in the same transaction as the delete.
+router.delete('/sets/:id', async (req, res) => {
+  const id = setId(req);
+  if (!id) return res.status(400).json({ error: 'Bad set.' });
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows } = await db.query('SELECT * FROM domain_sets WHERE id=$1 AND "userId"=$2 FOR UPDATE', [id, req.user.id]);
+    if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That set was not found.' }); }
+    require('../services/recycleBin/adapters');
+    const bin = require('../services/recycleBin');
+    const d = rows[0].data || {};
+    const binId = await bin.moveToBin(db, {
+      userId: req.user.id, type: 'domain-set', id: rows[0].id, title: rows[0].name,
+      detail: `${(d.suggestions || []).length} names${rows[0].preferred ? ` · preferred: ${rows[0].preferred}` : ''}`,
+      payload: { set: rows[0] },
+    });
+    await db.query('DELETE FROM domain_sets WHERE id=$1 AND "userId"=$2', [id, req.user.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    setFail(res, err);
+  } finally { db.release(); }
+});
 
 // Quick config check — confirms the key is visible to the process
 router.get('/config-check', async (req, res) => {

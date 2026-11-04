@@ -562,6 +562,9 @@
   "POST /api/device-preview-tutor": {
    "class": "authed"
   },
+  "POST /api/domains-tutor": {
+   "class": "authed"
+  },
   "POST /api/dns-lookup-tutor": {
    "class": "authed"
   },
@@ -632,6 +635,21 @@
    "class": "authed"
   },
   "POST /api/document-redaction/propose": {
+   "class": "authed"
+  },
+  "GET /api/domains/sets": {
+   "class": "authed"
+  },
+  "POST /api/domains/sets": {
+   "class": "authed"
+  },
+  "GET /api/domains/sets/:id": {
+   "class": "authed"
+  },
+  "PUT /api/domains/sets/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/domains/sets/:id": {
    "class": "authed"
   },
   "GET /api/domains/config-check": {

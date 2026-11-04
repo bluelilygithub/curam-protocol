@@ -253,6 +253,7 @@ app.use('/api/email-follow-up', requireFeature('emailFollowUp'), require('./rout
 app.use('/api/crm-tutor', requireFeature('clients'), aiLimiter, require('./routes/crmTutor')); // the CRM guide chat (sees no clients, deals or notes)
 app.use('/api/shares-tutor', requireFeature('shares'), aiLimiter, require('./routes/sharesTutor')); // the Shares guide chat (sees no holdings or figures)
 app.use('/api/settings-tutor', aiLimiter, require('./routes/settingsTutor')); // the Settings and Admin guide chat (sees no settings, keys or users)
+app.use('/api/domains-tutor', requireFeature('domains'), aiLimiter, require('./routes/domainsTutor')); // the Domain guide chat (sees no descriptions, names or results)
 app.use('/api/dns-lookup-tutor',requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
 app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)
 app.use('/api/topic-research', requireFeature('topicResearch'), require('./routes/topicResearch'));

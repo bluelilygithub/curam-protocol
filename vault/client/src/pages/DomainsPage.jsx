@@ -4,6 +4,14 @@ import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import Dialog from '../components/Dialog';
+import { VoiceInputProvider, VoiceInput } from '../components/voiceInput/VoiceInput';
+import DomainsTutorChat from './domains/DomainsTutorChat';
+import { GUIDE_TOOLS } from './domains/domainsTools.mjs';
+import { CurrentSetPanel, SavedSetsPanel, BLANK_WS, dataOf, jsonOf, runPlan, deleteSets, announceDeleted } from './domains/SetsPanels';
+import SuggestionTable from './domains/SuggestionTable';
+import { planRun, assemble, handleOf, needHandles } from './domains/runAll.mjs';
+import useToastStore from '../store/toastStore';
+import { spokenName, spokenHandle, spokenBrand } from './domains/spoken.mjs';
 
 // ── Tool metadata ─────────────────────────────────────────────────────────────
 
@@ -33,6 +41,16 @@ const TOOL_HELP = {
     description: 'Check if your brand name is free on Instagram, X (Twitter), TikTok, LinkedIn, YouTube, GitHub, and more — all in one call.',
     features: ['Checks 10+ major platforms simultaneously', 'Available / taken / unknown status per platform', 'Username normalisation (handles special chars)', 'Results in seconds'],
   },
+  board: {
+    title: 'Current set',
+    description: 'Everything for the business idea you are working on: the preferred name, the result of every tool, and a place to save it all as a set.',
+    features: ['Run Name Scorer, Social Handles, Registrar Pricing, Domain Profile and Compare Names on the preferred name in one go', 'Results gather on one page', 'Save the set, with its names and results, to come back to later'],
+  },
+  sets: {
+    title: 'Saved sets',
+    description: 'Your saved sets. Open one to pick up where you left off, with the names and results exactly as they were saved.',
+    features: ['Open a set to see its names and results without any new lookups', 'Run all tools again on the board to refresh availability', 'Deleted sets stay in Settings, Recycle bin for 30 days'],
+  },
   pricing: {
     title: 'Registrar Pricing',
     description: 'Compare registration and renewal prices for a TLD across major registrars — Namecheap, GoDaddy, Cloudflare, Google Domains, and more.',
@@ -56,6 +74,11 @@ const MODE_GROUPS = [
     icon: 'shield-check',
     modes: ['social', 'pricing'],
   },
+  {
+    label: 'My sets',
+    icon: 'folder',
+    modes: ['board', 'sets'],
+  },
 ];
 
 const MODE_LABELS = {
@@ -65,6 +88,8 @@ const MODE_LABELS = {
   overview: 'Domain Profile',
   social: 'Social Handles',
   pricing: 'Registrar Pricing',
+  board: 'Current set',
+  sets: 'Saved sets',
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -121,18 +146,11 @@ function RunBtn({ onClick, busy, label = 'Run', disabled }) {
   );
 }
 
-function DomainInput({ value, onChange, placeholder = 'e.g. example.com', label }) {
+function DomainInput({ value, onChange, placeholder = 'e.g. example.com', label, speak = spokenName }) {
   return (
     <div>
       {label && <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>{label}</label>}
-      <input
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
-        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-      />
+      <VoiceInput value={value} onChange={onChange} placeholder={placeholder} label={label || placeholder} parse={speak} />
     </div>
   );
 }
@@ -152,7 +170,7 @@ function ResultCard({ data }) {
 }
 
 // Renders DomScan results in a human-readable way where possible
-function SmartResult({ mode, data }) {
+function SmartResult({ mode, data, pick }) {
   if (!data) return null;
 
   // Suggestions — new format: { suggestions[{name, results[{domain,tld,available}], hasAvailable}] }
@@ -174,6 +192,24 @@ function SmartResult({ mode, data }) {
                   </span>
                 )}
               </div>
+              {pick && (
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <Tooltip text="Add or remove this name from your shortlist. Shortlisted names are ranked against each other in Compare Names.">
+                    <button onClick={() => pick.onShortlist(s.name)} aria-pressed={pick.shortlist.includes(s.name)}
+                      className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity"
+                      style={pick.shortlist.includes(s.name) ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)' } : { borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                      {pick.shortlist.includes(s.name) ? '★ Shortlisted' : '☆ Shortlist'}
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Make this the preferred name. The other tools run on it.">
+                    <button onClick={() => pick.onPreferred(s.name)} aria-pressed={pick.preferred === s.name}
+                      className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity"
+                      style={pick.preferred === s.name ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      {pick.preferred === s.name ? '✓ Preferred' : 'Make preferred'}
+                    </button>
+                  </Tooltip>
+                </div>
+              )}
               {s.results.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {s.results.map((r, j) => (
@@ -314,22 +350,31 @@ function SmartResult({ mode, data }) {
 
 // ── Tool panels ───────────────────────────────────────────────────────────────
 
-function SuggestPanel() {
-  const [q, setQ] = useState('');
+function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkingHandles }) {
+  const [view, setView] = useState('cards'); // 'cards' or 'table'
+  const q = ws.description;
+  const setQ = (v) => setWs(w => ({ ...w, description: typeof v === 'function' ? v(w.description) : v }));
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
   const [err, setErr] = useState('');
+  const result = ws.suggestions ? { suggestions: ws.suggestions } : null;
+  const pick = ws.suggestions ? {
+    preferred: ws.preferred,
+    shortlist: ws.shortlist,
+    onPreferred: (name) => setWs(w => ({ ...w, preferred: w.preferred === name ? '' : name, results: w.preferred === name ? w.results : (w.results.handles ? { handles: w.results.handles } : {}), errors: w.preferred === name ? w.errors : {}, runAt: w.preferred === name ? w.runAt : null })),
+    onShortlist: (name) => setWs(w => ({ ...w, shortlist: w.shortlist.includes(name) ? w.shortlist.filter(n => n !== name) : [...w.shortlist, name].slice(0, 5) })),
+  } : null;
   const { startProcessing, stopProcessing } = useProcessingStore();
 
   const run = useCallback(async () => {
     if (!q.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
+    setBusy(true); setErr('');
     startProcessing('Generating name ideas…', 'AI generates names · DomScan checks availability.');
     try {
       const res = await api.get(`/api/domains/suggest?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setResult(data);
+      // a new batch of names starts the set over: the old preferred name, shortlist and results belonged to the old names
+      setWs(w => ({ ...w, suggestions: data.suggestions || [], preferred: '', shortlist: [], tableNames: [], results: {}, errors: {}, runAt: null }));
     } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
   }, [q]);
 
@@ -338,21 +383,54 @@ function SuggestPanel() {
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Describe your business or paste keywords</label>
         <Tooltip text="Plain English works best — the AI turns this description into 16 brand-name candidates.">
-          <textarea
-            rows={3}
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="e.g. We design and install bespoke wine fridges for luxury hotels and high-net-worth individuals"
-            className="w-full px-3 py-2 rounded-lg text-sm border outline-none resize-none"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <div data-guide="describe-business">
+            <VoiceInput
+              type="textarea" rows={3} append
+              value={q}
+              onChange={setQ}
+              placeholder="e.g. We design and install bespoke wine fridges for luxury hotels and high-net-worth individuals"
+              label="Describe your business or paste keywords"
+            />
+          </div>
         </Tooltip>
       </div>
       <Tooltip text="Generate 16 names and check their availability across 6 common TLDs.">
         <RunBtn onClick={run} busy={busy} label="Generate Names" disabled={!q.trim()} />
       </Tooltip>
       <ErrMsg msg={err} />
-      <SmartResult mode="suggest" data={result} />
+      {result && (
+        <div className="rounded-xl px-4 py-3 space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} data-guide="preferred-name">
+          <p className="text-xs" style={{ color: 'var(--color-text)' }}>
+            {ws.preferred ? <>Preferred name: <strong>{ws.preferred}</strong>{ws.shortlist.length ? ' · ' + ws.shortlist.length + ' shortlisted' : ''}</> : 'Choose a preferred name below, and shortlist the others you like, then run every tool on it.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Tooltip text="Run Name Scorer, Social Handles, Registrar Pricing, Domain Profile and Compare Names on the preferred name, and show them together on the Current set board.">
+              <button onClick={onRun} disabled={running || !ws.preferred}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                {running ? 'Checking…' : ws.preferred ? `Run all tools on ${ws.preferred}` : 'Run all tools'}
+              </button>
+            </Tooltip>
+            <Tooltip text="See the Current set board: the results so far, and where you save the set.">
+              <button onClick={() => goto('board')} className="px-3 py-1.5 rounded-lg text-sm border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Open Current set</button>
+            </Tooltip>
+          </div>
+        </div>
+      )}
+      {result && result.suggestions.length > 0 && (
+        <div className="flex items-center gap-1" role="group" aria-label="How to show the names">
+          <Tooltip text="Show each suggested name as a card, with the Shortlist and Make preferred buttons.">
+            <button onClick={() => setView('cards')} aria-pressed={view === 'cards'} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity"
+              style={view === 'cards' ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cards</button>
+          </Tooltip>
+          <Tooltip text="Show three suggestions side by side in a table, each with its domain endings and social media handles.">
+            <button onClick={() => setView('table')} aria-pressed={view === 'table'} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity"
+              style={view === 'table' ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Table of three</button>
+          </Tooltip>
+        </div>
+      )}
+      {view === 'table' && result
+        ? <SuggestionTable ws={ws} setWs={setWs} onCheckHandles={onCheckHandles} checking={checkingHandles} />
+        : <SmartResult mode="suggest" data={result} pick={pick} />}
     </div>
   );
 }
@@ -418,14 +496,9 @@ function ComparePanel() {
       <label className="block text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Brand name candidates (2–5)</label>
       {names.map((n, i) => (
         <Tooltip key={i} text="Enter a candidate name to include in the head-to-head comparison.">
-          <input
-            type="text"
-            value={n}
-            onChange={e => setName(i, e.target.value)}
-            placeholder={`Name ${i + 1}`}
-            className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <div>
+            <VoiceInput value={n} onChange={v => setName(i, v)} placeholder={`Name ${i + 1}`} label={`Brand name ${i + 1}`} parse={spokenBrand} />
+          </div>
         </Tooltip>
       ))}
       <div className="flex items-center gap-2">
@@ -501,7 +574,7 @@ function SocialPanel() {
   return (
     <div className="space-y-3">
       <Tooltip text="The handle you'd use across social platforms — checked against Instagram, X, TikTok, LinkedIn, YouTube, GitHub and more.">
-        <div><DomainInput value={username} onChange={setUsername} label="Brand / username to check" placeholder="e.g. mybrand" /></div>
+        <div><DomainInput value={username} onChange={setUsername} label="Brand / username to check" placeholder="e.g. mybrand" speak={spokenHandle} /></div>
       </Tooltip>
       <Tooltip text="Check this handle's availability across every supported platform at once.">
         <RunBtn onClick={run} busy={busy} label="Check Handles" disabled={!username.trim()} />
@@ -554,6 +627,8 @@ const PANELS = {
   overview: OverviewPanel,
   social: SocialPanel,
   pricing: PricingPanel,
+  board: CurrentSetPanel,
+  sets: SavedSetsPanel,
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -562,10 +637,92 @@ export default function DomainsPage() {
   const [mode, setMode] = useState('suggest');
   const [helpTool, setHelpTool] = useState(null);
   const getIcon = useIcon();
+  const addToast = useToastStore(s => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
+  const [ws, setWs] = useState(BLANK_WS);       // the set being worked on, shared by the Name Generator, the board and the saved list
+  const [running, setRunning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedTick, setSavedTick] = useState(0);
+  const [checkingHandles, setCheckingHandles] = useState(false);
+
+  // Social handles for the names in the side-by-side table: one lookup per name, kept with the set.
+  const checkHandles = async (names) => {
+    const todo = needHandles(ws.results && ws.results.handles, names);
+    if (!todo.length) return;
+    setCheckingHandles(true);
+    try {
+      const found = await Promise.all(todo.map(async (n) => {
+        try {
+          const res = await api.get(`/api/domains/social?username=${encodeURIComponent(handleOf(n))}`);
+          const d = await res.json();
+          if (!res.ok) throw new Error(d.error);
+          return [n, d];
+        } catch (e) { return [n, { error: e.message || 'Could not be checked.' }]; }
+      }));
+      const ok = found.filter(([, d]) => d && d.availability);
+      setWs(w => ({ ...w, results: { ...w.results, handles: { ...(w.results.handles || {}), ...Object.fromEntries(ok) } } }));
+      const bad = found.filter(([, d]) => !(d && d.availability));
+      if (bad.length) addToast(`Could not check handles for ${bad.map(([n, d]) => `${n} (${d.error || 'no answer'})`).join(', ')}.`, 'error');
+    } finally { setCheckingHandles(false); }
+  };
+
+  // Delete the set being worked on (it goes to the recycle bin), then show the saved list.
+  const deleteCurrent = async () => {
+    if (!ws.id) return;
+    const target = { id: ws.id, name: ws.name };
+    const result = await deleteSets([target]);
+    announceDeleted(addToast, [target], result, () => setSavedTick(t => t + 1));
+    if (result.deleted) { setWs(BLANK_WS); setSavedTick(t => t + 1); setMode('sets'); }
+  };
+
+  // Run every tool on the preferred name (the plan is in domains/runAll.mjs), then show the board.
+  const runAllTools = async () => {
+    const plan = planRun(ws);
+    if (!plan.jobs.length) { addToast(plan.skipped[0]?.reason || 'Choose a preferred name first.', 'error'); return; }
+    setRunning(true);
+    startProcessing(`Checking ${ws.preferred}…`, 'Score · social handles · prices · profile · compare.');
+    try {
+      const { results, errors } = assemble(plan, await runPlan(plan));
+      setWs(w => ({ ...w, results, errors, runAt: new Date().toISOString() }));
+      setMode('board');
+    } finally { setRunning(false); stopProcessing(); }
+  };
+
+  const saveSet = async () => {
+    const name = ws.name.trim();
+    if (!name) return;
+    setSaving(true);
+    try {
+      const body = { name, data: dataOf(ws) };
+      const res = ws.id ? await api.put(`/api/domains/sets/${ws.id}`, body) : await api.post('/api/domains/sets', body);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      setWs(w => ({ ...w, id: d.set.id, name: d.set.name, savedJson: jsonOf(w) }));
+      setSavedTick(t => t + 1);
+      addToast(ws.id ? 'Set updated.' : 'Set saved.');
+    } catch (e) { addToast(e.message || 'Could not save the set.', 'error'); } finally { setSaving(false); }
+  };
+
+  const newSet = () => { setWs(BLANK_WS); setMode('suggest'); };
+
+  const openSet = (set) => {
+    const d = set.data || {};
+    const next = { ...BLANK_WS, id: set.id, name: set.name, description: d.description || '', suggestions: d.suggestions?.length ? d.suggestions : null, preferred: d.preferred || '', shortlist: d.shortlist || [], tableNames: d.tableNames || [], results: d.results || {}, errors: d.errors || {}, runAt: d.runAt || null };
+    setWs({ ...next, savedJson: jsonOf(next) });
+    setMode('board');
+  };
 
   const Panel = PANELS[mode] || (() => null);
 
+  // The guide's Open buttons switch the page to the tool that holds the control.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    const next = target ? target.tool : id;
+    if (PANELS[next]) setMode(next);
+  };
+
   return (
+    <VoiceInputProvider lang="en-AU">
     <div className="flex h-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
 
       {/* ── Sidebar ── */}
@@ -654,12 +811,15 @@ export default function DomainsPage() {
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="max-w-xl">
-            <Panel key={mode} />
+            <Panel key={mode} ws={ws} setWs={setWs} running={running} onRun={runAllTools} saving={saving} onSave={saveSet} onNew={newSet} onDelete={deleteCurrent} onCheckHandles={checkHandles} checkingHandles={checkingHandles}
+              goto={setMode} Result={SmartResult} onOpen={openSet} refreshKey={savedTick} onDeleted={(id) => { if (ws.id === id) setWs(w => ({ ...w, id: null, savedJson: null })); }} />
           </div>
         </div>
       </div>
 
       {helpTool && <HelpModal tool={helpTool} onClose={() => setHelpTool(null)} />}
+      <DomainsTutorChat currentTool={mode} onOpenTool={openToolById} />
     </div>
+    </VoiceInputProvider>
   );
 }
