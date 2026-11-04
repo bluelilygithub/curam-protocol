@@ -1,7 +1,7 @@
 'use strict';
 // node server/services/domainSets.test.js   (no database)
 const assert = require('assert');
-const { cleanSetData, cleanSetName, summarise, MAX_SET_BYTES, shapeStatus, cleanRequirements, labelOf, GENERATE_MAX_AGE } = require('./domainSets');
+const { cleanSetData, cleanSetName, summarise, MAX_SET_BYTES, shapeStatus, cleanRequirements, labelOf, GENERATE_MAX_AGE, ownVariants, missingTlds, ENDINGS } = require('./domainSets');
 
 const sug = (name, avail) => ({ name, results: [{ domain: `${name}.com`, tld: 'com', available: avail }, { domain: `${name}.io`, tld: 'io', available: false }] });
 
@@ -105,5 +105,34 @@ assert.deepStrictEqual(cleanRequirements(null), { tlds: [], platforms: [] });
 assert.deepStrictEqual(cleanRequirements({ tlds: 'com' }), { tlds: [], platforms: [] });
 assert.deepStrictEqual(cleanSetData({ requirements: { tlds: ['com'], platforms: ['x'] } }).requirements, { tlds: ['com'], platforms: ['x'] });
 assert.deepStrictEqual(cleanSetData({}).requirements, { tlds: [], platforms: [] });
+
+// ── names the person already has (a book title, an artist) are always checked ──
+assert.ok(ENDINGS.includes('org'), '.org is one of the endings checked');
+assert.deepStrictEqual(ownVariants('The Staircase Suitcase\nDorothy Stoner'), [
+  { name: 'thestaircasesuitcase', label: 'The Staircase Suitcase' },
+  { name: 'staircasesuitcase', label: 'The Staircase Suitcase' },
+  { name: 'dorothystoner', label: 'Dorothy Stoner' },
+]);
+assert.deepStrictEqual(ownVariants('Dorothy Stoner, The Staircase Suitcase; Blue-Lily & Co').map((v) => v.name), ['dorothystoner', 'thestaircasesuitcase', 'staircasesuitcase', 'blue-lilyco']);
+assert.deepStrictEqual(ownVariants('The'), [], 'a lone article is not a name');
+assert.deepStrictEqual(ownVariants('  \n ; '), []);
+assert.deepStrictEqual(ownVariants(null), []);
+assert.strictEqual(ownVariants('x'.repeat(80)).length, 0, 'too long for a domain label');
+assert.strictEqual(ownVariants('a\nb\nc\nd\ne\nf\ng').length, 0, 'one letter is too short');
+assert.strictEqual(ownVariants('one one one\ntwo two two\nthree three\nfour four\nfive five\nsix six six').length, 5, 'at most five names');
+// a name with a typed label keeps it, and is marked as the person's own
+{
+  const kept = cleanSetData({ suggestions: [{ name: 'thestaircasesuitcase', label: 'The Staircase Suitcase', own: true, results: [] }, { name: 'plain', results: [] }], ownNames: 'The Staircase Suitcase' });
+  assert.strictEqual(kept.suggestions[0].label, 'The Staircase Suitcase');
+  assert.strictEqual(kept.suggestions[0].own, true);
+  assert.ok(!('own' in kept.suggestions[1]));
+  assert.strictEqual(kept.ownNames, 'The Staircase Suitcase');
+}
+// the data service may skip endings it was asked for (and may write them with a dot): ask again for those only
+assert.deepStrictEqual(missingTlds({ results: [{ tld: 'com' }, { tld: '.com.au' }, { tld: 'io' }] }, ['com', 'com.au', 'org', 'io']), ['org']);
+assert.deepStrictEqual(missingTlds({ results: [] }, ['com', 'org']), ['com', 'org']);
+assert.deepStrictEqual(missingTlds(null, ['org']), ['org']);
+assert.deepStrictEqual(missingTlds({ results: [{ tld: 'COM' }] }, ['com']), []);
+assert.strictEqual(shapeStatus('x', { results: [{ domain: 'x.org', tld: '.org', available: true }] }).results[0].tld, 'org', 'a leading dot is dropped');
 
 console.log('domainSets tests passed');

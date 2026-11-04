@@ -25,9 +25,40 @@ const labelOf = (name) => String(name == null ? '' : name).toLowerCase().replace
  * What the data service said about one name's domain endings, in the shape the page keeps: each ending free (true), taken (false) or
  * unknown (null), where the answer came from ('rdap' is a live registry lookup, 'cache' is a saved answer) and when we asked.
  */
+/**
+ * Names the person already has (a book title, an artist's name, a business) turned into domain labels, so they are always checked and
+ * never depend on the AI thinking of them. "The Staircase Suitcase" gives staircasesuitcase and thestaircasesuitcase; "Dorothy Stoner"
+ * gives dorothystoner. Returns [{ name, label }]: the label is what the person typed, shown beside the name.
+ */
+const MAX_OWN_PHRASES = 5;
+function ownVariants(text) {
+  const phrases = String(text == null ? '' : text).split(/[\n;,]+/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, MAX_OWN_PHRASES);
+  const out = [];
+  const seen = new Set();
+  for (const phrase of phrases) {
+    const words = phrase.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/[\s]+/).map((w) => w.replace(/^-+|-+$/g, '')).filter(Boolean);
+    if (!words.length || (words.length === 1 && ['the', 'a', 'an'].includes(words[0]))) continue;
+    const joined = words.join('');
+    const variants = [joined];
+    if (words.length > 1 && ['the', 'a', 'an'].includes(words[0])) variants.push(words.slice(1).join(''));
+    for (const v of variants) {
+      if (v.length < 3 || v.length > 63 || seen.has(v)) continue;
+      seen.add(v);
+      out.push({ name: v, label: phrase.slice(0, 80) });
+    }
+  }
+  return out;
+}
+
+/** The endings that were asked for but are not in the data service's answer (it may skip some), so they can be asked for again. */
+function missingTlds(avail, wanted) {
+  const got = new Set((avail && Array.isArray(avail.results) ? avail.results : []).map((r) => String((r && r.tld) || '').replace(/^\./, '').toLowerCase()));
+  return (wanted || []).map((t) => String(t).trim().toLowerCase()).filter((t) => t && !got.has(t));
+}
+
 function shapeStatus(name, avail, now = new Date()) {
   const results = (avail && Array.isArray(avail.results) ? avail.results : []).slice(0, 12).map((r) => ({
-    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24),
+    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24).replace(/^\./, ''),
     available: r && (r.available === true || r.available === false) ? r.available : null,
     source: clip(r && r.source, 20),
   }));
@@ -45,12 +76,13 @@ function cleanSuggestion(s) {
   if (!s || typeof s !== 'object') return null;
   const name = clip(s.name, 120);
   if (!name) return null;
+  const label = clip(s.label, 80);
   const results = (Array.isArray(s.results) ? s.results : []).slice(0, 12).map((r) => ({
     domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24), available: r && (r.available === true || r.available === false) ? r.available : null,
     source: clip(r && r.source, 20),
   }));
   const checkedAt = s.checkedAt && Number.isFinite(new Date(s.checkedAt).getTime()) ? new Date(s.checkedAt).toISOString() : null;
-  return { name, results, hasAvailable: results.some((r) => r.available === true), checkedAt };
+  return { name, ...(label ? { label, own: true } : {}), results, hasAvailable: results.some((r) => r.available === true), checkedAt };
 }
 
 function cleanResult(v) {
@@ -81,6 +113,7 @@ function cleanSetData(input) {
   }
   const out = {
     description: String(d.description == null ? '' : d.description).replace(/\r\n/g, '\n').trim().slice(0, 4000),
+    ownNames: String(d.ownNames == null ? '' : d.ownNames).replace(/\r\n/g, '\n').trim().slice(0, 500),
     suggestions,
     // the preferred name and shortlist must be names the set actually has (or typed by hand when there are no suggestions)
     preferred: suggestions.length && !names.has(preferred) ? '' : preferred,
@@ -111,4 +144,4 @@ function summarise(row) {
   };
 }
 
-module.exports = { GENERATE_MAX_AGE, ENDINGS, labelOf, shapeStatus, cleanRequirements, MAX_SETS_PER_USER, MAX_SET_BYTES, RESULT_KEYS, cleanSetData, cleanSetName, summarise };
+module.exports = { ownVariants, missingTlds, MAX_OWN_PHRASES, GENERATE_MAX_AGE, ENDINGS, labelOf, shapeStatus, cleanRequirements, MAX_SETS_PER_USER, MAX_SET_BYTES, RESULT_KEYS, cleanSetData, cleanSetName, summarise };

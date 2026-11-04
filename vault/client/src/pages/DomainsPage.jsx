@@ -11,7 +11,7 @@ import { CurrentSetPanel, SavedSetsPanel, BLANK_WS, dataOf, jsonOf, runPlan, del
 import SuggestionTable from './domains/SuggestionTable';
 import ClearancePanel, { ClearanceBadge } from './domains/ClearancePanel';
 import { filterSuggestions, applyVerification } from './domains/clearance.mjs';
-import { planRun, assemble, handleOf, needHandles, verifyTargets } from './domains/runAll.mjs';
+import { planRun, assemble, handleOf, needHandles, verifyTargets, DOMAIN_ENDINGS } from './domains/runAll.mjs';
 import useToastStore from '../store/toastStore';
 import { spokenName, spokenHandle, spokenBrand } from './domains/spoken.mjs';
 
@@ -171,6 +171,13 @@ function ResultCard({ data }) {
   );
 }
 
+// Every ending the page checks, in order, with what we know: free (true), taken (false) or not answered (null).
+function endingChips(s) {
+  const have = new Map((s.results || []).map(r => [r.tld, r]));
+  const extra = (s.results || []).map(r => r.tld).filter(t => t && !DOMAIN_ENDINGS.includes(t));
+  return [...DOMAIN_ENDINGS, ...extra].map(tld => ({ tld, available: have.has(tld) ? have.get(tld).available : null }));
+}
+
 // Renders DomScan results in a human-readable way where possible
 function SmartResult({ mode, data, pick }) {
   if (!data) return null;
@@ -187,7 +194,11 @@ function SmartResult({ mode, data, pick }) {
           return (
             <div key={i} className="px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: `1px solid ${s.hasAvailable ? 'var(--color-border)' : 'var(--color-border)'}` }}>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{s.name}</span>
+                <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
+                  {s.label || s.name}
+                  {s.label && <span className="ml-2 text-xs font-normal font-mono" style={{ color: 'var(--color-muted)' }}>{s.name}</span>}
+                  {s.own && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}>Your name</span>}
+                </span>
                 {s.results.length > 0 && (
                   <span className="text-xs" style={{ color: availCount > 0 ? '#16a34a' : '#dc2626' }}>
                     {availCount > 0 ? `${availCount} TLD${availCount > 1 ? 's' : ''} available` : 'All taken'}
@@ -213,9 +224,9 @@ function SmartResult({ mode, data, pick }) {
                 </div>
               )}
               {pick && <div className="mb-2"><ClearanceBadge suggestion={s} handles={pick.handles[s.name]} req={pick.req} /></div>}
-              {s.results.length > 0 && (
+              {(
                 <div className="flex flex-wrap gap-1.5">
-                  {s.results.map((r, j) => (
+                  {endingChips(s).map((r, j) => (
                     <span key={j} className="text-xs px-2 py-0.5 rounded font-mono" style={{
                       background: r.available === true ? '#dcfce7' : r.available === false ? '#fef2f2' : '#f5f5f5',
                       color: r.available === true ? '#15803d' : r.available === false ? '#dc2626' : '#888',
@@ -227,7 +238,7 @@ function SmartResult({ mode, data, pick }) {
                 </div>
               )}
               {s.results.length === 0 && (
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Availability unknown</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>The data service gave no answer for this name, so every ending is unknown. Press Verify now to ask again.</p>
               )}
             </div>
           );
@@ -357,6 +368,7 @@ function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkin
   const [view, setView] = useState('cards'); // 'cards' or 'table'
   const [filter, setFilter] = useState('all');
   const q = ws.description;
+  const ownNames = ws.ownNames || '';
   const setQ = (v) => setWs(w => ({ ...w, description: typeof v === 'function' ? v(w.description) : v }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -374,17 +386,17 @@ function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkin
   const { startProcessing, stopProcessing } = useProcessingStore();
 
   const run = useCallback(async () => {
-    if (!q.trim()) return;
+    if (!q.trim() && !ownNames.trim()) return;
     setBusy(true); setErr('');
     startProcessing('Generating name ideas…', 'AI generates names · DomScan checks availability.');
     try {
-      const res = await api.get(`/api/domains/suggest?q=${encodeURIComponent(q)}`);
+      const res = await api.get(`/api/domains/suggest?q=${encodeURIComponent(q.trim() || ownNames.trim())}&own=${encodeURIComponent(ownNames)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       // a new batch of names starts the set over: the old preferred name, shortlist and results belonged to the old names
       setWs(w => ({ ...w, suggestions: data.suggestions || [], preferred: '', shortlist: [], tableNames: [], results: {}, errors: {}, runAt: null }));
     } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  }, [q]);
+  }, [q, ownNames]);
 
   return (
     <div className="space-y-3">
@@ -402,8 +414,17 @@ function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkin
           </div>
         </Tooltip>
       </div>
-      <Tooltip text="Generate 16 names and check their availability across 7 common TLDs.">
-        <RunBtn onClick={run} busy={busy} label="Generate Names" disabled={!q.trim()} />
+      <div>
+        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Names I already have (optional, one per line)</label>
+        <Tooltip text="A book title, a person, a business: names you want checked exactly as they are. Each is checked first, whatever the AI suggests, and a leading 'The' is tried with and without.">
+          <div data-guide="own-names">
+            <VoiceInput type="textarea" rows={2} append value={ownNames} onChange={(v) => setWs(w => ({ ...w, ownNames: v }))}
+              placeholder={'e.g. The Staircase Suitcase\nDorothy Stoner'} label="Names I already have" />
+          </div>
+        </Tooltip>
+      </div>
+      <Tooltip text="Check your own names first, then generate 16 more, and check availability across 7 common endings.">
+        <RunBtn onClick={run} busy={busy} label="Generate Names" disabled={!q.trim() && !ownNames.trim()} />
       </Tooltip>
       <ErrMsg msg={err} />
       {ws.suggestions && ws.suggestions.length > 0 && (
@@ -770,7 +791,7 @@ export default function DomainsPage() {
 
   const openSet = (set) => {
     const d = set.data || {};
-    const next = { ...BLANK_WS, id: set.id, name: set.name, description: d.description || '', suggestions: d.suggestions?.length ? d.suggestions : null, preferred: d.preferred || '', shortlist: d.shortlist || [], tableNames: d.tableNames || [], requirements: d.requirements || { tlds: [], platforms: [] }, results: d.results || {}, errors: d.errors || {}, runAt: d.runAt || null };
+    const next = { ...BLANK_WS, id: set.id, name: set.name, description: d.description || '', ownNames: d.ownNames || '', suggestions: d.suggestions?.length ? d.suggestions : null, preferred: d.preferred || '', shortlist: d.shortlist || [], tableNames: d.tableNames || [], requirements: d.requirements || { tlds: [], platforms: [] }, results: d.results || {}, errors: d.errors || {}, runAt: d.runAt || null };
     setWs({ ...next, savedJson: jsonOf(next) });
     setMode('board');
   };

@@ -47,6 +47,7 @@ export const TOOL_BLURBS = {
 // The longer text for the (i) "How Domain works" box.
 export const HOW_IT_WORKS = [
   ['Finding a name', 'Name Generator takes a plain description of the business, or a few keywords, and suggests 16 brand names. Each is checked for .com, .com.au, .org, .io, .ai, .co and .app, and the ones with a free .com or .com.au come first.'],
+  ['Names you already have', 'If you already have a name, such as a book title, an artist or a business, type it in Names I already have (one per line). It is checked first, exactly as written, whatever the AI suggests, with and without a leading "The", and marked Your name. Mention it in the description too, and the AI is asked to keep it.'],
   ['Scoring and comparing', 'Name Scorer rates one name for how memorable it is, how hard it is to spell and say, how well it reads in other languages and how brandable it is. Compare Names ranks two to five names against each other.'],
   ['Looking at an existing domain', 'Domain Profile shows who registered a domain, when, how old it is and how it is regarded. It reports what is public; it does not buy or change anything.'],
   ['Before you commit', 'Social Handles checks whether the name is free on the big social platforms. Registrar Pricing compares what registrars charge to register and renew, so a cheap first year does not hide an expensive renewal.'],
@@ -66,6 +67,7 @@ export const GUIDE_TOOLS = [
   { id: 'social', label: 'Social Handles', tool: 'social' },
   { id: 'pricing', label: 'Registrar Pricing', tool: 'pricing' },
   { id: 'describe-business', label: 'Describe your business', tool: 'suggest' },
+  { id: 'own-names', label: 'Names I already have', tool: 'suggest' },
   { id: 'availability', label: 'Availability check', tool: 'suggest' },
   { id: 'add-name', label: 'Add name', tool: 'compare' },
   { id: 'microphone', label: 'Microphone', tool: 'suggest' },

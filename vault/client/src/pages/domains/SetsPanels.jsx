@@ -15,12 +15,13 @@ import { verifyTargets } from './runAll.mjs';
 // Generator, the Current set board and the saved list all share it. Drawing a result is passed in (`Result`), because that code lives in
 // the page next to the individual tools.
 
-export const BLANK_WS = { id: null, name: '', description: '', suggestions: null, preferred: '', shortlist: [], tableNames: [], requirements: { tlds: [], platforms: [] }, results: {}, errors: {}, runAt: null, savedJson: null };
+export const BLANK_WS = { id: null, name: '', description: '', ownNames: '', suggestions: null, preferred: '', shortlist: [], tableNames: [], requirements: { tlds: [], platforms: [] }, results: {}, errors: {}, runAt: null, savedJson: null };
 
 /** What gets saved: everything the person would want back, nothing about the screen. */
 export function dataOf(ws) {
   return {
     description: ws.description || '',
+    ownNames: ws.ownNames || '',
     suggestions: ws.suggestions || [],
     preferred: ws.preferred || '',
     shortlist: ws.shortlist || [],

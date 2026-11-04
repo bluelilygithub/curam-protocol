@@ -31,7 +31,7 @@ router.post('/verify', verifyLimiter, async (req, res) => {
     const tlds = sets.ENDINGS.join(',');
     const checks = await Promise.all(names.map(async (name) => {
       const out = { name, domains: null, domainsError: null, social: null, socialError: null };
-      try { out.domains = sets.shapeStatus(name, await domscan('/status', { name, tlds, max_age: 0 })); } catch (e) { out.domainsError = e.message; }
+      try { out.domains = sets.shapeStatus(name, await statusFor(name, tlds, 0)); } catch (e) { out.domainsError = e.message; }
       if (withSocial) {
         try { out.social = await domscan('/social', { handle: name.replace(/-/g, '') }); } catch (e) { out.socialError = e.message; }
       }
@@ -184,6 +184,18 @@ function handle(fn) {
 // ── Discover ────────────────────────────────────────────────────────────────
 
 // Step 1: LLM generates creative names. Step 2: DomScan checks availability.
+// Ask the data service about a name's endings. It can skip some of the endings it was asked for, so any that are missing from the answer
+// are asked for again in a second request rather than silently left out.
+async function statusFor(name, tldList, maxAge) {
+  const first = await domscan('/status', { name, tlds: tldList, max_age: maxAge });
+  const missing = sets.missingTlds(first, tldList.split(','));
+  if (!missing.length) return first;
+  try {
+    const more = await domscan('/status', { name, tlds: missing.join(','), max_age: maxAge });
+    return { ...first, results: [...(Array.isArray(first.results) ? first.results : []), ...(Array.isArray(more.results) ? more.results : [])] };
+  } catch { return first; }
+}
+
 router.get('/suggest', handle(async (req) => {
   const { q, tlds } = req.query;
   if (!q) throw new Error('q (description) is required.');
@@ -204,9 +216,11 @@ router.get('/suggest', handle(async (req) => {
 
 Generate exactly 16 creative, memorable domain name candidates.
 
+If the description names a book, a person, an artist, an organisation or a product, treat that name as a fixed fact: do not change it. Put it first, written as one lowercase word (and also a version without a leading "the"), then fill the rest with creative alternatives.
+
 Rules:
 - Output one name per line, nothing else — no numbering, no TLDs, no explanation
-- Names should be 5–14 characters, lowercase
+- Invented names should be 5–14 characters, lowercase (a real title or person's name may be longer)
 - Mix styles: invented words, portmanteaus, metaphors, evocative compounds
 - Avoid generic filler: "hub", "pro", "app", "best", "my", "get", "go"
 - Every name must feel like a real brand
@@ -251,15 +265,21 @@ frostelier`;
     names = raw
       .split(/[\n,]+/)
       .map(l => l.trim().replace(/^["'\d.\-\s]+|["'\s]+$/g, ''))
-      .filter(l => l.length >= 3 && l.length <= 30 && /^[a-z0-9-]+$/i.test(l));
+      .filter(l => l.length >= 3 && l.length <= 40 && /^[a-z0-9-]+$/i.test(l));
   }
 
   // Sanitise: lowercase, alphanumeric + hyphens only, deduplicate
   names = [...new Set(
     names
-      .map(n => String(n).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30))
+      .map(n => String(n).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40))
       .filter(n => n.length >= 3)
   )].slice(0, 16);
+
+  // Names the person already has (a book title, an artist) are always checked, first, whatever the AI suggested.
+  const own = sets.ownVariants(req.query.own);
+  const ownNames = new Set(own.map(o => o.name));
+  names = [...own.map(o => o.name), ...names.filter(n => !ownNames.has(n))];
+  const labelOf = new Map(own.map(o => [o.name, o.label]));
 
   if (!names.length) throw new Error('The AI did not return usable names. Please rephrase your description and try again.');
 
@@ -270,17 +290,18 @@ frostelier`;
     names.map(async (name) => {
       // max_age is how old a saved answer may be (seconds). The old prefer_cache meant up to 30 days, which could show a name as free after
       // it was registered. Five minutes keeps the first look quick; Verify now asks for a live answer (max_age 0).
-      const avail = await domscan('/status', { name, tlds: tldList, max_age: sets.GENERATE_MAX_AGE });
-      return sets.shapeStatus(name, avail);
+      const avail = await statusFor(name, tldList, sets.GENERATE_MAX_AGE);
+      return { ...sets.shapeStatus(name, avail), ...(labelOf.has(name) ? { label: labelOf.get(name), own: true } : {}) };
     })
   );
 
   const suggestions = results.map((r, i) =>
-    r.status === 'fulfilled' ? r.value : { name: names[i], results: [], hasAvailable: null, checkedAt: null }
+    r.status === 'fulfilled' ? r.value : { name: names[i], ...(labelOf.has(names[i]) ? { label: labelOf.get(names[i]), own: true } : {}), results: [], hasAvailable: null, checkedAt: null }
   );
 
   // Sort: names with an available .com or .com.au first, then other available, then unknown
   suggestions.sort((a, b) => {
+    if (!!a.own !== !!b.own) return a.own ? -1 : 1;
     const score = (s) => {
       if (s.results.find(r => (r.tld === 'com' || r.tld === 'com.au') && r.available)) return 2;
       if (s.hasAvailable) return 1;

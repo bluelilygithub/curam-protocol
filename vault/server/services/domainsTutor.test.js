@@ -21,6 +21,8 @@ checkGuide({
     ['suggest', 'does', /\.org/, 'the endings checked include .org'],
     ['suggest', 'notes', /trademarks are not checked/, 'a free name is not a safe name'],
     ['availability', 'notes', /does not register it/, 'it does not register'],
+    ['own-names', 'does', /thestaircasesuitcase/, 'the example is joined into one word'],
+    ['own-names', 'does', /always appear/, 'own names always appear'],
     ['compare', 'notes', /at least two/, 'compare needs two names'],
     ['microphone', 'does', /"dot".*"dash"/s, 'the microphone explains dot and dash'],
     ['social', 'notes', /Unknown means/, 'unknown is explained'],
