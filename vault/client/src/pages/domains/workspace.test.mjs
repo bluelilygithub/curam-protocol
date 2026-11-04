@@ -1,6 +1,6 @@
 // node client/src/pages/domains/workspace.test.mjs   (the set being worked on)
 import assert from 'node:assert';
-import { BLANK_WS, MAX_POOL, dataOf, jsonOf, isDirty, fromSet, mergeRound, orderedPool, toggleShortlist, toggleFeedback, feedbackOf } from './workspace.mjs';
+import { BLANK_WS, MAX_POOL, dataOf, jsonOf, isDirty, fromSet, mergeRound, orderedPool, toggleShortlist, toggleFeedback, feedbackOf, addTurn, addNote } from './workspace.mjs';
 
 const card = (name, round = 1, over = {}) => ({ name, round, style: 'invented', syllables: 2, spell: { score: 0, notes: [] }, reasoning: '', risks: [], domains: { checkedAt: null, results: [] }, ...over });
 const names = (pool) => pool.map((c) => c.name);
@@ -92,6 +92,24 @@ assert.deepStrictEqual(orderedPool(null), []);
   ws = toggleFeedback(ws, 'lumera', 'less');
   assert.strictEqual(feedbackOf(ws, 'lumera'), '', 'pressing again clears it');
   assert.strictEqual(feedbackOf(BLANK_WS, 'x'), '');
+}
+
+// the talk-it-through thread and extra notes
+{
+  let ws = addTurn(BLANK_WS, 'Which suggests events?', 'Lean towards a.');
+  assert.deepStrictEqual(ws.conversation, [{ q: 'Which suggests events?', a: 'Lean towards a.' }]);
+  for (let i = 0; i < 20; i++) ws = addTurn(ws, 'q' + i, 'a' + i);
+  assert.strictEqual(ws.conversation.length, 12);
+  assert.strictEqual(ws.conversation[11].q, 'q19');
+  assert.deepStrictEqual(dataOf(ws).conversation, ws.conversation, 'the thread is saved');
+  assert.deepStrictEqual(fromSet({ id: 1, name: 'x', data: { conversation: [{ q: 'a', a: 'b' }] } }).conversation, [{ q: 'a', a: 'b' }]);
+  assert.deepStrictEqual(fromSet({ id: 1, name: 'x' }).conversation, []);
+  let n = addNote(BLANK_WS, '  The exhibitions are called Stairs of Light ');
+  assert.strictEqual(n.brief.notes, 'The exhibitions are called Stairs of Light');
+  n = addNote(n, 'Aimed at galleries');
+  assert.strictEqual(n.brief.notes, 'The exhibitions are called Stairs of Light\nAimed at galleries');
+  assert.strictEqual(addNote(BLANK_WS, '   '), BLANK_WS, 'nothing to add');
+  assert.strictEqual(addNote(BLANK_WS, 'x'.repeat(3000)).brief.notes.length, 1500);
 }
 
 console.log('workspace tests passed');

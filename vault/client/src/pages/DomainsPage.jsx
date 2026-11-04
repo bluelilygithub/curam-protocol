@@ -10,7 +10,7 @@ import BriefForm from './domains/BriefForm';
 import NameResults, { Chips } from './domains/NameResults';
 import SavedSets from './domains/SavedSets';
 import { BLANK_FILTERS } from './domains/filters.mjs';
-import { BLANK_WS, dataOf, jsonOf, isDirty, fromSet, mergeRound } from './domains/workspace.mjs';
+import { BLANK_WS, dataOf, jsonOf, isDirty, fromSet, mergeRound, orderedPool, addTurn, addNote } from './domains/workspace.mjs';
 
 // The Domain tool: a guided journey from a brief to a name you can be confident in. Brief -> Names -> Shortlist (-> Check -> Decide).
 // The set being worked on lives here, so every step shares it and Save set keeps all of it.
@@ -62,6 +62,7 @@ export default function DomainsPage() {
   const [filters, setFilters] = useState(BLANK_FILTERS);
   const [editingBrief, setEditingBrief] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [confirmNew, setConfirmNew] = useState(false);
@@ -73,11 +74,11 @@ export default function DomainsPage() {
   const dirty = isDirty(ws);
 
   // One round of names (see server/services/domainNaming/generate.js): wide generation, free filtering, checks for the best few, reasons.
-  const generate = async (mode = 'round', seed = '') => {
+  const generate = async (mode = 'round', seed = '', briefOverride = null) => {
     setGenerating(true);
     startProcessing(mode === 'variations' ? `Making variations of ${seed}…` : 'Finding names…', mode === 'variations' ? 'Prefixes, suffixes and spellings, checked for availability.' : 'Writing ideas, filtering them, checking the best for availability and explaining the finalists.');
     try {
-      const res = await api.post('/api/domains/generate', { brief: ws.brief, mode, seed, feedback: ws.feedback, seen: ws.seen, round: ws.rounds + 1 });
+      const res = await api.post('/api/domains/generate', { brief: briefOverride || ws.brief, mode, seed, feedback: ws.feedback, seen: ws.seen, round: ws.rounds + 1 });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setWs((w) => mergeRound(w, data));
@@ -86,6 +87,25 @@ export default function DomainsPage() {
       if (!data.cards.length) addToast('No names passed the checks this time. Loosen the brief or the required endings, or try again.', 'error');
       else if (data.explainError) addToast('The names are ready, but the explanations could not be written just now.', 'error');
     } catch (e) { addToast(e.message || 'Could not make names just now.', 'error'); } finally { setGenerating(false); stopProcessing(); }
+  };
+
+  // Talk it through. A question gets an answer from the names so far; detail is added to the brief and makes a new round that builds on it.
+  const ask = async (question) => {
+    setAsking(true);
+    try {
+      const cards = [...ws.pool.filter((c) => ws.shortlist.includes(c.name) || ws.preferred === c.name), ...orderedPool(ws.pool)].filter((c, i, a) => a.findIndex((x) => x.name === c.name) === i).slice(0, 30);
+      const res = await api.post('/api/domains/ask', { brief: ws.brief, cards, history: ws.conversation, question });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setWs((w) => addTurn(w, question, data.answer));
+      return true;
+    } catch (e) { addToast(e.message || 'Could not answer just now.', 'error'); return false; } finally { setAsking(false); }
+  };
+  const refine = async (text) => {
+    const next = addNote(ws, text);
+    setWs(next);
+    await generate('round', '', next.brief);
+    return true;
   };
 
   const save = async () => {
@@ -177,7 +197,8 @@ export default function DomainsPage() {
                   <button onClick={() => setEditingBrief(false)} className="mt-3 text-xs underline hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Close without changing</button>
                 </div>
               )}
-              <NameResults ws={ws} setWs={setWs} filters={filters} setFilters={setFilters} config={config} generating={generating}
+              <NameResults ws={ws} setWs={setWs} filters={filters} setFilters={setFilters} config={config} generating={generating} asking={asking}
+                onAsk={ask} onRefine={refine}
                 onMore={() => generate('round')} onVariations={(name) => generate('variations', name)} onEditBrief={() => setEditingBrief((e) => !e)} />
             </div>
           )}

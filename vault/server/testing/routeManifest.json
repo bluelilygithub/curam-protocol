@@ -640,6 +640,9 @@
   "GET /api/domains/config": {
    "class": "authed"
   },
+  "POST /api/domains/ask": {
+   "class": "authed"
+  },
   "POST /api/domains/generate": {
    "class": "authed"
   },

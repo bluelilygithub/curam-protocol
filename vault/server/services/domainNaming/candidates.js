@@ -5,6 +5,7 @@
 // too like a well-known brand are dropped here, for free, and the reason for each drop is counted so nothing disappears silently.
 
 const { syllables, spellingRisk } = require('./spelling');
+const { ownVariants } = require('../domainSets');
 
 // Famous names an invented word should not sit on top of. A deliberately short, obvious list: this is a safety net for the clumsiest
 // near-misses (googel, amazan), not a trade mark search. The trade mark step later is the real check.
@@ -72,9 +73,20 @@ const lengthLimits = (brief) => {
  * Filter a wide list. `items` are { name, style?, own? }. Own names (a book title, a person) are never dropped here.
  * Returns { kept, dropped } where dropped is a count by reason. Kept items gain { syllables, spell, notes } (notes: risks found).
  */
+/** Names (and key words of names) the person already has: a candidate built on one of these is intentional, not filler. */
+function anchorsOf(brief) {
+  const out = new Set();
+  for (const v of ownVariants(brief && brief.own)) {
+    if (v.name.length >= 4) out.add(v.name);
+    for (const w of String(v.label || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)) if (w.length >= 5 && !['the', 'and'].includes(w)) out.add(w);
+  }
+  return [...out];
+}
+
 function filterCandidates(items, brief, { seen = [] } = {}) {
   const avoid = ((brief && brief.avoid) || []).map((w) => String(w).toLowerCase()).filter(Boolean);
   const { min, max, hard } = lengthLimits(brief);
+  const anchors = anchorsOf(brief);
   const dropped = { invalid: 0, length: 0, filler: 0, avoided: 0, hard_to_spell: 0, brand: 0, similar: 0, seen: 0 };
   const seenSet = new Set((seen || []).map(normalizeName));
   const kept = [];
@@ -85,22 +97,23 @@ function filterCandidates(items, brief, { seen = [] } = {}) {
     const own = !!(it && it.own);
     if (!name || name.length < 3) { dropped.invalid += 1; continue; }
     if (names.has(name)) continue; // an exact repeat is not worth counting
+    const anchored = !own && anchors.some((a) => name.includes(a));
     if (!own) {
       if (!/^[a-z]+$/.test(name)) { dropped.invalid += 1; continue; }
-      if (name.length < min || name.length > max) { dropped.length += 1; continue; }
-      if (FILLER_START.some((w) => name.startsWith(w) && name.length > w.length + 2) && !(brief && (brief.include || []).some((i) => name.startsWith(String(i).toLowerCase())))) { dropped.filler += 1; continue; }
-      if (FILLER_END.some((w) => name.endsWith(w))) { dropped.filler += 1; continue; }
+      if (name.length < min || name.length > (anchored ? 30 : max)) { dropped.length += 1; continue; }
+      if (!anchored && FILLER_START.some((w) => name.startsWith(w) && name.length > w.length + 2) && !(brief && (brief.include || []).some((i) => name.startsWith(String(i).toLowerCase())))) { dropped.filler += 1; continue; }
+      if (!anchored && FILLER_END.some((w) => name.endsWith(w))) { dropped.filler += 1; continue; }
       if (avoid.some((w) => name.includes(w))) { dropped.avoided += 1; continue; }
       if (seenSet.has(name)) { dropped.seen += 1; continue; }
     }
     const spell = spellingRisk(name);
     const clash = own ? null : brandClash(name);
     if (!own && clash && clash[1] !== 'contains') { dropped.brand += 1; continue; }
-    if (!own && spell.score >= hard) { dropped.hard_to_spell += 1; continue; }
+    if (!own && !anchored && spell.score >= hard) { dropped.hard_to_spell += 1; continue; }
     names.add(name);
     const notes = [];
     if (clash && clash[1] === 'contains') notes.push(`contains the well-known name "${clash[0]}"`);
-    kept.push({ ...it, name, own, style: it.style || '', syllables: syllables(name), spell, brandNotes: notes });
+    kept.push({ ...it, name, own, anchored, style: it.style || '', syllables: syllables(name), spell, brandNotes: notes });
   }
 
   // too like another name in the list: keep the first, drop the later one (own names always stay)
@@ -120,7 +133,7 @@ function filterCandidates(items, brief, { seen = [] } = {}) {
 function rankLocal(cands) {
   const score = (c) => {
     if (c.own) return 1000;
-    let s = 60 - c.spell.score * 0.5;
+    let s = 60 - c.spell.score * 0.5 + (c.anchored ? 100 : 0); // a name built on the client's own name goes to the front of the line
     const len = c.name.length;
     s += len >= 6 && len <= 10 ? 12 : len >= 5 && len <= 12 ? 5 : -4;
     s += c.syllables === 2 || c.syllables === 3 ? 8 : c.syllables === 1 ? 2 : -6;
@@ -178,4 +191,4 @@ function variations(seed, brief) {
   return [...out].filter((n) => n.length >= 4 && n.length <= 24).slice(0, 24).map((name) => ({ name, style: 'variation' }));
 }
 
-module.exports = { describe, HARD_TO_SPELL, WELL_KNOWN, normalizeName, distance, brandClash, filterCandidates, rankLocal, variations };
+module.exports = { anchorsOf, describe, HARD_TO_SPELL, WELL_KNOWN, normalizeName, distance, brandClash, filterCandidates, rankLocal, variations };

@@ -26,7 +26,7 @@ export const TONES = [
 ];
 
 export const BLANK_BRIEF = {
-  what: '', who: '', own: '',
+  what: '', who: '', own: '', notes: '',
   tone: { playfulSerious: 3, modernClassic: 3, localGlobal: 3, premiumApproachable: 3 },
   styles: [], include: [], avoid: [],
   required: { tlds: [], platforms: [] },

@@ -1,7 +1,8 @@
 'use strict';
 // node server/services/domainNaming/generate.test.js   (no network, no database: the model and DomScan are stood in)
 const assert = require('assert');
-const { generateRound, mapLimit, CHECK_BATCH, SHOW } = require('./generate');
+const { generateRound, mapLimit, ownCombos, CHECK_BATCH, SHOW } = require('./generate');
+const { askAboutNames } = require('./ask');
 const { cleanBrief } = require('./brief');
 
 const brief = (o = {}) => cleanBrief({ what: 'Wine fridges for hotels', avoid: ['wine'], styles: ['invented', 'metaphor'], required: { tlds: ['com.au'], platforms: [] }, ...o });
@@ -146,6 +147,34 @@ const deps = (over = {}) => ({
     calls.status = [];
     const r = await generateRound({ userId: 1, brief: brief({ own: 'The Staircase Suitcase' }), mode: 'variations', seed: 'lumera' }, deps());
     assert.ok(!r.cards.some((c) => c.own) && !calls.status.some(([n]) => /staircase/.test(n)));
+  }
+
+  // names built on the person's own names are made by code and shown, even when the AI never thinks of them
+  {
+    assert.deepStrictEqual(ownCombos([{ name: 'thesuitcase', label: 'The Suitcase' }, { name: 'suitcase', label: 'The Suitcase' }], { include: [] }).map((c) => c.name),
+      ['thesuitcasegallery', 'thesuitcaseexhibitions', 'thesuitcasecollection', 'thesuitcasestories', 'thesuitcaseart', 'thesuitcaseevents'], 'one set per name, not per variant');
+    assert.deepStrictEqual(ownCombos([{ name: 'thesuitcase', label: 'The Suitcase' }, { name: 'dorothystoner', label: 'Dorothy Stoner' }], { include: [] }).map((c) => c.name),
+      ['thesuitcasegallery', 'dorothystonergallery', 'thesuitcaseexhibitions', 'dorothystonerexhibitions', 'thesuitcasecollection', 'dorothystonercollection', 'thesuitcasestories', 'dorothystonerstories'], 'taken in turn, eight at most');
+    assert.deepStrictEqual(ownCombos([{ name: 'dorothystoner', label: 'Dorothy Stoner' }], { include: ['tour', 'Book'] }).map((c) => c.name), ['dorothystonertour', 'dorothystonerbook'], 'the brief words are used when given');
+    assert.deepStrictEqual(ownCombos([], { include: [] }), []);
+    calls.status = [];
+    const r = await generateRound({ userId: 1, brief: brief({ own: 'The Staircase Suitcase\nDorothy Stoner', required: { tlds: [], platforms: [] } }) }, deps());
+    const names = r.cards.map((c) => c.name);
+    assert.ok(names.includes('dorothystonergallery') || names.includes('dorothystonerexhibitions'), 'a name built on the artist is shown: ' + names.join(','));
+    assert.ok(names.some((n) => /^(the)?staircasesuitcase(gallery|exhibitions|collection|stories|art|events)$/.test(n)), 'and one built on the book title: ' + names.join(','));
+  }
+  // talk it through: a question about the names
+  {
+    let seenPrompt = '';
+    const d = { getModels: async () => ({ standard: 'm' }), logUsage: (u) => { calls.askUsage = u.feature; }, callModel: async (m, p) => { seenPrompt = p; return { text: ' Lean towards thesuitcaseevents because it suggests events. ', model: m }; } };
+    const out = await askAboutNames({ userId: 1, brief: brief(), cards: [{ name: 'thesuitcaseevents', domains: { results: [] } }], history: [], question: 'Which suggests events?' }, d);
+    assert.strictEqual(out.answer, 'Lean towards thesuitcaseevents because it suggests events.');
+    assert.match(seenPrompt, /thesuitcaseevents/);
+    assert.strictEqual(calls.askUsage, 'domains_ask');
+    await assert.rejects(askAboutNames({ userId: 1, brief: brief(), cards: [], history: [], question: ' hi ' }, d), (e) => e.status === 400);
+    await assert.rejects(askAboutNames({ userId: 1, brief: brief(), cards: [], history: [], question: 'a real question' }, { ...d, getModels: async () => ({}) }), /No AI model/);
+    await assert.rejects(askAboutNames({ userId: 1, brief: brief(), cards: [], history: [], question: 'a real question' }, { ...d, callModel: async () => { throw new Error('Model call timed out after 90s'); } }), (e) => e.status === 504 && /took too long/.test(e.message));
+    await assert.rejects(askAboutNames({ userId: 1, brief: brief(), cards: [], history: [], question: 'a real question' }, { ...d, callModel: async () => ({ text: '   ' }) }), (e) => e.status === 502);
   }
 
   // the concurrency limiter never runs more than the limit at once

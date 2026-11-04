@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
+import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { ENDINGS, STYLES } from './constants.mjs';
 import { briefSummary } from './briefSummary.mjs';
 import { BLANK_FILTERS, applyFilters, countLine, activeFilters, HARD_SPELLING_SCORE } from './filters.mjs';
@@ -72,7 +73,49 @@ function Card({ card, ws, setWs, required, onVariations, generating }) {
   );
 }
 
-export default function NameResults({ ws, setWs, filters, setFilters, config, generating, onMore, onVariations, onEditBrief }) {
+// Talk it through: add detail or ask a question about the names so far. An answer is grounded in the names and their checks and never
+// changes the set; adding the detail to the brief makes a new round that builds on it.
+function TalkItThrough({ ws, asking, generating, onAsk, onRefine, onClear, credits }) {
+  const [text, setText] = useState('');
+  const busy = asking || generating;
+  const ask = async () => { const ok = await onAsk(text.trim()); if (ok) setText(''); };
+  const refine = async () => { const ok = await onRefine(text.trim()); if (ok) setText(''); };
+  return (
+    <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} data-guide="talk">
+      <div>
+        <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Talk it through</p>
+        <p className="text-xs" style={mute}>Add more about what you are naming, or ask about these names, to lean towards the right ones.</p>
+      </div>
+      {ws.conversation.length > 0 && (
+        <div className="space-y-2 max-h-72 overflow-y-auto" aria-live="polite">
+          {ws.conversation.map((t, i) => (
+            <div key={i} className="text-sm space-y-1">
+              <p className="px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><span className="text-xs" style={mute}>You: </span>{t.q}</p>
+              <p className="px-3 py-1.5 whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{t.a}</p>
+            </div>
+          ))}
+          <button onClick={onClear} className="text-xs underline hover:opacity-70" style={mute}>Clear the conversation</button>
+        </div>
+      )}
+      <Tooltip text="For example: The exhibitions are called Stairs of Light. Or: Which of these suggests events? Or: I want something shorter.">
+        <div>
+          <VoiceInput type="textarea" rows={2} append value={text} onChange={setText} label="Add detail or ask a question about these names"
+            placeholder="Add detail or ask a question, e.g. The exhibitions are called Stairs of Light. Which of these suggests events?" />
+        </div>
+      </Tooltip>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tooltip text="Ask the AI about the names you have. It answers from the names and what is known about them, and recommends from the list. It changes nothing and uses no domain credits.">
+          <button onClick={ask} disabled={busy || text.trim().length < 3} className="px-4 py-1.5 rounded-lg text-sm border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40" style={line}>{asking ? 'Thinking…' : 'Ask about these names'}</button>
+        </Tooltip>
+        <Tooltip text={`Add what you wrote to the brief (under Anything else we should know) and make a new round of names that builds on it. Uses about ${credits} lookup credits.`}>
+          <button onClick={refine} disabled={busy || text.trim().length < 3} className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>Add to the brief and get new names</button>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+export default function NameResults({ ws, setWs, filters, setFilters, config, generating, asking, onMore, onVariations, onEditBrief, onAsk, onRefine }) {
   const [limit, setLimit] = useState(PAGE);
   const required = ws.brief.required.tlds;
   const ordered = useMemo(() => orderedPool(ws.pool), [ws.pool]);
@@ -149,6 +192,10 @@ export default function NameResults({ ws, setWs, filters, setFilters, config, ge
         </Tooltip>
         <span className="text-xs" style={mute}>About {credits} lookup credits{ws.feedback.more.length + ws.feedback.less.length ? ` · steering with ${ws.feedback.more.length} liked and ${ws.feedback.less.length} disliked` : ''}</span>
       </div>
+
+      {ws.pool.length > 0 && (
+        <TalkItThrough ws={ws} asking={asking} generating={generating} credits={credits} onAsk={onAsk} onRefine={onRefine} onClear={() => setWs((w) => ({ ...w, conversation: [] }))} />
+      )}
 
       {ws.pool.length === 0 && <p className="text-sm" style={mute}>No names yet. Fill in the brief and generate.</p>}
       {ws.pool.length > 0 && shown.length === 0 && <p className="text-sm" style={mute}>No names match those filters. Clear a filter to see them again, or get more names.</p>}

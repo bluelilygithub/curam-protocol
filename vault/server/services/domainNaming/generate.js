@@ -27,6 +27,7 @@ const BUDGET_MS = 200000;       // past this the explanations are skipped rather
 const CHECK_BATCH = 40;      // domain lookups for a normal round (1 credit each)
 const VARIATION_BATCH = 24;
 const SHOW = 12;
+const COMBO_WORDS = ['gallery', 'exhibitions', 'collection', 'stories', 'art', 'events'];
 const CONCURRENCY = 8;
 
 /** Run `fn` over `items`, at most `limit` at a time, keeping the order of the results. */
@@ -41,6 +42,20 @@ async function mapLimit(items, limit, fn) {
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return out;
+}
+
+/**
+ * Names built on the person's own names, made by code so they never depend on the AI: the title or the person joined with the brief's
+ * own words (or gallery, exhibitions, collection...). Taken in turn across the names so each gets some, at most 8 in all, so they lead the
+ * list without crowding out the creative names.
+ */
+function ownCombos(own, brief) {
+  const words = ((brief.include && brief.include.length) ? brief.include.slice(0, 3) : COMBO_WORDS).map(normalizeName).filter((w) => w.length >= 3);
+  const byLabel = new Map();
+  for (const o of own) if (!byLabel.has(o.label)) byLabel.set(o.label, o.name);
+  const out = [];
+  for (const w of words) for (const base of byLabel.values()) out.push({ name: base + w, style: 'built on your name' });
+  return out.slice(0, 8);
 }
 
 /** The plain risks shown on a card: the AI's, then what code found (spelling, a known brand). At most four. */
@@ -81,7 +96,7 @@ async function generateRound(args, deps) {
       return parseWide(result.text);
     }));
     // one part failing is fine, the other's names are used; only both failing is an error
-    wide = calls.filter((c) => c.status === 'fulfilled').flatMap((c) => c.value);
+    wide = [...ownCombos(own, brief), ...calls.filter((c) => c.status === 'fulfilled').flatMap((c) => c.value)];
     const failed = calls.find((c) => c.status === 'rejected');
     if (!wide.length && failed && !own.length) {
       const msg = String((failed.reason && failed.reason.message) || '');
@@ -171,4 +186,4 @@ async function generateRound(args, deps) {
   return { cards, checkedNames: toCheck.map((c) => c.name), counts, dropped, creditsUsed: counts.checked, model, explainError, checkedAt: now.toISOString() };
 }
 
-module.exports = { WIDE_CALLS, WIDE_COUNT, CHECK_BATCH, VARIATION_BATCH, SHOW, mapLimit, risksFor, generateRound };
+module.exports = { ownCombos, WIDE_CALLS, WIDE_COUNT, CHECK_BATCH, VARIATION_BATCH, SHOW, mapLimit, risksFor, generateRound };

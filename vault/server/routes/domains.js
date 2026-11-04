@@ -9,6 +9,7 @@ const { pool } = require('../db');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const sets = require('../services/domainSets');
 const { cleanBrief } = require('../services/domainNaming/brief');
+const { askAboutNames } = require('../services/domainNaming/ask');
 const { generateRound, CHECK_BATCH, VARIATION_BATCH, WIDE_COUNT, SHOW } = require('../services/domainNaming/generate');
 const { getProviders } = require('../services/domainNaming/providers');
 const { DOMSCAN_BASE, key } = require('../services/domainNaming/domscan');
@@ -65,6 +66,28 @@ router.post('/generate', aiLimiter, generateLimiter, async (req, res) => {
       seen: names(body.seen, 300),
       round: Math.max(1, Math.min(99, Math.round(Number(body.round)) || 1)),
     }, { getModels: p.getModels, callModel: p.callModel, logUsage: p.logUsage, statusFor: p.statusFor });
+    res.json(out);
+  } catch (err) { fail(res, err); }
+});
+
+// ── Talk it through ──────────────────────────────────────────
+// A question, or extra detail, about the names so far. The answer comes from the names and their checks; nothing is changed or bought.
+const askLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, keyGenerator: perUser,
+  message: { error: 'You have asked a lot of questions this hour. Please wait a while.' },
+});
+
+router.post('/ask', aiLimiter, askLimiter, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const p = getProviders();
+    const out = await askAboutNames({
+      userId: req.user.id,
+      brief: cleanBrief(body.brief),
+      cards: (Array.isArray(body.cards) ? body.cards : []).slice(0, 30).map(sets.cleanCard).filter(Boolean),
+      history: sets.cleanConversation(body.history),
+      question: body.question,
+    }, { getModels: p.getModels, callModel: p.callModel, logUsage: p.logUsage });
     res.json(out);
   } catch (err) { fail(res, err); }
 });

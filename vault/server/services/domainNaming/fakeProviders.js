@@ -40,7 +40,9 @@ function explain(prompt) {
 }
 
 async function callModel(model, prompt) {
-  const text = /ONLY a JSON array/.test(prompt) ? explain(prompt) : wide(prompt);
+  const text = prompt.includes('\n<question>\n')
+    ? `(Test mode, not an AI answer.) From the names listed, I would lean towards the ones with your required endings free and an easy spelling. Tell me more about who it is for and I can narrow it down.`
+    : /ONLY a JSON array/.test(prompt) ? explain(prompt) : wide(prompt);
   return { text, model, inputTokens: 0, outputTokens: 0 };
 }
 

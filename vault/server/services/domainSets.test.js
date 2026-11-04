@@ -133,6 +133,18 @@ assert.strictEqual(cleanSetData({ preferred: 'mybrand' }).preferred, 'mybrand');
   assert.strictEqual(upgradeSetData({}).rounds, 0);
 }
 
+// ── the talk-it-through conversation is kept with the set ──
+{
+  const turns = Array.from({ length: 20 }, (_, i) => ({ q: 'question ' + i, a: 'answer ' + i }));
+  const d = cleanSetData({ conversation: turns.concat([{ q: '', a: 'no question' }, { q: 'no answer', a: '' }, null]) });
+  assert.strictEqual(d.conversation.length, 12);
+  assert.strictEqual(d.conversation[11].q, 'question 19', 'the last twelve are kept');
+  assert.deepStrictEqual(cleanSetData({ conversation: 'no' }).conversation, []);
+  assert.strictEqual(cleanSetData({ conversation: [{ q: 'q'.repeat(2000), a: 'a'.repeat(5000) }] }).conversation[0].a.length, 1500);
+  assert.deepStrictEqual(upgradeSetData({ description: 'x' }).conversation, []);
+  assert.strictEqual(cleanSetData({ brief: { notes: ' more detail ' } }).brief.notes, 'more detail');
+}
+
 // ── names ──
 assert.strictEqual(cleanSetName('  Wine   fridges \n'), 'Wine fridges');
 assert.throws(() => cleanSetName('   '), /Give the set a name/);

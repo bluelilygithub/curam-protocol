@@ -1,7 +1,7 @@
 'use strict';
 // node server/services/domainNaming/candidates.test.js
 const assert = require('assert');
-const { normalizeName, distance, brandClash, filterCandidates, rankLocal, variations } = require('./candidates');
+const { normalizeName, distance, brandClash, filterCandidates, rankLocal, variations, anchorsOf } = require('./candidates');
 
 const brief = { styles: ['invented', 'metaphor'], avoid: ['wine'], include: ['cellar'] };
 const names = (r) => r.kept.map((c) => c.name);
@@ -92,6 +92,27 @@ assert.strictEqual(filterCandidates([{ name: 'harbourlightcafe' }], { styles: ['
   assert.ok(variations('zenith', {}).length <= 24);
   assert.deepStrictEqual(variations('ab', {}), []);
   assert.ok(variations('lumera', {}).every((x) => x.style === 'variation'));
+}
+
+// names built on the person's own names are intentional, not filler: they may be longer, start with "the", and are ranked first
+{
+  const own = { styles: ['invented'], own: 'The Suitcase\nDorothy Stoner' };
+  assert.deepStrictEqual(anchorsOf(own).sort(), ['dorothy', 'dorothystoner', 'stoner', 'suitcase', 'thesuitcase'].sort(), 'whole names and their key words');
+  const r = filterCandidates([
+    { name: 'thesuitcasegallery' },          // filler start and a long name: kept because it is built on the title
+    { name: 'dorothystonerexhibitions' },    // long: kept
+    { name: 'stonerhub' },                   // filler end but built on the surname
+    { name: 'getfridge' },                   // still filler
+    { name: 'pretzel' },                     // not built on anything
+  ], own);
+  assert.deepStrictEqual(r.kept.map((c) => c.name), ['thesuitcasegallery', 'dorothystonerexhibitions', 'stonerhub', 'pretzel']);
+  assert.ok(r.kept.slice(0, 3).every((c) => c.anchored) && !r.kept[3].anchored);
+  assert.strictEqual(r.dropped.filler, 1);
+  const ranked = rankLocal(r.kept).map((c) => c.name);
+  assert.ok(ranked.indexOf('pretzel') > ranked.indexOf('thesuitcasegallery'), 'built-on-your-name names come before ordinary ones');
+  // a brief with no own names changes nothing
+  assert.deepStrictEqual(anchorsOf({ styles: [] }), []);
+  assert.strictEqual(filterCandidates([{ name: 'thesuitcasegallery' }], { styles: ['invented'] }).kept.length, 0);
 }
 
 console.log('candidates tests passed');

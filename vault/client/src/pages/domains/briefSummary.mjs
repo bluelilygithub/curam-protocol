@@ -37,5 +37,6 @@ export function briefSummary(brief) {
   const ownCount = String(b.own || '').split(/[\n;,]+/).map((x) => x.trim()).filter(Boolean).length;
   let text = `${parts.join(', ')}.`;
   if (ownCount) text += ` Includes ${ownCount === 1 ? 'your own name' : `your ${ownCount} own names`}.`;
+  if (String(b.notes || '').trim()) text += ' Plus your extra notes.';
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

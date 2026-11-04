@@ -3,6 +3,7 @@ import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { ENDINGS, PLATFORMS, STYLES, TONES, splitWords } from './constants.mjs';
 import { toneWords } from './briefSummary.mjs';
+import { noticeOwnNames } from './ownNames.mjs';
 
 // Step 1: the brief. A short guided form (a microphone on every text field). Everything here is saved with the set and is shown as a
 // plain sentence above the names, so it is always clear what they were made for.
@@ -37,6 +38,9 @@ export default function BriefForm({ brief, setBrief, onGenerate, generating, con
     return { ...b, required: { ...(b.required || {}), [key]: cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value] } };
   });
   const ready = !!(brief.what.trim() || brief.own.trim());
+  // names spotted in the description that are not yet in "Names I already have": offered, never added by themselves
+  const noticed = noticeOwnNames(brief.what, brief.own);
+  const addOwn = (names) => set({ own: [brief.own.trim(), ...names].filter(Boolean).join('\n') });
   const credits = config && config.generate ? config.generate.credits : 40;
   const tone = toneWords(brief.tone);
 
@@ -53,6 +57,19 @@ export default function BriefForm({ brief, setBrief, onGenerate, generating, con
             </div>
           </Tooltip>
         </div>
+        {noticed.length > 0 && (
+          <div className="rounded-lg px-3 py-2 text-xs flex flex-wrap items-center gap-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} data-guide="noticed-names">
+            <span>Names I noticed in your description:</span>
+            {noticed.map((n) => (
+              <Tooltip key={n} text={`Add "${n}" to Names I already have, so it is always included, checked first, and used to build other names.`}>
+                <button onClick={() => addOwn([n])} className="px-2.5 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200 font-medium" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>+ {n}</button>
+              </Tooltip>
+            ))}
+            {noticed.length > 1 && (
+              <Tooltip text="Add all of these to Names I already have."><button onClick={() => addOwn(noticed)} className="px-2.5 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200" style={{ borderColor: 'var(--color-border)' }}>Add all</button></Tooltip>
+            )}
+          </div>
+        )}
         <div>
           <label className={FIELD_LABEL} style={mute}>Who is it for?</label>
           <Tooltip text="Who will use it or read it. It helps the names fit the audience.">
@@ -85,6 +102,15 @@ export default function BriefForm({ brief, setBrief, onGenerate, generating, con
         </div>
       </div>
 
+        <div>
+          <label className={FIELD_LABEL} style={mute}>Anything else we should know? (optional)</label>
+          <Tooltip text="More detail that should shape the names: what events or exhibitions are called, who you want to reach, what you do not want. Say it in your own words.">
+            <div data-guide="notes">
+              <VoiceInput type="textarea" rows={3} append value={brief.notes} onChange={(v) => set({ notes: v })} label="Anything else we should know"
+                placeholder="e.g. The exhibitions are called Stairs of Light. I want galleries and schools to find it." />
+            </div>
+          </Tooltip>
+        </div>
       </div>
       <div className="space-y-5">
       <div className="rounded-xl p-4 space-y-3" style={card} data-guide="tone">

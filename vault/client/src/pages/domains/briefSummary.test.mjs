@@ -17,6 +17,7 @@ assert.strictEqual(
   'Metaphor, compound and founder or personal name names, very global, built around harbour and light, avoiding wine, .com.au and .org required, free on Instagram and TikTok. Includes your 2 own names.',
 );
 assert.match(briefSummary({ own: 'Dorothy Stoner' }), /Includes your own name\.$/);
+assert.match(briefSummary({ styles: ['invented'], notes: 'The exhibitions are called Stairs of Light' }), /Invented word names\. Plus your extra notes\.$/);
 assert.deepStrictEqual(toneWords({ playfulSerious: 3 }), []);
 assert.deepStrictEqual(toneWords({ playfulSerious: 1, modernClassic: 4 }), ['very playful', 'classic']);
 assert.deepStrictEqual(toneWords(null), []);

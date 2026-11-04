@@ -117,6 +117,11 @@ function cleanCard(c) {
   };
 }
 
+/** The talk-it-through exchanges kept with a set: the last twelve, each clipped. */
+function cleanConversation(v) {
+  return (Array.isArray(v) ? v : []).map((t) => ({ q: clip(t && t.q, 800), a: String((t && t.a) == null ? '' : t.a).replace(/\r\n/g, '\n').trim().slice(0, 1500) })).filter((t) => t.q && t.a).slice(-12);
+}
+
 function boundedJson(v, max) {
   if (v == null || typeof v !== 'object') return null;
   return JSON.stringify(v).length > max ? { truncated: true } : v;
@@ -148,6 +153,7 @@ function cleanSetData(input) {
     shortlist: inPool(nameList(d.shortlist, 16)),
     preferred: pool.length && !seenNames.has(preferredRaw) ? '' : preferredRaw,
     feedback: { more: nameList(d.feedback && d.feedback.more, 30), less: nameList(d.feedback && d.feedback.less, 30) },
+    conversation: cleanConversation(d.conversation),
     seen: nameList(d.seen, MAX_SEEN),
     rounds: Math.max(0, Math.min(99, Math.round(Number(d.rounds)) || 0)),
     checks,
@@ -199,6 +205,7 @@ function upgradeSetData(data) {
     shortlist: (d.shortlist || []).map(labelOf).filter(Boolean),
     preferred: labelOf(d.preferred),
     feedback: { more: [], less: [] },
+    conversation: [],
     seen: pool.map((p) => p.name),
     rounds: pool.length ? 1 : 0,
     checks,
@@ -221,5 +228,5 @@ function summarise(row) {
 
 module.exports = {
   GENERATE_MAX_AGE, ENDINGS, MAX_SETS_PER_USER, MAX_SET_BYTES, MAX_POOL, MAX_OWN_PHRASES,
-  labelOf, shapeStatus, ownVariants, missingTlds, cleanRequirements, cleanSetName, cleanSetData, upgradeSetData, summarise,
+  labelOf, cleanCard, cleanConversation, shapeStatus, ownVariants, missingTlds, cleanRequirements, cleanSetName, cleanSetData, upgradeSetData, summarise,
 };

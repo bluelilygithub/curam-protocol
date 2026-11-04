@@ -7,7 +7,7 @@ export const MAX_POOL = 150;
 
 export const BLANK_WS = {
   id: null, name: '', brief: BLANK_BRIEF, pool: [], shortlist: [], preferred: '',
-  feedback: { more: [], less: [] }, seen: [], rounds: 0, checks: {}, legacy: null, lastCounts: null, savedJson: null,
+  feedback: { more: [], less: [] }, conversation: [], seen: [], rounds: 0, checks: {}, legacy: null, lastCounts: null, savedJson: null,
 };
 
 /** What gets saved: everything the person would want back, nothing about the screen. */
@@ -15,7 +15,7 @@ export function dataOf(ws) {
   return {
     schemaVersion: 2,
     brief: ws.brief, pool: ws.pool, shortlist: ws.shortlist, preferred: ws.preferred,
-    feedback: ws.feedback, seen: ws.seen, rounds: ws.rounds, checks: ws.checks,
+    feedback: ws.feedback, conversation: ws.conversation, seen: ws.seen, rounds: ws.rounds, checks: ws.checks,
     ...(ws.legacy ? { legacy: ws.legacy } : {}),
   };
 }
@@ -34,7 +34,7 @@ export function fromSet(set) {
     brief: { ...BLANK_BRIEF, ...(d.brief || {}), tone: { ...BLANK_BRIEF.tone, ...((d.brief && d.brief.tone) || {}) }, required: { ...BLANK_BRIEF.required, ...((d.brief && d.brief.required) || {}) } },
     pool: d.pool || [], shortlist: d.shortlist || [], preferred: d.preferred || '',
     feedback: { more: (d.feedback && d.feedback.more) || [], less: (d.feedback && d.feedback.less) || [] },
-    seen: d.seen || [], rounds: d.rounds || 0, checks: d.checks || {}, legacy: d.legacy || null,
+    conversation: d.conversation || [], seen: d.seen || [], rounds: d.rounds || 0, checks: d.checks || {}, legacy: d.legacy || null,
   };
   return { ...next, savedJson: jsonOf(next) };
 }
@@ -79,6 +79,18 @@ export function toggleFeedback(ws, name, kind) {
   const other = kind === 'more' ? 'less' : 'more';
   const has = ws.feedback[kind].includes(name);
   return { ...ws, feedback: { [kind]: has ? ws.feedback[kind].filter((n) => n !== name) : [...ws.feedback[kind], name], [other]: ws.feedback[other].filter((n) => n !== name) } };
+}
+
+/** One more question and answer in the talk-it-through thread (the last twelve are kept). */
+export function addTurn(ws, q, a) {
+  return { ...ws, conversation: [...ws.conversation, { q, a }].slice(-12) };
+}
+
+/** Extra detail from the person added to the brief's notes, one line each. */
+export function addNote(ws, text) {
+  const note = String(text || '').trim();
+  if (!note) return ws;
+  return { ...ws, brief: { ...ws.brief, notes: [ws.brief.notes, note].filter(Boolean).join('\n').slice(0, 1500) } };
 }
 
 export const feedbackOf = (ws, name) => (ws.feedback.more.includes(name) ? 'more' : ws.feedback.less.includes(name) ? 'less' : '');
