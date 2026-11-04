@@ -1,6 +1,6 @@
 // node client/src/pages/domains/runAll.test.mjs   (which lookups "run everything" makes, and how results are filed)
 import assert from 'node:assert';
-import { planRun, assemble, handleOf, takenDomain, tableDefaults, tableNames, domainRows, socialRows, needHandles, columnSummary } from './runAll.mjs';
+import { planRun, assemble, handleOf, takenDomain, tableDefaults, tableNames, domainRows, socialRows, needHandles, columnSummary, verifyTargets } from './runAll.mjs';
 
 const sug = (name, results) => ({ name, results });
 const ws = {
@@ -11,13 +11,14 @@ const ws = {
 // the plan: score, social, two prices, compare, and a profile of the taken domain
 {
   const p = planRun(ws);
-  assert.deepStrictEqual(p.jobs.map((j) => j.key), ['score', 'social', 'pricing', 'pricing', 'compare', 'overview']);
-  assert.strictEqual(p.jobs[0].url, '/api/domains/score?domain=vinoire');
-  assert.strictEqual(p.jobs[1].url, '/api/domains/social?username=vinoire');
-  assert.strictEqual(p.jobs[2].url, '/api/domains/pricing?domain=vinoire.com');
-  assert.strictEqual(p.jobs[3].url, '/api/domains/pricing?domain=vinoire.com.au');
-  assert.deepStrictEqual(p.jobs[4].body, { domains: ['vinoire', 'chillar'] });
-  assert.strictEqual(p.jobs[5].url, '/api/domains/overview?domain=vinoire.com');
+  assert.deepStrictEqual(p.jobs.map((j) => j.key), ['verify', 'score', 'social', 'pricing', 'pricing', 'compare', 'overview']);
+  assert.deepStrictEqual(p.jobs[0].body, { names: ['vinoire'], social: false }, 'a live availability check comes first');
+  assert.strictEqual(p.jobs[1].url, '/api/domains/score?domain=vinoire');
+  assert.strictEqual(p.jobs[2].url, '/api/domains/social?username=vinoire');
+  assert.strictEqual(p.jobs[3].url, '/api/domains/pricing?domain=vinoire.com');
+  assert.strictEqual(p.jobs[4].url, '/api/domains/pricing?domain=vinoire.com.au');
+  assert.deepStrictEqual(p.jobs[5].body, { domains: ['vinoire', 'chillar'] });
+  assert.strictEqual(p.jobs[6].url, '/api/domains/overview?domain=vinoire.com');
   assert.deepStrictEqual(p.skipped, []);
 }
 // nothing chosen: nothing runs
@@ -51,18 +52,28 @@ assert.strictEqual(takenDomain(sug('x', [{ domain: 'x.io', tld: 'io', available:
 assert.strictEqual(takenDomain(null), null);
 // a name with spaces or symbols gives a usable handle
 assert.strictEqual(handleOf('Blue Lily & Co!'), 'bluelilyco');
-assert.strictEqual(planRun({ preferred: 'Blue Lily', shortlist: [], suggestions: [] }).jobs[1].url, '/api/domains/social?username=bluelily');
+assert.strictEqual(planRun({ preferred: 'Blue Lily', shortlist: [], suggestions: [] }).jobs[2].url, '/api/domains/social?username=bluelily');
 
 // filing results: pricing from both endings is kept together; a failed job is an error, not a missing result
 {
   const p = planRun(ws);
-  const out = p.jobs.map((j) => (j.key === 'social' ? { ok: false, error: 'rate limited' } : j.key === 'pricing' ? { ok: true, data: { for: j.ending } } : { ok: true, data: { k: j.key } }));
-  const { results, errors } = assemble(p, out);
+  const out = p.jobs.map((j) => (j.key === 'social' ? { ok: false, error: 'rate limited' } : j.key === 'pricing' ? { ok: true, data: { for: j.ending } } : j.key === 'verify' ? { ok: true, data: { checks: [{ name: 'vinoire' }] } } : { ok: true, data: { k: j.key } }));
+  const { results, errors, verified } = assemble(p, out);
+  assert.deepStrictEqual(verified, [{ name: 'vinoire' }]);
+  assert.ok(!('verify' in results), 'the live check is not a result to show');
   assert.deepStrictEqual(results.pricing, { com: { for: 'com' }, 'com.au': { for: 'com.au' } });
   assert.deepStrictEqual(results.score, { k: 'score' });
   assert.strictEqual(errors.social, 'rate limited');
   assert.ok(!('social' in results));
   assert.ok(!('all' in errors));
+}
+// a failed live check is reported, and does not stop the rest
+{
+  const p = planRun(ws);
+  const { results, errors, verified } = assemble(p, p.jobs.map((j) => (j.key === 'verify' ? { ok: false, error: 'service down' } : { ok: true, data: { k: j.key } })));
+  assert.strictEqual(errors.verify, 'service down');
+  assert.strictEqual(verified, null);
+  assert.deepStrictEqual(results.score, { k: 'score' });
 }
 // a skipped tool shows its reason where its result would be
 {
@@ -129,5 +140,11 @@ assert.deepStrictEqual(tableNames({ ...many, tableNames: ['echo', 'echo', 'echo'
   assert.deepStrictEqual(columnSummary(dr, rows, 1), { domainsFree: 4, domainsTotal: 6, handlesFree: 1, handlesTotal: 3 });
   assert.strictEqual(columnSummary(dr, rows, 2).handlesFree, null, 'unchecked handles have no count');
 }
+
+// Verify now checks the preferred name, the shortlist and the table's names, at most five
+assert.deepStrictEqual(verifyTargets({ ...many, preferred: 'alpha', shortlist: ['bravo'], tableNames: ['echo', 'charlie', 'delta'] }), ['alpha', 'bravo', 'echo', 'charlie', 'delta']);
+assert.deepStrictEqual(verifyTargets({ ...many, preferred: 'ghost', shortlist: ['gone'], tableNames: [] }), ['bravo', 'delta', 'echo'], 'names that are not suggestions are ignored; the table supplies the rest');
+assert.deepStrictEqual(verifyTargets({ suggestions: null }), []);
+assert.strictEqual(verifyTargets({ ...many, preferred: 'alpha', shortlist: ['bravo', 'charlie', 'delta', 'echo'] }).length, 5);
 
 console.log('runAll tests passed');

@@ -9,7 +9,9 @@ import DomainsTutorChat from './domains/DomainsTutorChat';
 import { GUIDE_TOOLS } from './domains/domainsTools.mjs';
 import { CurrentSetPanel, SavedSetsPanel, BLANK_WS, dataOf, jsonOf, runPlan, deleteSets, announceDeleted } from './domains/SetsPanels';
 import SuggestionTable from './domains/SuggestionTable';
-import { planRun, assemble, handleOf, needHandles } from './domains/runAll.mjs';
+import ClearancePanel, { ClearanceBadge } from './domains/ClearancePanel';
+import { filterSuggestions, applyVerification } from './domains/clearance.mjs';
+import { planRun, assemble, handleOf, needHandles, verifyTargets } from './domains/runAll.mjs';
 import useToastStore from '../store/toastStore';
 import { spokenName, spokenHandle, spokenBrand } from './domains/spoken.mjs';
 
@@ -210,6 +212,7 @@ function SmartResult({ mode, data, pick }) {
                   </Tooltip>
                 </div>
               )}
+              {pick && <div className="mb-2"><ClearanceBadge suggestion={s} handles={pick.handles[s.name]} req={pick.req} /></div>}
               {s.results.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {s.results.map((r, j) => (
@@ -350,14 +353,19 @@ function SmartResult({ mode, data, pick }) {
 
 // ── Tool panels ───────────────────────────────────────────────────────────────
 
-function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkingHandles }) {
+function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkingHandles, onVerify, verifying }) {
   const [view, setView] = useState('cards'); // 'cards' or 'table'
+  const [filter, setFilter] = useState('all');
   const q = ws.description;
   const setQ = (v) => setWs(w => ({ ...w, description: typeof v === 'function' ? v(w.description) : v }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const result = ws.suggestions ? { suggestions: ws.suggestions } : null;
+  const handlesMap = (ws.results && ws.results.handles) || {};
+  const shownList = ws.suggestions ? filterSuggestions(ws.suggestions, filter, ws.requirements, handlesMap) : null;
+  const result = shownList ? { suggestions: shownList } : null;
   const pick = ws.suggestions ? {
+    handles: handlesMap,
+    req: ws.requirements,
     preferred: ws.preferred,
     shortlist: ws.shortlist,
     onPreferred: (name) => setWs(w => ({ ...w, preferred: w.preferred === name ? '' : name, results: w.preferred === name ? w.results : (w.results.handles ? { handles: w.results.handles } : {}), errors: w.preferred === name ? w.errors : {}, runAt: w.preferred === name ? w.runAt : null })),
@@ -416,7 +424,11 @@ function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkin
           </div>
         </div>
       )}
-      {result && result.suggestions.length > 0 && (
+      {ws.suggestions && ws.suggestions.length > 0 && (
+        <ClearancePanel ws={ws} setWs={setWs} filter={filter} setFilter={setFilter} onVerify={onVerify} verifying={verifying}
+          targets={verifyTargets(ws)} shown={shownList.length} total={ws.suggestions.length} />
+      )}
+      {result && ws.suggestions.length > 0 && (
         <div className="flex items-center gap-1" role="group" aria-label="How to show the names">
           <Tooltip text="Show each suggested name as a card, with the Shortlist and Make preferred buttons.">
             <button onClick={() => setView('cards')} aria-pressed={view === 'cards'} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity"
@@ -427,6 +439,9 @@ function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkin
               style={view === 'table' ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Table of three</button>
           </Tooltip>
         </div>
+      )}
+      {result && result.suggestions.length === 0 && ws.suggestions.length > 0 && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No names match that filter. Check more handles, press Verify now, or choose All names.</p>
       )}
       {view === 'table' && result
         ? <SuggestionTable ws={ws} setWs={setWs} onCheckHandles={onCheckHandles} checking={checkingHandles} />
@@ -666,6 +681,26 @@ export default function DomainsPage() {
     } finally { setCheckingHandles(false); }
   };
 
+  // Verify now: a live check (never a saved answer) of the names about to be committed to, and their social handles when a platform is required.
+  const [verifying, setVerifying] = useState(false);
+  const verifyNow = async () => {
+    const names = verifyTargets(ws);
+    if (!names.length) return;
+    setVerifying(true);
+    try {
+      const res = await api.post('/api/domains/verify', { names, social: (ws.requirements?.platforms || []).length > 0 });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      setWs(w => {
+        const v = applyVerification(w, d.checks);
+        return { ...w, suggestions: v.suggestions, results: { ...w.results, handles: v.handles } };
+      });
+      const bad = d.checks.filter(c => c.domainsError || c.socialError);
+      if (bad.length) addToast(`Some checks failed: ${bad.map(c => `${c.name} (${c.domainsError || c.socialError})`).join(', ')}.`, 'error');
+      else addToast(`Checked ${names.length} name${names.length === 1 ? '' : 's'} live.`);
+    } catch (e) { addToast(e.message || 'Could not verify just now.', 'error'); } finally { setVerifying(false); }
+  };
+
   // Delete the set being worked on (it goes to the recycle bin), then show the saved list.
   const deleteCurrent = async () => {
     if (!ws.id) return;
@@ -682,8 +717,13 @@ export default function DomainsPage() {
     setRunning(true);
     startProcessing(`Checking ${ws.preferred}…`, 'Score · social handles · prices · profile · compare.');
     try {
-      const { results, errors } = assemble(plan, await runPlan(plan));
-      setWs(w => ({ ...w, results, errors, runAt: new Date().toISOString() }));
+      const { results, errors, verified } = assemble(plan, await runPlan(plan));
+      setWs(w => {
+        const v = verified ? applyVerification(w, verified) : { suggestions: w.suggestions, handles: (w.results && w.results.handles) || {} };
+        // the preferred name's social answer doubles as its handle check for the table and the requirements
+        const handles = results.social && results.social.availability ? { ...v.handles, [w.preferred]: results.social } : v.handles;
+        return { ...w, suggestions: v.suggestions, results: { ...results, ...(Object.keys(handles).length ? { handles } : {}) }, errors, runAt: new Date().toISOString() };
+      });
       setMode('board');
     } finally { setRunning(false); stopProcessing(); }
   };
@@ -707,7 +747,7 @@ export default function DomainsPage() {
 
   const openSet = (set) => {
     const d = set.data || {};
-    const next = { ...BLANK_WS, id: set.id, name: set.name, description: d.description || '', suggestions: d.suggestions?.length ? d.suggestions : null, preferred: d.preferred || '', shortlist: d.shortlist || [], tableNames: d.tableNames || [], results: d.results || {}, errors: d.errors || {}, runAt: d.runAt || null };
+    const next = { ...BLANK_WS, id: set.id, name: set.name, description: d.description || '', suggestions: d.suggestions?.length ? d.suggestions : null, preferred: d.preferred || '', shortlist: d.shortlist || [], tableNames: d.tableNames || [], requirements: d.requirements || { tlds: [], platforms: [] }, results: d.results || {}, errors: d.errors || {}, runAt: d.runAt || null };
     setWs({ ...next, savedJson: jsonOf(next) });
     setMode('board');
   };
@@ -811,7 +851,7 @@ export default function DomainsPage() {
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="max-w-xl">
-            <Panel key={mode} ws={ws} setWs={setWs} running={running} onRun={runAllTools} saving={saving} onSave={saveSet} onNew={newSet} onDelete={deleteCurrent} onCheckHandles={checkHandles} checkingHandles={checkingHandles}
+            <Panel key={mode} ws={ws} setWs={setWs} running={running} onRun={runAllTools} saving={saving} onSave={saveSet} onNew={newSet} onDelete={deleteCurrent} onCheckHandles={checkHandles} checkingHandles={checkingHandles} onVerify={verifyNow} verifying={verifying}
               goto={setMode} Result={SmartResult} onOpen={openSet} refreshKey={savedTick} onDeleted={(id) => { if (ws.id === id) setWs(w => ({ ...w, id: null, savedJson: null })); }} />
           </div>
         </div>

@@ -7,13 +7,15 @@ import { offerUndo } from '../../utils/binUndo';
 import { RESULT_ORDER, RESULT_TITLES } from './runAll.mjs';
 import { spokenBrand } from './spoken.mjs';
 import SuggestionTable from './SuggestionTable';
+import ClearancePanel from './ClearancePanel';
+import { verifyTargets } from './runAll.mjs';
 
 // The two "My sets" tools of the Domain page. A set is one business idea kept with everything found for it: the description, the
 // generated names, the preferred name and shortlist, and what each tool said. The page owns the set being worked on (`ws`) so the Name
 // Generator, the Current set board and the saved list all share it. Drawing a result is passed in (`Result`), because that code lives in
 // the page next to the individual tools.
 
-export const BLANK_WS = { id: null, name: '', description: '', suggestions: null, preferred: '', shortlist: [], tableNames: [], results: {}, errors: {}, runAt: null, savedJson: null };
+export const BLANK_WS = { id: null, name: '', description: '', suggestions: null, preferred: '', shortlist: [], tableNames: [], requirements: { tlds: [], platforms: [] }, results: {}, errors: {}, runAt: null, savedJson: null };
 
 /** What gets saved: everything the person would want back, nothing about the screen. */
 export function dataOf(ws) {
@@ -23,6 +25,7 @@ export function dataOf(ws) {
     preferred: ws.preferred || '',
     shortlist: ws.shortlist || [],
     tableNames: ws.tableNames || [],
+    requirements: ws.requirements || { tlds: [], platforms: [] },
     results: ws.results || {},
     errors: ws.errors || {},
     runAt: ws.runAt || null,
@@ -86,7 +89,7 @@ function Section({ title, children }) {
 
 // ── Current set ──────────────────────────────────────────────────────────────
 
-export function CurrentSetPanel({ ws, setWs, Result, running, onRun, saving, onSave, onNew, onDelete, onCheckHandles, checkingHandles, goto }) {
+export function CurrentSetPanel({ ws, setWs, Result, running, onRun, saving, onSave, onNew, onDelete, onCheckHandles, checkingHandles, onVerify, verifying, goto }) {
   const [confirmNew, setConfirmNew] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dirty = isDirty(ws);
@@ -181,9 +184,12 @@ export function CurrentSetPanel({ ws, setWs, Result, running, onRun, saving, onS
       {ws.suggestions && ws.suggestions.length > 0 && (
         <Section title="Suggestions to consider">
           <p className="text-xs mt-1 mb-3" style={{ color: 'var(--color-muted)' }}>Three candidates side by side: their domain endings and social media handles.</p>
+          <div className="mb-3"><ClearancePanel ws={ws} setWs={setWs} showFilter={false} onVerify={onVerify} verifying={verifying} targets={verifyTargets(ws)} /></div>
           <SuggestionTable ws={ws} setWs={setWs} onCheckHandles={onCheckHandles} checking={checkingHandles} />
         </Section>
       )}
+
+      {errors.verify && <p className="text-xs" style={{ color: '#b45309' }}>The fresh availability check did not finish: {errors.verify}</p>}
 
       {!ran && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing has been checked for this set yet. Choose a preferred name and run all the tools.</p>}
 

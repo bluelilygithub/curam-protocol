@@ -1,6 +1,7 @@
 import React from 'react';
 import Tooltip from '../../components/Tooltip';
 import { tableNames, domainRows, socialRows, needHandles, columnSummary, TABLE_SLOTS } from './runAll.mjs';
+import { ClearanceBadge } from './ClearancePanel';
 
 // The side-by-side table: three candidates, one per column, each with its domain endings and its social handles, so they can be weighed
 // at a glance. The columns start as the preferred name, the shortlist and then the best of the rest; each can be swapped for any other
@@ -73,6 +74,7 @@ export default function SuggestionTable({ ws, setWs, onCheckHandles, checking })
                     <p className="text-xs mt-1 font-normal" style={{ color: 'var(--color-muted)' }}>
                       {sum.domainsFree} of {sum.domainsTotal} endings free{sum.handlesFree !== null ? ` · ${sum.handlesFree} of ${sum.handlesTotal} handles free` : ''}
                     </p>
+                    <div className="mt-1"><ClearanceBadge suggestion={ws.suggestions.find((s) => s.name === n)} handles={handles[n]} req={ws.requirements} compact /></div>
                     <Tooltip text="Make this the preferred name. The other tools run on it.">
                       <button onClick={() => setWs((w) => ({ ...w, preferred: w.preferred === n ? '' : n, results: w.preferred === n ? w.results : { ...(w.results.handles ? { handles: w.results.handles } : {}) }, errors: w.preferred === n ? w.errors : {}, runAt: w.preferred === n ? w.runAt : null }))}
                         aria-pressed={ws.preferred === n}

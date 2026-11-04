@@ -44,6 +44,8 @@ export function planRun(ws) {
   const jobs = [];
   const skipped = [];
 
+  // First, a live check of the name's domain endings (never a saved answer), so the rest is judged on what is true now.
+  jobs.push({ key: 'verify', label: 'Fresh availability check', method: 'POST', url: '/api/domains/verify', body: { names: [preferred], social: false } });
   jobs.push({ key: 'score', label: 'Name Scorer', method: 'GET', url: `/api/domains/score?domain=${enc(preferred)}` });
   jobs.push({ key: 'social', label: 'Social Handles', method: 'GET', url: `/api/domains/social?username=${enc(handleOf(preferred))}` });
   for (const ending of PRICING_ENDINGS) {
@@ -71,14 +73,20 @@ export function planRun(ws) {
 
 /**
  * File what the lookups returned. `outcomes` is one entry per job, in the same order: { ok: true, data } or { ok: false, error }.
- * Pricing from several endings becomes { com: ..., 'com.au': ... }. Returns { results, errors }.
+ * Pricing from several endings becomes { com: ..., 'com.au': ... }. The fresh availability check is not a result to show: its answers go
+ * back into the suggestions (see applyVerification in clearance.mjs). Returns { results, errors, verified }.
  */
 export function assemble(plan, outcomes) {
   const results = {};
   const errors = {};
+  let verified = null;
   plan.jobs.forEach((job, i) => {
     const o = outcomes[i];
     if (!o) return;
+    if (job.key === 'verify') {
+      if (o.ok) verified = (o.data && o.data.checks) || null; else errors.verify = String(o.error || 'Could not be checked.');
+      return;
+    }
     if (o.ok) {
       if (job.key === 'pricing') results.pricing = { ...(results.pricing || {}), [job.ending]: o.data };
       else results[job.key] = o.data;
@@ -88,7 +96,7 @@ export function assemble(plan, outcomes) {
     }
   });
   for (const s of plan.skipped) if (s.key !== 'all') errors[s.key] = s.reason;
-  return { results, errors };
+  return { results, errors, verified };
 }
 
 // ── The side-by-side table ───────────────────────────────────────────────────
@@ -121,6 +129,16 @@ export function tableNames(ws) {
   const out = chosen.slice(0, TABLE_SLOTS);
   if (out.length >= TABLE_SLOTS) return out;
   for (const n of tableDefaults(ws)) if (!out.includes(n) && out.length < TABLE_SLOTS) out.push(n);
+  return out;
+}
+
+/** The names Verify now checks live: the preferred name, the shortlist and the table's three, five at most (each costs lookup credits). */
+export function verifyTargets(ws) {
+  const have = new Set(((ws && ws.suggestions) || []).map((s) => s.name));
+  const out = [];
+  for (const n of [ws && ws.preferred, ...((ws && ws.shortlist) || []), ...tableNames(ws || {})]) {
+    if (n && have.has(n) && !out.includes(n) && out.length < 5) out.push(n);
+  }
   return out;
 }
 

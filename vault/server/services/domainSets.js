@@ -14,14 +14,43 @@ const RESULT_KEYS = ['score', 'compare', 'overview', 'social', 'pricing', 'handl
 
 const clip = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
 
+/** Longest an availability answer may be reused for the generator's first look (seconds). A fresh check (max_age 0) is used to verify. */
+const GENERATE_MAX_AGE = 300;
+const ENDINGS = ['com', 'com.au', 'io', 'ai', 'co', 'app'];
+
+/** A name as a domain label or handle: lower case letters, numbers and hyphens only. */
+const labelOf = (name) => String(name == null ? '' : name).toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '').slice(0, 63);
+
+/**
+ * What the data service said about one name's domain endings, in the shape the page keeps: each ending free (true), taken (false) or
+ * unknown (null), where the answer came from ('rdap' is a live registry lookup, 'cache' is a saved answer) and when we asked.
+ */
+function shapeStatus(name, avail, now = new Date()) {
+  const results = (avail && Array.isArray(avail.results) ? avail.results : []).slice(0, 12).map((r) => ({
+    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24),
+    available: r && (r.available === true || r.available === false) ? r.available : null,
+    source: clip(r && r.source, 20),
+  }));
+  return { name, results, hasAvailable: results.some((r) => r.available === true), checkedAt: new Date(now).toISOString() };
+}
+
+/** What a person insists on being free: some endings and some social platforms. Kept with the set. */
+function cleanRequirements(r) {
+  const o = r && typeof r === 'object' ? r : {};
+  const list = (v, n, len) => [...new Set((Array.isArray(v) ? v : []).map((x) => clip(x, len).toLowerCase()).filter(Boolean))].slice(0, n);
+  return { tlds: list(o.tlds, 12, 24), platforms: list(o.platforms, 12, 30) };
+}
+
 function cleanSuggestion(s) {
   if (!s || typeof s !== 'object') return null;
   const name = clip(s.name, 120);
   if (!name) return null;
   const results = (Array.isArray(s.results) ? s.results : []).slice(0, 12).map((r) => ({
     domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24), available: r && (r.available === true || r.available === false) ? r.available : null,
+    source: clip(r && r.source, 20),
   }));
-  return { name, results, hasAvailable: results.some((r) => r.available === true) };
+  const checkedAt = s.checkedAt && Number.isFinite(new Date(s.checkedAt).getTime()) ? new Date(s.checkedAt).toISOString() : null;
+  return { name, results, hasAvailable: results.some((r) => r.available === true), checkedAt };
 }
 
 function cleanResult(v) {
@@ -57,6 +86,7 @@ function cleanSetData(input) {
     preferred: suggestions.length && !names.has(preferred) ? '' : preferred,
     shortlist: suggestions.length ? shortlist.filter((n) => names.has(n)) : shortlist,
     tableNames,
+    requirements: cleanRequirements(d.requirements),
     results,
     errors,
     runAt: d.runAt && Number.isFinite(new Date(d.runAt).getTime()) ? new Date(d.runAt).toISOString() : null,
@@ -81,4 +111,4 @@ function summarise(row) {
   };
 }
 
-module.exports = { MAX_SETS_PER_USER, MAX_SET_BYTES, RESULT_KEYS, cleanSetData, cleanSetName, summarise };
+module.exports = { GENERATE_MAX_AGE, ENDINGS, labelOf, shapeStatus, cleanRequirements, MAX_SETS_PER_USER, MAX_SET_BYTES, RESULT_KEYS, cleanSetData, cleanSetName, summarise };

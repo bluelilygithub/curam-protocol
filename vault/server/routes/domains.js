@@ -4,6 +4,7 @@ const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 const { pool } = require('../db');
 const sets = require('../services/domainSets');
+const rateLimit = require('express-rate-limit');
 
 const DOMSCAN_BASE = 'https://domscan.net/v1';
 
@@ -12,6 +13,33 @@ function key() {
   if (!k) throw new Error('DOMSCAN_API_KEY environment variable is not set on this server. Add it in Railway → Variables and redeploy.');
   return k;
 }
+
+// ── Verify now ──────────────────────────────────────────────
+// A live check of the names someone is about to commit to: domain endings straight from the registry (max_age 0, never a saved answer),
+// and optionally the social handles. Costs 1 credit per name for domains and 2 more for handles, so it is limited per person.
+const verifyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.id || req.ip),
+  message: { error: 'You have verified a lot of names this hour. Please wait a while.' },
+});
+
+router.post('/verify', verifyLimiter, async (req, res) => {
+  try {
+    const names = [...new Set((Array.isArray(req.body && req.body.names) ? req.body.names : []).map(sets.labelOf).filter(Boolean))].slice(0, 5);
+    if (!names.length) return res.status(400).json({ error: 'Choose at least one name to verify.' });
+    const withSocial = !!(req.body && req.body.social);
+    const tlds = sets.ENDINGS.join(',');
+    const checks = await Promise.all(names.map(async (name) => {
+      const out = { name, domains: null, domainsError: null, social: null, socialError: null };
+      try { out.domains = sets.shapeStatus(name, await domscan('/status', { name, tlds, max_age: 0 })); } catch (e) { out.domainsError = e.message; }
+      if (withSocial) {
+        try { out.social = await domscan('/social', { handle: name.replace(/-/g, '') }); } catch (e) { out.socialError = e.message; }
+      }
+      return out;
+    }));
+    res.json({ checks, checkedAt: new Date().toISOString() });
+  } catch (err) { setFail(res, err); }
+});
 
 // ── Saved sets ──────────────────────────────────────────────
 // A set is one business idea kept with its names, preferred name and every tool's result, to come back to. Named routes, before any /:id.
@@ -240,14 +268,15 @@ frostelier`;
 
   const results = await Promise.allSettled(
     names.map(async (name) => {
-      const avail = await domscan('/status', { name, tlds: tldList, prefer_cache: 1 });
-      const r = (avail.results || []).map(r => ({ domain: r.domain, tld: r.tld, available: r.available }));
-      return { name, results: r, hasAvailable: r.some(r => r.available === true) };
+      // max_age is how old a saved answer may be (seconds). The old prefer_cache meant up to 30 days, which could show a name as free after
+      // it was registered. Five minutes keeps the first look quick; Verify now asks for a live answer (max_age 0).
+      const avail = await domscan('/status', { name, tlds: tldList, max_age: sets.GENERATE_MAX_AGE });
+      return sets.shapeStatus(name, avail);
     })
   );
 
   const suggestions = results.map((r, i) =>
-    r.status === 'fulfilled' ? r.value : { name: names[i], results: [], hasAvailable: null }
+    r.status === 'fulfilled' ? r.value : { name: names[i], results: [], hasAvailable: null, checkedAt: null }
   );
 
   // Sort: names with an available .com or .com.au first, then other available, then unknown

@@ -637,6 +637,9 @@
   "POST /api/document-redaction/propose": {
    "class": "authed"
   },
+  "POST /api/domains/verify": {
+   "class": "authed"
+  },
   "GET /api/domains/sets": {
    "class": "authed"
   },

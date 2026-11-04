@@ -1,7 +1,7 @@
 'use strict';
 // node server/services/domainSets.test.js   (no database)
 const assert = require('assert');
-const { cleanSetData, cleanSetName, summarise, MAX_SET_BYTES } = require('./domainSets');
+const { cleanSetData, cleanSetName, summarise, MAX_SET_BYTES, shapeStatus, cleanRequirements, labelOf, GENERATE_MAX_AGE } = require('./domainSets');
 
 const sug = (name, avail) => ({ name, results: [{ domain: `${name}.com`, tld: 'com', available: avail }, { domain: `${name}.io`, tld: 'io', available: false }] });
 
@@ -71,5 +71,39 @@ assert.strictEqual(cleanSetName('x'.repeat(300)).length, 120);
   const s = summarise({ id: 3, name: 'N', preferred: 'vinoire', data: { suggestions: [1, 2], shortlist: [1], results: { score: {}, social: {} } }, updatedAt: 'u', createdAt: 'c' });
   assert.deepStrictEqual(s, { id: 3, name: 'N', preferred: 'vinoire', updatedAt: 'u', createdAt: 'c', names: 2, shortlist: 1, results: 2 });
 }
+
+
+// ── how fresh a check is ──
+// the generator may reuse an answer for minutes, never for weeks (the old prefer_cache was a 30-day cache)
+assert.ok(GENERATE_MAX_AGE > 0 && GENERATE_MAX_AGE <= 3600);
+{
+  const now = new Date('2026-11-04T01:02:03Z');
+  const shaped = shapeStatus('vinoire', { results: [
+    { domain: 'vinoire.com', tld: 'com', available: false, source: 'cache', latency_ms: 4 },
+    { domain: 'vinoire.io', tld: 'io', available: true, source: 'rdap' },
+    { domain: 'vinoire.ai', tld: 'ai', available: 'maybe' },
+  ] }, now);
+  assert.strictEqual(shaped.checkedAt, '2026-11-04T01:02:03.000Z');
+  assert.deepStrictEqual(shaped.results.map((r) => [r.tld, r.available, r.source]), [['com', false, 'cache'], ['io', true, 'rdap'], ['ai', null, '']]);
+  assert.strictEqual(shaped.hasAvailable, true);
+  assert.ok(!('latency_ms' in shaped.results[0]), 'only the fields the page uses are kept');
+  assert.deepStrictEqual(shapeStatus('x', null, now).results, [], 'no answer gives no endings, never "free"');
+  assert.strictEqual(shapeStatus('x', {}, now).hasAvailable, false);
+  // what was checked, and when, survives saving
+  const kept = cleanSetData({ suggestions: [shaped] }).suggestions[0];
+  assert.strictEqual(kept.checkedAt, '2026-11-04T01:02:03.000Z');
+  assert.strictEqual(kept.results[0].source, 'cache');
+  assert.strictEqual(cleanSetData({ suggestions: [{ name: 'a', results: [], checkedAt: 'rubbish' }] }).suggestions[0].checkedAt, null);
+}
+assert.strictEqual(labelOf('Blue Lily & Co!'), 'bluelilyco');
+assert.strictEqual(labelOf('-my-brand-'), 'my-brand');
+assert.strictEqual(labelOf('x'.repeat(100)).length, 63);
+assert.strictEqual(labelOf(null), '');
+// requirements: endings and platforms that must be free
+assert.deepStrictEqual(cleanRequirements({ tlds: ['COM.au', 'com.au', ' io '], platforms: ['Instagram', 'instagram', 'TikTok'] }), { tlds: ['com.au', 'io'], platforms: ['instagram', 'tiktok'] });
+assert.deepStrictEqual(cleanRequirements(null), { tlds: [], platforms: [] });
+assert.deepStrictEqual(cleanRequirements({ tlds: 'com' }), { tlds: [], platforms: [] });
+assert.deepStrictEqual(cleanSetData({ requirements: { tlds: ['com'], platforms: ['x'] } }).requirements, { tlds: ['com'], platforms: ['x'] });
+assert.deepStrictEqual(cleanSetData({}).requirements, { tlds: [], platforms: [] });
 
 console.log('domainSets tests passed');
