@@ -15,12 +15,12 @@ const CONFIG = {
   name: 'Domain guide',
   shortName: 'guide',
   subtitle: 'Tell me what you want to do',
-  intro: 'Hi! Tell me what you are trying to do, in your own words: find a name for a business, check one you already have, see whether it is free on social media, or see what it costs to keep. I will check what Domain can do and give you the steps. If something is missing, I will say so. I cannot see what you type or the results.',
+  intro: 'Hi! Tell me what you are trying to do, in your own words: find a name for a business, a book or a project, check a name you already have, or see whether a domain is free. I will check what Domain can do and give you the steps. If something is missing, I will say so. I cannot see what you type or the results.',
   starters: [
     'I need a name for my business',
-    'Is this name free on Instagram and TikTok?',
-    'Which of my shortlisted names is best?',
-    'What will it cost to keep a .com.au?',
+    'I already have a book title and an artist name',
+    'The .com is taken, what can I do?',
+    'How do I save my names for later?',
   ],
   // Status colours are deliberately outside the theme (see client/DESIGN.md).
   verdicts: {

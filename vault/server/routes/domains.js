@@ -1,25 +1,79 @@
+'use strict';
+
+// The Domain tool's API (/api/domains, flag `domains`). A guided journey: brief -> generate and refine -> shortlist -> check -> decide.
+// Named routes only; nothing here is bought or registered. Credits (DomScan docs): domain check 1 per name, social handles 2 per name.
+
 const express = require('express');
-const router = express.Router();
-const { getVaultModelsConfigForUser } = require('../services/modelResolver');
-const { callModel } = require('../services/callModel');
-const { pool } = require('../db');
-const sets = require('../services/domainSets');
 const rateLimit = require('express-rate-limit');
+const { pool } = require('../db');
+const { aiLimiter } = require('../middleware/aiRateLimit');
+const sets = require('../services/domainSets');
+const { cleanBrief } = require('../services/domainNaming/brief');
+const { generateRound, CHECK_BATCH, VARIATION_BATCH, WIDE_COUNT, SHOW } = require('../services/domainNaming/generate');
+const { getProviders } = require('../services/domainNaming/providers');
+const { DOMSCAN_BASE, key } = require('../services/domainNaming/domscan');
 
-const DOMSCAN_BASE = 'https://domscan.net/v1';
+const router = express.Router();
 
-function key() {
-  const k = process.env.DOMSCAN_API_KEY;
-  if (!k) throw new Error('DOMSCAN_API_KEY environment variable is not set on this server. Add it in Railway → Variables and redeploy.');
-  return k;
-}
+const fail = (res, err) => {
+  const status = err && err.status ? err.status : 500;
+  if (status === 500) console.error('domains route error:', err);
+  res.status(status).json({ error: status === 500 ? (err && err.message) || 'Something went wrong. Please try again.' : err.message });
+};
+const perUser = (req) => String(req.user?.id || req.ip);
 
-// ── Verify now ──────────────────────────────────────────────
-// A live check of the names someone is about to commit to: domain endings straight from the registry (max_age 0, never a saved answer),
-// and optionally the social handles. Costs 1 credit per name for domains and 2 more for handles, so it is limited per person.
+// ── What this server is set up to do ─────────────────────────
+// The page shows the cost of a round before it runs, and says so when it is running on stand-in data.
+router.get('/config', (req, res) => {
+  const fake = process.env.DOMAIN_PROVIDER === 'fake';
+  res.json({
+    provider: fake ? 'fake' : 'live',
+    generate: { wide: WIDE_COUNT, domainChecks: CHECK_BATCH, shown: SHOW, credits: CHECK_BATCH },
+    variations: { domainChecks: VARIATION_BATCH, credits: VARIATION_BATCH },
+    endings: sets.ENDINGS,
+  });
+});
+
+router.get('/config-check', async (req, res) => {
+  try {
+    const k = key();
+    const probe = await fetch(`${DOMSCAN_BASE}/tlds?limit=1`, { headers: { 'X-API-Key': k, Accept: 'application/json' } });
+    res.json({ configured: true, keyPreview: `${k.slice(0, 4)}…`, status: probe.status });
+  } catch (err) { res.status(200).json({ configured: false, error: err.message }); }
+});
+
+// ── Generate and refine ──────────────────────────────────────
+// One round: wide generation, free filtering in code, domain checks for the best few only, then reasons for the finalists.
+const generateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, keyGenerator: perUser,
+  message: { error: 'You have generated a lot of names this hour. Please wait a while.' },
+});
+
+router.post('/generate', aiLimiter, generateLimiter, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const brief = cleanBrief(body.brief);
+    if (!brief.what && !brief.own) return res.status(400).json({ error: 'Say what it is, or give a name you already have.' });
+    const mode = body.mode === 'variations' ? 'variations' : 'round';
+    const seed = sets.labelOf(body.seed);
+    if (mode === 'variations' && !seed) return res.status(400).json({ error: 'Choose a name to make variations of.' });
+    const names = (v, n) => [...new Set((Array.isArray(v) ? v : []).map(sets.labelOf).filter(Boolean))].slice(0, n);
+    const p = getProviders();
+    const out = await generateRound({
+      userId: req.user.id, brief, mode, seed,
+      feedback: { more: names(body.feedback && body.feedback.more, 8), less: names(body.feedback && body.feedback.less, 12) },
+      seen: names(body.seen, 300),
+      round: Math.max(1, Math.min(99, Math.round(Number(body.round)) || 1)),
+    }, { getModels: p.getModels, callModel: p.callModel, logUsage: p.logUsage, statusFor: p.statusFor });
+    res.json(out);
+  } catch (err) { fail(res, err); }
+});
+
+// ── Verify now ───────────────────────────────────────────────
+// A live check (never a saved answer) of the names someone is about to commit to: domain endings straight from the registry, and
+// optionally the social handles. 1 credit per name for domains and 2 more for handles, so it is limited per person.
 const verifyLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req) => String(req.user?.id || req.ip),
+  windowMs: 60 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, keyGenerator: perUser,
   message: { error: 'You have verified a lot of names this hour. Please wait a while.' },
 });
 
@@ -29,30 +83,48 @@ router.post('/verify', verifyLimiter, async (req, res) => {
     if (!names.length) return res.status(400).json({ error: 'Choose at least one name to verify.' });
     const withSocial = !!(req.body && req.body.social);
     const tlds = sets.ENDINGS.join(',');
+    const p = getProviders();
     const checks = await Promise.all(names.map(async (name) => {
       const out = { name, domains: null, domainsError: null, social: null, socialError: null };
-      try { out.domains = sets.shapeStatus(name, await statusFor(name, tlds, 0)); } catch (e) { out.domainsError = e.message; }
+      try { out.domains = sets.shapeStatus(name, await p.statusFor(name, tlds, 0)); } catch (e) { out.domainsError = e.message; }
       if (withSocial) {
-        try { out.social = await domscan('/social', { handle: name.replace(/-/g, '') }); } catch (e) { out.socialError = e.message; }
+        try { out.social = await p.domscan('/social', { handle: name.replace(/-/g, '') }); } catch (e) { out.socialError = e.message; }
       }
       return out;
     }));
     res.json({ checks, checkedAt: new Date().toISOString() });
-  } catch (err) { setFail(res, err); }
+  } catch (err) { fail(res, err); }
 });
 
-// ── Saved sets ──────────────────────────────────────────────
-// A set is one business idea kept with its names, preferred name and every tool's result, to come back to. Named routes, before any /:id.
+// ── Small links on a name card ───────────────────────────────
+router.get('/overview', async (req, res) => {
+  try {
+    const domain = String(req.query.domain || '').trim().toLowerCase();
+    if (!domain) return res.status(400).json({ error: 'domain is required.' });
+    res.json(await getProviders().domscan('/overview', { domain }));
+  } catch (err) { fail(res, err); }
+});
+
+router.get('/social', async (req, res) => {
+  try {
+    const username = sets.labelOf(req.query.username).replace(/-/g, '');
+    if (!username) return res.status(400).json({ error: 'username is required.' });
+    res.json(await getProviders().domscan('/social', { handle: username }));
+  } catch (err) { fail(res, err); }
+});
+
+// ── Saved sets ───────────────────────────────────────────────
+// A set is one naming brief kept with its names, shortlist and results, to come back to. A set saved by the old toolbox opens converted.
 
 const SET_COLS = 'id, name, preferred, data, "createdAt", "updatedAt"';
-const setFail = (res, err) => res.status(err && err.status ? err.status : 500).json({ error: err && err.status ? err.message : 'Something went wrong. Please try again.' });
 const setId = (req) => { const n = Number(req.params.id); return Number.isInteger(n) && n > 0 ? n : null; };
+const withData = (row) => ({ ...sets.summarise(row), data: sets.upgradeSetData(row.data) });
 
 router.get('/sets', async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT ${SET_COLS} FROM domain_sets WHERE "userId"=$1 ORDER BY "updatedAt" DESC LIMIT 200`, [req.user.id]);
     res.json({ sets: rows.map(sets.summarise) });
-  } catch (err) { setFail(res, err); }
+  } catch (err) { fail(res, err); }
 });
 
 router.post('/sets', async (req, res) => {
@@ -64,8 +136,8 @@ router.post('/sets', async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO domain_sets ("userId", name, preferred, data) VALUES ($1,$2,$3,$4) RETURNING ${SET_COLS}`,
       [req.user.id, name, data.preferred || null, JSON.stringify(data)]);
-    res.status(201).json({ set: { ...sets.summarise(rows[0]), data: rows[0].data } });
-  } catch (err) { setFail(res, err); }
+    res.status(201).json({ set: withData(rows[0]) });
+  } catch (err) { fail(res, err); }
 });
 
 router.get('/sets/:id', async (req, res) => {
@@ -74,8 +146,8 @@ router.get('/sets/:id', async (req, res) => {
     if (!id) return res.status(400).json({ error: 'Bad set.' });
     const { rows } = await pool.query(`SELECT ${SET_COLS} FROM domain_sets WHERE id=$1 AND "userId"=$2`, [id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'That set was not found.' });
-    res.json({ set: { ...sets.summarise(rows[0]), data: rows[0].data } });
-  } catch (err) { setFail(res, err); }
+    res.json({ set: withData(rows[0]) });
+  } catch (err) { fail(res, err); }
 });
 
 router.put('/sets/:id', async (req, res) => {
@@ -88,8 +160,8 @@ router.put('/sets/:id', async (req, res) => {
       `UPDATE domain_sets SET name=$1, preferred=$2, data=$3, "updatedAt"=NOW() WHERE id=$4 AND "userId"=$5 RETURNING ${SET_COLS}`,
       [name, data.preferred || null, JSON.stringify(data), id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'That set was not found.' });
-    res.json({ set: { ...sets.summarise(rows[0]), data: rows[0].data } });
-  } catch (err) { setFail(res, err); }
+    res.json({ set: withData(rows[0]) });
+  } catch (err) { fail(res, err); }
 });
 
 // Deleting goes to the shared 30-day recycle bin, in the same transaction as the delete.
@@ -103,10 +175,10 @@ router.delete('/sets/:id', async (req, res) => {
     if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That set was not found.' }); }
     require('../services/recycleBin/adapters');
     const bin = require('../services/recycleBin');
-    const d = rows[0].data || {};
+    const s = sets.summarise(rows[0]);
     const binId = await bin.moveToBin(db, {
       userId: req.user.id, type: 'domain-set', id: rows[0].id, title: rows[0].name,
-      detail: `${(d.suggestions || []).length} names${rows[0].preferred ? ` · preferred: ${rows[0].preferred}` : ''}`,
+      detail: `${s.names} names${rows[0].preferred ? ` · preferred: ${rows[0].preferred}` : ''}`,
       payload: { set: rows[0] },
     });
     await db.query('DELETE FROM domain_sets WHERE id=$1 AND "userId"=$2', [id, req.user.id]);
@@ -114,250 +186,8 @@ router.delete('/sets/:id', async (req, res) => {
     res.json({ ok: true, binId });
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});
-    setFail(res, err);
+    fail(res, err);
   } finally { db.release(); }
 });
-
-// Quick config check — confirms the key is visible to the process
-router.get('/config-check', async (req, res) => {
-  const k = process.env.DOMSCAN_API_KEY;
-  if (!k) return res.json({ configured: false, prefix: null });
-  // Probe DomScan with a lightweight call to confirm the key is valid
-  try {
-    const probe = await fetch(`${DOMSCAN_BASE}/tlds?limit=1`, {
-      headers: { 'X-API-Key': k, Accept: 'application/json' },
-    });
-    res.json({
-      configured: true,
-      prefix: k.slice(0, 6) + '…',
-      length: k.length,
-      domscanStatus: probe.status,
-      keyValid: probe.ok,
-    });
-  } catch (e) {
-    res.json({ configured: true, prefix: k.slice(0, 6) + '…', length: k.length, probeError: e.message });
-  }
-});
-
-async function domscan(path, params = {}) {
-  const url = new URL(`${DOMSCAN_BASE}${path}`);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
-  });
-  const res = await fetch(url.toString(), {
-    headers: { 'X-API-Key': key(), Accept: 'application/json' },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (res.status === 401 || res.status === 403) {
-    throw new Error(`DomScan API key is invalid or unauthorised (HTTP ${res.status}). Check the key value in Railway → Variables.`);
-  }
-  if (!res.ok) throw new Error(body.message || body.error || `DomScan API error ${res.status}`);
-  return body;
-}
-
-async function domscanPost(path, payload = {}) {
-  const res = await fetch(`${DOMSCAN_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'X-API-Key': key(), 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (res.status === 401 || res.status === 403) {
-    throw new Error(`DomScan API key is invalid or unauthorised (HTTP ${res.status}). Check the key value in Railway → Variables.`);
-  }
-  if (!res.ok) throw new Error(body.message || body.error || `DomScan API error ${res.status}`);
-  return body;
-}
-
-function handle(fn) {
-  return async (req, res) => {
-    try {
-      const data = await fn(req);
-      res.json(data);
-    } catch (err) {
-      console.error('domains route error:', err);
-      res.status(500).json({ error: err.message || 'DomScan request failed.' });
-    }
-  };
-}
-
-// ── Discover ────────────────────────────────────────────────────────────────
-
-// Step 1: LLM generates creative names. Step 2: DomScan checks availability.
-// Ask the data service about a name's endings. It can skip some of the endings it was asked for, so any that are missing from the answer
-// are asked for again in a second request rather than silently left out.
-async function statusFor(name, tldList, maxAge) {
-  const first = await domscan('/status', { name, tlds: tldList, max_age: maxAge });
-  const missing = sets.missingTlds(first, tldList.split(','));
-  if (!missing.length) return first;
-  try {
-    const more = await domscan('/status', { name, tlds: missing.join(','), max_age: maxAge });
-    return { ...first, results: [...(Array.isArray(first.results) ? first.results : []), ...(Array.isArray(more.results) ? more.results : [])] };
-  } catch { return first; }
-}
-
-router.get('/suggest', handle(async (req) => {
-  const { q, tlds } = req.query;
-  if (!q) throw new Error('q (description) is required.');
-
-  // Get all configured text models so we can try them all as fallbacks
-  const { models: allModels, defaultModel } = await getVaultModelsConfigForUser(req.user.id);
-  const textModels = allModels
-    .filter(m => !['fal', 'seedance'].includes(String(m.provider || '').toLowerCase()))
-    .map(m => m.id)
-    .filter(Boolean);
-
-  // Put the default model first, then the rest
-  const candidates = [...new Set([defaultModel, ...textModels].filter(Boolean))];
-
-  const prompt = `You are an expert brand naming consultant. A client needs domain name ideas for this business:
-
-"${q}"
-
-Generate exactly 16 creative, memorable domain name candidates.
-
-If the description names a book, a person, an artist, an organisation or a product, treat that name as a fixed fact: do not change it. Put it first, written as one lowercase word (and also a version without a leading "the"), then fill the rest with creative alternatives.
-
-Rules:
-- Output one name per line, nothing else — no numbering, no TLDs, no explanation
-- Invented names should be 5–14 characters, lowercase (a real title or person's name may be longer)
-- Mix styles: invented words, portmanteaus, metaphors, evocative compounds
-- Avoid generic filler: "hub", "pro", "app", "best", "my", "get", "go"
-- Every name must feel like a real brand
-
-Example output:
-chillvault
-vinoguard
-cellrmate
-frostelier`;
-
-  let raw = '';
-  let usedModel = '';
-  for (const modelId of candidates) {
-    try {
-      console.log(`[domains/suggest] trying model=${modelId}`);
-      const result = await callModel(modelId, prompt, { maxTokens: 300 });
-      if (result && result.trim()) {
-        raw = result;
-        usedModel = modelId;
-        break;
-      }
-      console.log(`[domains/suggest] model=${modelId} returned empty, trying next`);
-    } catch (e) {
-      console.warn(`[domains/suggest] model=${modelId} error: ${e.message}, trying next`);
-    }
-  }
-
-  console.log(`[domains/suggest] used=${usedModel} raw (${raw.length} chars): ${raw.slice(0, 200)}`);
-
-  if (!raw || !raw.trim()) {
-    const tried = candidates.join(', ');
-    throw new Error(`All configured AI models returned empty responses (tried: ${tried}). Check your models in Settings → AI & Chat.`);
-  }
-
-  // Parse: try JSON array first, then fall back to one-name-per-line
-  let names = [];
-  const jsonMatch = raw.match(/\[[\s\S]*\]/);
-  if (jsonMatch) {
-    try { names = JSON.parse(jsonMatch[0]); } catch { /* fall through to line parsing */ }
-  }
-  if (!names.length) {
-    names = raw
-      .split(/[\n,]+/)
-      .map(l => l.trim().replace(/^["'\d.\-\s]+|["'\s]+$/g, ''))
-      .filter(l => l.length >= 3 && l.length <= 40 && /^[a-z0-9-]+$/i.test(l));
-  }
-
-  // Sanitise: lowercase, alphanumeric + hyphens only, deduplicate
-  names = [...new Set(
-    names
-      .map(n => String(n).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40))
-      .filter(n => n.length >= 3)
-  )].slice(0, 16);
-
-  // Names the person already has (a book title, an artist) are always checked, first, whatever the AI suggested.
-  const own = sets.ownVariants(req.query.own);
-  const ownNames = new Set(own.map(o => o.name));
-  names = [...own.map(o => o.name), ...names.filter(n => !ownNames.has(n))];
-  const labelOf = new Map(own.map(o => [o.name, o.label]));
-
-  if (!names.length) throw new Error('The AI did not return usable names. Please rephrase your description and try again.');
-
-  // Step 2: check availability in parallel (not sequentially — avoids timeout)
-  const tldList = tlds || 'com,com.au,org,io,ai,co,app';
-
-  const results = await Promise.allSettled(
-    names.map(async (name) => {
-      // max_age is how old a saved answer may be (seconds). The old prefer_cache meant up to 30 days, which could show a name as free after
-      // it was registered. Five minutes keeps the first look quick; Verify now asks for a live answer (max_age 0).
-      const avail = await statusFor(name, tldList, sets.GENERATE_MAX_AGE);
-      return { ...sets.shapeStatus(name, avail), ...(labelOf.has(name) ? { label: labelOf.get(name), own: true } : {}) };
-    })
-  );
-
-  const suggestions = results.map((r, i) =>
-    r.status === 'fulfilled' ? r.value : { name: names[i], ...(labelOf.has(names[i]) ? { label: labelOf.get(names[i]), own: true } : {}), results: [], hasAvailable: null, checkedAt: null }
-  );
-
-  // Sort: names with an available .com or .com.au first, then other available, then unknown
-  suggestions.sort((a, b) => {
-    if (!!a.own !== !!b.own) return a.own ? -1 : 1;
-    const score = (s) => {
-      if (s.results.find(r => (r.tld === 'com' || r.tld === 'com.au') && r.available)) return 2;
-      if (s.hasAvailable) return 1;
-      return 0;
-    };
-    return score(b) - score(a);
-  });
-
-  return { suggestions, source: 'llm', tlds: tldList };
-}));
-
-// Domain quality / brand score
-router.get('/score', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  // DomScan /v1/score uses 'name' param (no TLD needed)
-  const name = domain.replace(/\.[^.]+$/, ''); // strip TLD if provided
-  return domscan('/score', { name });
-}));
-
-// Compare and rank multiple brand names
-router.post('/score/compare', handle(async (req) => {
-  const { domains } = req.body;
-  if (!domains || !Array.isArray(domains) || domains.length < 2) {
-    throw new Error('Provide at least 2 domain names to compare.');
-  }
-  // DomScan /v1/score/compare uses 'names' (strip TLDs)
-  const names = domains.map(d => d.replace(/\.[^.]+$/, ''));
-  return domscanPost('/score/compare', { names });
-}));
-
-// ── Research ────────────────────────────────────────────────────────────────
-
-// Full domain overview: WHOIS + lifecycle + reputation + DNS in one call
-router.get('/overview', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  return domscan('/overview', { domain });
-}));
-
-// ── Launch Readiness ─────────────────────────────────────────────────────────
-
-// Social handle availability — API uses 'handle' param
-router.get('/social', handle(async (req) => {
-  const { username } = req.query;
-  if (!username) throw new Error('username is required.');
-  return domscan('/social', { handle: username });
-}));
-
-// Compare registrar prices for a domain
-router.get('/pricing', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  const [name, ...tldParts] = domain.replace(/^www\./, '').split('.');
-  const tld = tldParts.join('.');
-  return domscan('/prices/compare', { tld: tld || 'com' });
-}));
 
 module.exports = router;

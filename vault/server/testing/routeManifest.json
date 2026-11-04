@@ -637,6 +637,12 @@
   "POST /api/document-redaction/propose": {
    "class": "authed"
   },
+  "GET /api/domains/config": {
+   "class": "authed"
+  },
+  "POST /api/domains/generate": {
+   "class": "authed"
+  },
   "POST /api/domains/verify": {
    "class": "authed"
   },
@@ -661,19 +667,7 @@
   "GET /api/domains/overview": {
    "class": "authed"
   },
-  "GET /api/domains/pricing": {
-   "class": "authed"
-  },
-  "POST /api/domains/score/compare": {
-   "class": "authed"
-  },
-  "GET /api/domains/score": {
-   "class": "authed"
-  },
   "GET /api/domains/social": {
-   "class": "authed"
-  },
-  "GET /api/domains/suggest": {
    "class": "authed"
   },
   "POST /api/email-follow-up-tutor": {

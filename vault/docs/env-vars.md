@@ -18,6 +18,7 @@ Moved out of CLAUDE.md.
 | `FINNHUB_API_KEY` | Shares — NYSE/NASDAQ quotes + company news (free tier, no IP block on Railway) |
 | `ALPHA_VANTAGE_API_KEY` | Shares — ASX quotes (free tier: 25 req/day; cron polls 2×/day + 15 min cache for UI) |
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
+| `DOMAIN_PROVIDER` | Domain page — set to `fake` to use stand-in AI and DomScan answers (no keys, no credits, repeatable; the page shows a Test mode badge). For local trials and tests only: leave unset on Railway. `server/services/domainNaming/fakeProviders.js` |
 | `RAINFOREST_API_KEY` | Product Scout — Amazon search/product data via Rainforest API |
 | `AMAZON_DOMAIN` | Product Scout — Amazon locale (default `amazon.com.au`) |
 | `FAL_API_KEY` | Graphics, Video Tools (generate fallback), Recipes (dish photos) |

@@ -1,20 +1,26 @@
 'use strict';
 
-// Saved sets on the Domain page: one business idea kept with everything found for it (the description, the generated names, the
-// preferred name and shortlist, and the result of each tool as it was). Pure rules, no database: the route calls these so a test can too.
+// Saved sets on the Domain page: one naming brief kept with everything found for it. Pure rules, no database: the route calls these so
+// a test can too.
+//
+// A set is stored as JSON in domain_sets.data. Version 2 (this file) holds the brief, the pool of candidate names with their reasons
+// and domain checks, the shortlist and preferred name, the feedback that steers new rounds, and (from the check stage on) the verdict
+// evidence for each name. Version 1 (the old toolbox: description, suggestions, tool results) is converted when a set is opened, and
+// its old tool results are kept untouched under `legacy`.
 //
 // Nothing the browser sends is trusted: only known keys are kept, text is clipped, lists are capped and the whole set has a size limit,
-// so a set cannot be used to store arbitrary data. Results are what the data service answered; they are kept as JSON and drawn by the page.
+// so a set cannot be used to store arbitrary data.
 
 const MAX_SETS_PER_USER = 200;
 const MAX_SET_BYTES = 400 * 1024;
-const MAX_RESULT_BYTES = 100 * 1024;
-// 'handles' is the social check of each name in the side-by-side table: { [name]: the Social Handles answer }
-const RESULT_KEYS = ['score', 'compare', 'overview', 'social', 'pricing', 'handles'];
+const MAX_POOL = 150;
+const MAX_SEEN = 300;
+const MAX_CHECK_BYTES = 12 * 1024;
+const MAX_LEGACY_BYTES = 100 * 1024;
 
 const clip = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
 
-/** Longest an availability answer may be reused for the generator's first look (seconds). A fresh check (max_age 0) is used to verify. */
+/** Longest an availability answer may be reused for the generator's first look (seconds). A live check uses max_age 0. */
 const GENERATE_MAX_AGE = 300;
 const ENDINGS = ['com', 'com.au', 'org', 'io', 'ai', 'co', 'app'];
 
@@ -25,6 +31,15 @@ const labelOf = (name) => String(name == null ? '' : name).toLowerCase().replace
  * What the data service said about one name's domain endings, in the shape the page keeps: each ending free (true), taken (false) or
  * unknown (null), where the answer came from ('rdap' is a live registry lookup, 'cache' is a saved answer) and when we asked.
  */
+function shapeStatus(name, avail, now = new Date()) {
+  const results = (avail && Array.isArray(avail.results) ? avail.results : []).slice(0, 12).map((r) => ({
+    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24).replace(/^\./, ''),
+    available: r && (r.available === true || r.available === false) ? r.available : null,
+    source: clip(r && r.source, 20),
+  }));
+  return { name, results, hasAvailable: results.some((r) => r.available === true), checkedAt: new Date(now).toISOString() };
+}
+
 /**
  * Names the person already has (a book title, an artist's name, a business) turned into domain labels, so they are always checked and
  * never depend on the AI thinking of them. "The Staircase Suitcase" gives staircasesuitcase and thestaircasesuitcase; "Dorothy Stoner"
@@ -56,76 +71,11 @@ function missingTlds(avail, wanted) {
   return (wanted || []).map((t) => String(t).trim().toLowerCase()).filter((t) => t && !got.has(t));
 }
 
-function shapeStatus(name, avail, now = new Date()) {
-  const results = (avail && Array.isArray(avail.results) ? avail.results : []).slice(0, 12).map((r) => ({
-    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24).replace(/^\./, ''),
-    available: r && (r.available === true || r.available === false) ? r.available : null,
-    source: clip(r && r.source, 20),
-  }));
-  return { name, results, hasAvailable: results.some((r) => r.available === true), checkedAt: new Date(now).toISOString() };
-}
-
-/** What a person insists on being free: some endings and some social platforms. Kept with the set. */
+/** What a person insists on being free: some endings and some social platforms. */
 function cleanRequirements(r) {
   const o = r && typeof r === 'object' ? r : {};
   const list = (v, n, len) => [...new Set((Array.isArray(v) ? v : []).map((x) => clip(x, len).toLowerCase()).filter(Boolean))].slice(0, n);
   return { tlds: list(o.tlds, 12, 24), platforms: list(o.platforms, 12, 30) };
-}
-
-function cleanSuggestion(s) {
-  if (!s || typeof s !== 'object') return null;
-  const name = clip(s.name, 120);
-  if (!name) return null;
-  const label = clip(s.label, 80);
-  const results = (Array.isArray(s.results) ? s.results : []).slice(0, 12).map((r) => ({
-    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24), available: r && (r.available === true || r.available === false) ? r.available : null,
-    source: clip(r && r.source, 20),
-  }));
-  const checkedAt = s.checkedAt && Number.isFinite(new Date(s.checkedAt).getTime()) ? new Date(s.checkedAt).toISOString() : null;
-  return { name, ...(label ? { label, own: true } : {}), results, hasAvailable: results.some((r) => r.available === true), checkedAt };
-}
-
-function cleanResult(v) {
-  if (v == null || typeof v !== 'object') return null;
-  const json = JSON.stringify(v);
-  if (json.length > MAX_RESULT_BYTES) return { truncated: true };
-  return v;
-}
-
-/** The data of a set from whatever the browser sent. Throws { status: 400, message } when it cannot be a set. */
-function cleanSetData(input) {
-  const d = input && typeof input === 'object' ? input : {};
-  const suggestions = (Array.isArray(d.suggestions) ? d.suggestions : (d.suggestions && Array.isArray(d.suggestions.suggestions) ? d.suggestions.suggestions : []))
-    .slice(0, 40).map(cleanSuggestion).filter(Boolean);
-  const names = new Set(suggestions.map((s) => s.name));
-  const preferred = clip(d.preferred, 120);
-  const shortlist = [...new Set((Array.isArray(d.shortlist) ? d.shortlist : []).map((n) => clip(n, 120)).filter(Boolean))].slice(0, 16);
-  // the three names shown in the side-by-side table, if the person chose them
-  const tableNames = [...new Set((Array.isArray(d.tableNames) ? d.tableNames : []).map((n) => clip(n, 120)).filter((n) => n && names.has(n)))].slice(0, 3);
-  const results = {};
-  for (const k of RESULT_KEYS) {
-    const r = d.results && d.results[k] != null ? cleanResult(d.results[k]) : null;
-    if (r) results[k] = r;
-  }
-  const errors = {};
-  for (const k of RESULT_KEYS) {
-    if (d.errors && d.errors[k]) errors[k] = clip(d.errors[k], 300);
-  }
-  const out = {
-    description: String(d.description == null ? '' : d.description).replace(/\r\n/g, '\n').trim().slice(0, 4000),
-    ownNames: String(d.ownNames == null ? '' : d.ownNames).replace(/\r\n/g, '\n').trim().slice(0, 500),
-    suggestions,
-    // the preferred name and shortlist must be names the set actually has (or typed by hand when there are no suggestions)
-    preferred: suggestions.length && !names.has(preferred) ? '' : preferred,
-    shortlist: suggestions.length ? shortlist.filter((n) => names.has(n)) : shortlist,
-    tableNames,
-    requirements: cleanRequirements(d.requirements),
-    results,
-    errors,
-    runAt: d.runAt && Number.isFinite(new Date(d.runAt).getTime()) ? new Date(d.runAt).toISOString() : null,
-  };
-  if (Buffer.byteLength(JSON.stringify(out)) > MAX_SET_BYTES) throw Object.assign(new Error('This set is too large to save. Remove some results and try again.'), { status: 400 });
-  return out;
 }
 
 /** A set's name: required, short, one line. */
@@ -135,13 +85,141 @@ function cleanSetName(name) {
   return n;
 }
 
-/** What the list shows for a set. */
-function summarise(row) {
-  const d = row.data || {};
+// ── version 2 ────────────────────────────────────────────────────────────────
+
+function cleanDomains(d) {
+  const results = (d && Array.isArray(d.results) ? d.results : []).slice(0, 12).map((r) => ({
+    domain: clip(r && r.domain, 253), tld: clip(r && r.tld, 24).replace(/^\./, ''),
+    available: r && (r.available === true || r.available === false) ? r.available : null,
+    source: clip(r && r.source, 20),
+  }));
+  const checkedAt = d && d.checkedAt && Number.isFinite(new Date(d.checkedAt).getTime()) ? new Date(d.checkedAt).toISOString() : null;
+  return { checkedAt, results, hasAvailable: results.some((r) => r.available === true) };
+}
+
+function cleanCard(c) {
+  if (!c || typeof c !== 'object') return null;
+  const name = labelOf(c.name);
+  if (!name) return null;
+  const label = clip(c.label, 80);
+  const score = Number(c.spell && c.spell.score);
   return {
-    id: row.id, name: row.name, preferred: row.preferred || d.preferred || '', updatedAt: row.updatedAt, createdAt: row.createdAt,
-    names: (d.suggestions || []).length, shortlist: (d.shortlist || []).length, results: Object.keys(d.results || {}).length,
+    name,
+    ...(label ? { label } : {}),
+    ...(c.own ? { own: true } : {}),
+    style: clip(c.style, 20),
+    syllables: Math.max(0, Math.min(20, Math.round(Number(c.syllables)) || 0)),
+    spell: { score: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 0, notes: (c.spell && Array.isArray(c.spell.notes) ? c.spell.notes : []).slice(0, 3).map((n) => clip(n, 120)).filter(Boolean) },
+    reasoning: clip(c.reasoning, 320),
+    risks: (Array.isArray(c.risks) ? c.risks : []).slice(0, 4).map((r) => clip(r, 200)).filter(Boolean),
+    domains: cleanDomains(c.domains),
+    round: Math.max(1, Math.min(99, Math.round(Number(c.round)) || 1)),
   };
 }
 
-module.exports = { ownVariants, missingTlds, MAX_OWN_PHRASES, GENERATE_MAX_AGE, ENDINGS, labelOf, shapeStatus, cleanRequirements, MAX_SETS_PER_USER, MAX_SET_BYTES, RESULT_KEYS, cleanSetData, cleanSetName, summarise };
+function boundedJson(v, max) {
+  if (v == null || typeof v !== 'object') return null;
+  return JSON.stringify(v).length > max ? { truncated: true } : v;
+}
+
+/** The data of a set from whatever the browser sent. Throws { status: 400 } when it is too large. */
+function cleanSetData(input) {
+  const d = input && typeof input === 'object' ? input : {};
+  const { cleanBrief } = require('./domainNaming/brief'); // loaded here: brief.js uses this file
+  const seenNames = new Set();
+  const pool = [];
+  for (const c of (Array.isArray(d.pool) ? d.pool : []).slice(0, MAX_POOL)) {
+    const card = cleanCard(c);
+    if (card && !seenNames.has(card.name)) { seenNames.add(card.name); pool.push(card); }
+  }
+  const nameList = (v, n) => [...new Set((Array.isArray(v) ? v : []).map(labelOf).filter(Boolean))].slice(0, n);
+  const inPool = (list) => (pool.length ? list.filter((n) => seenNames.has(n)) : list);
+  const preferredRaw = labelOf(d.preferred);
+  const checks = {};
+  for (const [name, v] of Object.entries(d.checks && typeof d.checks === 'object' ? d.checks : {}).slice(0, 50)) {
+    const key = labelOf(name);
+    const b = boundedJson(v, MAX_CHECK_BYTES);
+    if (key && b && (!pool.length || seenNames.has(key))) checks[key] = b;
+  }
+  const out = {
+    schemaVersion: 2,
+    brief: cleanBrief(d.brief),
+    pool,
+    shortlist: inPool(nameList(d.shortlist, 16)),
+    preferred: pool.length && !seenNames.has(preferredRaw) ? '' : preferredRaw,
+    feedback: { more: nameList(d.feedback && d.feedback.more, 30), less: nameList(d.feedback && d.feedback.less, 30) },
+    seen: nameList(d.seen, MAX_SEEN),
+    rounds: Math.max(0, Math.min(99, Math.round(Number(d.rounds)) || 0)),
+    checks,
+  };
+  const legacy = boundedJson(d.legacy, MAX_LEGACY_BYTES);
+  if (legacy) out.legacy = legacy;
+  if (Buffer.byteLength(JSON.stringify(out)) > MAX_SET_BYTES) throw Object.assign(new Error('This set is too large to save. Remove some names and try again.'), { status: 400 });
+  return out;
+}
+
+/**
+ * A stored set as version 2, whichever version it was saved as. A version 1 set (the old toolbox) keeps its names, shortlist, preferred
+ * name, requirements and handle checks; the old tool results (score, compare, profile, pricing) are kept under `legacy` and not shown.
+ */
+function upgradeSetData(data) {
+  const d = data && typeof data === 'object' ? data : {};
+  if (d.schemaVersion === 2) return d;
+  const { cleanBrief } = require('./domainNaming/brief');
+  const { spellingRisk, syllables } = require('./domainNaming/spelling');
+  const pool = (Array.isArray(d.suggestions) ? d.suggestions : []).map((s) => {
+    const name = labelOf(s && s.name);
+    if (!name) return null;
+    return {
+      name,
+      ...(s.label ? { label: clip(s.label, 80) } : {}),
+      ...(s.own ? { own: true } : {}),
+      style: s.own ? 'own' : '',
+      syllables: syllables(name),
+      spell: spellingRisk(name),
+      reasoning: '',
+      risks: [],
+      domains: cleanDomains({ checkedAt: s.checkedAt, results: s.results }),
+      round: 1,
+    };
+  }).filter(Boolean);
+  const checks = {};
+  const handles = (d.results && d.results.handles) || {};
+  for (const [name, social] of Object.entries(handles)) {
+    const key = labelOf(name);
+    if (key) checks[key] = { social, checkedAt: social && social.checked_at ? social.checked_at : null };
+  }
+  const oldResults = { ...(d.results || {}) };
+  delete oldResults.handles;
+  const legacy = { results: oldResults, errors: d.errors || {}, runAt: d.runAt || null, tableNames: d.tableNames || [] };
+  return {
+    schemaVersion: 2,
+    brief: cleanBrief({ what: d.description, own: d.ownNames, required: d.requirements }),
+    pool,
+    shortlist: (d.shortlist || []).map(labelOf).filter(Boolean),
+    preferred: labelOf(d.preferred),
+    feedback: { more: [], less: [] },
+    seen: pool.map((p) => p.name),
+    rounds: pool.length ? 1 : 0,
+    checks,
+    legacy,
+  };
+}
+
+/** What the saved-sets list shows for a set (either version). */
+function summarise(row) {
+  const d = row.data || {};
+  const v2 = d.schemaVersion === 2;
+  return {
+    id: row.id, name: row.name, preferred: row.preferred || d.preferred || '', updatedAt: row.updatedAt, createdAt: row.createdAt,
+    names: v2 ? (d.pool || []).length : (d.suggestions || []).length,
+    shortlist: (d.shortlist || []).length,
+    checked: v2 ? Object.keys(d.checks || {}).length : Object.keys((d.results && d.results.handles) || {}).length,
+    what: v2 ? clip(d.brief && d.brief.what, 120) : clip(d.description, 120),
+  };
+}
+
+module.exports = {
+  GENERATE_MAX_AGE, ENDINGS, MAX_SETS_PER_USER, MAX_SET_BYTES, MAX_POOL, MAX_OWN_PHRASES,
+  labelOf, shapeStatus, ownVariants, missingTlds, cleanRequirements, cleanSetName, cleanSetData, upgradeSetData, summarise,
+};
