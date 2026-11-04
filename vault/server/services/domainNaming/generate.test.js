@@ -59,7 +59,8 @@ const deps = (over = {}) => ({
     }
     // names with the required ending positively free
     assert.ok(r.cards.every((c) => c.domains.results.find((x) => x.tld === 'com.au').available === true));
-    assert.deepStrictEqual(calls.usage, ['domains_generate', 'domains_explain']);
+    assert.deepStrictEqual(calls.usage, ['domains_generate', 'domains_generate', 'domains_explain'], 'two wide calls, then the explanations');
+    assert.strictEqual(calls.model.filter((p) => /part \d of 2/.test(p)).length, 2, 'each wide call is told it is one of two parts');
     assert.strictEqual(r.checkedNames.length, calls.status.length, 'every looked-up name is reported, so it is not offered again');
     assert.ok(r.cards.every((c) => r.checkedNames.includes(c.name)));
   }
@@ -85,14 +86,21 @@ const deps = (over = {}) => ({
   {
     calls.model = [];
     await generateRound({ userId: 1, brief: brief(), feedback: { more: ['lumera'], less: ['zorbo'] } }, deps());
-    assert.match(calls.model[0], /liked: lumera/);
-    assert.match(calls.model[0], /disliked: zorbo/);
+    assert.ok(calls.model.slice(0, 2).every((p) => /liked: lumera/.test(p) && /disliked: zorbo/.test(p)), 'both parts get the feedback');
   }
 
-  // explanations failing costs only the explanations
+  // one of the two wide calls failing is fine; both failing is a clear error, and a timeout says so
   {
     let n = 0;
-    const d = deps({ callModel: async (m, p) => { n += 1; if (n === 2) throw new Error('model down'); return deps().callModel(m, p); } });
+    const half = deps({ callModel: async (m, p) => { n += 1; if (n === 1) throw new Error('Model call timed out after 150s (x)'); return deps().callModel(m, p); } });
+    const r = await generateRound({ userId: 1, brief: brief() }, half);
+    assert.ok(r.cards.length > 0, 'the other half is enough');
+    await assert.rejects(generateRound({ userId: 1, brief: brief() }, deps({ callModel: async () => { throw new Error('Model call timed out after 150s (x)'); } })), (e) => e.status === 504 && /took too long/.test(e.message));
+    await assert.rejects(generateRound({ userId: 1, brief: brief() }, deps({ callModel: async () => { throw new Error('key invalid'); } })), (e) => e.status === 502 && /could not make names/.test(e.message));
+  }
+  // explanations failing costs only the explanations
+  {
+    const d = deps({ callModel: async (m, p) => { if (/ONLY a JSON array/.test(p)) throw new Error('model down'); return deps().callModel(m, p); } });
     const r = await generateRound({ userId: 1, brief: brief() }, d);
     assert.ok(r.cards.length > 0);
     assert.ok(r.cards.every((c) => c.reasoning === ''));
@@ -107,6 +115,17 @@ const deps = (over = {}) => ({
     const r = await generateRound({ userId: 1, brief: brief({ required: { tlds: [], platforms: [] } }) }, d);
     const c = r.cards.find((x) => x.name === 'lumera');
     assert.ok(c && c.domains.results.length === 0, 'an unanswered name is shown with nothing confirmed');
+  }
+  // a slow AI step leaves no time: lookups are not started late, and the names already checked are still shown
+  {
+    let t = 0;
+    const slow = deps({ clock: () => t, statusFor: async (name, tl, a) => { calls.late = (calls.late || 0) + 1; if (calls.late === 5) t = 171000; return answer(name); } });
+    calls.late = 0;
+    const r = await generateRound({ userId: 1, brief: brief({ required: { tlds: [], platforms: [] } }) }, slow);
+    assert.ok(r.cards.length > 0 && r.counts.checked > 5, 'what was checked before the deadline is shown');
+    assert.ok(calls.late < 12, 'lookups stopped being started (' + calls.late + ')');
+    // and when the deadline has already passed before any lookup, the person is told why
+    await assert.rejects(generateRound({ userId: 1, brief: brief() }, deps({ clock: (() => { let n = 0; return () => { n += 1; return n === 1 ? 0 : 999999; }; })() })), /ran out of time/);
   }
   // no model, no usable names
   await assert.rejects(generateRound({ userId: 1, brief: brief() }, deps({ getModels: async () => ({}) })), /No AI model/);

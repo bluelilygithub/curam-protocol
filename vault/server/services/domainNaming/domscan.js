@@ -13,6 +13,9 @@ function key() {
   return k;
 }
 
+// A lookup that does not answer within this is given up on, so one slow request can never hold the whole round.
+const TIMEOUT_MS = 20000;
+
 async function parse(res) {
   const body = await res.json().catch(() => ({}));
   if (res.status === 401 || res.status === 403) {
@@ -29,7 +32,12 @@ async function domscan(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
   });
-  return parse(await fetch(url.toString(), { headers: { 'X-API-Key': key(), Accept: 'application/json' } }));
+  try {
+    return await parse(await fetch(url.toString(), { headers: { 'X-API-Key': key(), Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) }));
+  } catch (e) {
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error(`DomScan did not answer within ${TIMEOUT_MS / 1000} seconds.`);
+    throw e;
+  }
 }
 
 /**
@@ -46,4 +54,4 @@ async function statusFor(name, tldList, maxAge) {
   } catch { return first; }
 }
 
-module.exports = { DOMSCAN_BASE, key, domscan, statusFor };
+module.exports = { TIMEOUT_MS, DOMSCAN_BASE, key, domscan, statusFor };

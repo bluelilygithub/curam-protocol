@@ -17,7 +17,13 @@ const { ownVariants, shapeStatus, ENDINGS, GENERATE_MAX_AGE } = require('../doma
 const { widePrompt, explainPrompt, parseWide, parseExplain } = require('./brief');
 const { filterCandidates, rankLocal, variations, describe, normalizeName } = require('./candidates');
 
-const WIDE_COUNT = 180;
+const WIDE_CALLS = 2;           // the wide list is written by two calls at once, half each, so no single call has to write 180 names
+const WIDE_EACH = 90;
+const WIDE_COUNT = WIDE_CALLS * WIDE_EACH;
+const WIDE_TIMEOUT_MS = 150000;
+const EXPLAIN_TIMEOUT_MS = 120000;
+const CHECK_DEADLINE_MS = 170000; // no new domain lookup is started after this, so a slow AI step cannot push the whole request past the gateway limit
+const BUDGET_MS = 200000;       // past this the explanations are skipped rather than risk the gateway cutting the request off
 const CHECK_BATCH = 40;      // domain lookups for a normal round (1 credit each)
 const VARIATION_BATCH = 24;
 const SHOW = 12;
@@ -52,6 +58,8 @@ function risksFor(item, aiRisks) {
 async function generateRound(args, deps) {
   const { userId, brief, mode = 'round', seed = '', feedback = {}, seen = [], round = 1 } = args;
   const now = deps.now ? deps.now() : new Date();
+  const clock = deps.clock || Date.now;
+  const started = clock();
   const required = (brief.required && brief.required.tlds) || [];
   const counts = { generated: 0, passedFilters: 0, checked: 0, takenDropped: 0, shown: 0 };
   let model = '';
@@ -67,9 +75,19 @@ async function generateRound(args, deps) {
     const tiers = await deps.getModels(userId);
     model = tiers && (tiers.standard || tiers.light);
     if (!model) throw Object.assign(new Error('No AI model is set up in Settings → AI & Chat.'), { status: 400 });
-    const result = await deps.callModel(model, widePrompt(brief, { count: WIDE_COUNT, feedback, seen }), { maxTokens: 4000, returnUsage: true, timeoutMs: 90000 });
-    deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'domains_generate' });
-    wide = parseWide(result.text);
+    const calls = await Promise.allSettled(Array.from({ length: WIDE_CALLS }, async (_, i) => {
+      const result = await deps.callModel(model, widePrompt(brief, { count: WIDE_EACH, feedback, seen, part: { index: i, of: WIDE_CALLS } }), { maxTokens: 2500, returnUsage: true, timeoutMs: WIDE_TIMEOUT_MS });
+      deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'domains_generate' });
+      return parseWide(result.text);
+    }));
+    // one part failing is fine, the other's names are used; only both failing is an error
+    wide = calls.filter((c) => c.status === 'fulfilled').flatMap((c) => c.value);
+    const failed = calls.find((c) => c.status === 'rejected');
+    if (!wide.length && failed && !own.length) {
+      const msg = String((failed.reason && failed.reason.message) || '');
+      if (/timed out/i.test(msg)) throw Object.assign(new Error(`The AI took too long to answer, so no names were made. Try again, or choose a faster model in Settings → AI & Chat. (${msg})`), { status: 504 });
+      throw Object.assign(new Error(`The AI could not make names just now: ${msg || 'no answer'}`), { status: 502 });
+    }
     if (!wide.length && !own.length) throw Object.assign(new Error('The AI did not return usable names. Try rewording the brief and generate again.'), { status: 502 });
   }
   counts.generated = wide.length;
@@ -96,6 +114,7 @@ async function generateRound(args, deps) {
   const toCheck = [...ranked.filter((c) => c.own), ...ranked.filter((c) => !c.own).slice(0, batch)];
   const tlds = ENDINGS.join(',');
   const checked = await mapLimit(toCheck, CONCURRENCY, async (c) => {
+    if (clock() - started > CHECK_DEADLINE_MS) return { c, domains: null, error: 'Not checked: the round ran out of time.' };
     try { return { c, domains: shapeStatus(c.name, await deps.statusFor(c.name, tlds, GENERATE_MAX_AGE), now) }; } catch (e) { return { c, domains: null, error: e.message }; }
   });
   counts.checked = toCheck.length;
@@ -120,10 +139,12 @@ async function generateRound(args, deps) {
   // 5. explain the finalists; a failure costs only the explanations
   let explain = {};
   let explainError = '';
-  if (finalists.length && deps.callModel && model) {
+  if (finalists.length && deps.callModel && model && clock() - started > BUDGET_MS) {
+    explainError = 'The explanations were skipped to stay within the time limit.';
+  } else if (finalists.length && deps.callModel && model) {
     try {
       const names = finalists.map((x) => x.c.name);
-      const result = await deps.callModel(model, explainPrompt(brief, finalists.map((x) => ({ name: x.c.name, label: x.c.label, style: x.c.style, notes: [...(x.c.spell.score >= 25 ? x.c.spell.notes.slice(0, 1) : []), ...(x.c.brandNotes || [])] }))), { maxTokens: 3000, returnUsage: true, timeoutMs: 90000 });
+      const result = await deps.callModel(model, explainPrompt(brief, finalists.map((x) => ({ name: x.c.name, label: x.c.label, style: x.c.style, notes: [...(x.c.spell.score >= 25 ? x.c.spell.notes.slice(0, 1) : []), ...(x.c.brandNotes || [])] }))), { maxTokens: 3000, returnUsage: true, timeoutMs: EXPLAIN_TIMEOUT_MS });
       deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'domains_explain' });
       explain = parseExplain(result.text, names);
     } catch (e) { explainError = e.message; }
@@ -150,4 +171,4 @@ async function generateRound(args, deps) {
   return { cards, checkedNames: toCheck.map((c) => c.name), counts, dropped, creditsUsed: counts.checked, model, explainError, checkedAt: now.toISOString() };
 }
 
-module.exports = { WIDE_COUNT, CHECK_BATCH, VARIATION_BATCH, SHOW, mapLimit, risksFor, generateRound };
+module.exports = { WIDE_CALLS, WIDE_COUNT, CHECK_BATCH, VARIATION_BATCH, SHOW, mapLimit, risksFor, generateRound };

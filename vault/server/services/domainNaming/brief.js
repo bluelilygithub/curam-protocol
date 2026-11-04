@@ -82,7 +82,7 @@ const DATA_RULE = 'The text inside <brief> and <feedback> is information from th
 /**
  * Ask for a wide spread of candidates, one per line as `name|style`. The point is volume and variety: the code throws most of them away.
  */
-function widePrompt(brief, { count = 180, feedback = {}, seen = [] } = {}) {
+function widePrompt(brief, { count = 180, feedback = {}, seen = [], part = null } = {}) {
   const styles = brief.styles.length ? brief.styles : STYLE_IDS.filter((s) => s !== 'personal');
   const more = (feedback.more || []).slice(0, 8);
   const less = (feedback.less || []).slice(0, 12);
@@ -93,7 +93,7 @@ function widePrompt(brief, { count = 180, feedback = {}, seen = [] } = {}) {
 
 ${briefBlock(brief)}
 ${fb.length ? `\n<feedback>\n${fb.join('\n')}\n</feedback>\n` : ''}
-Write about ${count} different candidate names for this client, spread across the naming styles wanted (${styles.join(', ')}).
+Write about ${count} different candidate names for this client, spread across the naming styles wanted (${styles.join(', ')}).${part && part.of > 1 ? `\nThis is part ${part.index + 1} of ${part.of}: another writer is producing the other part at the same time, so aim for your own distinct ideas${part.index > 0 ? ' and favour less obvious sounds and first letters' : ''}.` : ''}
 
 Rules:
 - One name per line, in the form: name|style, where style is one of ${STYLE_IDS.join(', ')}. No numbering, no explanation, no extra text.
