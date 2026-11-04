@@ -16,7 +16,7 @@ const clip = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().sl
 
 /** Longest an availability answer may be reused for the generator's first look (seconds). A fresh check (max_age 0) is used to verify. */
 const GENERATE_MAX_AGE = 300;
-const ENDINGS = ['com', 'com.au', 'io', 'ai', 'co', 'app'];
+const ENDINGS = ['com', 'com.au', 'org', 'io', 'ai', 'co', 'app'];
 
 /** A name as a domain label or handle: lower case letters, numbers and hyphens only. */
 const labelOf = (name) => String(name == null ? '' : name).toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '').slice(0, 63);

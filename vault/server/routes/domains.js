@@ -264,7 +264,7 @@ frostelier`;
   if (!names.length) throw new Error('The AI did not return usable names. Please rephrase your description and try again.');
 
   // Step 2: check availability in parallel (not sequentially — avoids timeout)
-  const tldList = tlds || 'com,com.au,io,ai,co,app';
+  const tldList = tlds || 'com,com.au,org,io,ai,co,app';
 
   const results = await Promise.allSettled(
     names.map(async (name) => {

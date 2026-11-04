@@ -7,7 +7,7 @@ import Dialog from '../components/Dialog';
 import { VoiceInputProvider, VoiceInput } from '../components/voiceInput/VoiceInput';
 import DomainsTutorChat from './domains/DomainsTutorChat';
 import { GUIDE_TOOLS } from './domains/domainsTools.mjs';
-import { CurrentSetPanel, SavedSetsPanel, BLANK_WS, dataOf, jsonOf, runPlan, deleteSets, announceDeleted } from './domains/SetsPanels';
+import { CurrentSetPanel, SavedSetsPanel, BLANK_WS, dataOf, jsonOf, runPlan, deleteSets, announceDeleted, isDirty } from './domains/SetsPanels';
 import SuggestionTable from './domains/SuggestionTable';
 import ClearancePanel, { ClearanceBadge } from './domains/ClearancePanel';
 import { filterSuggestions, applyVerification } from './domains/clearance.mjs';
@@ -20,8 +20,8 @@ import { spokenName, spokenHandle, spokenBrand } from './domains/spoken.mjs';
 const TOOL_HELP = {
   suggest: {
     title: 'Name Generator',
-    description: 'Describe your business in plain English and the AI generates 16 creative, brand-quality name candidates — then instantly checks availability across .com, .com.au, .io, .ai, .co and .app. Names with available .com or .com.au appear first.',
-    features: ['AI generates 16 creative brand names from your description', 'No keywords or jargon needed — plain English works best', 'Availability checked across 6 TLDs per name', 'Sorted: .com/.com.au available first', 'Green = available · Red = taken'],
+    description: 'Describe your business in plain English and the AI generates 16 creative, brand-quality name candidates — then instantly checks availability across .com, .com.au, .org, .io, .ai, .co and .app. Names with available .com or .com.au appear first.',
+    features: ['AI generates 16 creative brand names from your description', 'No keywords or jargon needed — plain English works best', 'Availability checked across 7 TLDs per name', 'Sorted: .com/.com.au available first', 'Green = available · Red = taken'],
   },
   score: {
     title: 'Name Scorer',
@@ -353,7 +353,7 @@ function SmartResult({ mode, data, pick }) {
 
 // ── Tool panels ───────────────────────────────────────────────────────────────
 
-function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkingHandles, onVerify, verifying }) {
+function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkingHandles, onVerify, verifying, onSave, saving }) {
   const [view, setView] = useState('cards'); // 'cards' or 'table'
   const [filter, setFilter] = useState('all');
   const q = ws.description;
@@ -402,10 +402,33 @@ function SuggestPanel({ ws, setWs, onRun, running, goto, onCheckHandles, checkin
           </div>
         </Tooltip>
       </div>
-      <Tooltip text="Generate 16 names and check their availability across 6 common TLDs.">
+      <Tooltip text="Generate 16 names and check their availability across 7 common TLDs.">
         <RunBtn onClick={run} busy={busy} label="Generate Names" disabled={!q.trim()} />
       </Tooltip>
       <ErrMsg msg={err} />
+      {ws.suggestions && ws.suggestions.length > 0 && (
+        <div className="rounded-xl px-4 py-3 space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} data-guide="save-set">
+          <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+            {ws.id ? 'Saved set' : 'Save these names as a set'}
+            {ws.id && !isDirty(ws) && <span className="ml-2 font-normal" style={{ color: '#15803d' }}>✓ Saved</span>}
+            {ws.id && isDirty(ws) && <span className="ml-2 font-normal" style={{ color: '#b45309' }}>Unsaved changes</span>}
+          </p>
+          <Tooltip text="Name the set so you can find it again, for example the business or the product.">
+            <div><VoiceInput value={ws.name} onChange={(v) => setWs(w => ({ ...w, name: v }))} placeholder="Name this set, e.g. Wine fridge business" label="Set name" /></div>
+          </Tooltip>
+          <div className="flex flex-wrap items-center gap-2">
+            <Tooltip text={ws.id ? 'Save your changes to this set, including the names, your shortlist and every result.' : 'Keep all these names, your shortlist and any results, so you can come back to them later.'}>
+              <button onClick={onSave} disabled={saving || !ws.name.trim()}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                {saving ? 'Saving…' : ws.id ? 'Update set' : 'Save set'}
+              </button>
+            </Tooltip>
+            <Tooltip text="Your saved sets. Open one to carry on, or delete the ones you no longer need.">
+              <button onClick={() => goto('sets')} className="px-3 py-1.5 rounded-lg text-sm border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Saved sets</button>
+            </Tooltip>
+          </div>
+        </div>
+      )}
       {result && (
         <div className="rounded-xl px-4 py-3 space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} data-guide="preferred-name">
           <p className="text-xs" style={{ color: 'var(--color-text)' }}>

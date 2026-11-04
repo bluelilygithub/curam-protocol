@@ -112,9 +112,10 @@ assert.deepStrictEqual(tableNames({ ...many, tableNames: ['echo', 'echo', 'echo'
 {
   const names = ['alpha', 'bravo'];
   const rows = domainRows(many, names);
-  assert.deepStrictEqual(rows.map((r) => r.tld), ['com', 'com.au', 'io', 'ai', 'co', 'app']);
+  assert.deepStrictEqual(rows.map((r) => r.tld), ['com', 'com.au', 'org', 'io', 'ai', 'co', 'app']);
   assert.deepStrictEqual(rows[0].cells.map((c) => c.state), ['taken', 'free']);
-  assert.deepStrictEqual(rows[3].cells.map((c) => c.state), ['unknown', 'free'], 'an ending that was not checked is unknown, not free');
+  assert.deepStrictEqual(rows[4].cells.map((c) => c.state), ['unknown', 'free'], 'an ending that was not checked is unknown, not free');
+  assert.deepStrictEqual(rows[2].cells.map((c) => c.state), ['unknown', 'unknown'], '.org was not in an older check: unknown, never free');
   assert.strictEqual(rows[0].cells[0].domain, 'x.com');
   // an unusual ending the service returned is added after the standard ones
   const odd = domainRows({ suggestions: [sug('z', [R('xyz', true)])] }, ['z']);
@@ -137,7 +138,7 @@ assert.deepStrictEqual(tableNames({ ...many, tableNames: ['echo', 'echo', 'echo'
   assert.deepStrictEqual(socialRows(null, ['a']), []);
   // the summary under a column
   const dr = domainRows(many, ['alpha', 'bravo']);
-  assert.deepStrictEqual(columnSummary(dr, rows, 1), { domainsFree: 4, domainsTotal: 6, handlesFree: 1, handlesTotal: 3 });
+  assert.deepStrictEqual(columnSummary(dr, rows, 1), { domainsFree: 4, domainsTotal: 7, handlesFree: 1, handlesTotal: 3 });
   assert.strictEqual(columnSummary(dr, rows, 2).handlesFree, null, 'unchecked handles have no count');
 }
 

@@ -23,7 +23,7 @@ export const GROUP_TIPS = {
 };
 
 export const TOOL_TIPS = {
-  suggest: 'Describe the business and get 16 brand names, each checked for .com, .com.au, .io, .ai, .co and .app.',
+  suggest: 'Describe the business and get 16 brand names, each checked for .com, .com.au, .org, .io, .ai, .co and .app.',
   score: 'Type one name and see how memorable, easy to spell and brandable it is.',
   compare: 'Enter two to five candidate names and rank them side by side.',
   overview: 'See who registered a domain, how old it is, and its reputation.',
@@ -46,12 +46,12 @@ export const TOOL_BLURBS = {
 
 // The longer text for the (i) "How Domain works" box.
 export const HOW_IT_WORKS = [
-  ['Finding a name', 'Name Generator takes a plain description of the business, or a few keywords, and suggests 16 brand names. Each is checked for .com, .com.au, .io, .ai, .co and .app, and the ones with a free .com or .com.au come first.'],
+  ['Finding a name', 'Name Generator takes a plain description of the business, or a few keywords, and suggests 16 brand names. Each is checked for .com, .com.au, .org, .io, .ai, .co and .app, and the ones with a free .com or .com.au come first.'],
   ['Scoring and comparing', 'Name Scorer rates one name for how memorable it is, how hard it is to spell and say, how well it reads in other languages and how brandable it is. Compare Names ranks two to five names against each other.'],
   ['Looking at an existing domain', 'Domain Profile shows who registered a domain, when, how old it is and how it is regarded. It reports what is public; it does not buy or change anything.'],
   ['Before you commit', 'Social Handles checks whether the name is free on the big social platforms. Registrar Pricing compares what registrars charge to register and renew, so a cheap first year does not hide an expensive renewal.'],
   ['Is the name really free?', 'Tick the domain endings and social platforms a name must have under What must be free. A name is only marked Clear when every one is confirmed free; one taken makes it Blocked, and anything not checked or unknown stays Not confirmed, never free. Each name shows when it was last checked and whether that was a live check. Verify now asks the registry again, right now, for your preferred name, shortlist and table names, so you can be sure before you commit. Free means not registered or claimed at this moment; it is not a trademark check.'],
-  ['Table of three', 'On the Name Generator, Table of three puts three suggestions side by side, one per column, each with its domain endings (.com, .com.au, .io, .ai, .co, .app) and its social media handles marked free, taken or unknown. The columns start with your preferred name and shortlist, then the best of the rest, and each can be swapped for any other name. Check social handles looks the names up; the table also appears on Current set and is saved with the set.'],
+  ['Table of three', 'On the Name Generator, Table of three puts three suggestions side by side, one per column, each with its domain endings (.com, .com.au, .org, .io, .ai, .co, .app) and its social media handles marked free, taken or unknown. The columns start with your preferred name and shortlist, then the best of the rest, and each can be swapped for any other name. Check social handles looks the names up; the table also appears on Current set and is saved with the set.'],
   ['Sets', 'On the Name Generator, shortlist the names you like and make one the preferred name. Run all tools checks that name in every other tool at once and gathers the results on Current set, where you name and save the set. Saved sets keeps each set with its names and results, so you can open it again later without new lookups, and run the tools again to refresh.'],
   ['Speaking instead of typing', 'Every box has a microphone. Press it, say your description or names, and press it again to stop. In a domain or name box, say "dot" for a full stop and "dash" for a hyphen: "acme wine dot com dot au" becomes acmewine.com.au.'],
   ['Read only', 'Nothing is bought or registered. Names are checked against a domain data service; the description you type is read by the AI model Vault is set up with. The only thing kept is a set you save yourself, with your account.'],

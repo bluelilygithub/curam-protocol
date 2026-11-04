@@ -18,6 +18,7 @@ checkGuide({
   facts: [
     ['suggest', 'does', /16 brand names/, 'the generator gives 16 names'],
     ['suggest', 'does', /\.com\.au/, 'the endings checked include .com.au'],
+    ['suggest', 'does', /\.org/, 'the endings checked include .org'],
     ['suggest', 'notes', /trademarks are not checked/, 'a free name is not a safe name'],
     ['availability', 'notes', /does not register it/, 'it does not register'],
     ['compare', 'notes', /at least two/, 'compare needs two names'],

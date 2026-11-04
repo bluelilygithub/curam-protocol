@@ -103,7 +103,7 @@ export function assemble(plan, outcomes) {
 // Three candidates, one per column, each with its domain endings and its social handles, so they can be weighed at a glance.
 
 export const TABLE_SLOTS = 3;
-export const DOMAIN_ENDINGS = ['com', 'com.au', 'io', 'ai', 'co', 'app'];
+export const DOMAIN_ENDINGS = ['com', 'com.au', 'org', 'io', 'ai', 'co', 'app'];
 
 /** The names to show: the shortlist first, then the best of the rest (most free endings, a free .com or .com.au first). Up to three. */
 export function tableDefaults(ws) {
