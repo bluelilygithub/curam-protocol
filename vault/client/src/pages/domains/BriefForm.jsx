@@ -22,7 +22,7 @@ function Check({ checked, onChange, children, tip }) {
   );
 }
 
-export default function BriefForm({ brief, setBrief, onGenerate, generating, config, submitLabel = 'Generate names', compact = false }) {
+export default function BriefForm({ brief, setBrief, onGenerate, generating, config, submitLabel = 'Generate names', compact = false, dismissed = [], onDismiss = () => {} }) {
   // include and avoid words are typed as text, kept as lists: the text is held here so a half-typed comma is not undone
   const [includeText, setIncludeText] = useState((brief.include || []).join(', '));
   const [avoidText, setAvoidText] = useState((brief.avoid || []).join(', '));
@@ -39,7 +39,7 @@ export default function BriefForm({ brief, setBrief, onGenerate, generating, con
   });
   const ready = !!(brief.what.trim() || brief.own.trim());
   // names spotted in the description that are not yet in "Names I already have": offered, never added by themselves
-  const noticed = noticeOwnNames(brief.what, brief.own);
+  const noticed = noticeOwnNames(brief.what, brief.own).filter((n) => !dismissed.includes(n));
   const addOwn = (names) => set({ own: [brief.own.trim(), ...names].filter(Boolean).join('\n') });
   const credits = config && config.generate ? config.generate.credits : 40;
   const tone = toneWords(brief.tone);
@@ -57,17 +57,22 @@ export default function BriefForm({ brief, setBrief, onGenerate, generating, con
             </div>
           </Tooltip>
         </div>
+        <p className="text-xs -mt-1" style={{ color: 'var(--color-text)' }} data-guide="quotes-tip">
+          <strong>Tip:</strong> put a title or name in quotes, like the book called 'The Suitcase' or "Dorothy Stoner", and it is picked up as a name you already have. <strong>Anything in quotes counts as a name</strong>, so leave quotes off words that are not names. Names after "called" or "named", and two capitalised words in a row, are picked up too.
+        </p>
         {noticed.length > 0 && (
           <div className="rounded-lg px-3 py-2 text-xs flex flex-wrap items-center gap-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} data-guide="noticed-names">
-            <span>Names I noticed in your description:</span>
+            <span>Names I noticed in your description, added to Names I already have when you generate:</span>
             {noticed.map((n) => (
-              <Tooltip key={n} text={`Add "${n}" to Names I already have, so it is always included, checked first, and used to build other names.`}>
-                <button onClick={() => addOwn([n])} className="px-2.5 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200 font-medium" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>+ {n}</button>
-              </Tooltip>
+              <span key={n} className="inline-flex items-center rounded-full border overflow-hidden" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
+                <Tooltip text={`Add "${n}" to Names I already have now, so it is always included, checked first, and used to build other names.`}>
+                  <button onClick={() => addOwn([n])} className="pl-2.5 pr-1.5 py-1 hover:opacity-70 transition-opacity duration-200 font-medium">+ {n}</button>
+                </Tooltip>
+                <Tooltip text={`Leave "${n}" out: it is not a name you already have.`}>
+                  <button onClick={() => onDismiss(n)} aria-label={`Leave out ${n}`} className="pr-2 pl-1 py-1 hover:opacity-70 transition-opacity duration-200">×</button>
+                </Tooltip>
+              </span>
             ))}
-            {noticed.length > 1 && (
-              <Tooltip text="Add all of these to Names I already have."><button onClick={() => addOwn(noticed)} className="px-2.5 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200" style={{ borderColor: 'var(--color-border)' }}>Add all</button></Tooltip>
-            )}
           </div>
         )}
         <div>

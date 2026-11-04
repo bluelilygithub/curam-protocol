@@ -10,6 +10,7 @@ import BriefForm from './domains/BriefForm';
 import NameResults, { Chips } from './domains/NameResults';
 import SavedSets from './domains/SavedSets';
 import { BLANK_FILTERS } from './domains/filters.mjs';
+import { noticeOwnNames } from './domains/ownNames.mjs';
 import { BLANK_WS, dataOf, jsonOf, isDirty, fromSet, mergeRound, orderedPool, addTurn, addNote } from './domains/workspace.mjs';
 
 // The Domain tool: a guided journey from a brief to a name you can be confident in. Brief -> Names -> Shortlist (-> Check -> Decide).
@@ -63,6 +64,7 @@ export default function DomainsPage() {
   const [editingBrief, setEditingBrief] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [dismissedOwn, setDismissedOwn] = useState([]); // names spotted in the description that the person said are not theirs
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [confirmNew, setConfirmNew] = useState(false);
@@ -75,10 +77,21 @@ export default function DomainsPage() {
 
   // One round of names (see server/services/domainNaming/generate.js): wide generation, free filtering, checks for the best few, reasons.
   const generate = async (mode = 'round', seed = '', briefOverride = null) => {
+    // Names spotted in the description (a book called X, an artist named Y) are added to "Names I already have" now, so they are always
+    // included, unless the person left one out. Variations are about one favourite and do not need them.
+    let brief = briefOverride || ws.brief;
+    if (mode !== 'variations') {
+      const found = noticeOwnNames(brief.what, brief.own).filter((n) => !dismissedOwn.includes(n));
+      if (found.length) {
+        brief = { ...brief, own: [brief.own.trim(), ...found].filter(Boolean).join('\n') };
+        setWs((w) => ({ ...w, brief: { ...w.brief, own: brief.own } }));
+        addToast(`Added ${found.join(' and ')} to Names I already have.`);
+      }
+    }
     setGenerating(true);
     startProcessing(mode === 'variations' ? `Making variations of ${seed}…` : 'Finding names…', mode === 'variations' ? 'Prefixes, suffixes and spellings, checked for availability.' : 'Writing ideas, filtering them, checking the best for availability and explaining the finalists.');
     try {
-      const res = await api.post('/api/domains/generate', { brief: briefOverride || ws.brief, mode, seed, feedback: ws.feedback, seen: ws.seen, round: ws.rounds + 1 });
+      const res = await api.post('/api/domains/generate', { brief, mode, seed, feedback: ws.feedback, seen: ws.seen, round: ws.rounds + 1 });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setWs((w) => mergeRound(w, data));
@@ -123,7 +136,7 @@ export default function DomainsPage() {
     } catch (e) { addToast(e.message || 'Could not save the set.', 'error'); } finally { setSaving(false); }
   };
 
-  const newSet = () => { setWs(BLANK_WS); setFilters(BLANK_FILTERS); setStep('brief'); setEditingBrief(false); setConfirmNew(false); };
+  const newSet = () => { setDismissedOwn([]); setWs(BLANK_WS); setFilters(BLANK_FILTERS); setStep('brief'); setEditingBrief(false); setConfirmNew(false); };
   const openSet = (set) => { setWs(fromSet(set)); setFilters(BLANK_FILTERS); setStep(set.data && set.data.pool && set.data.pool.length ? 'names' : 'brief'); setEditingBrief(false); };
   const openToolById = (id) => { const t = GUIDE_TOOLS.find((x) => x.id === id); const next = t ? t.tool : id; if (['brief', 'names', 'shortlist', 'sets'].includes(next)) setStep(next); };
 
@@ -185,7 +198,7 @@ export default function DomainsPage() {
         <div className="px-6 py-5 max-w-[1700px]">
           {step === 'brief' && (
             <div>
-              <BriefForm brief={ws.brief} setBrief={setBrief} onGenerate={() => generate('round')} generating={generating} config={config} />
+              <BriefForm brief={ws.brief} setBrief={setBrief} onGenerate={() => generate('round')} generating={generating} config={config} dismissed={dismissedOwn} onDismiss={(n) => setDismissedOwn((d) => [...d, n])} />
             </div>
           )}
 
@@ -193,7 +206,7 @@ export default function DomainsPage() {
             <div className="space-y-5">
               {editingBrief && (
                 <div className="rounded-xl p-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                  <BriefForm brief={ws.brief} setBrief={setBrief} onGenerate={() => generate('round')} generating={generating} config={config} submitLabel="Update names" compact />
+                  <BriefForm brief={ws.brief} setBrief={setBrief} onGenerate={() => generate('round')} generating={generating} config={config} submitLabel="Update names" compact dismissed={dismissedOwn} onDismiss={(n) => setDismissedOwn((d) => [...d, n])} />
                   <button onClick={() => setEditingBrief(false)} className="mt-3 text-xs underline hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Close without changing</button>
                 </div>
               )}

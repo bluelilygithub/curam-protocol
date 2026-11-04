@@ -14,11 +14,12 @@ const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 function phrase(raw) {
   const out = [];
   for (const w of raw.split(/\s+/)) {
-    const bare = w.replace(/[.,;:!?()"“”]+$/g, '');
+    const closes = /['’”"]$/.test(w);
+    const bare = w.replace(/[.,;:!?()'’"“”‘]+$/g, '');
     const lower = bare.toLowerCase();
     if (!bare || (out.length && STOP.has(lower))) break;
     out.push(bare);
-    if (/[.,;:!?)]$/.test(w)) break;
+    if (/[.,;:!?)]$/.test(w) || closes) break;
   }
   return out;
 }
@@ -41,10 +42,13 @@ export function noticeOwnNames(text, existing = '') {
   };
 
   const hits = [];
-  // text in double quotes
+  // text in double or curly quotes
   for (const m of t.matchAll(/["“”]([^"“”\n]{3,60})["“”]/g)) hits.push([m.index, m[1]]);
+  for (const m of t.matchAll(/‘([^’\n]{3,60})’/g)) hits.push([m.index, m[1]]);
+  // text in single quotes: only when the quote opens a word and closes after one, so "artist's work" is never taken for a title
+  for (const m of t.matchAll(/(?:^|[\s(])'([^'\n]{3,60})'(?=[\s.,;:!?)]|$)/g)) hits.push([m.index, m[1]]);
   // a title after called / titled / entitled
-  for (const m of t.matchAll(/\b(?:called|titled|entitled)\s+((?:[A-Za-z][\w'’-]*[,.;:]?\s*){1,6})/gi)) {
+  for (const m of t.matchAll(/\b(?:called|titled|entitled)\s+['"“‘]?((?:[A-Za-z][\w'’-]*[,.;:]?\s*){1,6})/gi)) {
     const words = phrase(m[1]);
     if (words.length) hits.push([m.index, words.join(' ')]);
   }

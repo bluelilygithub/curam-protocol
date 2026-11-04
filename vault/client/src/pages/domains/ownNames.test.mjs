@@ -7,6 +7,14 @@ import { noticeOwnNames } from './ownNames.mjs';
   const text = 'I need names for a domain to promote my book which is about a prominent female Tasmanian portrait artist named artist named Dorothy Stoner. The website is intended to promote the book called the suitcase and also to promote events which are scheduled to release the exhibitions';
   assert.deepStrictEqual(noticeOwnNames(text), ['Dorothy Stoner', 'The Suitcase']);
 }
+// the same description as it was really typed: the title in single quotes, a double space, "the book is intended to promote the let me start again"
+{
+  const typed = "I need names for a domain to promote my book which is about a prominent female Tasmanian portrait artist named  Dorothy Stoner the book is intended to promote the let me start again the website is intended to promote the book called 'the suitcase' and also to promote events which are scheduled to release the exhibitions";
+  assert.deepStrictEqual(noticeOwnNames(typed), ['Dorothy Stoner', 'The Suitcase']);
+  assert.deepStrictEqual(noticeOwnNames("a book called ‘the suitcase’ by me"), ['The Suitcase']);
+  assert.deepStrictEqual(noticeOwnNames("the book 'The Staircase Suitcase' launches soon"), ['The Staircase Suitcase']);
+  assert.deepStrictEqual(noticeOwnNames("the artist's work and the gallery's walls"), [], 'apostrophes in ordinary words are not quotes');
+}
 // quoted titles
 assert.deepStrictEqual(noticeOwnNames('A site for my book "The Staircase Suitcase" and its launch'), ['The Staircase Suitcase']);
 assert.deepStrictEqual(noticeOwnNames('The exhibition is “Stairs of Light” this spring'), ['Stairs Of Light']);
