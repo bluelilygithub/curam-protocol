@@ -15,7 +15,7 @@ import { formatHtml, shortenDataUris } from './restyle/sourceView.mjs';
 import WebExtractorTutorChat from './webExtractor/WebExtractorTutorChat';
 import {
   WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS, parseSpokenUrl, parseSpokenList, parseSpokenSelector,
-  toCsv, tableToObjects, linksToRows, tableToRows,
+  toCsv, tableToObjects, linksToRows, tableToRows, PALETTE_PAGES, readableOn, paletteToCss, paletteToRows,
 } from './webExtractor/webExtractorTools.mjs';
 
 const BUTTON = 'px-3.5 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50';
@@ -46,6 +46,7 @@ export default function WebExtractorPage() {
   });
   const [excludeTerms, setExcludeTerms] = useState('');
   const [selector, setSelector] = useState('');
+  const [palettePages, setPalettePages] = useState(1);
   const [linkType, setLinkType] = useState('all');
   const [linkQuery, setLinkQuery] = useState('');
   const [loadingMode, setLoadingMode] = useState(null);
@@ -105,7 +106,7 @@ export default function WebExtractorPage() {
       const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
       const stop = new AbortController();
       const ask = async () => {
-        const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim() }, { signal: stop.signal });
+        const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim(), pages: palettePages }, { signal: stop.signal });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || 'Extraction failed');
         return body;
@@ -403,8 +404,27 @@ export default function WebExtractorPage() {
             </div>
           )}
 
+          {mode === 'palette' && (
+            <div className="space-y-1" data-guide="palette-pages">
+              <label htmlFor="web-extractor-palette-pages" className="block text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+                Pages to read <span>(a website&rsquo;s style files cover the whole site, so one page is usually enough)</span>
+              </label>
+              <Tooltip text="Read only this page, or also a few other pages linked from it (the menu links first, spread across the site). More pages take longer. Style files shared by pages are counted once.">
+                <select
+                  id="web-extractor-palette-pages"
+                  value={palettePages}
+                  onChange={(e) => setPalettePages(Number(e.target.value))}
+                  className="w-full sm:w-72 rounded-lg border px-3 py-2 text-sm transition-opacity duration-200"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+                >
+                  {PALETTE_PAGES.map(([n, label]) => <option key={n} value={n}>{label}</option>)}
+                </select>
+              </Tooltip>
+            </div>
+          )}
+
           {loading && (
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Fetching the page…</p>
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{mode === 'palette' && palettePages > 1 ? 'Reading the pages and their style files… this can take up to a minute.' : 'Fetching the page…'}</p>
           )}
 
           {result?.notice ? (
@@ -676,6 +696,101 @@ export default function WebExtractorPage() {
                     {result.jsonLdSkipped > 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{result.jsonLdSkipped} block{result.jsonLdSkipped === 1 ? ' was' : 's were'} left out (too large, too many, or not valid JSON).</p>}
                   </div>
                 )}
+              </section>
+            );
+          })()}
+
+          {result?.mode === 'palette' && (() => {
+            const colors = result.colors || [];
+            const brand = colors.filter((c) => c.kind === 'brand');
+            const neutral = colors.filter((c) => c.kind !== 'brand');
+            const sg = result.suggested || {};
+            const slug = hostSlug(result.url);
+            const roleLine = (c) => [
+              c.roles.background ? `background ${c.roles.background}` : '', c.roles.text ? `text ${c.roles.text}` : '',
+              c.roles.border ? `border ${c.roles.border}` : '', c.roles.other ? `other ${c.roles.other}` : '', c.variables.length ? c.variables.join(', ') : '',
+            ].filter(Boolean).join(' · ');
+            const swatch = (c, big) => (
+              <div key={c.hex} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <Tooltip text={'Copy ' + c.hex + '. Used ' + c.count + ' time' + (c.count === 1 ? '' : 's') + ', ' + c.share + '% of the colours on the page.'}>
+                  <button
+                    type="button"
+                    onClick={() => copyText(c.hex)}
+                    aria-label={'Copy ' + c.hex}
+                    className="w-full text-left px-3 transition-opacity duration-200 hover:opacity-70"
+                    style={{ background: c.hex, color: readableOn(c.hex), height: big ? 76 : 52, display: 'flex', alignItems: 'flex-end', paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}
+                  >
+                    <span className="text-sm font-semibold font-mono">{c.hex}</span>
+                  </button>
+                </Tooltip>
+                <div className="px-3 py-2 space-y-0.5">
+                  <p className="text-xs" style={{ color: 'var(--color-text)' }}>{c.count} use{c.count === 1 ? '' : 's'} · {c.share}%</p>
+                  <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }}>rgb({c.rgb.join(', ')}) · hsl({c.hsl[0]}, {c.hsl[1]}%, {c.hsl[2]}%)</p>
+                  {roleLine(c) ? <p className="text-xs break-words" style={{ color: 'var(--color-muted)' }}>{roleLine(c)}</p> : null}
+                  {c.semiTransparent ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Also used partly see-through</p> : null}
+                </div>
+              </div>
+            );
+            const roles = [
+              ['Primary', sg.primary, 'The most used colourful colour.'],
+              ['Accent', sg.accent, 'The next most used colourful colour with a clearly different hue.'],
+              ['Background', sg.background, 'The colour used most for backgrounds.'],
+              ['Text', sg.text, 'The colour used most for text.'],
+              ['Browser theme', result.themeColor, 'The colour the page asks the browser to use for its toolbar (theme-color), if it sets one.'],
+            ].filter(([, hex]) => hex);
+            const found = colors.length
+              ? result.colourCount + ' colour' + (result.colourCount === 1 ? '' : 's') + ' found' + (result.colourCount > colors.length ? ' (the ' + colors.length + ' most used are shown)' : '')
+              : 'No colours found';
+            return (
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{found}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {result.pagesRead} page{result.pagesRead === 1 ? '' : 's'} and {result.files} style file{result.files === 1 ? '' : 's'} read
+                    </p>
+                  </div>
+                  {colors.length > 0 && (
+                    <div className="shrink-0 flex flex-wrap items-center gap-2">
+                      <Tooltip text="Copy every hex code, one per line, most used first."><button type="button" onClick={() => copyText(colors.map((c) => c.hex).join('\n'))} className={BUTTON} style={BUTTON_STYLE}>Copy hex codes</button></Tooltip>
+                      <Tooltip text="Copy the palette as CSS variables (--color-primary, --brand-1, --neutral-1 and so on) to paste into a style sheet."><button type="button" data-guide="copy-palette" onClick={() => copyText(paletteToCss(result))} className={BUTTON} style={BUTTON_STYLE}>Copy as CSS</button></Tooltip>
+                      <Tooltip text="Download the palette as a CSV file for a spreadsheet: codes, RGB, HSL, how often each is used and for what."><button type="button" onClick={() => downloadCsv(paletteToRows(result), slug + '-colours.csv')} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button></Tooltip>
+                    </div>
+                  )}
+                </div>
+                {roles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {roles.map(([label, hex, tip]) => (
+                      <Tooltip key={label} text={tip + ' Click to copy ' + hex + '.'}>
+                        <button type="button" onClick={() => copyText(hex)} aria-label={'Copy ' + label + ' ' + hex} className="flex items-center gap-2 rounded-full border pl-1 pr-3 py-1 text-xs transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}>
+                          <span className="inline-block rounded-full border" style={{ width: 20, height: 20, background: hex, borderColor: 'var(--color-border)' }} />
+                          <span>{label}</span><span className="font-mono" style={{ color: 'var(--color-muted)' }}>{hex}</span>
+                        </button>
+                      </Tooltip>
+                    ))}
+                  </div>
+                )}
+                {brand.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Brand colours</p>
+                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{brand.map((c) => swatch(c, true))}</div>
+                  </div>
+                )}
+                {neutral.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Greys, whites and blacks</p>
+                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{neutral.map((c) => swatch(c, false))}</div>
+                  </div>
+                )}
+                {result.pages?.length > 1 && (
+                  <div className="rounded-2xl border p-4 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Pages read</p>
+                    {result.pages.map((p) => (
+                      <p key={p.url} className="text-xs break-all" style={{ color: p.ok ? 'var(--color-text)' : 'var(--color-muted)' }}>{p.ok ? '✓' : '✗'} {p.url}{p.ok ? '' : p.skipped ? ' (skipped: out of time)' : ' (could not be read)'}</p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Only colours written in the page&rsquo;s styles are counted. Colours inside pictures, such as a logo or a photo, are not read.</p>
               </section>
             );
           })()}

@@ -712,6 +712,7 @@ async function runExtraction(rawUrl, mode, customExcludes = [], options = {}, de
   else if (mode === 'links') result = extractLinks(body, pageUrl);
   else if (mode === 'tables') result = extractTables(body, pageUrl);
   else if (mode === 'metadata') result = extractMetadata(body, pageUrl);
+  else if (mode === 'palette') result = await require('./webExtractorPalette').buildPalette(pageUrl, body, { pages: options.pages }, { fetcher, scrapeCss: deps.scrapeCss });
   else if (mode === 'styled') {
     // One page that shows properly anywhere: style files and pictures copied in (restyle/selfContainedPage.js).
     const built = await require('./restyle/selfContainedPage').buildSelfContainedPage(body, pageUrl, { fetcher, inlineFragment: deps.inlineFragment });

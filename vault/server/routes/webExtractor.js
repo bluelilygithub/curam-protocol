@@ -61,11 +61,11 @@ async function fetchImage(src) {
   return { url, ...got, contentType: type.startsWith('image/') ? type : 'application/octet-stream' };
 }
 
-const MODES = new Set(['article', 'images', 'styled', 'links', 'tables', 'metadata']);
+const MODES = new Set(['article', 'images', 'styled', 'links', 'tables', 'metadata', 'palette']);
 const MAX_SELECTOR_CHARS = 200;
 
 router.post('/extract', async (req, res) => {
-  const { url, mode, excludeSections, selector } = req.body || {};
+  const { url, mode, excludeSections, selector, pages } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url is required' });
   }
@@ -75,7 +75,7 @@ router.post('/extract', async (req, res) => {
     : [];
   try {
     const cssSelector = typeof selector === 'string' ? selector.trim().slice(0, MAX_SELECTOR_CHARS) : '';
-    const result = await runExtraction(url, chosenMode, customExcludes, { selector: cssSelector });
+    const result = await runExtraction(url, chosenMode, customExcludes, { selector: cssSelector, pages: Number(pages) || 1 });
     res.json(result);
   } catch (err) {
     getLogger().error({ err }, '[web-extractor/extract]');

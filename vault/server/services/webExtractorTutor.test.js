@@ -11,7 +11,7 @@ const {
 
 (async () => {
   const tools = await import(pathToFileURL(path.join(__dirname, '../../client/src/pages/webExtractor/webExtractorTools.mjs')).href);
-  const { GUIDE_TOOLS, WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, parseSpokenUrl, parseSpokenList, parseSpokenSelector, toCsv, tableToObjects, linksToRows, tableToRows } = tools;
+  const { GUIDE_TOOLS, WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, parseSpokenUrl, parseSpokenList, parseSpokenSelector, toCsv, tableToObjects, linksToRows, tableToRows, PALETTE_PAGES, readableOn, paletteToCss, paletteToRows } = tools;
 
   // ---- the guide knows exactly the tools and buttons the page can show (fails if one is added to or removed from either list alone) ----
   assert.deepStrictEqual(CATALOG.map((t) => t.id).sort(), GUIDE_TOOLS.map((t) => t.id).sort(), 'the guide catalogue matches the page');
@@ -36,6 +36,10 @@ const {
   assert.match(CATALOG.find((t) => t.id === 'styled').does, /HTML source.*As fetched.*The copy/s, 'Exact scrape offers the HTML source');
   assert.match(CATALOG.find((t) => t.id === 'styled').notes, /rather than showing a words-only copy/, 'a refused page is not replaced by a words-only copy');
   assert.match(CATALOG.find((t) => t.id === 'download-images').does, /up to 60/);
+  assert.match(CATALOG.find((t) => t.id === 'palette').notes, /inside pictures/, 'colours in pictures are not read');
+  assert.match(CATALOG.find((t) => t.id === 'palette').does, /Click a swatch to copy/);
+  assert.match(CATALOG.find((t) => t.id === 'palette-pages').notes, /Up to six pages, not a whole website/);
+  assert.match(NOT_POSSIBLE.join(' '), /except Colour palette/, 'the one-page rule names its exception');
   assert.match(CATALOG.find((t) => t.id === 'download-pdf').notes, /show as \?/);
   const gaps = NOT_POSSIBLE.join(' ');
   for (const needle of [/sign-in/, /JavaScript/, /crawling/, /history or library/, /AI on the page/]) assert.match(gaps, needle);
@@ -100,6 +104,28 @@ const {
   assert.deepStrictEqual(tableToObjects({ headers: null, rows: [['a', 'b']], colCount: 2 }), [{ 'column 1': 'a', 'column 2': 'b' }]);
   assert.deepStrictEqual(tableToRows({ headers: ['H'], rows: [['r']] }), [['H'], ['r']]);
   assert.deepStrictEqual(tableToRows({ headers: null, rows: [['r']] }), [['r']]);
+
+  // ---- the Colour palette helpers ----
+  assert.deepStrictEqual(PALETTE_PAGES.map(([n]) => n), [1, 3, 6], 'the page choices are the ones the server accepts');
+  assert.strictEqual(readableOn('#ffffff'), '#000000', 'black words on white');
+  assert.strictEqual(readableOn('#000000'), '#ffffff', 'white words on black');
+  assert.strictEqual(readableOn('#9b5b46'), '#ffffff', 'white words on a mid-dark brown');
+  assert.strictEqual(readableOn('#f4efe6'), '#000000');
+  assert.strictEqual(readableOn('nonsense'), '#000000', 'a bad value never throws');
+  const pal = {
+    suggested: { primary: '#9b5b46', accent: null, background: '#f4efe6', text: '#222222' },
+    colors: [
+      { hex: '#9b5b46', rgb: [155, 91, 70], hsl: [15, 38, 46], kind: 'brand', count: 7, share: 41.2, roles: { background: 2, text: 1, border: 1, other: 0 }, variables: ['--brand'] },
+      { hex: '#f4efe6', rgb: [244, 239, 230], hsl: [40, 38, 93], kind: 'neutral', count: 3, share: 17.6, roles: { background: 3, text: 0, border: 0, other: 0 }, variables: [] },
+    ],
+  };
+  assert.strictEqual(paletteToCss(pal), ':root {\n  --color-primary: #9b5b46;\n  --color-background: #f4efe6;\n  --color-text: #222222;\n\n  --brand-1: #9b5b46;\n  --neutral-1: #f4efe6;\n}');
+  assert.strictEqual(paletteToCss({ colors: [] }), ':root {\n}', 'an empty palette is still valid CSS');
+  const palRows = paletteToRows(pal);
+  assert.strictEqual(palRows[0].length, palRows[1].length, 'every row has a cell for each heading');
+  assert.deepStrictEqual(palRows[1].slice(0, 6), ['#9b5b46', '155, 91, 70', '15, 38%, 46%', 'Brand', 7, 41.2]);
+  assert.strictEqual(palRows[2][3], 'Grey, white or black');
+  assert.match(toCsv(palRows), /^\uFEFFHex,RGB,HSL/, 'opens in Excel with its heading row');
   const linkRows = linksToRows([{ text: 'About', href: 'https://e.com/a', type: 'internal', nofollow: false, occurrences: 2 }]);
   assert.deepStrictEqual(linkRows[1], ['About', 'https://e.com/a', 'This site', '', 2]);
   assert.strictEqual(linkRows[0].length, linkRows[1].length);
