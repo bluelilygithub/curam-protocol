@@ -1,0 +1,628 @@
+{
+ "version": "0.1.20261103",
+ "status_code": 20000,
+ "status_message": "Ok.",
+ "time": "6.3712 sec.",
+ "cost": 0.004,
+ "tasks_count": 1,
+ "tasks_error": 0,
+ "tasks": [
+  {
+   "id": "11060803-3060-0139-0000-cc597ff65668",
+   "status_code": 20000,
+   "status_message": "Ok.",
+   "time": "6.2755 sec.",
+   "cost": 0.004,
+   "result_count": 1,
+   "path": [
+    "v3",
+    "serp",
+    "google",
+    "organic",
+    "live",
+    "advanced"
+   ],
+   "data": {
+    "api": "serp",
+    "function": "live",
+    "se": "google",
+    "se_type": "organic",
+    "keyword": "walk in wine cabinets",
+    "location_name": "Australia",
+    "language_code": "en",
+    "device": "desktop",
+    "depth": 10,
+    "load_async_ai_overview": true,
+    "os": "windows"
+   },
+   "result": [
+    {
+     "keyword": "walk in wine cabinets",
+     "type": "organic",
+     "se_domain": "google.com",
+     "location_code": 2036,
+     "language_code": "en",
+     "check_url": "https://www.google.com/search?q=walk%20in%20wine%20cabinets&hl=en&gl=AU&ie=UTF-8&uule=w+CAIQIFISCd_Fh2cH_SsrEVITW5WhZ4JT",
+     "datetime": "2026-11-06 08:03:23 +00:00",
+     "spell": null,
+     "refinement_chips": null,
+     "item_types": [
+      "ai_overview",
+      "organic",
+      "images"
+     ],
+     "se_results_count": 53,
+     "pages_count": 1,
+     "items_count": 10,
+     "items": [
+      {
+       "type": "ai_overview",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+       "asynchronous_ai_overview": true,
+       "markdown": "![Account Suspended](https://api.dataforseo.com/cdn/i/11060803-3060-0139-0000-cc597ff65668:4)\nWalk-in wine cabinets—often called walk-in wine rooms or custom wine cellars—blend the large-capacity storage of a cellar with the sleek, engineered climate control of a high-end wine cabinet.[[1]](https://google.com/goto?url=CAESaAHEIkXXwKSA3NsPllgenJcIdj16od7PEgIrAnCcw4ZZ0MMsDejLYYDR9Z3tKZLR6zf04ii1TkqM2jENLPCaHH-18Za4-tSs-La0ZhJeePAvKozkoAd47Mf7z-piG8QFTerWrXzHQqUi)[[2]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)\n\n### Key Features of Walk-In Wine Cabinets\n\n- **Climate Control:** Unlike standard kitchen cupboards or rooms, walk-in units use specialized cooling and refrigeration systems to maintain a steady temperature (typically around 12°C–14°C) and balanced humidity to protect corks and aging wine.[[1]](https://google.com/goto?url=CAESzwEBxCJF19gJwxPl4RUEvJen_1K_ko2I036wr1bWm4TnHByDqDAxN5yHHKJpncZQrmuHwXo8BAlR9bugQKM33fOdgo_fM1oW66ylLA6zZQX9ZmvoGxJjCnrOLXQnP_uecdOqSJhp8VqGgxhLtnAhYSnls5PWsD7JKtxWBSCN6BxiS5z8O3R46MBxz0XBmNLlICzjyV53XXZG6_77RZPBtuN6LCRZC4rQ13yeZYsBU8VQSHB09HWLPxqZxrJP_rku6lSNDgNrhNDaGK8g1CUQ-iQ)[[2]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)\n- **Custom Racking & Materials:** They frequently combine metal grid racks, floating wood shelves, or modular wooden displays with floor-to-ceiling configurations.[[1]](https://google.com/goto?url=CAES0QEBxCJF19vppXGZ65KYPcnfj6YdhTNEeWjOLyi0dHM7mTAi1SUfLqs3Gn3REbwWTlHYh46FoVi17Pio7yG_8zOtsCiNmGwRUwfIxJMk1JeIduyna2YcNUK07G_aN4mLBQeSnhQRYgMAGB91f9MqmmeDyKTXvG3FTrbLwvtPvu0FD375YwYi8z_VvznFt5MuHXe5Qh1xRlr9CYeQsuojdlscfnReHFBlUtkuFUSB2xqqoIP-JJg9v8jTAqkhFqV2kHDjnkHa-qEWMm50QtwD7NN8qA)[[2]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)\n- **Aesthetic Glass Enclosures:** Modern designs lean heavily into frameless glass walls, doors, and soft LED backlighting to turn the collection into a visual centerpiece for a dining room, kitchen, or entertaining space.[[1]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)[[2]](https://google.com/goto?url=CAES0QEBxCJF19vppXGZ65KYPcnfj6YdhTNEeWjOLyi0dHM7mTAi1SUfLqs3Gn3REbwWTlHYh46FoVi17Pio7yG_8zOtsCiNmGwRUwfIxJMk1JeIduyna2YcNUK07G_aN4mLBQeSnhQRYgMAGB91f9MqmmeDyKTXvG3FTrbLwvtPvu0FD375YwYi8z_VvznFt5MuHXe5Qh1xRlr9CYeQsuojdlscfnReHFBlUtkuFUSB2xqqoIP-JJg9v8jTAqkhFqV2kHDjnkHa-qEWMm50QtwD7NN8qA)\n- **Depth and Sizing:** While standard freestanding wine cabinets feature an interior depth of roughly 24 to 29 inches, walk-in versions scale up to room-size dimensions, tailored to the exact square footage and bottle capacity required.[[1]](https://google.com/goto?url=CAESwAEBxCJF120HqCIKlbSq9eoLidVCMDawuqlmSOfR9S7X2W2lM31_vKu9xGuKk6lolzLfwugMbWWWQQ6T5VPda1cAyOI2pVUgeTJBPWRRkrkdYphZD8l5NV0SakBJcGP02Rl5lBQxfXJ0olBjWI56G_5805mfIDubhFrVFpfQsCk_gue3BWwM486ckrpQwIJSJ_Bre2co_zzrg8APz0d3-kU-pWjRG2kN73MUR8yLlpwi4xNNteyzOvF6AtmrL5gWS_U)\n\n### Popular Design Styles\n\n- **Glass-Enclosed Feature Walls:** Built flush into a living area or hallway, acting as a transparent vault.\n- **Dedicated Walk-In Rooms:** Converted pantries, under-stair spaces, or small architectural nooks sealed and lined with insulation, vapor barriers, and specialized wine cooling units.[[1]](https://google.com/goto?url=CAESaAHEIkXXwKSA3NsPllgenJcIdj16od7PEgIrAnCcw4ZZ0MMsDejLYYDR9Z3tKZLR6zf04ii1TkqM2jENLPCaHH-18Za4-tSs-La0ZhJeePAvKozkoAd47Mf7z-piG8QFTerWrXzHQqUi)[[2]](https://google.com/goto?url=CAESbgHEIkXX4UXT0SE1byWs_5WQkofzsHahbAtJFrMpRrLWnSnmpJUGj3C6YcXvU5m929bXnFpmmNZd6tQHab95K5nc2vPS_6XweMvJhB92E-s5qm7BUX9hXp8M5xZEs5qoOBvNBZsMM_ptwiNMnT_j)[[3]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)\n\nIf you are looking to plan or install one, custom options are often designed and built by specialized firms (such as [Vineyard Wine Cellars](https://google.com/goto?url=CAESbQHEIkXXSW9C2SHfUlfFNPBdIg2AohL7vl1TasjBwY-ewqWg7VPygDxUKOZVwsy4QEbQ7-6MTQqUt1SyGtdqICH5g6IfFgsIVOsc-ZytvwvrFxRkIYy_LG2mnpAPjqSlVT9QwH2dWpEWUdw0Sl8) ) or integrated via high-capacity modular storage units.[[1]](https://google.com/goto?url=CAESbQHEIkXXSW9C2SHfUlfFNPBdIg2AohL7vl1TasjBwY-ewqWg7VPygDxUKOZVwsy4QEbQ7-6MTQqUt1SyGtdqICH5g6IfFgsIVOsc-ZytvwvrFxRkIYy_LG2mnpAPjqSlVT9QwH2dWpEWUdw0Sl8)",
+       "items": [
+        {
+         "type": "ai_overview_element",
+         "position": "left",
+         "title": null,
+         "text": "Walk-in wine cabinets—often called walk-in wine rooms or custom wine cellars—blend the large-capacity storage of a cellar with the sleek, engineered climate control of a high-end wine cabinet.",
+         "markdown": "![Account Suspended](https://api.dataforseo.com/cdn/i/11060803-3060-0139-0000-cc597ff65668:2)\nWalk-in wine cabinets—often called walk-in wine rooms or custom wine cellars—blend the large-capacity storage of a cellar with the sleek, engineered climate control of a high-end wine cabinet.[[1]](https://google.com/goto?url=CAESaAHEIkXXwKSA3NsPllgenJcIdj16od7PEgIrAnCcw4ZZ0MMsDejLYYDR9Z3tKZLR6zf04ii1TkqM2jENLPCaHH-18Za4-tSs-La0ZhJeePAvKozkoAd47Mf7z-piG8QFTerWrXzHQqUi)[[2]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)",
+         "links": null,
+         "images": [
+          {
+           "type": "images_element",
+           "alt": "Account Suspended",
+           "url": null,
+           "image_url": "https://api.dataforseo.com/cdn/i/11060803-3060-0139-0000-cc597ff65668:3"
+          }
+         ],
+         "references": [
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Instagram",
+           "domain": "www.instagram.com",
+           "url": "https://www.instagram.com/reel/DQyrDdJktC-/",
+           "title": "but this time, we bring you a walk-in wine room. . . . ...",
+           "text": "This custom wine cellar creates a quiet and elegant corner for preserving your wine collection. Custom sizes and structures are av..."
+          },
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "YouTube",
+           "domain": "www.youtube.com",
+           "url": "https://www.youtube.com/shorts/1R4O_g6N67I?vl=en",
+           "title": "Stunning Wine Cellar Design Ideas in 30s",
+           "text": "Stunning Wine Cellar Design Ideas in 30s | Custom & Modern Wine Room #shorts stop scrolling here are the most stunning wine celler..."
+          }
+         ]
+        },
+        {
+         "type": "ai_overview_element",
+         "position": "left",
+         "title": "Key Features of Walk-In Wine Cabinets",
+         "text": "Climate Control: Unlike standard kitchen cupboards or rooms, walk-in units use specialized cooling and refrigeration systems to maintain a steady temperature (typically around 12°C–14°C) and balanced humidity to protect corks and aging wine. Custom Racking & Materials: They frequently combine metal grid racks, floating wood shelves, or modular wooden displays with floor-to-ceiling configurations. Aesthetic Glass Enclosures: Modern designs lean heavily into frameless glass walls, doors, and soft LED backlighting to turn the collection into a visual centerpiece for a dining room, kitchen, or entertaining space. Depth and Sizing: While standard freestanding wine cabinets feature an interior depth of roughly 24 to 29 inches, walk-in versions scale up to room-size dimensions, tailored to the exact square footage and bottle capacity required.",
+         "markdown": "- **Climate Control:** Unlike standard kitchen cupboards or rooms, walk-in units use specialized cooling and refrigeration systems to maintain a steady temperature (typically around 12°C–14°C) and balanced humidity to protect corks and aging wine.[[1]](https://google.com/goto?url=CAESzwEBxCJF19gJwxPl4RUEvJen_1K_ko2I036wr1bWm4TnHByDqDAxN5yHHKJpncZQrmuHwXo8BAlR9bugQKM33fOdgo_fM1oW66ylLA6zZQX9ZmvoGxJjCnrOLXQnP_uecdOqSJhp8VqGgxhLtnAhYSnls5PWsD7JKtxWBSCN6BxiS5z8O3R46MBxz0XBmNLlICzjyV53XXZG6_77RZPBtuN6LCRZC4rQ13yeZYsBU8VQSHB09HWLPxqZxrJP_rku6lSNDgNrhNDaGK8g1CUQ-iQ)[[2]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)\n- **Custom Racking & Materials:** They frequently combine metal grid racks, floating wood shelves, or modular wooden displays with floor-to-ceiling configurations.[[1]](https://google.com/goto?url=CAES0QEBxCJF19vppXGZ65KYPcnfj6YdhTNEeWjOLyi0dHM7mTAi1SUfLqs3Gn3REbwWTlHYh46FoVi17Pio7yG_8zOtsCiNmGwRUwfIxJMk1JeIduyna2YcNUK07G_aN4mLBQeSnhQRYgMAGB91f9MqmmeDyKTXvG3FTrbLwvtPvu0FD375YwYi8z_VvznFt5MuHXe5Qh1xRlr9CYeQsuojdlscfnReHFBlUtkuFUSB2xqqoIP-JJg9v8jTAqkhFqV2kHDjnkHa-qEWMm50QtwD7NN8qA)[[2]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)\n- **Aesthetic Glass Enclosures:** Modern designs lean heavily into frameless glass walls, doors, and soft LED backlighting to turn the collection into a visual centerpiece for a dining room, kitchen, or entertaining space.[[1]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)[[2]](https://google.com/goto?url=CAES0QEBxCJF19vppXGZ65KYPcnfj6YdhTNEeWjOLyi0dHM7mTAi1SUfLqs3Gn3REbwWTlHYh46FoVi17Pio7yG_8zOtsCiNmGwRUwfIxJMk1JeIduyna2YcNUK07G_aN4mLBQeSnhQRYgMAGB91f9MqmmeDyKTXvG3FTrbLwvtPvu0FD375YwYi8z_VvznFt5MuHXe5Qh1xRlr9CYeQsuojdlscfnReHFBlUtkuFUSB2xqqoIP-JJg9v8jTAqkhFqV2kHDjnkHa-qEWMm50QtwD7NN8qA)\n- **Depth and Sizing:** While standard freestanding wine cabinets feature an interior depth of roughly 24 to 29 inches, walk-in versions scale up to room-size dimensions, tailored to the exact square footage and bottle capacity required.[[1]](https://google.com/goto?url=CAESwAEBxCJF120HqCIKlbSq9eoLidVCMDawuqlmSOfR9S7X2W2lM31_vKu9xGuKk6lolzLfwugMbWWWQQ6T5VPda1cAyOI2pVUgeTJBPWRRkrkdYphZD8l5NV0SakBJcGP02Rl5lBQxfXJ0olBjWI56G_5805mfIDubhFrVFpfQsCk_gue3BWwM486ckrpQwIJSJ_Bre2co_zzrg8APz0d3-kU-pWjRG2kN73MUR8yLlpwi4xNNteyzOvF6AtmrL5gWS_U)",
+         "links": null,
+         "images": null,
+         "references": [
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Captivating Cabinets",
+           "domain": "www.captivatingcabinets.com",
+           "url": "https://www.captivatingcabinets.com/blog/wine-storage-ideas-for-kitchen-cabinets",
+           "title": "Wine Storage Ideas for the Kitchen: Built-In Cabinet Racks",
+           "text": "Is it OK to store wine in kitchen cabinets? For bottles you'll open within weeks or a few months, yes, as long as the cabinet is a..."
+          },
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "YouTube",
+           "domain": "www.youtube.com",
+           "url": "https://www.youtube.com/shorts/1R4O_g6N67I?vl=en",
+           "title": "Stunning Wine Cellar Design Ideas in 30s",
+           "text": "Stunning Wine Cellar Design Ideas in 30s | Custom & Modern Wine Room #shorts stop scrolling here are the most stunning wine celler design ideas you'll want in your"
+          },
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Facebook",
+           "domain": "www.facebook.com",
+           "url": "https://www.facebook.com/Homebarsfurniture/videos/elevate-your-wine-storage-from-hidden-away-to-center-stage-nothing-transforms-a/1152576184007441/",
+           "title": "Elevate your wine storage from hidden away to center stage. 🍷 ...",
+           "text": "Nothing transforms a dining area, entertaining space, or modern kitchen quite like floor-to-ceiling wine display racks. Designed f..."
+          },
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Vinotemp",
+           "domain": "vinotemp.com",
+           "url": "https://vinotemp.com/blogs/news/how-deep-should-a-wine-cabinet-be",
+           "title": "How Deep Should a Wine Cabinet Be? - Vinotemp",
+           "text": "A wine cabinet's depth largely depends on the cabinet's contents; the wine racking used, cooling system, lights, insulation, and m..."
+          }
+         ]
+        },
+        {
+         "type": "ai_overview_element",
+         "position": "left",
+         "title": "Popular Design Styles",
+         "text": "Glass-Enclosed Feature Walls: Built flush into a living area or hallway, acting as a transparent vault. Dedicated Walk-In Rooms: Converted pantries, under-stair spaces, or small architectural nooks sealed and lined with insulation, vapor barriers, and specialized wine cooling units.",
+         "markdown": "- **Glass-Enclosed Feature Walls:** Built flush into a living area or hallway, acting as a transparent vault.\n- **Dedicated Walk-In Rooms:** Converted pantries, under-stair spaces, or small architectural nooks sealed and lined with insulation, vapor barriers, and specialized wine cooling units.[[1]](https://google.com/goto?url=CAESaAHEIkXXwKSA3NsPllgenJcIdj16od7PEgIrAnCcw4ZZ0MMsDejLYYDR9Z3tKZLR6zf04ii1TkqM2jENLPCaHH-18Za4-tSs-La0ZhJeePAvKozkoAd47Mf7z-piG8QFTerWrXzHQqUi)[[2]](https://google.com/goto?url=CAESbgHEIkXX4UXT0SE1byWs_5WQkofzsHahbAtJFrMpRrLWnSnmpJUGj3C6YcXvU5m929bXnFpmmNZd6tQHab95K5nc2vPS_6XweMvJhB92E-s5qm7BUX9hXp8M5xZEs5qoOBvNBZsMM_ptwiNMnT_j)[[3]](https://google.com/goto?url=CAESbQHEIkXXB7uregjg-qJvbi9Bs0f54Le6vZ9lRKbgaDX2y_9LDY4Lm2DioqpC5waO4VPWaYZY-hebf6a_YfkI1g746JoEMp7F-kHsCz6Ob8oFQIWqQXzjt2rYqCHeH3FWFd65wssJ6JIMkTJNe1Q)",
+         "links": null,
+         "images": null,
+         "references": [
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Instagram",
+           "domain": "www.instagram.com",
+           "url": "https://www.instagram.com/reel/DQyrDdJktC-/",
+           "title": "but this time, we bring you a walk-in wine room. . . . ...",
+           "text": "This custom wine cellar creates a quiet and elegant corner for preserving your wine collection. Custom sizes and structures are available for ..."
+          },
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Pinterest",
+           "domain": "google.com",
+           "url": "https://google.com/goto?url=CAESbgHEIkXX4UXT0SE1byWs_5WQkofzsHahbAtJFrMpRrLWnSnmpJUGj3C6YcXvU5m929bXnFpmmNZd6tQHab95K5nc2vPS_6XweMvJhB92E-s5qm7BUX9hXp8M5xZEs5qoOBvNBZsMM_ptwiNMnT_j",
+           "title": "Vogue Australia - Pinterest",
+           "text": "Experience the allure of a room filled with an impressive collection of wine bottles displayed in a glass case next to a luxurious..."
+          },
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "YouTube",
+           "domain": "www.youtube.com",
+           "url": "https://www.youtube.com/shorts/1R4O_g6N67I?vl=en",
+           "title": "Stunning Wine Cellar Design Ideas in 30s",
+           "text": "Stunning Wine Cellar Design Ideas in 30s | Custom & Modern Wine Room #shorts stop scrolling here are the most stunning wine celler design ideas you'll want in your"
+          }
+         ]
+        },
+        {
+         "type": "ai_overview_element",
+         "position": "left",
+         "title": null,
+         "text": "If you are looking to plan or install one, custom options are often designed and built by specialized firms (such as Vineyard Wine Cellars ) or integrated via high-capacity modular storage units.",
+         "markdown": "If you are looking to plan or install one, custom options are often designed and built by specialized firms (such as [Vineyard Wine Cellars](https://google.com/goto?url=CAESbQHEIkXXSW9C2SHfUlfFNPBdIg2AohL7vl1TasjBwY-ewqWg7VPygDxUKOZVwsy4QEbQ7-6MTQqUt1SyGtdqICH5g6IfFgsIVOsc-ZytvwvrFxRkIYy_LG2mnpAPjqSlVT9QwH2dWpEWUdw0Sl8) ) or integrated via high-capacity modular storage units.[[1]](https://google.com/goto?url=CAESbQHEIkXXSW9C2SHfUlfFNPBdIg2AohL7vl1TasjBwY-ewqWg7VPygDxUKOZVwsy4QEbQ7-6MTQqUt1SyGtdqICH5g6IfFgsIVOsc-ZytvwvrFxRkIYy_LG2mnpAPjqSlVT9QwH2dWpEWUdw0Sl8)",
+         "links": [
+          {
+           "type": "link_element",
+           "title": "Vineyard Wine Cellars",
+           "description": null,
+           "url": "https://google.com/goto?url=CAESbQHEIkXXSW9C2SHfUlfFNPBdIg2AohL7vl1TasjBwY-ewqWg7VPygDxUKOZVwsy4QEbQ7-6MTQqUt1SyGtdqICH5g6IfFgsIVOsc-ZytvwvrFxRkIYy_LG2mnpAPjqSlVT9QwH2dWpEWUdw0Sl8",
+           "domain": "google.com"
+          }
+         ],
+         "images": null,
+         "references": [
+          {
+           "type": "ai_overview_reference",
+           "position": "left",
+           "source": "Pinterest",
+           "domain": "dk.pinterest.com",
+           "url": "https://dk.pinterest.com/pin/484770347415797649/",
+           "title": "Wine Collection - Pinterest",
+           "text": "Dec 7, 2025 — Where elegance meets innovation ✨ This custom wine wall from @VineyardWineCellars features temperature control for t..."
+          }
+         ]
+        }
+       ],
+       "references": [
+        {
+         "type": "ai_overview_reference",
+         "position": "right",
+         "source": "Instagram",
+         "domain": "www.instagram.com",
+         "url": "https://www.instagram.com/reel/DQyrDdJktC-/",
+         "title": "but this time, we bring you a walk-in wine room. . . . ...",
+         "text": "This custom wine cellar creates a quiet and elegant corner for preserving your wine collection. Custom sizes and structures are available for ..."
+        },
+        {
+         "type": "ai_overview_reference",
+         "position": "right",
+         "source": "YouTube",
+         "domain": "www.youtube.com",
+         "url": "https://www.youtube.com/shorts/1R4O_g6N67I?vl=en",
+         "title": "Stunning Wine Cellar Design Ideas in 30s",
+         "text": "Stunning Wine Cellar Design Ideas in 30s | Custom & Modern Wine Room #shorts stop scrolling here are the most stunning wine celler design ideas you'll want in your"
+        },
+        {
+         "type": "ai_overview_reference",
+         "position": "right",
+         "source": "Captivating Cabinets",
+         "domain": "www.captivatingcabinets.com",
+         "url": "https://www.captivatingcabinets.com/blog/wine-storage-ideas-for-kitchen-cabinets",
+         "title": "Wine Storage Ideas for the Kitchen: Built-In Cabinet Racks",
+         "text": "Is it OK to store wine in kitchen cabinets? For bottles you'll open within weeks or a few months, yes, as long as the cabinet is away from the range, dishwasher, f..."
+        }
+       ],
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 1,
+       "rank_absolute": 2,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[3]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "Vogue Australia",
+       "url": "https://google.com/goto?url=CAESbgHEIkXXSKhDRUdNqNGmgM8RHbTmK006Su0m8MHQzKbQWZEa1d4we989_HmuZpnoGu-s2VhtmktZ2wOMJH3SFFyamYUuUIVrj_WjfaGQr2V1YwcFQIl4NxxCWQcciFcg_Y0J0t_b1tBthy3ZeR0f",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "https://www.pinterest.com › pin",
+       "website_name": "Pinterest",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "19 Oct 2017 — Experience the allure of a room filled with an impressive collection of wine bottles displayed in a glass case next to a luxurious brown ...",
+       "pre_snippet": "10/19/2017 00:00:00",
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": [
+        "wine"
+       ],
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": "2017-10-19 00:00:00 +00:00",
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 2,
+       "rank_absolute": 3,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[5]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "Wine Collection",
+       "url": "https://google.com/goto?url=CAESbQHEIkXXok5H50cn4_B_XTXRey5XEy8GjoKkFG1kmdMKnV65Ly1epxIOc_TGl2Ci8LOhYamLjHBhPjQXrhCFec-Ohuspknm_FhSSFmV5f7MwsoXzY_d37URL2C79HPCisVKXctrHQf9GJKI1M-c",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "1 week ago",
+       "website_name": "Pinterest · sgatling",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "Dec 7, 2025 — Where elegance meets innovation ✨ This custom wine wall from @VineyardWineCellars features temperature control for the ...",
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": [
+        "wine"
+       ],
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      },
+      {
+       "type": "images",
+       "rank_group": 1,
+       "rank_absolute": 4,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[7]/div[1]",
+       "title": "Images",
+       "url": null,
+       "items": [
+        {
+         "type": "images_element",
+         "alt": "Modern Style Walk In Wine Cellar And Beverage Coolers Restaurant Living  Room Built In Luxury Glass Wine Cabinet Cellar Chiller - Buy Product on ...",
+         "url": "https://www.alibaba.com/product-detail/Modern-style-Walk-in-Wine-Cellar_1601121540390.html",
+         "image_url": "https://api.dataforseo.com/cdn/i/11060803-3060-0139-0000-cc597ff65668:5"
+        },
+        {
+         "type": "images_element",
+         "alt": "Underbench Wine Cellars | Vintec Australia",
+         "url": "https://www.vintec.com/en-au/underbench-wine-cellars/",
+         "image_url": "https://api.dataforseo.com/cdn/i/11060803-3060-0139-0000-cc597ff65668:6"
+        },
+        {
+         "type": "images_element",
+         "alt": "Modern Style Walk In Wine Cellar And Beverage Coolers Restaurant Living  Room Built In Luxury Glass Wine Cabinet Cellar Chiller - Buy Product on ...",
+         "url": "https://www.alibaba.com/product-detail/Modern-style-Walk-in-Wine-Cellar_1601121540390.html",
+         "image_url": "https://api.dataforseo.com/cdn/i/11060803-3060-0139-0000-cc597ff65668:7"
+        },
+        {
+         "type": "images_element",
+         "alt": "How to Choose a Good Wine Cabinet? | Home",
+         "url": "https://google.com/goto?url=CAESeQHEIkXX-0hsDFd6oEKemUNyWfo767cVdEnezGV8JvgiMtzZBQUA3uEsTroxHxID58jFeusunKOoqLljLm5wjdtP5QyvfGPNQHv9W-b6bpnCDMMGXF2xhv4cy3POOKe5fvyQr5ROpO-CQ-0L93zrbWJW7pLdKF3u3zM",
+         "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSz3SRptY4yJwZ5Bnxmrag5Oosa2y-maenxMjelrgvSqyZFf9KxLKX3emo&s"
+        },
+        {
+         "type": "images_element",
+         "alt": "Underbench Wine Cellars | Vintec Australia",
+         "url": "https://www.vintec.com/en-au/underbench-wine-cellars/",
+         "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ8iy6aEdshKddVTNt9wioePaVh2GZoamiImPuqHK_nWMUT2qR3_-a0nQU&s"
+        },
+        {
+         "type": "images_element",
+         "alt": "Wine Cabinets Appliances | Winning Appliances",
+         "url": "https://www.winnings.com.au/c/kitchen/wine%20cabinets",
+         "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRkJ1uf-yiWBShaUz2qH5N1wV8lpX1V6goPYtVNrArfV_w9nA16duqEGbQ&s"
+        },
+        {
+         "type": "images_element",
+         "alt": "Wine Cabinets Australia | Cellar Shop",
+         "url": "https://www.cellarshop.com.au/collections/wine-rack-cabinet?srsltid=AYCX9vJ5cDRL5HDaqBXOTmfwJ6bx9jr4fw-xVUceeoSr2ByPiUYxTZQW",
+         "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRy6fpL8e-bsq1ZNUfIFrlBmsJYZ0pSfI6HPcBI1KDDpkl6ZC6xZgLNXzA&s"
+        },
+        {
+         "type": "images_element",
+         "alt": "Modern Style Walk In Wine Cellar And Beverage Coolers Restaurant Living  Room Built In Luxury Glass Wine Cabinet Cellar Chiller - Buy Product on ...",
+         "url": "https://www.alibaba.com/product-detail/Modern-style-Walk-in-Wine-Cellar_1601121540390.html",
+         "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTurjqJxEv5439c81tWCh96Z4mmdKuApUjWtR-Q3KtbKzUgLAcbvoUR3hI&s"
+        },
+        {
+         "type": "images_element",
+         "alt": "Perfect Wine Storage with Vintec Wine Cabinets | Designer ...",
+         "url": "https://www.designerappliances.com.au/blogs/ideas-inspirations/your-wines-story?srsltid=AYCX9vLhAhjayV7M8ydb83Bv7nOUB0gfbMv9JoDGPNpOXrCns8DVcxnT",
+         "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTTA7ewKGmNPWf095Wi4rPh1iuQLQ7muOXkup_n3cwSRJ-MRr9FkcDCL8LP9g&s"
+        }
+       ],
+       "related_image_searches": null,
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 3,
+       "rank_absolute": 5,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[9]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "Classic Parisian style unifies a Victorian terrace",
+       "url": "https://google.com/goto?url=CAESbQHEIkXXp-BlU8OzP_3sEwJioZ1khVnth7gDR89AwtBvCfOpOOOnh067aHDtX-R-ZAoGoNKjrZVI0ITVFYqufezNq_mpaDfIO7M2_0WF1NRo1eSb53KeJ-tmr9zIUOTPA0X5z3FP0v5qV76UYrU",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "9 years ago",
+       "website_name": "Pinterest · acgrateau",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "The Vintec wine fridges are lit from within, adding another element of sophistication to the slick kitchen at night.",
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": [
+        "Vintec wine fridges are lit from within"
+       ],
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 4,
+       "rank_absolute": 6,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[11]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "https://www.retravision.com.au/liebherr-single-zon...",
+       "url": "https://google.com/goto?url=CAESjAIBxCJF16CsBbkb9xx9Hm8q6Mf-qr3p_BnOgjwxsoh1zmYgbLl5Yyx4q91S13jCArj8plwHZjH8ulcvcCiHALSsu_XyonvsKaD4kuKGDtj2pc0i3DBJjJ26Nt0x34ooT7AB9F6vvxydp0LATU3XfGWYmNh9vfjbTYk-ift3-I5NDJdUIqYsmW6kYncc5JvNtno8gh2tvOgH5t6YvyMudwTZ8_U21cyvqlgytaiqHwBtyQf1eupRaBfHuuOPjr7Z9xub-3qi2wSVktDFcxZ6AAWLkfeoU-E6LyaAvqNckTSfBtSOTgiJL7L91nTHkhYBeOUYKYmHnltCgiUQsLLTTa2sp1KgF0zLWTdl1bF_",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "https://www.retravision.com.au › liebherr-single-zone-f...",
+       "website_name": "Retravision",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": null,
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": null,
+       "links": [
+        {
+         "type": "link_element",
+         "title": "Learn why",
+         "description": null,
+         "url": "https://support.google.com/webmasters/answer/7489871?hl=en",
+         "domain": "support.google.com"
+        }
+       ],
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 5,
+       "rank_absolute": 7,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[13]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "Appliances Online | Buy Online with Free Delivery",
+       "url": "https://google.com/goto?url=CAESnQEBxCJF1-5zyy7VfuRV0t5A2AMYlMiZgcqOvuEbtQGi7H175D7rOOoAgQCtN5nsj3SgYW_28J8LNGj06iu72xYUYuxXVje7WA_ec-Det3BxLFrEJnGFz3sWYgcAQxKsNA3DuGb2bnisYYB0wziTbmq9S1sdus7R6NhsyzQBju-3duAkig_-XVvvYQeShzrJNB4U1boi_VtFuN6z5_AM",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "https://www.appliancesonline.com.au › product › 155-b...",
+       "website_name": "Appliances Online",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "We're Australia's largest online appliance retailer with a huge range of fridges, freezers, washers and more. Order now for free delivery to most areas.",
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": null,
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 6,
+       "rank_absolute": 8,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[15]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "Περισσότερες επιλογές για εξερεύνηση",
+       "url": "https://google.com/goto?url=CAESbQHEIkXX_DGIOuv1w-Agj-AxypG1xvOTskwQmkyUf09uLVWJXXfWAz630fEIiNTldE2dFXcq_G9stuU-8ueSrbWTG0K9SXEy_sxblqs6K4FkHbQZUZeNmFmig8q9WhCDLCvGeTsPZ6qieJWu9Mg",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "7 years ago",
+       "website_name": "Pinterest · elinamargellou",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "Browse photos of home wine cellar designs and decor. Discover ideas for custom wine rooms and closets, including inspiring wine cellar layouts ...",
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": [
+        "Browse photos of home wine cellar designs and decor"
+       ],
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 7,
+       "rank_absolute": 9,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[17]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "The homes with the best interior design in Australia",
+       "url": "https://google.com/goto?url=CAESbQHEIkXXlS-2srVfztpNyaP_dqoUgOnVfpIpUZv_jZAF1zCr8_kcTU9poikXZ0gOmkds9d6Agljq8hWddvnfOW-_l96mxZeCauQxZk1gOLfMnrXV4vFSOKjmrbNyeoFFbAlYvuzqLCc_NWUFWf0",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "8 years ago",
+       "website_name": "Pinterest · grafljeannette",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "【 Suction Cup & 90° Opening 】: The included suction cup can be used to open and close the cellar door, even heavy doors can be operated with ...",
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": [
+        "cellar"
+       ],
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      },
+      {
+       "type": "organic",
+       "rank_group": 8,
+       "rank_absolute": 10,
+       "page": 1,
+       "position": "left",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[19]/div[1]/div[1]",
+       "domain": "google.com",
+       "title": "Winning Appliances | Kitchen & Laundry Appliances",
+       "url": "https://google.com/goto?url=CAESiQEBxCJF1zU-Sm06l-AXVl__SQ15-ias4xmyDBNUZYlrLlm4kWKwaa4V6xS8NG6oich6mNxiPLJKEtIaRXPUD_RPd5fLxmXTB4jpw1ZARxKKn3EJ-jNdjgqXu1TPw06iU6bF_EJlQepvFQtqXdICwjrTl5BpNvueCD6PFl7qZo7ls4EDADjvD_Z18A",
+       "cache_url": null,
+       "related_search_url": null,
+       "breadcrumb": "https://www.winnings.com.au › multi-zone-wine-cabinets",
+       "website_name": "Winning Appliances",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "checks": null,
+       "description": "Hi, It looks like you have scripts disabled! Please enable scripts for the best experience on our website. If you wish to purchase please call us on 1300 050 ...",
+       "pre_snippet": null,
+       "extended_snippet": null,
+       "images": null,
+       "amp_version": false,
+       "rating": null,
+       "price": null,
+       "highlighted": null,
+       "links": null,
+       "faq": null,
+       "extended_people_also_search": null,
+       "about_this_result": null,
+       "related_result": null,
+       "timestamp": null,
+       "rectangle": null
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

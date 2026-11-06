@@ -128,4 +128,27 @@ assert.equal(rp.ads[0].description, 'Buy now');
 assert.equal(rp.mine.itemsAboveMe, null); // I am not in the organic results, so there is nothing "above my first result"
 assert.equal(parseSerp({ keyword: 'k', items: [...Array.from({ length: 14 }, (_, i) => ({ type: 'paid', rank_group: i + 1, rank_absolute: i + 1, domain: 'x.com', url: 'https://x.com/' })), organic(1, 15, 'https://a.com/', 'a.com')] }, { depth: 10 }).ads.length, 10);
 
+// ---- the REAL Live answer saved on 6 Nov 2026 (fixtures/live-walk-in-wine-cabinets-desktop-australia.json), expected values read off it by hand
+const realAnswer = require('./fixtures/live-walk-in-wine-cabinets-desktop-australia.json').tasks[0].result[0];
+const rr = parseSerp(realAnswer, { myDomain: 'wiwc.com.au', competitors: ['retravision.com.au', 'vintec.com'], depth: 10 });
+assert.equal(rr.organicCount, 8);
+assert.deepEqual(rr.top10.map((r) => r.domain), ['pinterest.com', '', '', 'retravision.com.au', 'appliancesonline.com.au', '', '', 'winnings.com.au']);
+assert.equal(rr.unknownDomainCount, 4); // four Pinterest pins show no web address
+assert.deepEqual(rr.searched, { seDomain: 'google.com', locationCode: 2036, languageCode: 'en' });
+assert.deepEqual(rr.ads, []); // this answer had no paid items
+assert.equal(rr.mine.status, 'not_in_top_10');
+assert.equal(rr.mine.bestPosition, null);
+assert.equal(rr.mine.uncertain, true); // not found, but four results hide their website
+assert.equal(rr.aiOverview.present, true);
+assert.deepEqual(rr.aiOverview.citations.map((c) => c.domain), ['instagram.com', 'youtube.com', 'captivatingcabinets.com']);
+assert.equal(rr.aiOverview.mineCited, false);
+assert.deepEqual(rr.layout.map((l) => l.type), ['ai_overview', 'organic', 'organic', 'images', 'organic', 'organic', 'organic', 'organic', 'organic', 'organic']);
+assert.equal(rr.mine.itemsAboveMe, null);
+// and if the owner's site had been one of the results, it would be found despite the redirect links
+const asIfMine = JSON.parse(JSON.stringify(realAnswer));
+asIfMine.items.find((i) => i.website_name === 'Winning Appliances').breadcrumb = 'https://www.wiwc.com.au › walk-in-wine-cabinets';
+const found = parseSerp(asIfMine, { myDomain: 'wiwc.com.au', depth: 10 });
+assert.equal(found.mine.status, 'ranked');
+assert.equal(found.mine.bestPosition, 8);
+
 console.log('serpParse.test.js: all passed');
