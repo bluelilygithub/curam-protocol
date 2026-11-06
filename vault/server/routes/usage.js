@@ -3,6 +3,8 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { getModelsForUser } = require('../services/modelResolver');
+const { buildInsights } = require('../services/usageInsights');
 
 const TZ = 'Australia/Sydney';
 
@@ -116,7 +118,7 @@ router.get('/summary', async (req, res) => {
 
     const { rows: dailyRows } = await pool.query(`
       SELECT
-        DATE_TRUNC('${dailyTrunc}', created_at AT TIME ZONE '${TZ}')::DATE AS bucket,
+        DATE_TRUNC('${dailyTrunc}', created_at AT TIME ZONE '${TZ}')::DATE::TEXT AS bucket,
         SUM(estimated_cost_usd)::FLOAT AS cost,
         SUM(input_tokens + output_tokens)::INT AS tokens,
         COUNT(*)::INT AS calls
@@ -174,6 +176,33 @@ router.get('/log', async (req, res) => {
   } catch (err) {
     console.error('[usage] log error:', err);
     res.status(500).json({ error: 'Failed to fetch usage log' });
+  }
+});
+
+// GET /api/usage/insights?period=...&from=&to=  Advice on which model each feature should use, from the same usage log.
+router.get('/insights', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const period = req.query.period || 'month';
+    const { from, to } = req.query;
+    const { clause, params } = periodClause(period, from, to, 2);
+    const { rows } = await pool.query(`
+      SELECT feature, model_id,
+        COUNT(*)::INT AS calls,
+        SUM(input_tokens)::INT AS input_tokens,
+        SUM(output_tokens)::INT AS output_tokens,
+        SUM(estimated_cost_usd)::FLOAT AS cost,
+        COALESCE(SUM(cache_read_tokens), 0)::INT AS cache_read,
+        COALESCE(SUM(cache_creation_tokens), 0)::INT AS cache_creation
+      FROM usage_logs
+      WHERE user_id = $1 ${clause}
+      GROUP BY feature, model_id
+    `, [userId, ...params]);
+    const models = await getModelsForUser(userId).catch(() => ({}));
+    res.json({ period, models: { light: models.light || null, standard: models.standard || null }, ...buildInsights(rows, models) });
+  } catch (err) {
+    console.error('[usage] insights error:', err);
+    res.status(500).json({ error: 'Failed to build usage advice' });
   }
 });
 

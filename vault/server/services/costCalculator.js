@@ -77,4 +77,9 @@ function calculateVideoCost(modelId) {
   return lookupVideoBySubstring(modelId);
 }
 
-module.exports = { calculateCost, calculateVideoCost, hasVideoPricing };
+/** True only when this exact model has a price on file; others are priced by a generic rate matched on the name. */
+function hasPricing(modelId) {
+  return PRICING[modelId] != null;
+}
+
+module.exports = { hasPricing, calculateCost, calculateVideoCost, hasVideoPricing };
