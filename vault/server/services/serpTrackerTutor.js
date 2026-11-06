@@ -42,7 +42,7 @@ const CATALOG = [
     does: 'One page of your own site per line. A later stage will check these every day for redirects, errors and a changed canonical address.',
     notes: 'Nothing checks them yet.' },
   { id: 'location-depth', label: 'Where Google is asked from', group: 'Set up',
-    does: 'Five boxes: where Google is asked from ("Australia" gives national results; a place such as "Bowen Hills,Queensland,Australia" gives local ones), how many results to request (10 to 100 in steps of 10), the language, the Google site searched (google.com.au is the Australian index) and your time zone. A line under them says in plain words the place, Google site and language that will really be used.',
+    does: 'Five boxes: where Google is asked from ("Australia" gives national results; a place such as "Bowen Hills,Queensland,Australia" gives local ones), how many results to request (10 to 100 in steps of 10), the language, the Google site searched (google.com.au is the Australian index) and your time zone. Under the place box, "Use my location" asks the browser where you are and fills in the matching place, and "Use Australia" goes back to national results. A line under them says in plain words the place, Google site and language that will really be used.',
     notes: 'Asking for more results costs more. Lookup uses the place, language and Google site set here. The place must match DataForSEO\'s list exactly or the line turns red. The time zone decides which day a result belongs to.' },
   { id: 'devices', label: 'Devices', group: 'Set up',
     does: 'Tick Desktop, Mobile or both. Google can show different results to each.',

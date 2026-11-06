@@ -37,6 +37,7 @@ function createRouter(pool, {
   env = process.env,
   now = () => new Date(),
   modules = [],
+  geocoder = null, // reverse place lookup for "Use my location" (services/geocode.js); null = that button says it is unavailable
   runsPerHour = 6,
   lookupsPerHour = 30,
 } = {}) {
@@ -95,6 +96,38 @@ function createRouter(pool, {
     } catch (err) {
       getLogger().warn({ code: err && err.code }, 'serp-tracker location check failed');
       res.json({ found: false, unavailable: true });
+    }
+  });
+
+  // "Use my location": the browser's position (in the body, never the URL, never logged) -> the suburb or city -> DataForSEO's matching place.
+  // { found, code, name, type } or { found: false, reason }
+  const pointLimiter = rateLimit({
+    windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
+    keyGenerator: (req) => `serp-point:${req.user?.id || req.ip}`,
+    message: { error: 'Too many location checks. Wait a minute.' },
+  });
+  router.post('/location-from-point', pointLimiter, async (req, res) => {
+    const lat = Number(req.body && req.body.lat);
+    const lng = Number(req.body && req.body.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return res.status(400).json({ error: 'That is not a point on the map.' });
+    if (!geocoder || !deps.hasCredentials(env)) return res.json({ found: false, reason: 'unavailable' });
+    try {
+      const r = await geocoder.reverse(lat, lng, { parts: true });
+      const p = r && r.result;
+      if (!p) return res.json({ found: false, reason: 'not_australia' });
+      const find = deps.findLocation || findLocation;
+      const tries = [];
+      if (p.suburb && p.state) tries.push(`${p.suburb},${p.state},Australia`);
+      if (p.city && p.state) tries.push(`${p.city},${p.state},Australia`);
+      if (p.suburb && p.city && p.state) tries.push(`${p.suburb},${p.city},${p.state},Australia`);
+      for (const t of tries) {
+        const loc = await find(t, { env });
+        if (loc) return res.json({ found: true, code: loc.code, name: loc.name, type: loc.type });
+      }
+      res.json({ found: false, reason: 'no_match', suburb: p.suburb || p.city || null });
+    } catch (err) {
+      getLogger().warn({ code: err && err.code }, 'serp-tracker location-from-point failed');
+      res.json({ found: false, reason: 'unavailable' });
     }
   });
 

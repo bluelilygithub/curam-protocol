@@ -38,8 +38,35 @@ function searchingAs(info, form) {
   return `"${form.locationName}" is not a place DataForSEO knows. Use the exact form, for example "Bowen Hills,Queensland,Australia". Searches will fail until it is fixed.`;
 }
 
+const REASONS = {
+  not_australia: 'That position is not in Australia, so it cannot be used.',
+  no_match: 'DataForSEO has no place for that spot. Type one yourself, or use Australia.',
+  unavailable: 'Your place could not be worked out just now.',
+};
+
 export default function SiteForm({ form, set, toggleDevice, errors, saving, onSave, isNew, savedAt, clients, clientId, onClientChange, clientName }) {
   const locInfo = useLocationCheck(form.locationName);
+  const [locating, setLocating] = useState(false);
+  const [locNote, setLocNote] = useState('');
+  const setPlace = (value) => set('locationName')({ target: { value } });
+  // the browser asks permission, then the server names the suburb and matches it to DataForSEO's list; nothing is saved until Save is pressed
+  const useMyLocation = () => {
+    setLocNote('');
+    if (!navigator.geolocation) { setLocNote('This browser cannot say where you are.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const res = await api.post('/api/serp-tracker/location-from-point', { lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const data = await res.json();
+        if (res.ok && data.found) setPlace(data.name);
+        else setLocNote(res.ok ? (REASONS[data.reason] || REASONS.unavailable) : (data.error || REASONS.unavailable));
+      } catch { setLocNote(REASONS.unavailable); }
+      setLocating(false);
+    }, (err) => {
+      setLocNote(err && err.code === 1 ? 'Location is blocked for this site in your browser. Allow it in the address bar, or type a place.' : 'Your position could not be read. Type a place instead.');
+      setLocating(false);
+    }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+  };
   return (
     <section className="rounded-2xl border p-6 space-y-4" style={CARD} aria-labelledby="serp-site-title">
       <h2 id="serp-site-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{isNew ? 'New site' : 'Your site'}</h2>
@@ -102,8 +129,19 @@ export default function SiteForm({ form, set, toggleDevice, errors, saving, onSa
         <div>
           <label htmlFor="serp-location" className={labelCls} style={muted}>Where Google is asked from</label>
           <Tooltip text='The place the search is made from. "Australia" gives national results; a city such as "Brisbane,Queensland,Australia" gives local ones. Lookups for this site use it.'>
-            <input id="serp-location" value={form.locationName} onChange={set('locationName')} className={input} style={FIELD} />
+            <input id="serp-location" value={form.locationName} onChange={set('locationName')} placeholder="Australia" className={input} style={FIELD} />
           </Tooltip>
+          <div className="flex gap-3 mt-1.5">
+            <Tooltip text="Asks your browser where you are, finds the suburb and fills the box with DataForSEO's matching place. Your position is used once to name the suburb and is not stored. Nothing changes until you press Save.">
+              <button type="button" onClick={useMyLocation} disabled={locating} className="text-xs underline transition-opacity duration-200 hover:opacity-70 disabled:opacity-50" style={{ color: 'var(--color-primary)' }}>
+                {locating ? 'Finding you…' : 'Use my location'}
+              </button>
+            </Tooltip>
+            <Tooltip text="Goes back to national results for the whole of Australia.">
+              <button type="button" onClick={() => setPlace('Australia')} className="text-xs underline transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Use Australia</button>
+            </Tooltip>
+          </div>
+          {locNote && <p role="alert" className="text-xs mt-1" style={{ color: '#ef4444' }}>{locNote}</p>}
         </div>
         <div>
           <label htmlFor="serp-depth" className={labelCls} style={muted}>Results to request (10 to 100)</label>

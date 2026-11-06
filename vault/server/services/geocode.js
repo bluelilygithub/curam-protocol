@@ -72,6 +72,17 @@ function mapReverse(row) {
   return label ? { label, lat, lng } : null;
 }
 
+/** A reverse lookup row -> the named parts of the place { suburb, city, state }, for matching it to another service's place list. Null outside Australia or if unknown. */
+function mapReverseParts(row) {
+  if (!row || typeof row !== 'object' || row.error) return null;
+  const a = row.address ?? {};
+  if (a.country_code && String(a.country_code).toLowerCase() !== 'au') return null;
+  const suburb = [a.suburb, a.city_district, a.town, a.village, a.hamlet, a.locality].find(Boolean) ?? null;
+  const city = [a.city, a.municipality].find(Boolean) ?? null;
+  const state = a.state ? String(a.state) : null;
+  return suburb || city ? { suburb, city, state } : null;
+}
+
 /** Nominatim rows -> what the app needs. Rows outside Australia or without usable coordinates are dropped. */
 function mapResults(rows) {
   const out = [];
@@ -154,7 +165,7 @@ function createGeocoder(o = {}) {
   }
 
   /** Nominatim's answer for one point, through the same one-a-second queue as searches. */
-  async function reverseUpstream(lat, lng) {
+  async function reverseUpstream(lat, lng, parts = false) {
     const wait = lastUpstreamAt + MIN_GAP_MS - now();
     if (wait > 0) await sleep(wait);
     lastUpstreamAt = now();
@@ -170,17 +181,17 @@ function createGeocoder(o = {}) {
     if (!res.ok) throw new GeocodeError('unavailable', 'The place lookup service could not answer that.');
     let row;
     try { row = await res.json(); } catch { throw new GeocodeError('unavailable', 'The place lookup service sent something unreadable.'); }
-    return mapReverse(row);
+    return parts ? mapReverseParts(row) : mapReverse(row);
   }
 
   return {
     stats, attribution: ATTRIBUTION,
     /** The name of the place at a point (a deliberate tap or pin drop). `result` is null when nothing is known there. Memory-only cache. */
-    async reverse(lat, lng) {
+    async reverse(lat, lng, { parts = false } = {}) { // parts: the named parts { suburb, city, state } instead of the short label (SERP Tracker place check)
       if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
         throw new GeocodeError('invalid', 'That is not a point on the map.');
       }
-      const key = `rev:${lat.toFixed(4)},${lng.toFixed(4)}`; // about 11 m: the same spot twice is one lookup
+      const key = `${parts ? 'revp' : 'rev'}:${lat.toFixed(4)},${lng.toFixed(4)}`; // about 11 m: the same spot twice is one lookup
       const m = memory.get(key);
       if (m && now() - m.at < ADDRESS_TTL_MS) { stats.cacheHits += 1; return { result: m.results, cached: true, attribution: ATTRIBUTION }; }
       if (pending >= MAX_PENDING) throw new GeocodeError('busy', 'Lots of people are looking places up right now. Try again in a few seconds.');
@@ -188,7 +199,7 @@ function createGeocoder(o = {}) {
       const run = chain.then(async () => {
         const again = memory.get(key);
         if (again && now() - again.at < ADDRESS_TTL_MS) { stats.cacheHits += 1; return { result: again.results, cached: true, attribution: ATTRIBUTION }; }
-        const result = await reverseUpstream(lat, lng);
+        const result = await reverseUpstream(lat, lng, parts);
         memory.set(key, { at: now(), results: result });
         if (memory.size > MAX_MEMORY) { for (const k of memory.keys()) { memory.delete(k); if (memory.size <= MAX_MEMORY * 0.8) break; } }
         return { result, cached: false, attribution: ATTRIBUTION };
@@ -238,4 +249,4 @@ function pgStore(pool) {
   };
 }
 
-module.exports = { createGeocoder, pgStore, normalizeQuery, isAddressQuery, mapResults, mapReverse, userAgent, GeocodeError, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION, CACHE_TTL_MS };
+module.exports = { createGeocoder, pgStore, normalizeQuery, isAddressQuery, mapResults, mapReverse, mapReverseParts, userAgent, GeocodeError, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION, CACHE_TTL_MS };
