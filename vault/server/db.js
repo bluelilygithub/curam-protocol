@@ -1297,6 +1297,26 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_api_costs_date ON serp_api_costs ("costDate")`);
+    // SERP Tracker Lookup: one saved ad-hoc search per row (the latest 50 per person are kept). "rawGz" is DataForSEO's answer gzipped; the
+    // daily clean-up empties it after 90 days (the parsed "summaryJson" stays). Deleting goes through the shared recycle bin (type serp-lookup).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS serp_lookups (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "siteId"       INTEGER REFERENCES serp_sites(id) ON DELETE SET NULL,
+        keyword        TEXT NOT NULL,
+        "locationName" TEXT NOT NULL,
+        "languageCode" TEXT NOT NULL,
+        device         TEXT NOT NULL,
+        depth          INTEGER NOT NULL,
+        domain         TEXT,
+        "costUsd"      NUMERIC(12,6) NOT NULL DEFAULT 0,
+        "summaryJson"  JSONB NOT NULL,
+        "rawGz"        BYTEA,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_lookups_user ON serp_lookups ("userId", "createdAt" DESC)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS topic_research_source_weights (
         "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

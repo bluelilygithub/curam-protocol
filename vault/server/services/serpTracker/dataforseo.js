@@ -149,4 +149,32 @@ async function waitForSerpTask(taskId, { intervalMs = 10000, maxMs = 60 * 60 * 1
   }
 }
 
-module.exports = { request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };
+// --- Live mode, for the ad-hoc Lookup (not the daily run): ONE call, the answer comes back at once, and it costs more per search than the
+// Standard Queue. POST /v3/serp/google/organic/live/advanced takes exactly one task. Checked against the docs on 2026-11-06; the docs pages
+// read did not say what a successful live task's status code is, so 20000 is assumed (any other code is shown as a failure with DataForSEO's
+// own message, never as an empty answer).
+/**
+ * @param task { keyword, locationName, languageCode, device, depth, loadAiOverview }
+ * @returns {{ costUsd, result, raw }}  (result = tasks[0].result[0])
+ */
+async function liveSerp(task, opts = {}) {
+  const body = [{
+    keyword: task.keyword,
+    location_name: task.locationName,
+    language_code: task.languageCode,
+    device: task.device,
+    depth: task.depth,
+    ...(task.loadAiOverview ? { load_async_ai_overview: true } : {}),
+  }];
+  const json = await request({ ...opts, method: 'POST', path: '/v3/serp/google/organic/live/advanced', body });
+  const t = json && json.tasks && json.tasks[0];
+  if (!t) throw new DataForSeoError('DataForSEO sent no task in its answer.', { code: 'BAD_BODY' });
+  if (t.status_code !== TASK_OK) {
+    throw new DataForSeoError(`DataForSEO could not run the search (status ${t.status_code}: ${String(t.status_message || '').slice(0, 200)}).`, { code: 'TASK_FAILED' });
+  }
+  const result = t.result && t.result[0];
+  if (!result) throw new DataForSeoError('DataForSEO answered with no results.', { code: 'BAD_BODY' });
+  return { costUsd: Number(t.cost) || 0, result, raw: json };
+}
+
+module.exports = { request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, liveSerp, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };

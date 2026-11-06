@@ -9,14 +9,20 @@ import Tooltip from '../components/Tooltip';
 import EmptyState from '../components/EmptyState';
 import Skeleton from '../components/Skeleton';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { profileToForm, formToProfile } from './serpTracker/profileForm.mjs';
+import LookupPanel from './serpTracker/LookupPanel';
+import SerpTrackerTutorChat from './serpTracker/SerpTrackerTutorChat';
+import { SERP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './serpTracker/serpTrackerTools.mjs';
+import { costText } from './serpTracker/lookupHelpers.mjs';
 
-// SERP Tracker, stage 1 (docs/serp-tracker.md): set up the site to track, see whether DataForSEO is connected and what it has cost,
-// run the daily check by hand, and read past runs. Rankings, Search Console history and the weekly report arrive in later stages.
+// SERP Tracker (docs/serp-tracker.md): three tabs. Site setup (the site, searches and competitors, and whether DataForSEO is connected and what it
+// has cost), Lookup (a search on Google right now, saved and reopenable), Runs (the daily checks). Rankings history, Search Console and the
+// weekly report arrive in later stages.
 
 const FIELD = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 const CARD = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
-const usd = (n) => (n == null ? '—' : `US$${Number(n).toFixed(2)}`);
+const usd = (n) => (n == null ? '—' : costText(n));
 const when = (iso) => (iso ? new Date(iso).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
 function StatusDot({ status }) {
@@ -40,6 +46,28 @@ export default function SerpTrackerPage() {
   const [form, setForm] = useState(() => profileToForm(null));
   const [errors, setErrors] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState('setup');
+  const info = useToolInfoModal('vault_serp_tracker_info_seen');
+
+  // spend changes whenever a lookup is made: re-read just the status
+  const refreshStatus = useCallback(async () => {
+    try {
+      const res = await api.get('/api/serp-tracker/status');
+      const data = await res.json();
+      if (res.ok) setStatus(data);
+    } catch { /* the figures just stay as they were */ }
+  }, []);
+
+  // The guide's Open buttons: show the tab, then scroll to the part of the page.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    if (!target) return;
+    setTab(target.tool);
+    setTimeout(() => {
+      const el = document.querySelector('[data-guide="' + id + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -108,18 +136,42 @@ export default function SerpTrackerPage() {
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
       <div className="w-full max-w-[1700px] mx-auto p-4 sm:p-6 space-y-6">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>SERP Tracker</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>SERP Tracker</h1>
+            <Tooltip text="How SERP Tracker works, what it costs, and what it cannot do yet.">
+              <button type="button" onClick={info.open} aria-label="How SERP Tracker works"
+                className="transition-opacity duration-200 hover:opacity-60"
+                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                {getIcon('info', { size: 16 })}
+              </button>
+            </Tooltip>
+          </div>
           <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Tracks where your site ranks on Google, every day, and keeps the history. Set-up stage: the daily check currently confirms DataForSEO is connected and logs its cost. Rankings come next.
+            See where your site shows on Google. Look up any search now and keep the result. Collecting your rankings every day is the next stage.
           </p>
         </div>
 
-        {loading ? <Skeleton lines={5} label="Loading SERP Tracker" /> : (
+        <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }} role="tablist" aria-label="SERP Tracker sections">
+          {SERP_TOOLS.map((t) => (
+            <Tooltip key={t.id} text={TOOL_TIPS[t.id]}>
+              <button type="button" role="tab" aria-selected={tab === t.id} data-guide={t.id} onClick={() => setTab(t.id)}
+                className="px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-all duration-200 hover:opacity-70 flex items-center gap-2"
+                style={{ borderColor: tab === t.id ? 'var(--color-primary)' : 'transparent', color: tab === t.id ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                {getIcon(t.icon, { size: 14 })} {t.label}
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+
+        {loading ? <Skeleton lines={5} label="Loading SERP Tracker" /> : tab === 'lookup' ? (
+          <LookupPanel status={status} siteSaved={Boolean(site)} onSpendChanged={refreshStatus} />
+        ) : (
           <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-6">
+            {tab === 'setup' && (
             <section className="rounded-2xl border p-6 space-y-4" style={CARD} aria-labelledby="serp-site-title">
               <h2 id="serp-site-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Your site</h2>
 
-              <div>
+              <div data-guide="site-address">
                 <label htmlFor="serp-domain" className={labelCls} style={{ color: 'var(--color-muted)' }}>Site address</label>
                 <Tooltip text="The site you want to track, for example www.wiwc.com.au. Any www or https:// is tidied up for you.">
                   <input id="serp-domain" value={form.domain} onChange={set('domain')} placeholder="www.example.com.au"
@@ -127,7 +179,7 @@ export default function SerpTrackerPage() {
                 </Tooltip>
               </div>
 
-              <div>
+              <div data-guide="brand-names">
                 <label htmlFor="serp-brand" className={labelCls} style={{ color: 'var(--color-muted)' }}>Brand names (one per line)</label>
                 <Tooltip text="Words people type when they are looking for you by name. Used later to split searches into branded and non-branded.">
                   <textarea id="serp-brand" rows={3} value={form.brandTermsText} onChange={set('brandTermsText')}
@@ -135,7 +187,7 @@ export default function SerpTrackerPage() {
                 </Tooltip>
               </div>
 
-              <div>
+              <div data-guide="keywords">
                 <label htmlFor="serp-keywords" className={labelCls} style={{ color: 'var(--color-muted)' }}>Keywords to track (one per line; add the page you want to rank after a | )</label>
                 <Tooltip text="One search per line, for example: walk in wine cabinets | https://www.example.com.au/cabinets/ . The page after the bar is optional.">
                   <textarea id="serp-keywords" rows={8} value={form.keywordsText} onChange={set('keywordsText')}
@@ -143,7 +195,7 @@ export default function SerpTrackerPage() {
                 </Tooltip>
               </div>
 
-              <div>
+              <div data-guide="competitors">
                 <label htmlFor="serp-competitors" className={labelCls} style={{ color: 'var(--color-muted)' }}>Competitors (one per line; pages to watch after a | , separated by commas)</label>
                 <Tooltip text="A competitor's site, then optionally the pages whose wording you want saved each week, for example: rival.com.au | https://rival.com.au/page-a/, https://rival.com.au/page-b/">
                   <textarea id="serp-competitors" rows={5} value={form.competitorsText} onChange={set('competitorsText')}
@@ -151,7 +203,7 @@ export default function SerpTrackerPage() {
                 </Tooltip>
               </div>
 
-              <div>
+              <div data-guide="health-urls">
                 <label htmlFor="serp-health" className={labelCls} style={{ color: 'var(--color-muted)' }}>Pages of yours to health-check each day (one per line)</label>
                 <Tooltip text="Pages checked every day for redirects, errors and changed canonical addresses, so a ranking drop can be read alongside them.">
                   <textarea id="serp-health" rows={3} value={form.healthText} onChange={set('healthText')}
@@ -159,7 +211,7 @@ export default function SerpTrackerPage() {
                 </Tooltip>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" data-guide="location-depth">
                 <div>
                   <label htmlFor="serp-location" className={labelCls} style={{ color: 'var(--color-muted)' }}>Where Google is asked from</label>
                   <Tooltip text='The place the search is made from. "Australia" gives national results; a city such as "Brisbane,Queensland,Australia" gives local ones.'>
@@ -188,7 +240,7 @@ export default function SerpTrackerPage() {
                 </div>
               </div>
 
-              <fieldset>
+              <fieldset data-guide="devices">
                 <legend className={labelCls} style={{ color: 'var(--color-muted)' }}>Devices</legend>
                 <div className="flex gap-4">
                   {['desktop', 'mobile'].map((d) => (
@@ -208,7 +260,7 @@ export default function SerpTrackerPage() {
 
               <div className="flex items-center gap-3">
                 <Tooltip text="Saves these details. Nothing is collected or charged by saving.">
-                  <button type="button" onClick={save} disabled={saving}
+                  <button type="button" onClick={save} disabled={saving} data-guide="save-site"
                     className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
                     style={{ background: 'var(--color-primary)', color: '#fff' }}>
                     {saving ? 'Saving…' : 'Save site details'}
@@ -217,9 +269,10 @@ export default function SerpTrackerPage() {
                 {site && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saved {when(site.updatedAt)}</span>}
               </div>
             </section>
+            )}
 
-            <div className="space-y-6">
-              <section className="rounded-2xl border p-6 space-y-3" style={CARD} aria-labelledby="serp-conn-title">
+            {tab === 'setup' && (
+              <section className="rounded-2xl border p-6 space-y-3" style={CARD} aria-labelledby="serp-conn-title" data-guide="spending">
                 <h2 id="serp-conn-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>DataForSEO and spending</h2>
                 {status?.dataForSeoConfigured ? (
                   <p className="text-sm" style={{ color: 'var(--color-text)' }}>Connected: the login and password are set on the server.</p>
@@ -242,12 +295,14 @@ export default function SerpTrackerPage() {
                 </dl>
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Spending counts every person using the workspace's DataForSEO account. The limit stops ranking collection when it would be passed; it is set by MAX_MONTHLY_SPEND_USD on the server (default US$5).</p>
               </section>
+            )}
 
-              <section className="rounded-2xl border p-6 space-y-4" style={CARD} aria-labelledby="serp-runs-title">
+            {tab === 'runs' && (
+              <section className="rounded-2xl border p-6 space-y-4 xl:col-span-2" style={CARD} aria-labelledby="serp-runs-title">
                 <div className="flex items-center justify-between gap-3">
                   <h2 id="serp-runs-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Runs</h2>
                   <Tooltip text="Runs today's check now instead of waiting for 6:00 am Brisbane time. At this stage it only checks the balance, which is free.">
-                    <button type="button" onClick={runNow} disabled={!site || !status?.dataForSeoConfigured}
+                    <button type="button" onClick={runNow} disabled={!site || !status?.dataForSeoConfigured} data-guide="run-now"
                       className="px-3.5 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
                       style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                       {getIcon('play', { size: 14 })} Run now
@@ -258,7 +313,7 @@ export default function SerpTrackerPage() {
                 {runs.length === 0 ? (
                   <EmptyState icon="line-chart" title="No runs yet" body={site ? 'Press Run now to check the connection, or wait for the first daily run.' : 'Save your site details first, then the daily run can start.'} />
                 ) : (
-                  <ul className="space-y-3">
+                  <ul className="space-y-3" data-guide="run-list">
                     {runs.map((r) => (
                       <li key={r.id} className="rounded-xl border p-4 space-y-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" style={{ color: 'var(--color-text)' }}>
@@ -281,10 +336,23 @@ export default function SerpTrackerPage() {
                   </ul>
                 )}
               </section>
-            </div>
+            )}
           </div>
         )}
       </div>
+
+      {info.show && (
+        <ToolInfoModal title="How SERP Tracker works" onClose={info.close}>
+          {HOW_IT_WORKS.map(([heading, text]) => (
+            <div key={heading}>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{heading}</h3>
+              <p className="text-sm leading-relaxed mt-1" style={{ color: 'var(--color-muted)' }}>{text}</p>
+            </div>
+          ))}
+        </ToolInfoModal>
+      )}
+
+      <SerpTrackerTutorChat currentTool={tab} onOpenTool={openToolById} />
     </div>
   );
 }

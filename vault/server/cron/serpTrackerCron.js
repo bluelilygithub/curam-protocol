@@ -30,6 +30,7 @@ async function runAllSites({ pool, loadAllSites, runSite, mayUse, deps, modules 
 }
 
 let task = null;
+let purgeTask = null;
 
 /** Real dependencies, loaded only when the job actually starts. */
 function realDeps() {
@@ -61,4 +62,15 @@ function startSerpTrackerCron() {
   console.log('[serp-tracker] daily run scheduled at 20:00 UTC (6:00 am Brisbane)');
 }
 
-module.exports = { runAllSites, realDeps, startSerpTrackerCron };
+/** Daily 03:40: empty the raw DataForSEO answers kept over 90 days (the parsed lookups stay). Sends nothing, so it runs everywhere. */
+function startSerpTrackerPurge() {
+  if (purgeTask) return;
+  purgeTask = cron.schedule('40 3 * * *', () => {
+    require('../services/serpTracker/lookups').purgeRaw(require('../db').pool).then((n) => {
+      if (n) console.log(`[serp-tracker] cleared ${n} raw answers older than 90 days`);
+    }).catch((err) => console.warn('[serp-tracker] purge failed:', err.message));
+  });
+  console.log('[serp-tracker] 90-day raw answer clean-up scheduled daily at 03:40');
+}
+
+module.exports = { runAllSites, realDeps, startSerpTrackerCron, startSerpTrackerPurge };

@@ -49,3 +49,21 @@ Built from the owner's "SERP Tracker, Phase 1 Build Brief" (6 Nov 2026) as a **n
 - No guide chat, compass tour or (i) box yet (Vault's new-tool convention): deferred until there is data worth explaining. Tooltips are on every control.
 - Voice input (mic) is not on the text fields yet.
 - Not verified: the balance call against the real DataForSEO account, and the page in a browser at phone width.
+
+## Lookup (built 6 Nov 2026, between stages 2 and 3)
+
+A **Lookup** tab on the page: type any search, choose Desktop or Mobile, how many results (top 10, 20, 50 or 100) and whether to include Google's AI summary, and Vault asks DataForSEO's **Live** mode (`POST /v3/serp/google/organic/live/advanced`, one task per call, answered at once, dearer per search than the Standard Queue the daily run will use). The answer is parsed (`serpParse.js`) and saved. It shows where the saved site is (or `not_in_top_N`, never 0), how many non-organic boxes sit above it, whether an AI Overview appears and whether it names the site or a configured competitor, the top 10 and the order of everything on the page.
+
+**Rules:** the cost is logged **before** parsing, because DataForSEO charges whether or not the answer can be read; a result with no organic results is a failed search (502, cost still shown), never "not ranked"; the monthly cap (`capStatus`, whole workspace) refuses the search with 402 before DataForSEO is called; no credentials is 503; a DataForSEO refusal (for example an unverified account) shows DataForSEO's own message and saves nothing. 30 lookups an hour per person.
+
+**Saved lookups** (`serp_lookups`, `lookups.js`): the latest 50 per person are kept (older ones tidied automatically). The raw DataForSEO answer is stored gzipped in `"rawGz"` and emptied after 90 days by a daily 03:40 job (`startSerpTrackerPurge`, runs everywhere, sends nothing); the parsed `"summaryJson"` stays. **Select and delete:** tick any lookups, or Select all, then Delete selected / Delete all, each with an inline Yes / No. `DELETE /api/serp-tracker/lookups` takes `{ ids: [...] }` or `{ all: true }`, moves each row to the shared **recycle bin** (type `serp-lookup`, 30 days, in the same transaction as the delete) and the message offers Undo. The bin copy leaves out the raw answer (big, and fetching it again costs money), so a restored lookup has its readable result but no raw. Restore is also in Settings, Recycle bin.
+
+**Routes added:** `POST|GET|DELETE /lookups`, `GET /lookups/:id`, all behind the flag and filtered by `"userId"`.
+
+**Not verified:** a real Live answer. The account was unverified (403) when this was built, so the Live endpoint, its success status code (assumed 20000) and the AI Overview `references` field names are checked only against the docs and hand-made fixtures (`serpParse.test.js`). Run one lookup on a verified account and compare the saved result with Google before trusting the AI Overview part.
+
+## Help on the page
+
+An (i) box ("How SERP Tracker works", opens once on first visit, `vault_serp_tracker_info_seen`), a tooltip on every control, and the round **SERP Tracker guide** (`guideId` `serp-tracker`, `POST /api/serp-tracker-tutor`, `server/services/serpTrackerTutor.js` on `guideCore.js`, wrapper `client/src/pages/serpTracker/SerpTrackerTutorChat.jsx`). The page and the guide share `client/src/pages/serpTracker/serpTrackerTools.mjs`; `node server/services/serpTrackerTutor.test.js` fails if they drift. The guide sees no site, search, result or cost, and says plainly that daily collection, history, reports and alerts are not built yet. **When a tab or control changes, update `serpTrackerTools.mjs` and the `CATALOG` together.** Not yet done: the compass tour and the microphone on the text boxes.
+
+**More tests:** `serpParse.test.js`, `client/src/pages/serpTracker/lookupHelpers.test.mjs`, and the Lookup section of `serpTrackerRouter.db.test.js` (ownership of list/open/delete/delete-all, validation, spending cap, charged-but-unreadable answer, DataForSEO refusal, bulk delete with bin and Undo, the 50 limit, 90-day raw clean-up, rate limit; the delete-all ownership filter was mutation-checked).

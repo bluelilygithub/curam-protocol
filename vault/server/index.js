@@ -258,6 +258,7 @@ app.use('/api/domains-tutor', requireFeature('domains'), aiLimiter, require('./r
 app.use('/api/dns-lookup-tutor',requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
 app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)
 app.use('/api/topic-research', requireFeature('topicResearch'), require('./routes/topicResearch'));
+app.use('/api/serp-tracker-tutor', requireFeature('serpTracker'), aiLimiter, require('./routes/serpTrackerTutor')); // the SERP Tracker guide chat (sees no site, searches, results or costs)
 app.use('/api/serp-tracker', requireFeature('serpTracker'), require('./routes/serpTracker')); // daily Google rankings + Search Console history (docs/serp-tracker.md)
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
@@ -316,7 +317,7 @@ const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startYoutubeFollows } = require('./cron/youtubeFollowsCron');
 const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
 const { startTopicResearchCron, startTopicResearchPurge } = require('./cron/topicResearchCron');
-const { startSerpTrackerCron } = require('./cron/serpTrackerCron');
+const { startSerpTrackerCron, startSerpTrackerPurge } = require('./cron/serpTrackerCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -342,6 +343,7 @@ async function start() {
   startYoutubeFollows(); // looks for new videos from followed YouTube channels/searches (cron-locked, quota-counted, sends no email)
   startBurnerMailPurge(); // removes burner addresses a day after they expire; sends nothing, so it runs everywhere
   startTopicResearchPurge(); // clears Topic Research page text kept over 30 days; sends nothing, so it runs everywhere
+  startSerpTrackerPurge(); // empties SERP Tracker raw answers kept over 90 days; sends nothing, so it runs everywhere
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');

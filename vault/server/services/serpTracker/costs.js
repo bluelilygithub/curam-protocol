@@ -36,4 +36,11 @@ async function monthSpend(pool, localDateStr, monthsBack = 0) {
   return Number(rows[0].spent);
 }
 
-module.exports = { logCost, monthSpend, monthBounds, monthlyCapUsd, DEFAULT_CAP_USD };
+/** Has this month's spend reached the cap? `over` is true when spent >= cap, so a cap of 0 blocks everything. Nothing is posted while it is true. */
+async function capStatus(pool, localDateStr, env = process.env) {
+  const cap = monthlyCapUsd(env);
+  const spent = await monthSpend(pool, localDateStr, 0);
+  return { cap, spent, over: spent >= cap };
+}
+
+module.exports = { logCost, monthSpend, monthBounds, monthlyCapUsd, capStatus, DEFAULT_CAP_USD };

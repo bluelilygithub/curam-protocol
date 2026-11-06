@@ -135,6 +135,140 @@ function serve(router) {
     assert.equal((await lcall(A)).status, 200);
     assert.equal((await lcall(A)).status, 429);
 
+    // ================= Lookup =================
+    const bin = require('../services/recycleBin');
+    require('../services/recycleBin/adapters');
+    const { saveLookup, purgeRaw } = require('../services/serpTracker/lookups');
+    const { DataForSeoError } = require('../services/serpTracker/dataforseo');
+    const organic = (g, a, url, domain) => ({ type: 'organic', rank_group: g, rank_absolute: a, url, domain, title: 't' });
+    const FAKE_RESULT = { keyword: 'walk in wine cabinets', items: [
+      { type: 'ai_overview', rank_group: 1, rank_absolute: 1, references: [{ url: 'https://www.wiwc.com.au/cabinets/', domain: 'www.wiwc.com.au', title: 'x' }] },
+      organic(1, 2, 'https://rival.com.au/', 'rival.com.au'), organic(2, 3, 'https://www.wiwc.com.au/cabinets/', 'www.wiwc.com.au'),
+    ] };
+    let liveCalls = 0;
+    let liveImpl = async () => ({ costUsd: 0.0123, result: FAKE_RESULT, raw: { tasks: [{ result: [FAKE_RESULT] }] } });
+    const lsrv = await serve(createRouter(pool, { deps: okDeps, live: async (...a) => { liveCalls++; return liveImpl(...a); }, env: { MAX_MONTHLY_SPEND_USD: '50' }, now: () => NOW, lookupsPerHour: 500 }));
+    servers.push(lsrv);
+    const lbase = `http://127.0.0.1:${lsrv.address().port}/api/serp-tracker`;
+    const lcallJson = async (user, method, path, body) => {
+      const r2 = await fetch(lbase + path, { method, headers: { 'x-test-user': String(user), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      return { status: r2.status, body: await r2.json() };
+    };
+
+    // validation: nothing is searched or charged
+    assert.equal((await lcallJson(A, 'POST', '/lookups', { keyword: '   ' })).status, 400);
+    assert.equal((await lcallJson(A, 'POST', '/lookups', { keyword: 'x', depth: 15 })).status, 400);
+    assert.equal(liveCalls, 0);
+
+    // a lookup: parsed with A's own domain, saved, cost logged
+    r = await lcallJson(A, 'POST', '/lookups', { keyword: 'walk in wine cabinets', device: 'mobile', depth: 20 });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const look1 = r.body.lookup;
+    assert.equal(look1.myPosition, 2);
+    assert.equal(look1.myStatus, 'ranked');
+    assert.equal(look1.device, 'mobile');
+    assert.equal(look1.depth, 20);
+    assert.equal(look1.costUsd, 0.0123);
+    assert.equal(look1.summary.aiOverview.mineCited, true);
+    assert.equal(look1.summary.mine.itemsAboveMe, 1);
+    assert.equal(look1.rawKept, true);
+    const lcost = (await pool.query(`SELECT endpoint, "costUsd"::float AS c FROM serp_api_costs WHERE "userId" = $1 AND endpoint LIKE '%live/advanced%'`, [A])).rows;
+    assert.equal(lcost.length, 1);
+    assert.equal(lcost[0].c, 0.0123);
+    assert.match(lcost[0].endpoint, /depth=20 mobile/);
+
+    // another person sees none of it and cannot open or delete it
+    assert.deepEqual((await lcallJson(B, 'GET', '/lookups')).body.lookups, []);
+    assert.equal((await lcallJson(B, 'GET', `/lookups/${look1.id}`)).status, 404);
+    assert.equal((await lcallJson(B, 'DELETE', '/lookups', { ids: [look1.id] })).body.deleted, 0);
+    assert.equal((await lcallJson(B, 'DELETE', '/lookups', { all: true })).body.deleted, 0);
+    assert.equal((await lcallJson(A, 'GET', `/lookups/${look1.id}`)).status, 200);
+    assert.equal((await lcallJson(A, 'GET', '/lookups')).body.lookups.length, 1);
+
+    // an answer that cannot be read is still CHARGED, so it is logged, and nothing is saved
+    liveImpl = async () => ({ costUsd: 0.5, result: { keyword: 'k', items: [] }, raw: {} });
+    r = await lcallJson(A, 'POST', '/lookups', { keyword: 'empty serp' });
+    assert.equal(r.status, 502);
+    assert.match(r.body.error, /no organic results/);
+    assert.match(r.body.error, /charged: US\$0\.5/);
+    assert.equal((await lcallJson(A, 'GET', '/lookups')).body.lookups.length, 1);
+    assert.equal(Number((await pool.query(`SELECT COUNT(*) FROM serp_api_costs WHERE "userId" = $1 AND "costUsd" = 0.5`, [A])).rows[0].count), 1);
+
+    // DataForSEO refusing (account not verified): its reason is shown, nothing saved, nothing charged
+    liveImpl = async () => { throw new DataForSeoError('DataForSEO answered HTTP 403. It said: Please verify your account before using the API.', { status: 403, code: 'HTTP' }); };
+    r = await lcallJson(A, 'POST', '/lookups', { keyword: 'refused' });
+    assert.equal(r.status, 502);
+    assert.match(r.body.error, /verify your account/);
+    assert.equal((await lcallJson(A, 'GET', '/lookups')).body.lookups.length, 1);
+    liveImpl = async () => ({ costUsd: 0.0123, result: FAKE_RESULT, raw: { tasks: [] } });
+
+    // not connected, and the spending cap: neither calls DataForSEO
+    const before = liveCalls;
+    const off = await serve(createRouter(pool, { deps: { ...okDeps, hasCredentials: () => false }, live: async () => { liveCalls++; return liveImpl(); }, now: () => NOW }));
+    servers.push(off);
+    assert.equal((await fetch(`http://127.0.0.1:${off.address().port}/api/serp-tracker/lookups`, { method: 'POST', headers: { 'x-test-user': String(A), 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: 'x' }) })).status, 503);
+    const capped = await serve(createRouter(pool, { deps: okDeps, live: async () => { liveCalls++; return liveImpl(); }, env: { MAX_MONTHLY_SPEND_USD: '1' }, now: () => NOW }));
+    servers.push(capped);
+    const capRes = await fetch(`http://127.0.0.1:${capped.address().port}/api/serp-tracker/lookups`, { method: 'POST', headers: { 'x-test-user': String(A), 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: 'x' }) });
+    assert.equal(capRes.status, 402);
+    assert.match((await capRes.json()).error, /spending limit \(US\$1\.00\)/);
+    assert.equal(liveCalls, before);
+
+    // several lookups; delete SOME (to the recycle bin), the rest stay
+    const made = [look1.id];
+    for (const kw of ['second search', 'third search']) made.push((await lcallJson(A, 'POST', '/lookups', { keyword: kw })).body.lookup.id);
+    assert.equal((await lcallJson(A, 'GET', '/lookups')).body.lookups.length, 3);
+    assert.equal((await lcallJson(A, 'DELETE', '/lookups', { ids: [] })).status, 400);
+    assert.equal((await lcallJson(A, 'DELETE', '/lookups', {})).status, 400);
+    assert.equal((await lcallJson(A, 'DELETE', '/lookups', { ids: ['x'] })).status, 400);
+    r = await lcallJson(A, 'DELETE', '/lookups', { ids: [made[0], made[1]] });
+    assert.equal(r.body.deleted, 2);
+    assert.equal(r.body.binIds.length, 2);
+    const left = (await lcallJson(A, 'GET', '/lookups')).body.lookups;
+    assert.deepEqual(left.map((l) => l.id), [made[2]]);
+    assert.equal((await bin.list(A, { types: ['serp-lookup'] })).length, 2);
+    assert.equal((await bin.list(B, { types: ['serp-lookup'] })).length, 0); // the bin is private too
+
+    // Undo: the lookup comes back with its parsed summary (not the raw answer, which is never put in the bin)
+    await bin.restoreItem(A, r.body.binIds[0]);
+    const back = (await lcallJson(A, 'GET', '/lookups')).body.lookups;
+    assert.equal(back.length, 2);
+    const restored = back.find((l) => l.id === made[0] || l.id === made[1]);
+    assert.ok(restored);
+    assert.equal(restored.rawKept, false);
+    assert.equal((await lcallJson(A, 'GET', `/lookups/${restored.id}`)).body.lookup.summary.top10.length, 2);
+
+    // delete ALL of one person's; the other person's are untouched
+    const bId = (await lcallJson(B, 'POST', '/lookups', { keyword: 'bs search' })).body.lookup.id;
+    r = await lcallJson(A, 'DELETE', '/lookups', { all: true });
+    assert.equal(r.body.deleted, 2);
+    assert.deepEqual((await lcallJson(A, 'GET', '/lookups')).body.lookups, []);
+    assert.deepEqual((await lcallJson(B, 'GET', '/lookups')).body.lookups.map((l) => l.id), [bId]);
+    assert.equal((await lcallJson(B, 'GET', '/lookups')).body.lookups[0].myStatus, null); // B has no site, so no "mine"
+
+    // only the latest 50 are kept
+    for (let i = 0; i < 52; i++) await saveLookup(pool, { userId: A, keyword: `k${i}`, locationName: 'Australia', languageCode: 'en', device: 'desktop', depth: 10, costUsd: 0, summary: { top10: [] } });
+    const fifty = (await lcallJson(A, 'GET', '/lookups')).body.lookups;
+    assert.equal(fifty.length, 50);
+    assert.equal(fifty[0].keyword, 'k51');
+    assert.equal(Number((await pool.query('SELECT COUNT(*) FROM serp_lookups WHERE "userId" = $1', [A])).rows[0].count), 50);
+
+    // raw answers are emptied after 90 days; the parsed lookup stays
+    const raw1 = await saveLookup(pool, { userId: B, keyword: 'old', locationName: 'Australia', languageCode: 'en', device: 'desktop', depth: 10, costUsd: 0, summary: { top10: [] }, raw: { a: 1 } });
+    await pool.query(`UPDATE serp_lookups SET "createdAt" = '2026-07-01T00:00:00Z' WHERE id = $1`, [raw1.id]);
+    const fresh = await saveLookup(pool, { userId: B, keyword: 'fresh', locationName: 'Australia', languageCode: 'en', device: 'desktop', depth: 10, costUsd: 0, summary: { top10: [] }, raw: { a: 1 } });
+    assert.ok(await purgeRaw(pool) >= 1);
+    const rawState = (await pool.query('SELECT id, ("rawGz" IS NULL) AS gone FROM serp_lookups WHERE id = ANY($1)', [[raw1.id, fresh.id]])).rows;
+    assert.equal(rawState.find((x) => x.id === raw1.id).gone, true);
+    assert.equal(rawState.find((x) => x.id === fresh.id).gone, false);
+
+    // lookups are rate limited per person
+    const lim = await serve(createRouter(pool, { deps: okDeps, live: async () => liveImpl(), now: () => NOW, lookupsPerHour: 1 }));
+    servers.push(lim);
+    const lp = (u) => fetch(`http://127.0.0.1:${lim.address().port}/api/serp-tracker/lookups`, { method: 'POST', headers: { 'x-test-user': String(u), 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: 'rl' }) });
+    assert.equal((await lp(B)).status, 200);
+    assert.equal((await lp(B)).status, 429);
+
     console.log('serpTrackerRouter.db.test.js: all passed');
   } finally {
     for (const s of servers) s.close();

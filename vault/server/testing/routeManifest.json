@@ -3268,6 +3268,21 @@
   "POST /api/serp-tracker/run": {
    "class": "authed"
   },
+  "POST /api/serp-tracker/lookups": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/lookups": {
+   "class": "authed"
+  },
+  "DELETE /api/serp-tracker/lookups": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/lookups/:id": {
+   "class": "authed"
+  },
+  "POST /api/serp-tracker-tutor": {
+   "class": "authed"
+  },
   "POST /api/topic-research-tutor": {
    "class": "authed"
   },

@@ -37,6 +37,7 @@ const GUIDES = {
   settings: { name: 'Settings guide', endpoint: '/api/settings-tutor' },
   domains: { name: 'Domain guide', endpoint: '/api/domains-tutor' },
   usage: { name: 'Usage & Cost guide', endpoint: '/api/usage-tutor' },
+  'serp-tracker': { name: 'SERP Tracker guide', endpoint: '/api/serp-tracker-tutor' },
 };
 
 module.exports = { GUIDES };
