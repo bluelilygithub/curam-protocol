@@ -63,7 +63,10 @@ async function request({ method = 'GET', path, body, env = process.env, fetchImp
       if (res.status >= 400) {
         // 4xx other than 429: our request is wrong or the login is; asking again will not help (and a bad login must not be hammered)
         const hint = res.status === 401 ? ' The login or password was refused.' : '';
-        throw new DataForSeoError(`DataForSEO answered HTTP ${res.status}.${hint}`, { status: res.status, code: 'HTTP' });
+        // DataForSEO's own explanation (for example "access denied" or "payment required") is safe to show: it never echoes the request headers
+        let why = '';
+        try { const j = await res.json(); why = String((j && (j.status_message || (j.tasks && j.tasks[0] && j.tasks[0].status_message))) || '').replace(/\s+/g, ' ').slice(0, 200); } catch { /* no readable body */ }
+        throw new DataForSeoError(`DataForSEO answered HTTP ${res.status}.${hint}${why ? ` It said: ${why}` : ''}`, { status: res.status, code: 'HTTP' });
       }
       let json;
       try { json = await res.json(); } catch { throw new DataForSeoError('DataForSEO sent an answer that was not JSON.', { status: res.status, code: 'BAD_BODY' }); }
@@ -91,4 +94,59 @@ async function getBalance(opts = {}) {
   return { balanceUsd: balance, costUsd: Number(json.cost) || 0 };
 }
 
-module.exports = { request, getBalance, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };
+// --- Google organic SERP, Standard Queue (stage 2). Endpoints checked against the DataForSEO docs on 2026-11-06:
+//   POST /v3/serp/google/organic/task_post              body = [ { keyword, location_name, language_code, device, depth, priority, load_async_ai_overview, tag } ]
+//                                                       a new task answers task status 20100; the charge is made HERE, per SERP of up to 10 results
+//   GET  /v3/serp/google/organic/task_get/advanced/<id> free to read, valid 30 days; task status 20000 = result ready
+// "Still being worked on" task codes are 40601 (handed) and 40602 (in queue) per the DataForSEO errors list; the docs pages read did not
+// show them, so any other task code is treated as a failure rather than "wait longer". Polling uses task_get (free), not tasks_ready, whose
+// shape the docs pages read did not show.
+const TASK_CREATED = 20100;
+const TASK_OK = 20000;
+const TASK_PENDING = new Set([40601, 40602]);
+
+/**
+ * Post ONE search task. @returns {{ taskId, costUsd }}  (costUsd is what this call charged)
+ * @param task { keyword, locationName, languageCode, device, depth, loadAiOverview, tag }
+ */
+async function postSerpTask(task, opts = {}) {
+  const body = [{
+    keyword: task.keyword,
+    location_name: task.locationName,
+    language_code: task.languageCode,
+    device: task.device,
+    depth: task.depth,
+    priority: 1, // normal = the cheapest
+    ...(task.loadAiOverview ? { load_async_ai_overview: true } : {}),
+    ...(task.tag ? { tag: String(task.tag).slice(0, 255) } : {}),
+  }];
+  const json = await request({ ...opts, method: 'POST', path: '/v3/serp/google/organic/task_post', body });
+  const t = json && json.tasks && json.tasks[0];
+  if (!t || t.status_code !== TASK_CREATED || !t.id) {
+    throw new DataForSeoError(`DataForSEO did not accept the search task (status ${t ? t.status_code : 'none'}: ${String((t && t.status_message) || '').slice(0, 200)}).`, { code: 'TASK_REJECTED' });
+  }
+  return { taskId: t.id, costUsd: Number(t.cost) || 0 };
+}
+
+/** Read one task. @returns {{ ready: boolean, result?: object, raw?: object }} ; a task that failed on DataForSEO's side throws. */
+async function getSerpTask(taskId, opts = {}) {
+  const json = await request({ ...opts, method: 'GET', path: `/v3/serp/google/organic/task_get/advanced/${encodeURIComponent(taskId)}` });
+  const t = json && json.tasks && json.tasks[0];
+  if (!t) throw new DataForSeoError('DataForSEO sent no task in its answer.', { code: 'BAD_BODY' });
+  if (t.status_code === TASK_OK) return { ready: true, result: t.result && t.result[0], raw: json };
+  if (TASK_PENDING.has(t.status_code)) return { ready: false };
+  throw new DataForSeoError(`DataForSEO task status ${t.status_code}: ${String(t.status_message || '').slice(0, 200)}`, { code: 'TASK_FAILED' });
+}
+
+/** Poll a task until it is ready or `maxMs` passes. Returns the getSerpTask answer, or { ready: false, timedOut: true }. */
+async function waitForSerpTask(taskId, { intervalMs = 10000, maxMs = 60 * 60 * 1000, sleep = realSleep, now = Date.now, ...opts } = {}) {
+  const started = now();
+  for (;;) {
+    const r = await getSerpTask(taskId, { ...opts, sleep });
+    if (r.ready) return r;
+    if (now() - started + intervalMs > maxMs) return { ready: false, timedOut: true };
+    await sleep(intervalMs);
+  }
+}
+
+module.exports = { request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };
