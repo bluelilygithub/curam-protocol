@@ -12,7 +12,7 @@ const DEFAULTS = Object.freeze({
   serpDepth: 100,
   timezone: 'Australia/Brisbane',
 });
-const LIMITS = Object.freeze({ keywords: 50, brandTerms: 20, competitors: 20, competitorPages: 10, healthUrls: 50 });
+const LIMITS = Object.freeze({ keywords: 50, brandTerms: 20, competitors: 20, competitorPages: 10, healthUrls: 50, sites: 20 });
 
 const HOST_RE = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 
@@ -55,6 +55,7 @@ function validateProfile(raw) {
   const errors = [];
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
 
+  const name = cleanText(src.name, 80); // what the person calls this site (a client's name, say); the domain is shown when it is empty
   const domain = normaliseDomain(src.domain);
   if (!domain) errors.push('Site domain is missing or not a valid web address (for example example.com.au).');
 
@@ -142,7 +143,7 @@ function validateProfile(raw) {
   }
 
   if (errors.length) return { ok: false, profile: null, errors };
-  return { ok: true, errors: [], profile: { domain, brandTerms, locationName, languageCode, devices, serpDepth: depth, timezone, keywords, competitors, healthCheckUrls } };
+  return { ok: true, errors: [], profile: { name, domain, brandTerms, locationName, languageCode, devices, serpDepth: depth, timezone, keywords, competitors, healthCheckUrls } };
 }
 
 /** The calendar date ("YYYY-MM-DD") in `timeZone` at `now`. The brief groups every report by this Brisbane date. */

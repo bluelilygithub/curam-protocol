@@ -43,4 +43,14 @@ async function capStatus(pool, localDateStr, env = process.env) {
   return { cap, spent, over: spent >= cap };
 }
 
-module.exports = { logCost, monthSpend, monthBounds, monthlyCapUsd, capStatus, DEFAULT_CAP_USD };
+// What one Live search is expected to cost, so the page can say so BEFORE it is made and the cap can refuse a search that would pass the limit.
+// DataForSEO bills "per SERP of up to 10 results" and adds US$0.002 for the AI summary on Live searches (docs, 6 Nov 2026); one real search
+// (top 10 with the AI summary) cost US$0.004, which leaves US$0.002 per 10 results. An ESTIMATE from list prices: the real cost is read from the
+// answer and logged. If DataForSEO changes its prices, change these two numbers.
+const LIVE_PER_TEN_RESULTS_USD = 0.002;
+const AI_OVERVIEW_USD = 0.002;
+function estimateLiveUsd(depth, aiOverview) {
+  return Math.ceil(Number(depth) / 10) * LIVE_PER_TEN_RESULTS_USD + (aiOverview ? AI_OVERVIEW_USD : 0);
+}
+
+module.exports = { logCost, monthSpend, monthBounds, monthlyCapUsd, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD, DEFAULT_CAP_USD };

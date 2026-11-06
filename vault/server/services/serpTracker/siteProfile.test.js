@@ -27,6 +27,7 @@ let v = validateProfile({
 });
 assert.equal(v.ok, true, v.errors.join('; '));
 assert.equal(v.profile.domain, 'wiwc.com.au');
+assert.equal(v.profile.name, ''); // no name given: the page shows the domain
 assert.deepEqual(v.profile.brandTerms, ['wiwc', 'walk in wine cabinets']); // case-insensitive duplicate and blank removed
 assert.equal(v.profile.locationName, 'Australia');
 assert.equal(v.profile.serpDepth, 100);
@@ -36,6 +37,10 @@ assert.deepEqual(v.profile.healthCheckUrls, ['https://www.wiwc.com.au/cabinets/'
 assert.equal(v.profile.keywords[0].targetUrl, 'https://www.wiwc.com.au/cabinets/');
 assert.equal('targetUrl' in v.profile.keywords[1], false);
 assert.deepEqual(v.profile.competitors, [{ domain: 'rival.com.au', pages: ['https://rival.com.au/a/'] }]);
+
+// --- a display name is kept, tidied and capped
+assert.equal(validateProfile({ domain: 'wiwc.com.au', name: '  Acme   Wines \n Pty ' }).profile.name, 'Acme Wines Pty');
+assert.equal(validateProfile({ domain: 'wiwc.com.au', name: 'x'.repeat(200) }).profile.name.length, 80);
 
 // --- every problem is reported together, in plain words
 v = validateProfile({

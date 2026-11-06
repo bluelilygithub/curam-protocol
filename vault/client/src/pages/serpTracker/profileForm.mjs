@@ -13,6 +13,7 @@ export function profileToForm(profile, defaults = FALLBACK) {
   const d = { ...FALLBACK, ...(defaults || {}) };
   const p = profile || {};
   return {
+    name: p.name || '',
     domain: p.domain || '',
     brandTermsText: (p.brandTerms || []).join('\n'),
     keywordsText: (p.keywords || []).map((k) => (k.targetUrl ? `${k.term} | ${k.targetUrl}` : k.term)).join('\n'),
@@ -28,6 +29,7 @@ export function profileToForm(profile, defaults = FALLBACK) {
 
 export function formToProfile(form) {
   return {
+    name: form.name,
     domain: form.domain,
     brandTerms: lines(form.brandTermsText),
     keywords: lines(form.keywordsText).map((l) => {

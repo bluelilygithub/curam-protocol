@@ -6,7 +6,7 @@ import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
-import { safeHref, positionText, costText, toggleOne, toggleAll, pruneSelection, deletedMessage, groupLayout } from './lookupHelpers.mjs';
+import { safeHref, positionText, costText, toggleOne, toggleAll, pruneSelection, deletedMessage, groupLayout, estimateCost, pageText } from './lookupHelpers.mjs';
 
 // SERP Tracker, Lookup tab: search Google right now through DataForSEO, read the answer, keep it, open it again, and delete saved lookups
 // (one, several or all, with Undo). See docs/serp-tracker.md. The server does the work; this only shows it.
@@ -15,7 +15,7 @@ const FIELD = { background: 'var(--color-bg)', borderColor: 'var(--color-border)
 const CARD = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 const INNER = { background: 'var(--color-bg)', borderColor: 'var(--color-border)' };
 const when = (iso) => (iso ? new Date(iso).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
-const DEPTHS = [10, 20, 50, 100];
+const DEPTHS = [10, 20, 50, 100, 200];
 
 function Fact({ label, children }) {
   return (
@@ -27,17 +27,19 @@ function Fact({ label, children }) {
 }
 
 /** One lookup read out: where you are, the AI summary, the top 10 and the page layout. */
-function LookupResult({ lookup }) {
+function LookupResult({ lookup, onDeeper, onRetry, busy }) {
   const s = lookup.summary || {};
   const mine = s.mine;
   const ai = s.aiOverview;
   const layout = groupLayout(s.layout);
+  const cov = s.coverage; // how many results really came back (older saved lookups have none)
+  const short = cov && cov.complete === false;
   return (
     <div className="space-y-4" data-guide="lookup-result">
       <div>
         <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{lookup.keyword}</h3>
         <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          {lookup.device === 'mobile' ? 'Mobile' : 'Desktop'} · {lookup.locationName} · top {lookup.depth} · {when(lookup.createdAt)} · cost {costText(lookup.costUsd)}
+          {lookup.device === 'mobile' ? 'Mobile' : 'Desktop'} · {lookup.locationName} · {cov ? `${cov.returned} results checked (asked for ${cov.asked})` : `top ${lookup.depth}`} · {when(lookup.createdAt)} · cost {costText(lookup.costUsd)}{s.attempts > 1 ? ` (${s.attempts} tries)` : ''}
         </p>
         {s.searched && (
           <Tooltip text="What DataForSEO says it actually searched: which Google site, which place (as a DataForSEO place number) and which language. Use it to check the results are for Australia.">
@@ -52,7 +54,7 @@ function LookupResult({ lookup }) {
 
       <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Fact label="Your site">
-          {!mine ? 'No site saved' : mine.status === 'ranked' ? `#${mine.bestPosition}` : `Not found in the top ${lookup.depth}`}
+          {!mine ? 'No site' : mine.status === 'ranked' ? `#${mine.bestPosition} · ${pageText(mine.bestPosition)}` : short ? `Not found in the ${cov.returned} checked` : `Not found in the top ${lookup.depth}`}
         </Fact>
         <Fact label="Above your first result">
           {!mine || mine.itemsAboveMe == null ? '—' : `${mine.itemsAboveMe} other ${mine.itemsAboveMe === 1 ? 'box' : 'boxes'}`}
@@ -61,6 +63,39 @@ function LookupResult({ lookup }) {
           {!ai || !ai.present ? 'Not shown' : mine && ai.mineCited ? 'Names you' : 'Shown'}
         </Fact>
       </dl>
+
+      {mine && mine.status !== 'ranked' && short && (
+        <div className="rounded-xl border p-3 text-sm flex flex-wrap items-center gap-3" style={{ ...INNER, borderColor: '#f59e0b' }}>
+          <span style={{ color: '#b45309' }}>
+            DataForSEO returned only {cov.returned} of the {cov.asked} results asked for{s.attempts > 1 ? `, even after ${s.attempts} tries` : ''}, so only those were checked and your site could be further down.
+            Google gives a short page most of the time and a full one only now and then.
+          </span>
+          {onRetry && (
+            <Tooltip text="Searches the same words again, hoping for a fuller answer. Another paid search, shown with its cost afterwards.">
+              <button type="button" disabled={busy} onClick={onRetry} data-guide="search-deeper"
+                className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                Try again
+              </button>
+            </Tooltip>
+          )}
+        </div>
+      )}
+
+      {mine && mine.status !== 'ranked' && !short && lookup.depth < 200 && onDeeper && (
+        <div className="rounded-xl border p-3 text-sm flex flex-wrap items-center gap-3" style={INNER}>
+          <span style={{ color: 'var(--color-text)' }}>Not in the top {lookup.depth}. You can look further down, as far as the top 200 (page 20).</span>
+          <Tooltip text="Searches the same words again, this time asking for 200 results. Another paid search, shown with its cost afterwards.">
+            <button type="button" disabled={busy} onClick={onDeeper} data-guide="search-deeper"
+              className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              Search the top 200
+            </button>
+          </Tooltip>
+        </div>
+      )}
+
+      {mine && mine.status !== 'ranked' && !short && lookup.depth >= 200 && (
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Not in the top 200 either. Going further than 200 needs DataForSEO's slower queued mode, which is not switched on here.</p>
+      )}
 
       {mine && mine.uncertain && (
         <p className="text-sm" style={{ color: '#b45309' }}>
@@ -137,7 +172,7 @@ function LookupResult({ lookup }) {
   );
 }
 
-export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
+export default function LookupPanel({ status, siteId = null, site = null, onSpendChanged }) {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
@@ -151,12 +186,13 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
   const [selected, setSelected] = useState(new Set());
   const [confirm, setConfirm] = useState(null); // null | 'selected' | 'all'
   const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const resultRef = useRef(null);
   const selectAllRef = useRef(null);
 
   const loadSaved = useCallback(async () => {
     try {
-      const res = await api.get('/api/serp-tracker/lookups');
+      const res = await api.get(`/api/serp-tracker/lookups?siteId=${siteId == null ? 'quick' : siteId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not load the saved lookups.');
       setSaved(data.lookups);
@@ -165,7 +201,7 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
       setSaved([]);
       addToast(err.message, 'error');
     }
-  }, [addToast]);
+  }, [addToast, siteId]);
 
   useEffect(() => { loadSaved(); }, [loadSaved]);
 
@@ -176,25 +212,34 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
 
   const scrollToResult = () => setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
 
-  async function lookUp(e) {
-    e?.preventDefault();
-    if (!keyword.trim()) { addToast('Type the search you want to look up.', 'error'); return; }
-    startProcessing('Looking up on Google…', 'This is a paid search through DataForSEO. The cost is shown when it finishes.');
+  /** One paid search. `over` can change the words, device, depth or AI summary (used by Find my site and Search the top 200). */
+  async function runLookup(over = {}) {
+    const kw = (over.keyword ?? keyword).trim();
+    if (!kw) { addToast('Type the search you want to look up.', 'error'); return; }
+    const body = { keyword: kw, device: over.device ?? device, depth: over.depth ?? depth, aiOverview: over.aiOverview ?? ai, siteId };
+    const est = estimateCost(body.depth, body.aiOverview, status?.pricing);
+    startProcessing('Looking up on Google…', `This is a paid search through DataForSEO${est != null ? `, expected to cost about ${costText(est)}` : ''}. The real cost is shown when it finishes.`);
+    setBusy(true);
     try {
-      const res = await api.post('/api/serp-tracker/lookups', { keyword, device, depth, aiOverview: ai });
+      const res = await api.post('/api/serp-tracker/lookups', body);
       const data = await res.json();
       if (!res.ok) { addToast(data.error || 'The lookup failed.', 'error'); return; }
       setResult(data.lookup);
-      addToast(`Looked up. Cost ${costText(data.lookup.costUsd)}.`, 'success');
+      const m = data.lookup.summary && data.lookup.summary.mine;
+      addToast(m && m.status === 'ranked' ? `Found your site at #${m.bestPosition} (${pageText(m.bestPosition)}). Cost ${costText(data.lookup.costUsd)}.` : `Looked up. Cost ${costText(data.lookup.costUsd)}.`, 'success');
       scrollToResult();
       loadSaved();
       onSpendChanged?.();
     } catch {
       addToast('The lookup could not be done. Check your connection and try again.', 'error');
     } finally {
+      setBusy(false);
       stopProcessing();
     }
   }
+  const lookUp = (e) => { e?.preventDefault(); runLookup(); };
+  // Find my site: the top 100 without the AI summary (the cheapest search that goes this deep), so a site on page 5 or 12 shows up
+  const findMySite = () => runLookup({ depth: 100, aiOverview: false });
 
   async function open(id) {
     try {
@@ -225,7 +270,7 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
   async function doDelete(all) {
     setDeleting(true);
     try {
-      const res = await api.delete('/api/serp-tracker/lookups', all ? { all: true } : { ids: [...selected] });
+      const res = await api.delete('/api/serp-tracker/lookups', all ? { all: true, siteId: siteId == null ? 'quick' : siteId } : { ids: [...selected] });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'The lookups could not be deleted.');
       setConfirm(null);
@@ -251,7 +296,7 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
             <h2 id="lookup-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Look up a search</h2>
             <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
               See who is on Google right now for any search. Each lookup is a paid search, and what it cost is shown afterwards.
-              {siteSaved ? '' : ' Save your site details first if you want to see where your own site is.'}
+              {site ? ` Results are read for ${site.name || site.domain}, searched from ${site.locationName}.` : ' This is a Quick lookup: there is no site, so it cannot say where your own site is.'}
             </p>
           </div>
           {!connected && (
@@ -282,7 +327,7 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
                 <Tooltip text="How deep into Google's results to look. The top 10 is the cheapest. Going deeper costs more, and is only needed to find out how far down your site is.">
                   <select id="lookup-depth" value={depth} onChange={(e) => setDepth(Number(e.target.value))}
                     className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={FIELD}>
-                    {DEPTHS.map((n) => <option key={n} value={n}>Top {n}</option>)}
+                    {DEPTHS.map((n) => <option key={n} value={n}>Top {n}{n >= 20 ? ` (about page ${n / 10})` : ''}</option>)}
                   </select>
                 </Tooltip>
               </div>
@@ -293,32 +338,52 @@ export default function LookupPanel({ status, siteSaved, onSpendChanged }) {
                 Include Google's AI summary
               </label>
             </Tooltip>
-            <Tooltip text="Searches Google now through DataForSEO. This is a paid search; the cost is shown when it finishes. The result is saved to the list.">
-              <button type="submit" disabled={!connected || !keyword.trim()} data-guide="lookup-run"
-                className="px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
-                style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                {getIcon('search', { size: 14 })} Look up
-              </button>
-            </Tooltip>
+            {(() => {
+              const est = estimateCost(depth, ai, status?.pricing);
+              const estFind = estimateCost(100, false, status?.pricing);
+              return (
+                <>
+                  {est != null && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Expected cost of this search: up to about {costText(est)}. The real cost is shown afterwards{depth >= 50 ? ' (a short answer from Google costs less, but is tried again, so it can cost a little more in all)' : ''}.</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Tooltip text="Searches Google now through DataForSEO. This is a paid search; the cost is shown when it finishes. The result is saved to the list.">
+                      <button type="submit" disabled={!connected || !keyword.trim() || busy} data-guide="lookup-run"
+                        className="px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        {getIcon('search', { size: 14 })} Look up
+                      </button>
+                    </Tooltip>
+                    <Tooltip text={site ? `Not in the top 10? This asks for the top 100 results for this site, without the AI summary${estFind != null ? `, up to about ${costText(estFind)}` : ''}, and tells you the position and about which page of Google it is on. Google often gives a short page, so a short answer is tried again (up to 4 times) and the result says how many results were really checked.` : 'Finding where your site sits needs a site. Add one on the Site setup tab; Quick lookups have no site.'}>
+                      <button type="button" disabled={!connected || !keyword.trim() || !site || busy} onClick={findMySite} data-guide="find-my-site"
+                        className="px-3.5 py-1.5 rounded-lg border text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        Find my site
+                      </button>
+                    </Tooltip>
+                  </div>
+                </>
+              );
+            })()}
           </form>
           {status && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Spent this month: {costText(status.spentThisMonthUsd)} of {costText(status.capUsd)}.</p>}
         </section>
 
         {result && (
           <section ref={resultRef} className="rounded-2xl border p-6" style={CARD} aria-label="Lookup result">
-            <LookupResult lookup={result} />
+            <LookupResult lookup={result} busy={busy}
+              onDeeper={site ? () => runLookup({ keyword: result.keyword, device: result.device, depth: 200, aiOverview: false }) : null}
+              onRetry={site ? () => runLookup({ keyword: result.keyword, device: result.device, depth: result.depth, aiOverview: false }) : null} />
           </section>
         )}
       </div>
 
       <section className="rounded-2xl border p-6 space-y-4 min-w-0" style={CARD} aria-labelledby="saved-title" data-guide="saved-lookups">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="saved-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Saved lookups</h2>
-          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>latest 50 · newest first</span>
+          <h2 id="saved-title" className="text-base font-semibold truncate" style={{ color: 'var(--color-text)' }}>{site ? `Saved lookups for ${site.name || site.domain}` : 'Quick lookups'}</h2>
+          <span className="text-xs shrink-0" style={{ color: 'var(--color-muted)' }}>latest 50 · newest first</span>
         </div>
 
         {saved === null ? <Skeleton lines={4} label="Loading saved lookups" /> : saved.length === 0 ? (
-          <EmptyState icon="search" title="No saved lookups yet" body="Look up a search and it is kept here, so you can open it again later." />
+          <EmptyState icon="search" title="No saved lookups yet" body={site ? 'Look up a search for this site and it is kept here, so you can open it again later.' : 'Quick lookups are kept here, so you can open them again later.'} />
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2" data-guide="select-delete">

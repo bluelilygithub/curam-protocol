@@ -12,3 +12,4 @@ require('./passwordVault');
 require('./emailFollowUp');
 require('./youtube'); // saved lists, follows, favourites
 require('./serpTracker'); // saved SERP Tracker lookups
+require('./serpSite'); // SERP Tracker sites (with their saved lookups)

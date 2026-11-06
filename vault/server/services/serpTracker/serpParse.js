@@ -90,6 +90,10 @@ function parseSerp(result, { myDomain = null, competitors = [], depth = 100 } = 
     checkUrl: cleanText(result.check_url, 500) || null,
     itemsCount: items.length,
     organicCount: organic.length,
+    // How much of what was asked for actually came back. Seen on 6 Nov 2026: asking for 100 results usually returned only 8 to 14 (Google or
+    // DataForSEO serves a short page) and only sometimes 97. So "not found" must say how many results were really checked. Below 20 results
+    // asked, a normal page is always a little short, so it is never called incomplete.
+    coverage: { asked: depth, returned: organic.length, complete: depth < 20 || organic.length >= depth * 0.9 },
     layout: items.filter((i) => i && i.type).map((i) => ({ type: i.type, absolute: isNum(i.rank_absolute) ? i.rank_absolute : null })),
     searched: { seDomain: cleanText(result.se_domain, 100) || null, locationCode: isNum(result.location_code) ? result.location_code : null, languageCode: cleanText(result.language_code, 20) || null },
     unknownDomainCount,
@@ -110,6 +114,7 @@ function parseSerp(result, { myDomain = null, competitors = [], depth = 100 } = 
       uncertain: !best && unknownDomainCount > 0, // not found, but some results hide their website, so it cannot be ruled out
       bestPosition: best ? best.rank_group : null,           // NULL when not ranked, never 0
       bestAbsolute: best && isNum(best.rank_absolute) ? best.rank_absolute : null,
+      bestPage: best ? Math.ceil(best.rank_group / 10) : null, // about which page of Google's results (10 organic results a page; approximate)
       bestUrl: best ? resolved.get(best).shownUrl || cleanText(best.url, 500) : null,
       urls: mine.map((i) => ({ position: i.rank_group, url: resolved.get(i).shownUrl || cleanText(i.url, 500) })),
       // how many non-organic things (ads, AI Overview, local pack, People Also Ask...) sit above my first result

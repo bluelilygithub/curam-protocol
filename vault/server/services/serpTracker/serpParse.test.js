@@ -38,6 +38,7 @@ assert.deepEqual(p.top10.slice(0, 3).map((r) => [r.position, r.domain, r.isMine]
 assert.equal(p.mine.status, 'ranked');
 assert.equal(p.mine.bestPosition, 3);
 assert.equal(p.mine.bestAbsolute, 6);
+assert.equal(p.mine.bestPage, 1); // position 3 is on page 1
 assert.equal(p.mine.bestUrl, 'https://www.wiwc.com.au/cabinets/');
 assert.deepEqual(p.mine.urls.map((u) => u.position), [3, 6]); // every URL of mine, subdomain included
 assert.equal(p.mine.itemsAboveMe, 3); // ad (1), AI overview (2), People Also Ask (5); the local pack is below
@@ -150,5 +151,25 @@ asIfMine.items.find((i) => i.website_name === 'Winning Appliances').breadcrumb =
 const found = parseSerp(asIfMine, { myDomain: 'wiwc.com.au', depth: 10 });
 assert.equal(found.mine.status, 'ranked');
 assert.equal(found.mine.bestPosition, 8);
+
+// deep positions: about which page of results. 10 per page: 10 -> page 1, 11 -> page 2, 118 -> page 12, 120 -> page 12
+const deepItems = (pos) => ({ keyword: 'k', items: [...Array.from({ length: 130 }, (_, i) => organic(i + 1, i + 1, i + 1 === pos ? 'https://www.wiwc.com.au/x' : `https://s${i}.com/`, i + 1 === pos ? 'www.wiwc.com.au' : `s${i}.com`))] });
+for (const [pos, page] of [[10, 1], [11, 2], [118, 12], [120, 12], [121, 13]]) {
+  const d = parseSerp(deepItems(pos), { myDomain: 'wiwc.com.au', depth: 130 });
+  assert.equal(d.mine.bestPosition, pos);
+  assert.equal(d.mine.bestPage, page, `position ${pos} is page ${page}`);
+  assert.equal(d.top10.length, 10); // only ten are kept as "top 10"; the position is read from all of them
+}
+assert.equal(parseSerp(deepItems(0), { myDomain: 'wiwc.com.au', depth: 130 }).mine.bestPage, null); // not found: no page
+
+// coverage: how much of what was asked for came back (a short answer must never be reported as "checked the top 100")
+assert.deepEqual(rr.coverage, { asked: 10, returned: 8, complete: true }); // asking for 10 and getting 8 ordinary results is a normal page
+const cov = (n, depth) => parseSerp({ keyword: 'k', items: Array.from({ length: n }, (_, i) => organic(i + 1, i + 1, `https://s${i}.com/`, `s${i}.com`)) }, { myDomain: 'wiwc.com.au', depth }).coverage;
+assert.deepEqual(cov(13, 100), { asked: 100, returned: 13, complete: false }); // the real short answer
+assert.deepEqual(cov(97, 100), { asked: 100, returned: 97, complete: true }); // the real full answer
+assert.deepEqual(cov(90, 100), { asked: 100, returned: 90, complete: true }); // 90% counts as complete
+assert.deepEqual(cov(89, 100), { asked: 100, returned: 89, complete: false });
+assert.deepEqual(cov(14, 20), { asked: 20, returned: 14, complete: false });
+assert.deepEqual(cov(8, 10), { asked: 10, returned: 8, complete: true });
 
 console.log('serpParse.test.js: all passed');

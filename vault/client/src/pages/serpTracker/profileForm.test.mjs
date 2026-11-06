@@ -8,10 +8,12 @@ assert.equal(empty.locationName, 'Australia');
 assert.equal(empty.serpDepth, 100);
 assert.deepEqual(empty.devices, ['desktop', 'mobile']);
 assert.equal(empty.timezone, 'Australia/Brisbane');
+assert.equal(empty.name, '');
 
 // text -> profile
 const p = formToProfile({
   ...empty,
+  name: 'Acme Wines',
   domain: 'www.wiwc.com.au',
   brandTermsText: 'wiwc\n\n  walk in wine cabinets  \n',
   keywordsText: 'walk in wine cabinets | https://www.wiwc.com.au/cabinets/\nwine room cooling\n',
@@ -23,6 +25,8 @@ assert.deepEqual(p.brandTerms, ['wiwc', 'walk in wine cabinets']);
 assert.deepEqual(p.keywords, [{ term: 'walk in wine cabinets', targetUrl: 'https://www.wiwc.com.au/cabinets/' }, { term: 'wine room cooling' }]);
 assert.deepEqual(p.competitors, [{ domain: 'rival.com.au', pages: ['https://rival.com.au/a/', 'https://rival.com.au/b/'] }, { domain: 'other.com.au', pages: [] }]);
 assert.equal(p.serpDepth, 50);
+assert.equal(p.name, 'Acme Wines');
+assert.equal(profileToForm(p).name, 'Acme Wines');
 
 // profile -> text -> profile is stable
 const again = formToProfile(profileToForm(p));

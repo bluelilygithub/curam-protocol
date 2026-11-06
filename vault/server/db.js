@@ -1266,7 +1266,9 @@ async function initSchema() {
         "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_serp_sites_user ON serp_sites ("userId")`);
+    // stage 1 allowed one site per person (unique index); several sites per person (one per client) are allowed now, so the unique index goes
+    await client.query(`DROP INDEX IF EXISTS idx_serp_sites_user`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_sites_user_all ON serp_sites ("userId")`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS serp_runs (
         id             SERIAL PRIMARY KEY,
@@ -3001,6 +3003,9 @@ async function initSchema() {
   await pool.query(`ALTER TABLE topic_research_topics ADD COLUMN IF NOT EXISTS "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_topics_client ON topic_research_topics("clientId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_topics_project ON topic_research_topics("projectId")`);
+  // SERP Tracker: the CRM client a tracked site is for (optional; deleting the client only unlinks). Here, after clients exists.
+  await pool.query(`ALTER TABLE serp_sites ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_serp_sites_client ON serp_sites("clientId")`);
 
   // ── CRM: audit log — records who created/edited/deleted a contact, deal,
   // touchpoint, or client, and what it looked like before/after. Added after

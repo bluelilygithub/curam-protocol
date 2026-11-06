@@ -8,11 +8,12 @@ export function safeHref(url) {
   } catch { return null; }
 }
 
-/** "Not in the top 20" / "#3" for a saved lookup row. */
+/** "Not in the top 20" / "#3" / "#118 (page 12)" for a saved lookup row. Page 1 is not worth saying. */
 export function positionText(l) {
   if (!l || l.myStatus == null) return 'No site set';
-  if (l.myStatus === 'ranked') return `#${l.myPosition}`;
+  if (l.myStatus === 'ranked') return l.myPage > 1 ? `#${l.myPosition} (page ${l.myPage})` : `#${l.myPosition}`;
   const n = /^not_in_top_(\d+)$/.exec(l.myStatus);
+  if (n && l.complete === false && Number.isInteger(l.checked)) return `Not in first ${l.checked}`; // a short answer: say how many were really checked
   return n ? `Not in top ${n[1]}` : 'Not ranked';
 }
 
@@ -22,6 +23,20 @@ export function costText(n) {
   if (!Number.isFinite(v)) return '—';
   if (v === 0) return 'US$0.00';
   return v < 0.1 ? `US$${v.toFixed(4)}` : `US$${v.toFixed(2)}`;
+}
+
+/** What a search is expected to cost before it is made: US$ per 10 results plus the AI summary, from the server's price list (`status.pricing`). */
+export function estimateCost(depth, aiOverview, pricing) {
+  if (!pricing || pricing.perTenResultsUsd == null || pricing.aiOverviewUsd == null) return null; // no price list: "unknown", never "free"
+  const per = Number(pricing.perTenResultsUsd);
+  const ai = Number(pricing.aiOverviewUsd);
+  if (!Number.isFinite(per) || !Number.isFinite(ai)) return null;
+  return Math.ceil(Number(depth) / 10) * per + (aiOverview ? ai : 0);
+}
+
+/** "about page 12": 10 organic results a page, so position 118 is page 12. */
+export function pageText(position) {
+  return Number.isInteger(position) && position > 0 ? `page ${Math.ceil(position / 10)}` : '';
 }
 
 /** Selection state for the saved list: toggling one, and "select all" that selects all or, when all are already picked, none. */

@@ -1,7 +1,7 @@
 'use strict';
 // node server/services/serpTracker/costs.test.js   (no database)
 const assert = require('node:assert/strict');
-const { monthBounds, monthlyCapUsd, DEFAULT_CAP_USD } = require('./costs');
+const { monthBounds, monthlyCapUsd, estimateLiveUsd, DEFAULT_CAP_USD } = require('./costs');
 
 assert.deepEqual(monthBounds('2026-11-06'), { start: '2026-11-01', next: '2026-12-01' });
 assert.deepEqual(monthBounds('2026-12-31'), { start: '2026-12-01', next: '2027-01-01' }); // year rolls over
@@ -14,5 +14,13 @@ assert.equal(monthlyCapUsd({ MAX_MONTHLY_SPEND_USD: '12.5' }), 12.5);
 assert.equal(monthlyCapUsd({ MAX_MONTHLY_SPEND_USD: '0' }), 0); // zero means "spend nothing", not "no cap"
 assert.equal(monthlyCapUsd({ MAX_MONTHLY_SPEND_USD: 'abc' }), 5); // a typo falls back to the default, never to no cap
 assert.equal(monthlyCapUsd({ MAX_MONTHLY_SPEND_USD: '-3' }), 5);
+
+// the estimate: US$0.002 per 10 results, plus US$0.002 for the AI summary (one real top-10 search with the summary cost US$0.004)
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+assert.ok(near(estimateLiveUsd(10, true), 0.004));
+assert.ok(near(estimateLiveUsd(10, false), 0.002));
+assert.ok(near(estimateLiveUsd(100, true), 0.022)); // ten SERPs + the summary
+assert.ok(near(estimateLiveUsd(200, false), 0.04));
+assert.ok(near(estimateLiveUsd(15, false), 0.004)); // a part page counts as a whole one
 
 console.log('costs.test.js: all passed');

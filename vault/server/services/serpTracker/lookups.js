@@ -18,9 +18,10 @@ const parseJson = (v) => (typeof v === 'string' ? JSON.parse(v) : v);
 function listWire(r) {
   const s = parseJson(r.summaryJson) || {};
   return {
-    id: r.id, keyword: r.keyword, device: r.device, depth: r.depth, locationName: r.locationName, domain: r.domain,
+    id: r.id, siteId: r.siteId == null ? null : r.siteId, keyword: r.keyword, device: r.device, depth: r.depth, locationName: r.locationName, domain: r.domain,
     costUsd: Number(r.costUsd), createdAt: r.createdAt,
-    myStatus: s.mine ? s.mine.status : null, myPosition: s.mine ? s.mine.bestPosition : null,
+    myStatus: s.mine ? s.mine.status : null, myPosition: s.mine ? s.mine.bestPosition : null, myPage: s.mine ? s.mine.bestPage ?? null : null,
+    checked: s.coverage ? s.coverage.returned : null, complete: s.coverage ? s.coverage.complete : null, attempts: s.attempts ?? null,
     aiOverview: s.aiOverview ? s.aiOverview.present : false, mineCited: s.aiOverview ? s.aiOverview.mineCited : false,
     rawKept: r.hasRaw === true,
   };
@@ -33,26 +34,29 @@ async function saveLookup(pool, { userId, siteId = null, keyword, locationName, 
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11) RETURNING id, "createdAt"`,
     [userId, siteId, keyword, locationName, languageCode, device, depth, domain, costUsd, JSON.stringify(summary), gz],
   );
-  // keep the latest 50 per person; the oldest beyond that are tidied away (an automatic tidy-up, not a person deleting, so no bin)
+  // keep the latest 50 PER SITE (and 50 Quick lookups); the oldest beyond that are tidied away (an automatic tidy-up, not a person deleting, so no bin)
   await pool.query(
-    `DELETE FROM serp_lookups WHERE "userId" = $1 AND id NOT IN (SELECT id FROM serp_lookups WHERE "userId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT ${KEEP_LATEST})`,
-    [userId],
+    `DELETE FROM serp_lookups WHERE "userId" = $1 AND "siteId" IS NOT DISTINCT FROM $2::int
+       AND id NOT IN (SELECT id FROM serp_lookups WHERE "userId" = $1 AND "siteId" IS NOT DISTINCT FROM $2::int ORDER BY "createdAt" DESC, id DESC LIMIT ${KEEP_LATEST})`,
+    [userId, siteId],
   );
   return { id: rows[0].id, createdAt: rows[0].createdAt };
 }
 
-async function listLookups(pool, userId) {
+/** { siteId }: undefined = every lookup, null = the Quick lookups (no site), a number = that site's. */
+async function listLookups(pool, userId, { siteId } = {}) {
+  const scoped = siteId !== undefined;
   const { rows } = await pool.query(
-    `SELECT id, keyword, device, depth, "locationName", domain, "costUsd", "createdAt", "summaryJson", ("rawGz" IS NOT NULL) AS "hasRaw"
-       FROM serp_lookups WHERE "userId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT ${KEEP_LATEST}`,
-    [userId],
+    `SELECT id, "siteId", keyword, device, depth, "locationName", domain, "costUsd", "createdAt", "summaryJson", ("rawGz" IS NOT NULL) AS "hasRaw"
+       FROM serp_lookups WHERE "userId" = $1 ${scoped ? 'AND "siteId" IS NOT DISTINCT FROM $2::int' : ''} ORDER BY "createdAt" DESC, id DESC LIMIT ${scoped ? KEEP_LATEST : KEEP_LATEST * 20}`,
+    scoped ? [userId, siteId] : [userId],
   );
   return rows.map(listWire);
 }
 
 async function getLookup(pool, userId, id) {
   const { rows } = await pool.query(
-    `SELECT id, keyword, device, depth, "locationName", "languageCode", domain, "costUsd", "createdAt", "summaryJson", ("rawGz" IS NOT NULL) AS "hasRaw"
+    `SELECT id, "siteId", keyword, device, depth, "locationName", "languageCode", domain, "costUsd", "createdAt", "summaryJson", ("rawGz" IS NOT NULL) AS "hasRaw"
        FROM serp_lookups WHERE "userId" = $1 AND id = $2`,
     [userId, id],
   );
@@ -64,12 +68,14 @@ async function getLookup(pool, userId, id) {
  * Delete the person's own lookups: `ids` (a list) or `all`. Each goes to the recycle bin first, in one transaction. Ids that are not theirs
  * are simply not found (nothing is said about them). @returns {{ deleted, binIds }}
  */
-async function deleteLookups(pool, bin, userId, { ids, all }) {
+async function deleteLookups(pool, bin, userId, { ids, all, siteId }) {
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
+    const COLS = 'id, keyword, device, depth, "locationName", "languageCode", "siteId", domain, "costUsd", "summaryJson", "createdAt"';
+    const scoped = all && siteId !== undefined; // "delete all" of one list (one site's, or the Quick lookups)
     const { rows } = all
-      ? await db.query('SELECT id, keyword, device, depth, "locationName", "languageCode", "siteId", domain, "costUsd", "summaryJson", "createdAt" FROM serp_lookups WHERE "userId" = $1 FOR UPDATE', [userId])
+      ? await db.query(`SELECT ${COLS} FROM serp_lookups WHERE "userId" = $1 ${scoped ? 'AND "siteId" IS NOT DISTINCT FROM $2::int' : ''} FOR UPDATE`, scoped ? [userId, siteId] : [userId])
       : await db.query('SELECT id, keyword, device, depth, "locationName", "languageCode", "siteId", domain, "costUsd", "summaryJson", "createdAt" FROM serp_lookups WHERE "userId" = $1 AND id = ANY($2::int[]) FOR UPDATE', [userId, ids]);
     const binIds = [];
     for (const r of rows) {
