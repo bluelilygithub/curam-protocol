@@ -208,5 +208,32 @@ assert.doesNotThrow(() => collectColours(['this is { not css', '']), 'broken CSS
   const odd = await buildPalette('https://example.com/', pagesHtml['https://example.com/'], { pages: 50 }, { fetcher });
   assert.strictEqual(odd.pages.length, 1);
 
+  // ---- grouping and where each colour is used ----
+  {
+    const { summarise, newAccumulator, collectColours: collect } = require('./webExtractorPalette');
+    const acc = newAccumulator();
+    collect([
+      ':root { --brand: #9a7a4a; --paper: #f6f1e7; }',
+      'body { background: var(--paper); color: #141a20; }',
+      '.hero { background: var(--paper); } footer { background: var(--paper); }',
+      '.btn, .btn-alt { background: var(--brand); color: #fff; } a { color: var(--brand); }',
+      'h1, h2, h3 { color: #141a20; } p { color: #141a20; } .card { border: 1px solid #d9d9d9; } .card2 { border-color: #d9d9d9; } .card3 { border-top: 1px solid #d9d9d9; }',
+      '.odd { color: #c0392b; }',
+    ], acc);
+    const r = summarise(acc, '');
+    const by = (hex) => r.colors.find((c) => c.hex === hex);
+    assert.strictEqual(by('#9a7a4a').group, 'brand');
+    assert.strictEqual(by('#f6f1e7').group, 'backgrounds', 'a cream used behind things is a background');
+    assert.strictEqual(by('#f6f1e7').use, 'background');
+    assert.strictEqual(by('#141a20').group, 'text');
+    assert.strictEqual(by('#d9d9d9').group, 'borders');
+    assert.ok(by('#9a7a4a').where.includes('.btn, .btn-alt'), 'a colour held in a variable reports where the variable is used');
+    assert.ok(by('#141a20').where.some((w) => /h1/.test(w)));
+    assert.ok(r.colors.every((c) => ['brand', 'backgrounds', 'text', 'borders', 'other', 'minor'].includes(c.group)));
+    const mainShares = r.colors.filter((c) => c.main).reduce((n, c) => n + c.mainShare, 0);
+    assert.ok(mainShares >= 98 && mainShares <= 102, 'main shares add up to about 100');
+    for (const c of r.colors.filter((x) => !x.main)) { assert.strictEqual(c.group, 'minor'); assert.strictEqual(c.mainShare, null); }
+  }
+
   console.log('webExtractorPalette tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

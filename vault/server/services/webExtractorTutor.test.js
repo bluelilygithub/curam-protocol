@@ -11,7 +11,7 @@ const {
 
 (async () => {
   const tools = await import(pathToFileURL(path.join(__dirname, '../../client/src/pages/webExtractor/webExtractorTools.mjs')).href);
-  const { GUIDE_TOOLS, WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, parseSpokenUrl, parseSpokenList, parseSpokenSelector, toCsv, tableToObjects, linksToRows, tableToRows, PALETTE_PAGES, readableOn, paletteToCss, paletteToRows } = tools;
+  const { GUIDE_TOOLS, WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, parseSpokenUrl, parseSpokenList, parseSpokenSelector, toCsv, tableToObjects, linksToRows, tableToRows, PALETTE_PAGES, readableOn, paletteToCss, paletteToRows, groupPalette, useSummary } = tools;
 
   // ---- the guide knows exactly the tools and buttons the page can show (fails if one is added to or removed from either list alone) ----
   assert.deepStrictEqual(CATALOG.map((t) => t.id).sort(), GUIDE_TOOLS.map((t) => t.id).sort(), 'the guide catalogue matches the page');
@@ -117,17 +117,25 @@ const {
   const pal = {
     suggested: { primary: '#9b5b46', accent: null, background: '#f4efe6', text: '#222222' },
     colors: [
-      { hex: '#9b5b46', rgb: [155, 91, 70], hsl: [15, 38, 46], kind: 'brand', count: 7, share: 41.2, roles: { background: 2, text: 1, border: 1, other: 0 }, variables: ['--brand'] },
-      { hex: '#f4efe6', rgb: [244, 239, 230], hsl: [40, 38, 93], kind: 'neutral', count: 3, share: 17.6, roles: { background: 3, text: 0, border: 0, other: 0 }, variables: [] },
+      { hex: '#9b5b46', rgb: [155, 91, 70], hsl: [15, 38, 46], kind: 'brand', main: true, group: 'brand', use: 'background', count: 7, share: 41.2, mainShare: 70, roles: { background: 2, text: 1, border: 1, other: 0 }, variables: ['--brand'], where: ['.btn', 'a:hover'] },
+      { hex: '#f4efe6', rgb: [244, 239, 230], hsl: [40, 38, 93], kind: 'neutral', main: true, group: 'backgrounds', use: 'background', count: 3, share: 17.6, mainShare: 30, roles: { background: 3, text: 0, border: 0, other: 0 }, variables: [], where: ['body'] },
+      { hex: '#c0392b', rgb: [192, 57, 43], hsl: [6, 63, 46], kind: 'brand', main: false, group: 'minor', use: 'text', count: 1, share: 0.4, mainShare: null, roles: { background: 0, text: 1, border: 0, other: 0 }, variables: [], where: ['.odd'] },
     ],
   };
-  assert.strictEqual(paletteToCss(pal), ':root {\n  --color-primary: #9b5b46;\n  --color-background: #f4efe6;\n  --color-text: #222222;\n\n  --brand-1: #9b5b46;\n  --neutral-1: #f4efe6;\n}');
+  const css = paletteToCss(pal);
+  assert.strictEqual(css, ':root {\n  /* Suggested */\n  --color-primary: #9b5b46;\n  --color-background: #f4efe6;\n  --color-text: #222222;\n\n  /* Brand colours */\n  --brand-1: #9b5b46; /* mostly background · .btn, a:hover */\n\n  /* Backgrounds */\n  --bg-1: #f4efe6; /* mostly background · body */\n\n  /* Minor and one-off colours */\n  --minor-1: #c0392b; /* mostly text · .odd */\n}');
   assert.strictEqual(paletteToCss({ colors: [] }), ':root {\n}', 'an empty palette is still valid CSS');
+  assert.deepStrictEqual(groupPalette(pal.colors).map((g) => g.key), ['brand', 'backgrounds', 'minor'], 'groups come in a fixed order and empty ones are left out');
+  assert.strictEqual(useSummary(pal.colors[0]), 'background 2, text 1, border 1');
   const palRows = paletteToRows(pal);
-  assert.strictEqual(palRows[0].length, palRows[1].length, 'every row has a cell for each heading');
-  assert.deepStrictEqual(palRows[1].slice(0, 6), ['#9b5b46', '155, 91, 70', '15, 38%, 46%', 'Brand', 7, 41.2]);
-  assert.strictEqual(palRows[2][3], 'Grey, white or black');
-  assert.match(toCsv(palRows), /^\uFEFFHex,RGB,HSL/, 'opens in Excel with its heading row');
+  assert.strictEqual(palRows.length, 4);
+  assert.ok(palRows.every((r) => r.length === palRows[0].length), 'every row has a cell for each heading');
+  assert.deepStrictEqual(palRows[0].slice(0, 4), ['Group', 'Hex', 'Mostly used for', 'Share of the main colours %']);
+  assert.deepStrictEqual(palRows[1].slice(0, 6), ['Brand colours', '#9b5b46', 'background', 70, 41.2, 7]);
+  assert.strictEqual(palRows[1][10], '.btn; a:hover', 'the selectors are in the sheet');
+  assert.strictEqual(palRows[3][0], 'Minor and one-off colours');
+  assert.strictEqual(palRows[3][3], '', 'a minor colour has no share of the main colours');
+  assert.match(toCsv(palRows), /^\uFEFFGroup,Hex,/, 'opens in Excel with its heading row');
   const linkRows = linksToRows([{ text: 'About', href: 'https://e.com/a', type: 'internal', nofollow: false, occurrences: 2 }]);
   assert.deepStrictEqual(linkRows[1], ['About', 'https://e.com/a', 'This site', '', 2]);
   assert.strictEqual(linkRows[0].length, linkRows[1].length);

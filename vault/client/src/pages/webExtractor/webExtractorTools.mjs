@@ -136,29 +136,74 @@ export function readableOn(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#000000' : '#ffffff';
 }
 
-/** The palette as CSS variables: the suggested roles first, then the colours by type, most used first. */
+/**
+ * The groups a palette is shown and exported in: [key, heading, CSS variable prefix, one line saying what the group is].
+ * Brand is the colourful main colours; Backgrounds, Text, Borders and Other are the main greys, whites and blacks by what they are mostly
+ * used for; Minor is everything else (a colour with a tiny share is a one-off, not part of the palette).
+ */
+export const PALETTE_GROUPS = [
+  ['brand', 'Brand colours', 'brand', 'The colourful colours that carry the site.'],
+  ['backgrounds', 'Backgrounds', 'bg', 'Greys, whites, blacks and creams used mostly behind things.'],
+  ['text', 'Text', 'text', 'Greys, whites and blacks used mostly for writing.'],
+  ['borders', 'Borders and lines', 'border', 'Used mostly for borders, outlines and dividers.'],
+  ['other', 'Other', 'other', 'Used mostly for shadows, icons and other things.'],
+  ['minor', 'Minor and one-off colours', 'minor', 'Used rarely: plugin leftovers, one-off shades, embedded content. Not part of the palette.'],
+];
+
+const USE_WORDS = { background: 'background', text: 'text', border: 'border', other: 'other' };
+
+/** What a colour is used for, in words, biggest first: "background 12, text 3" ('' when nothing says). */
+export function useSummary(c) {
+  return ['background', 'text', 'border', 'other']
+    .filter((k) => c.roles && c.roles[k] > 0)
+    .sort((x, y) => c.roles[y] - c.roles[x])
+    .map((k) => USE_WORDS[k] + ' ' + c.roles[k])
+    .join(', ');
+}
+
+/** The colours of a palette split into its groups, empty groups left out: [{ key, label, tip, prefix, colors }]. */
+export function groupPalette(colors) {
+  const list = colors || [];
+  return PALETTE_GROUPS
+    .map(([key, label, prefix, tip]) => ({ key, label, prefix, tip, colors: list.filter((c) => (c.group || (c.kind === 'brand' ? 'brand' : 'other')) === key) }))
+    .filter((g) => g.colors.length);
+}
+
+/**
+ * The palette as CSS variables: the suggested roles first, then one commented block per group (--brand-1, --bg-1, --text-1, --border-1 ...),
+ * each line saying what the colour is mostly used for and where.
+ */
 export function paletteToCss(palette) {
   const lines = [];
   const s = (palette && palette.suggested) || {};
-  for (const [name, hex] of [['primary', s.primary], ['accent', s.accent], ['background', s.background], ['text', s.text]]) if (hex) lines.push(`  --color-${name}: ${hex};`);
-  const colors = (palette && palette.colors) || [];
-  const brand = colors.filter((c) => c.kind === 'brand').slice(0, 12);
-  const neutral = colors.filter((c) => c.kind !== 'brand').slice(0, 12);
-  if (lines.length && (brand.length || neutral.length)) lines.push('');
-  brand.forEach((c, i) => lines.push(`  --brand-${i + 1}: ${c.hex};`));
-  neutral.forEach((c, i) => lines.push(`  --neutral-${i + 1}: ${c.hex};`));
+  for (const [name, hex] of [['primary', s.primary], ['accent', s.accent], ['background', s.background], ['text', s.text]]) if (hex) lines.push('  --color-' + name + ': ' + hex + ';');
+  const groups = groupPalette((palette && palette.colors) || []);
+  if (lines.length) lines.unshift('  /* Suggested */');
+  for (const g of groups) {
+    if (lines.length) lines.push('');
+    lines.push('  /* ' + g.label + ' */');
+    g.colors.slice(0, 12).forEach((c, i) => {
+      const note = [c.use && c.roles && useSummary(c) ? 'mostly ' + c.use : '', (c.where || []).slice(0, 2).join(', ')].filter(Boolean).join(' · ');
+      lines.push('  --' + g.prefix + '-' + (i + 1) + ': ' + c.hex + ';' + (note ? ' /* ' + note.replace(/\*\//g, '') + ' */' : ''));
+    });
+  }
   return [':root {', ...lines, '}'].join('\n');
 }
 
-/** The palette as CSV rows, header first. */
+/** The palette as CSV rows, header first, grouped (brand, backgrounds, text, borders, other, minor), most used first within a group. */
 export function paletteToRows(palette) {
-  return [
-    ['Hex', 'RGB', 'HSL', 'Type', 'Uses', 'Share %', 'Background', 'Text', 'Border', 'Other', 'CSS variables'],
-    ...((palette && palette.colors) || []).map((c) => [
-      c.hex, c.rgb.join(', '), `${c.hsl[0]}, ${c.hsl[1]}%, ${c.hsl[2]}%`, c.kind === 'brand' ? 'Brand' : 'Grey, white or black', c.count, c.share,
-      c.roles.background, c.roles.text, c.roles.border, c.roles.other, (c.variables || []).join(' '),
-    ]),
-  ];
+  const groups = groupPalette((palette && palette.colors) || []);
+  const rows = [['Group', 'Hex', 'Mostly used for', 'Share of the main colours %', 'Share of all colours %', 'Uses', 'Background', 'Text', 'Border', 'Other', 'Where (CSS selectors)', 'CSS variables', 'RGB', 'HSL']];
+  for (const g of groups) {
+    for (const c of g.colors) {
+      rows.push([
+        g.label, c.hex, c.use || '', c.mainShare == null ? '' : c.mainShare, c.share, c.count,
+        c.roles.background, c.roles.text, c.roles.border, c.roles.other, (c.where || []).join('; '), (c.variables || []).join(' '),
+        c.rgb.join(', '), c.hsl[0] + ', ' + c.hsl[1] + '%, ' + c.hsl[2] + '%',
+      ]);
+    }
+  }
+  return rows;
 }
 
 /** A table as a list of objects keyed by its headers (a missing or repeated header becomes "column N"). */

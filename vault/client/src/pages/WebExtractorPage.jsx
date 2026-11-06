@@ -15,7 +15,7 @@ import { formatHtml, shortenDataUris } from './restyle/sourceView.mjs';
 import WebExtractorTutorChat from './webExtractor/WebExtractorTutorChat';
 import {
   WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS, parseSpokenUrl, parseSpokenList, parseSpokenSelector,
-  toCsv, tableToObjects, linksToRows, tableToRows, PALETTE_PAGES, readableOn, paletteToCss, paletteToRows,
+  toCsv, tableToObjects, linksToRows, tableToRows, PALETTE_PAGES, readableOn, paletteToCss, paletteToRows, groupPalette, useSummary,
 } from './webExtractor/webExtractorTools.mjs';
 
 const BUTTON = 'px-3.5 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50';
@@ -707,14 +707,10 @@ export default function WebExtractorPage() {
             // the main colours by default; the less-used shades are one click away. Copy and download act on what is shown.
             const lessUsed = allColors.filter((c) => !c.main).length;
             const colors = paletteAll ? allColors : allColors.filter((c) => c.main);
-            const brand = colors.filter((c) => c.kind === 'brand');
-            const neutral = colors.filter((c) => c.kind !== 'brand');
+            const groups = groupPalette(colors);
             const sg = result.suggested || {};
             const slug = hostSlug(result.url);
-            const roleLine = (c) => [
-              c.roles.background ? `background ${c.roles.background}` : '', c.roles.text ? `text ${c.roles.text}` : '',
-              c.roles.border ? `border ${c.roles.border}` : '', c.roles.other ? `other ${c.roles.other}` : '', c.variables.length ? c.variables.join(', ') : '',
-            ].filter(Boolean).join(' · ');
+            const roleLine = (c) => [useSummary(c), c.variables.length ? c.variables.join(', ') : ''].filter(Boolean).join(' · ');
             const swatch = (c, big) => (
               <div key={c.hex} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <Tooltip text={'Copy ' + c.hex + '. Used ' + c.count + ' time' + (c.count === 1 ? '' : 's') + ', ' + c.share + '% of the colours on the page.'}>
@@ -729,9 +725,10 @@ export default function WebExtractorPage() {
                   </button>
                 </Tooltip>
                 <div className="px-3 py-2 space-y-0.5">
-                  <p className="text-xs" style={{ color: 'var(--color-text)' }}>{c.count} use{c.count === 1 ? '' : 's'} · {c.share}%</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text)' }}>{c.count} use{c.count === 1 ? '' : 's'} · {c.mainShare != null ? c.mainShare + '% of the main colours' : c.share + '% of all colours'}</p>
                   <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }}>rgb({c.rgb.join(', ')}) · hsl({c.hsl[0]}, {c.hsl[1]}%, {c.hsl[2]}%)</p>
                   {roleLine(c) ? <p className="text-xs break-words" style={{ color: 'var(--color-muted)' }}>{roleLine(c)}</p> : null}
+                  {c.where && c.where.length ? <p className="text-xs break-words font-mono" style={{ color: 'var(--color-muted)' }}>{c.where.join(' · ')}</p> : null}
                   {c.similar ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Includes {c.similar} near-identical shade{c.similar === 1 ? '' : 's'}{c.alsoHex && c.alsoHex.length ? ' (' + c.alsoHex.join(', ') + (c.similar > c.alsoHex.length ? ' …' : '') + ')' : ''}</p> : null}
                   {c.semiTransparent ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Also used partly see-through</p> : null}
                 </div>
@@ -760,8 +757,8 @@ export default function WebExtractorPage() {
                   {colors.length > 0 && (
                     <div className="shrink-0 flex flex-wrap items-center gap-2">
                       <Tooltip text="Copy every hex code, one per line, most used first."><button type="button" onClick={() => copyText(colors.map((c) => c.hex).join('\n'))} className={BUTTON} style={BUTTON_STYLE}>Copy hex codes</button></Tooltip>
-                      <Tooltip text="Copy the palette as CSS variables (--color-primary, --brand-1, --neutral-1 and so on) to paste into a style sheet."><button type="button" data-guide="copy-palette" onClick={() => copyText(paletteToCss({ ...result, colors }))} className={BUTTON} style={BUTTON_STYLE}>Copy as CSS</button></Tooltip>
-                      <Tooltip text="Download the palette as a CSV file for a spreadsheet: codes, RGB, HSL, how often each is used and for what."><button type="button" onClick={() => downloadCsv(paletteToRows({ ...result, colors }), slug + '-colours.csv')} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button></Tooltip>
+                      <Tooltip text="Copy the palette as CSS variables in groups (--color-primary, then --brand-1, --bg-1, --text-1, --border-1 and so on), each with a note of what it is used for and where."><button type="button" data-guide="copy-palette" onClick={() => copyText(paletteToCss({ ...result, colors }))} className={BUTTON} style={BUTTON_STYLE}>Copy as CSS</button></Tooltip>
+                      <Tooltip text="Download the palette as a CSV file for a spreadsheet, grouped, with what each colour is used for and the CSS selectors where it appears."><button type="button" onClick={() => downloadCsv(paletteToRows({ ...result, colors }), slug + '-colours.csv')} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button></Tooltip>
                     </div>
                   )}
                 </div>
@@ -777,18 +774,15 @@ export default function WebExtractorPage() {
                     ))}
                   </div>
                 )}
-                {brand.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Brand colours</p>
-                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{brand.map((c) => swatch(c, true))}</div>
+                {groups.map((g) => (
+                  <div key={g.key} className="space-y-2">
+                    <div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{g.label} <span className="font-normal" style={{ color: 'var(--color-muted)' }}>({g.colors.length})</span></p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{g.tip}</p>
+                    </div>
+                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{g.colors.map((c) => swatch(c, g.key === 'brand'))}</div>
                   </div>
-                )}
-                {neutral.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Greys, whites and blacks</p>
-                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{neutral.map((c) => swatch(c, false))}</div>
-                  </div>
-                )}
+                ))}
                 {lessUsed > 0 && (
                   <Tooltip text={paletteAll ? 'Show only the main colours, the ones that carry real weight on the site.' : 'Also show the colours that are only used once or twice: often one-off shades, plugin leftovers or colours inside embedded content.'}>
                     <button type="button" data-guide="palette-more" aria-expanded={paletteAll} onClick={() => setPaletteAll((v) => !v)} className={BUTTON} style={BUTTON_STYLE}>

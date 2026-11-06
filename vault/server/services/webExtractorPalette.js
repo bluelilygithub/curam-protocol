@@ -138,8 +138,21 @@ function coloursIn(prop, value) {
 
 /** What is counted across every page: colours, how each CSS variable is used and which variables point at others. */
 function newAccumulator() {
-  return { map: new Map(), uses: new Map(), varRoles: new Map(), aliases: new Map() };
+  return { map: new Map(), uses: new Map(), varRoles: new Map(), aliases: new Map(), varSels: new Map() };
 }
+
+const SEL_KEEP = 6; // selectors kept per colour while counting; 4 are returned
+/** Where a declaration sits, as a short readable label: ".btn-primary", "body, footer", "inline style"; '' when it is not in a style rule. */
+function selectorOf(decl) {
+  const p = decl.parent;
+  if (!p || p.type !== 'rule' || !p.selector) return '';
+  if (p.selector === 'x') return 'inline style'; // the wrapper readHtmlColours puts around style="" attributes
+  const parts = p.selector.replace(/\s+/g, ' ').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!parts.length || parts.every((s) => /^(from|to|\d+(\.\d+)?%)$/.test(s))) return ''; // keyframe steps say nothing
+  const s = parts.slice(0, 2).join(', ');
+  return s.length > 50 ? `${s.slice(0, 49)}…` : s;
+}
+const addCapped = (set, v) => { if (v && set.size < SEL_KEEP) set.add(v); };
 
 const VAR_RE = /var\(\s*(--[\w-]+)/g;
 
@@ -170,15 +183,17 @@ function collectColours(cssTexts, acc = newAccumulator()) {
           let r = acc.varRoles.get(m[1]);
           if (!r) { r = { background: 0, text: 0, border: 0, other: 0 }; acc.varRoles.set(m[1], r); }
           r[roleOf(prop)] += 1;
+          if (!acc.varSels.has(m[1])) acc.varSels.set(m[1], new Set());
+          addCapped(acc.varSels.get(m[1]), selectorOf(decl));
         }
       }
       const found = coloursIn(isVar ? '' : prop, decl.value);
       for (const c of found) {
         if (c.alpha === 0) continue;
         let e = into.get(c.hex);
-        if (!e) { e = { count: 0, roles: { background: 0, text: 0, border: 0, other: 0 }, variables: new Set(), semiTransparent: false }; into.set(c.hex, e); }
+        if (!e) { e = { count: 0, roles: { background: 0, text: 0, border: 0, other: 0 }, variables: new Set(), sels: new Set(), semiTransparent: false }; into.set(c.hex, e); }
         e.count += 1;
-        if (isVar) e.variables.add(prop); else e.roles[roleOf(prop)] += 1;
+        if (isVar) e.variables.add(prop); else { e.roles[roleOf(prop)] += 1; addCapped(e.sels, selectorOf(decl)); }
         if (c.alpha < 1) e.semiTransparent = true;
       }
     });
@@ -232,10 +247,11 @@ function mergeSimilar(sorted) {
   const out = [];
   for (const c of sorted) {
     const home = out.find((o) => deltaE(o.rgb, c.rgb) < SIMILAR_DELTA_E);
-    if (!home) { out.push({ ...c, roles: { ...c.roles }, variables: [...c.variables], similar: 0, alsoHex: [] }); continue; }
+    if (!home) { out.push({ ...c, roles: { ...c.roles }, variables: [...c.variables], where: [...c.where], similar: 0, alsoHex: [] }); continue; }
     home.count += c.count;
     for (const k of Object.keys(home.roles)) home.roles[k] += c.roles[k];
     home.variables = [...new Set([...home.variables, ...c.variables])].slice(0, 4);
+    home.where = [...new Set([...home.where, ...c.where])].slice(0, 4);
     home.semiTransparent = home.semiTransparent || c.semiTransparent;
     home.similar += 1 + (c.similar || 0);
     if (home.alsoHex.length < 3) home.alsoHex.push(c.hex);
@@ -243,9 +259,28 @@ function mergeSimilar(sorted) {
   return out;
 }
 
+/** What a colour is mostly used for: background, text, border or other (other too when nothing says). */
+function topRole(roles) {
+  let best = 'other'; let n = 0;
+  for (const k of ['background', 'text', 'border', 'other']) if (roles[k] > n) { best = k; n = roles[k]; }
+  return best;
+}
+
+/**
+ * The group a colour is exported under. Minor colours (not in the main set) form one group; the main colours split into Brand (the
+ * colourful ones, whatever they are used for) and the greys, whites and blacks by their main use.
+ */
+function groupOf(c, main, use) {
+  if (!main) return 'minor';
+  // a pale tint (a cream) or a very dark tint is a background or text colour, not a colour of the brand, even if it has a little hue
+  if (c.kind === 'brand' && c.hsl[2] >= 12 && c.hsl[2] <= 90) return 'brand';
+  return { background: 'backgrounds', text: 'text', border: 'borders' }[use] || 'other';
+}
+
 /** Counted colours -> the result: every colour with its use, plus a suggested background, text, primary and accent. */
 function summarise(acc, themeColor) {
   const { map, uses, varRoles, aliases } = acc;
+  const varSels = acc.varSels || new Map();
   // every variable that ends up as this one: itself, and the variables that point at it (up to three steps: --text: var(--ink); --ink: #222)
   const reaching = (name) => {
     const out = new Set([name]);
@@ -261,11 +296,13 @@ function summarise(acc, themeColor) {
     let used = 0;
     const roles = { ...e.roles };
     const seen = new Set();
+    const where = new Set(e.sels || []);
     for (const v of e.variables) {
       for (const name of reaching(v)) {
         if (seen.has(name)) continue;
         seen.add(name);
         used += uses.get(name) || 0;
+        for (const s of varSels.get(name) || []) addCapped(where, s);
         const r = varRoles.get(name);
         if (r) for (const k of Object.keys(roles)) roles[k] += r[k];
       }
@@ -275,7 +312,7 @@ function summarise(acc, themeColor) {
     const r = parseInt(hex.slice(1, 3), 16); const g = parseInt(hex.slice(3, 5), 16); const b = parseInt(hex.slice(5, 7), 16);
     const hsl = rgbToHsl(r, g, b);
     list.push({
-      hex, rgb: [r, g, b], hsl, count, roles, variables: [...e.variables].sort().slice(0, 4),
+      hex, rgb: [r, g, b], hsl, count, roles, variables: [...e.variables].sort().slice(0, 4), where: [...where].slice(0, 4),
       kind: isNeutral(hsl) ? 'neutral' : 'brand', semiTransparent: e.semiTransparent,
     });
   }
@@ -285,7 +322,15 @@ function summarise(acc, themeColor) {
   // everything else is a less-used shade, still listed but behind a "show more"
   const mainMin = Math.max(3, total * 0.02);
   const mainSet = new Set(merged.filter((c, i) => i < 5 || c.count >= mainMin).slice(0, MAIN_MAX).map((c) => c.hex));
-  const colors = merged.slice(0, MAX_COLOURS).map((c) => ({ ...c, share: total ? Math.round((c.count / total) * 1000) / 10 : 0, main: mainSet.has(c.hex) }));
+  const colors = merged.slice(0, MAX_COLOURS).map((c) => {
+    const main = mainSet.has(c.hex);
+    const use = topRole(c.roles);
+    return { ...c, share: total ? Math.round((c.count / total) * 1000) / 10 : 0, main, use, group: groupOf(c, main, use) };
+  });
+
+  // a share of ALL colour use is tiny for every colour on a site with a long tail (0.4%); among the main colours it reads sensibly
+  const mainTotal = colors.reduce((n, c) => n + (c.main ? c.count : 0), 0);
+  for (const c of colors) c.mainShare = c.main && mainTotal ? Math.round((c.count / mainTotal) * 100) : null;
 
   // suggestions come from the main colours: a stray colour used twice is never the primary, the accent, the background or the text
   const pool = colors.filter((c) => c.main);
