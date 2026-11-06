@@ -4,6 +4,9 @@ import Tooltip from '../components/Tooltip';
 import Skeleton from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { useIcon } from '../providers/IconProvider';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import UsageTutorChat from './usage/UsageTutorChat';
+import { HOW_IT_WORKS, GUIDE_TOOLS } from './usage/usageTools.mjs';
 
 const PERIODS = [
   { id: 'today',   label: 'Today',    tip: 'Since midnight (Sydney time).' },
@@ -107,6 +110,7 @@ export default function UsagePage() {
   const [logLoading, setLogLoading] = useState(false);
   const [allFeatures, setAllFeatures] = useState(false);
   const [error, setError]         = useState(null);
+  const info = useToolInfoModal('vault_usage_info_seen');
 
   const query = useCallback(() => {
     let q = `period=${period}`;
@@ -162,6 +166,18 @@ export default function UsagePage() {
   const potential = obs.reduce((n, o) => n + (o.kind === 'save' && o.saving > 0 ? o.saving : 0), 0);
   const avgCall = summary?.calls ? summary.cost / summary.calls : 0;
 
+  // The guide's Open buttons: show the tab (and Custom dates when asked), then scroll to the part of the page.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    if (!target) return;
+    setTab(target.tool);
+    if (id === 'custom-dates') setPeriod('custom');
+    setTimeout(() => {
+      const el = document.querySelector('[data-guide="' + id + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  };
+
   const btn = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 hover:opacity-70';
 
   return (
@@ -171,10 +187,23 @@ export default function UsagePage() {
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--color-text)' }}>Usage &amp; Cost</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--color-text)' }}>Usage &amp; Cost</h1>
+              <Tooltip text="How Usage & Cost works, and what it cannot do.">
+                <button
+                  type="button"
+                  onClick={info.open}
+                  aria-label="How Usage and Cost works"
+                  className="transition-opacity duration-200 hover:opacity-60"
+                  style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  {getIcon('info', { size: 16 })}
+                </button>
+              </Tooltip>
+            </div>
             <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>Estimated AI spend across every feature, and where to spend less.</p>
           </div>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Period">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Period" data-guide="period">
             {PERIODS.map(p => (
               <Tooltip key={p.id} text={p.tip}>
                 <button
@@ -196,7 +225,7 @@ export default function UsagePage() {
         </div>
 
         {period === 'custom' && (
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap" data-guide="custom-dates">
             {[['From', customFrom, setCustomFrom, 'First day to include.'], ['To', customTo, setCustomTo, 'Last day to include.']].map(([label, value, set, tip]) => (
               <div key={label} className="flex items-center gap-2">
                 <label className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</label>
@@ -215,12 +244,13 @@ export default function UsagePage() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }} role="tablist">
+        <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }} role="tablist" data-guide="overview">
           {TABS.map(t => (
             <Tooltip key={t.id} text={t.tip}>
               <button
                 type="button"
                 role="tab"
+                data-guide={t.id === 'advice' ? 'advice' : undefined}
                 aria-selected={tab === t.id}
                 onClick={() => setTab(t.id)}
                 className="px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-all duration-200 hover:opacity-70 flex items-center gap-2"
@@ -245,7 +275,7 @@ export default function UsagePage() {
         ) : summary && tab === 'overview' ? (
           <>
             {/* Headline numbers */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" data-guide="numbers">
               <Stat icon="coins" label="Estimated cost" value={fmtCost(summary.cost)} sub={summary.calls ? `${fmtCost(avgCall)} per call` : 'No calls yet'} tip="What the AI calls cost, worked out from token counts and published prices. Not an invoice." />
               <Stat icon="usage" label="Total tokens" value={fmtShort(summary.totalTokens)} sub={`${fmt(summary.totalTokens)} in all`} tip="Input plus output tokens. A token is about three quarters of a word." />
               <Stat icon="inbox" label="Input tokens" value={fmtShort(summary.inputTokens)} sub={`${fmtShort(summary.outputTokens)} written back`} tip="What was sent to the models. Output (the answers) is shown underneath and costs more per token." />
@@ -279,7 +309,7 @@ export default function UsagePage() {
               <>
                 {/* Over time */}
                 {summary.daily?.length > 1 && (
-                  <div className="rounded-2xl border p-5" style={CARD}>
+                  <div className="rounded-2xl border p-5" style={CARD} data-guide="over-time">
                     <div className="flex items-baseline justify-between mb-4">
                       <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Over time</h2>
                       <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -309,7 +339,7 @@ export default function UsagePage() {
                 <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-6">
                   {/* By model */}
                   {byModel.length > 0 && (
-                    <div className="rounded-2xl border p-5 space-y-4" style={CARD}>
+                    <div className="rounded-2xl border p-5 space-y-4" style={CARD} data-guide="by-model">
                       <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>By model</h2>
                       <div className="flex w-full h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }} aria-hidden="true">
                         {byModel.map((m, i) => (
@@ -338,7 +368,7 @@ export default function UsagePage() {
 
                   {/* By feature */}
                   {byFeature.length > 0 && (
-                    <div className="rounded-2xl border p-5 space-y-4" style={CARD}>
+                    <div className="rounded-2xl border p-5 space-y-4" style={CARD} data-guide="by-feature">
                       <div className="flex items-baseline justify-between">
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>By feature</h2>
                         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>most expensive first</span>
@@ -369,7 +399,7 @@ export default function UsagePage() {
                 </div>
 
                 {/* Calls */}
-                <div className="rounded-2xl border overflow-hidden" style={CARD}>
+                <div className="rounded-2xl border overflow-hidden" style={CARD} data-guide="calls">
                   <div className="flex items-baseline justify-between px-5 py-4">
                     <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Calls</h2>
                     <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fmt(logTotal)} total</span>
@@ -456,7 +486,7 @@ export default function UsagePage() {
                 {obs.map(o => {
                   const k = KIND[o.kind] || KIND.note;
                   return (
-                    <div key={o.id} className="rounded-2xl border p-5 space-y-3" style={CARD}>
+                    <div key={o.id} className="rounded-2xl border p-5 space-y-3" style={CARD} data-guide={'advice-' + o.kind}>
                       <div className="flex items-center justify-between gap-3">
                         <Tooltip text={k.tip}>
                           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: 'var(--color-bg)', color: o.kind === 'quality' ? '#b45309' : 'var(--color-primary)' }}>
@@ -488,6 +518,21 @@ export default function UsagePage() {
           </div>
         ) : null}
       </div>
+
+      {info.show && (
+        <ToolInfoModal title="How Usage & Cost Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            See what your AI use costs and where it goes, and get suggestions on using the right model for each job. Pick a period at the top right, then use the Overview and Advice tabs. Hover anything for a plain explanation. Not sure where to look? Press the round button at the bottom right and tell the guide what you want to know.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
+
+      <UsageTutorChat currentTool={tab} onOpenTool={openToolById} />
     </div>
   );
 }

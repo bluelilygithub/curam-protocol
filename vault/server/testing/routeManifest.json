@@ -3613,6 +3613,9 @@
   "POST /api/videos/youtube-preview": {
    "class": "authed"
   },
+  "POST /api/usage-tutor": {
+   "class": "authed"
+  },
   "POST /api/web-extractor-tutor": {
    "class": "authed"
   },

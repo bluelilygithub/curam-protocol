@@ -183,6 +183,7 @@ app.use('/api/expense-review', requireFeature('gmailIntel'), require('./routes/e
 // Vault Shelf, signed-in side: make/revoke the app's keys (Settings) and file what it sent to the CRM with no client chosen (CRM page). docs/vault-shelf.md
 app.use('/api/shelf-tokens', requireFeature('shelf'), require('./routes/quickIngest').tokensRouter);
 app.use('/api/shelf-inbox', requireFeature('clients'), require('./routes/quickIngest').inboxRouter);
+app.use('/api/usage-tutor', requireFeature('usage'), aiLimiter, require('./routes/usageTutor')); // the Usage & Cost guide chat (sees no spending, calls or settings)
 app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 // aiLimiter applies to the whole router — clients.js now has an AI-cost

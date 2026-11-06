@@ -36,6 +36,7 @@ const GUIDES = {
   shares: { name: 'Shares guide', endpoint: '/api/shares-tutor' },
   settings: { name: 'Settings guide', endpoint: '/api/settings-tutor' },
   domains: { name: 'Domain guide', endpoint: '/api/domains-tutor' },
+  usage: { name: 'Usage & Cost guide', endpoint: '/api/usage-tutor' },
 };
 
 module.exports = { GUIDES };
