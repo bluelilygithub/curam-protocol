@@ -117,6 +117,7 @@ async function postSerpTask(task, opts = {}) {
     device: task.device,
     depth: task.depth,
     priority: 1, // normal = the cheapest
+    ...(task.searchDomain ? { se_domain: task.searchDomain } : {}),
     ...(task.loadAiOverview ? { load_async_ai_overview: true } : {}),
     ...(task.tag ? { tag: String(task.tag).slice(0, 255) } : {}),
   }];
@@ -164,6 +165,7 @@ async function liveSerp(task, opts = {}) {
     language_code: task.languageCode,
     device: task.device,
     depth: task.depth,
+    ...(task.searchDomain ? { se_domain: task.searchDomain } : {}),
     ...(task.loadAiOverview ? { load_async_ai_overview: true } : {}),
   }];
   const json = await request({ ...opts, method: 'POST', path: '/v3/serp/google/organic/live/advanced', body });
@@ -177,4 +179,23 @@ async function liveSerp(task, opts = {}) {
   return { costUsd: Number(t.cost) || 0, result, raw: json };
 }
 
-module.exports = { request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, liveSerp, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };
+// --- Place check (free): DataForSEO's list of Australian places, read once and kept in memory. Used to show what a typed place really is.
+let auLocations = null;
+async function loadAuLocations(opts = {}) {
+  if (auLocations) return auLocations;
+  const json = await request({ ...opts, method: 'GET', path: '/v3/serp/google/locations/au' });
+  const rows = json && json.tasks && json.tasks[0] && json.tasks[0].result;
+  if (!Array.isArray(rows) || !rows.length) throw new DataForSeoError('DataForSEO sent no list of places.', { code: 'BAD_BODY' });
+  auLocations = rows.map((r) => ({ code: r.location_code, name: r.location_name, type: r.location_type }));
+  return auLocations;
+}
+
+/** The place DataForSEO will search from for a typed name (exact match, any case). @returns {{ code, name, type }|null} */
+async function findLocation(name, opts = {}) {
+  const want = String(name || '').trim().toLowerCase().replace(/\s*,\s*/g, ',');
+  if (!want) return null;
+  const list = await loadAuLocations(opts);
+  return list.find((l) => l.name.toLowerCase() === want) || null;
+}
+
+module.exports = { findLocation, request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, liveSerp, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };

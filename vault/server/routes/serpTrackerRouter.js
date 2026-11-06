@@ -15,7 +15,7 @@ const { validateProfile, DEFAULTS, localDate } = require('../services/serpTracke
 const { listSites, loadSite, createSite, updateSite, deleteSite, listRuns, SiteError, MAX_SITES } = require('../services/serpTracker/store');
 const { runSite, RunAlreadyActive } = require('../services/serpTracker/runner');
 const { monthSpend, monthlyCapUsd, logCost, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD } = require('../services/serpTracker/costs');
-const { getBalance, hasCredentials, liveSerp } = require('../services/serpTracker/dataforseo');
+const { getBalance, hasCredentials, liveSerp, findLocation } =require('../services/serpTracker/dataforseo');
 const { parseSerp, SerpParseError } = require('../services/serpTracker/serpParse');
 const { saveLookup, listLookups, getLookup, deleteLookups, MAX_IDS } = require('../services/serpTracker/lookups');
 
@@ -81,6 +81,20 @@ function createRouter(pool, {
       });
     } catch (err) {
       fail(res, err, 'status', 'Could not load the SERP Tracker status.');
+    }
+  });
+
+  // what a typed place really is to DataForSEO (free call): { found, code, name, type }. The Site setup page shows it as a label.
+  router.get('/location-check', async (req, res) => {
+    const name = typeof req.query.name === 'string' ? req.query.name.slice(0, 120) : '';
+    if (!name.trim()) return res.json({ found: false });
+    if (!deps.hasCredentials(env)) return res.json({ found: false, unavailable: true });
+    try {
+      const loc = await (deps.findLocation || findLocation)(name, { env });
+      res.json(loc ? { found: true, code: loc.code, name: loc.name, type: loc.type } : { found: false });
+    } catch (err) {
+      getLogger().warn({ code: err && err.code }, 'serp-tracker location check failed');
+      res.json({ found: false, unavailable: true });
     }
   });
 
@@ -181,7 +195,7 @@ function createRouter(pool, {
       if (cap.over) return res.status(402).json({ error: `The monthly spending limit (US$${cap.cap.toFixed(2)}) has been reached, so no more searches are made this month.` });
       if (cap.spent + estimate > cap.cap) return res.status(402).json({ error: `This search is expected to cost about US$${estimate.toFixed(3)}, which would pass the monthly spending limit (US$${cap.cap.toFixed(2)}; US$${cap.spent.toFixed(3)} spent so far). Choose fewer results, or raise the limit on the server.` });
 
-      const task = { keyword, locationName: (profile && profile.locationName) || DEFAULTS.locationName, languageCode: (profile && profile.languageCode) || DEFAULTS.languageCode, device, depth: rawDepth, loadAiOverview: aiOverview };
+      const task = { keyword, locationName: (profile && profile.locationName) || DEFAULTS.locationName, languageCode: (profile && profile.languageCode) || DEFAULTS.languageCode, searchDomain: (profile && profile.searchDomain) || DEFAULTS.searchDomain, device, depth: rawDepth, loadAiOverview: aiOverview };
       const myDomain = profile ? profile.domain : null;
       const competitors = profile ? profile.competitors.map((c) => c.domain) : [];
       let best = null; // { summary, raw } of the fullest readable answer so far

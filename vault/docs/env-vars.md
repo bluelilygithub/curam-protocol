@@ -2,6 +2,8 @@
 
 Moved out of CLAUDE.md.
 
+**Google Cloud project for OAuth:** the `GOOGLE_CLIENT_ID/SECRET` client lives in the Google Cloud project **LLM Search** (project ID `gen-lang-client-0352705059`, organisation bluelily.com.au). Manage it under Google Auth Platform → Clients. The consent screen app name is "Curam-Service-Account". Every redirect URI used by the Vault (Gmail, Calendar, Drive, Search Console `/api/gsc/callback`) must be listed on that client, and the Search Console API must be enabled in that project.
+
 | Var | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude |

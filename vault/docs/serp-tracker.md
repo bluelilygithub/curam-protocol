@@ -87,6 +87,12 @@ A person can track up to **20 sites** (`MAX_SITES`), one per client or website. 
 - **Delete a site** moves it **and its saved lookups** to the recycle bin (type `serp-site`, `adapters/serpSite.js`, one transaction, 30 days, Undo). Its run history is not restored; its past spending stays in `serp_api_costs` (the `siteId` becomes empty). Undo is refused if the same domain has been added again, or at 20 sites. The latest **50 lookups are kept per site** (and 50 Quick lookups); "Delete all" applies to the list being viewed.
 - **Not done:** the CRM client page does not show its SERP sites yet (the link only says whose site it is).
 
+## Australian index and the real place (7 Nov 2026)
+
+Site setup has a **Google site** setting (`profile.searchDomain`, default `google.com.au`, sent to DataForSEO as `se_domain` on Live and queued searches; sites saved before it existed get the default). A line under the place/language boxes says what will really be used, for example "Searching as: Bowen Hills,Queensland,Australia (city, place 9060847) · google.com.au · language en". The place is checked against DataForSEO's Australian list (`GET /api/serp-tracker/location-check?name=`, a **free** call, list cached in memory, `findLocation` in `dataforseo.js`); an unknown place turns the line red. Typed exactly, "Bowen Hills,Queensland,Australia" exists (9060847). The existing default "Australia" stays national (2036): change the site's place to use the suburb.
+
+Verified with one real Live search (US$0.002): DataForSEO echoed `se_domain` google.com.au, `location_code` 9060847 and `check_url` on google.com.au (gl=AU). This supersedes the earlier "se_domain did not help" note: it did reach Google, but the ranking difference from the owner's browser was not shown to be caused by it.
+
 ## Finding where the site is (Find my site)
 
 Lookup depths are 10, 20, 50, 100 and 200 (the Live maximum; deeper needs the queued mode, which is not switched on). **Find my site** asks for the top 100 without the AI summary and reports the position and `bestPage` = `ceil(position / 10)` ("#118, page 12"; approximate: ten ordinary results a page). If a full answer does not have the site, a button offers the top 200. The page shows an **expected cost before** searching (`estimateLiveUsd`: US$0.002 per 10 results plus US$0.002 for the AI summary, from one real search and the docs; an upper bound) and the real cost after; the server refuses a search that is over the monthly limit **or expected to pass it**.

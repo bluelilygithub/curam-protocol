@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
+import api from '../../utils/apiClient';
 
 // SERP Tracker, Site setup: the form for ONE site (a client's website). Controlled by the page; this only draws it. See docs/serp-tracker.md.
 
@@ -10,7 +11,35 @@ const labelCls = 'block text-xs font-medium mb-1';
 const muted = { color: 'var(--color-muted)' };
 const input = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none';
 
+// What DataForSEO will really search from for the typed place (a free check), so the label shows the real place and not just the typed text.
+function useLocationCheck(name) {
+  const [info, setInfo] = useState(null); // null = checking, { found, code, name, type, unavailable }
+  useEffect(() => {
+    let live = true;
+    setInfo(null);
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get(`/api/serp-tracker/location-check?name=${encodeURIComponent(name || '')}`);
+        const data = await res.json();
+        if (live) setInfo(res.ok ? data : { found: false, unavailable: true });
+      } catch { if (live) setInfo({ found: false, unavailable: true }); }
+    }, 400);
+    return () => { live = false; clearTimeout(t); };
+  }, [name]);
+  return info;
+}
+
+function searchingAs(info, form) {
+  const site = form.searchDomain || 'google.com.au';
+  const lang = form.languageCode || 'en';
+  if (!info) return `Checking the place…`;
+  if (info.found) return `Searching as: ${info.name} (${info.type.toLowerCase()}, place ${info.code}) · ${site} · language ${lang}`;
+  if (info.unavailable) return `Searching as: "${form.locationName}" (could not be checked just now) · ${site} · language ${lang}`;
+  return `"${form.locationName}" is not a place DataForSEO knows. Use the exact form, for example "Bowen Hills,Queensland,Australia". Searches will fail until it is fixed.`;
+}
+
 export default function SiteForm({ form, set, toggleDevice, errors, saving, onSave, isNew, savedAt, clients, clientId, onClientChange, clientName }) {
+  const locInfo = useLocationCheck(form.locationName);
   return (
     <section className="rounded-2xl border p-6 space-y-4" style={CARD} aria-labelledby="serp-site-title">
       <h2 id="serp-site-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{isNew ? 'New site' : 'Your site'}</h2>
@@ -86,6 +115,15 @@ export default function SiteForm({ form, set, toggleDevice, errors, saving, onSa
           <label htmlFor="serp-lang" className={labelCls} style={muted}>Language</label>
           <input id="serp-lang" value={form.languageCode} onChange={set('languageCode')} className={input} style={FIELD} />
         </div>
+        <div>
+          <label htmlFor="serp-searchdomain" className={labelCls} style={muted}>Google site (the index searched)</label>
+          <Tooltip text='The Google website the search is made on. "google.com.au" is the Australian index. Lookups for this site use it.'>
+            <input id="serp-searchdomain" value={form.searchDomain} onChange={set('searchDomain')} placeholder="google.com.au" className={input} style={FIELD} />
+          </Tooltip>
+        </div>
+        <p className="sm:col-span-2 text-xs" role="status" aria-live="polite" data-guide="searching-as" style={{ color: locInfo && !locInfo.found && !locInfo.unavailable ? '#ef4444' : 'var(--color-muted)' }}>
+          {searchingAs(locInfo, form)}
+        </p>
         <div>
           <label htmlFor="serp-tz" className={labelCls} style={muted}>Your time zone</label>
           <Tooltip text="Reports group days, and weekly tasks run on Mondays, in this time zone.">

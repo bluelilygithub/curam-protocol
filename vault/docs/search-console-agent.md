@@ -16,6 +16,8 @@ Organic **query and page** data at **`/search-console`**. This is not the HTML c
 
 OAuth callback is public (`GET /api/gsc/callback`) and must be registered **before** `requireAuth` in `server/index.js`. Add the exact URI in Google Cloud authorised redirects. Gmail uses `GOOGLE_REDIRECT_URI`; Search Console uses **`GSC_REDIRECT_URI`** or `{APP_URL}/api/gsc/callback` (the **API** host on Railway, not the Vite port).
 
+**Google Cloud project:** the OAuth client is in **LLM Search** (`gen-lang-client-0352705059`). Add `https://curam-vault.up.railway.app/api/gsc/callback` to its authorised redirect URIs and enable the Search Console API there. Details: `docs/env-vars.md`.
+
 ---
 
 ## API

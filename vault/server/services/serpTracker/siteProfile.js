@@ -8,6 +8,7 @@ const DEVICES = ['desktop', 'mobile'];
 const DEFAULTS = Object.freeze({
   locationName: 'Australia',
   languageCode: 'en',
+  searchDomain: 'google.com.au', // the Google site searched (its Australian index); older saved sites without one get this too
   devices: ['desktop', 'mobile'],
   serpDepth: 100,
   timezone: 'Australia/Brisbane',
@@ -72,6 +73,9 @@ function validateProfile(raw) {
   const locationName = cleanText(src.locationName, 120) || DEFAULTS.locationName;
   const languageCode = cleanText(src.languageCode, 12) || DEFAULTS.languageCode;
   if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(languageCode)) errors.push('Language code should look like "en" or "en-AU".');
+
+  const searchDomain = cleanText(src.searchDomain, 30).toLowerCase().replace(/^www\./, '') || DEFAULTS.searchDomain;
+  if (!/^google\.(com|com?\.[a-z]{2}|[a-z]{2})$/.test(searchDomain)) errors.push('Google site should look like "google.com.au".');
 
   let devices = Array.isArray(src.devices) ? [...new Set(src.devices.map((d) => String(d).toLowerCase()))] : DEFAULTS.devices.slice();
   if (!devices.length) errors.push('Choose at least one device (desktop or mobile).');
@@ -143,7 +147,7 @@ function validateProfile(raw) {
   }
 
   if (errors.length) return { ok: false, profile: null, errors };
-  return { ok: true, errors: [], profile: { name, domain, brandTerms, locationName, languageCode, devices, serpDepth: depth, timezone, keywords, competitors, healthCheckUrls } };
+  return { ok: true, errors: [], profile: { name, domain, brandTerms, locationName, languageCode, searchDomain, devices, serpDepth: depth, timezone, keywords, competitors, healthCheckUrls } };
 }
 
 /** The calendar date ("YYYY-MM-DD") in `timeZone` at `now`. The brief groups every report by this Brisbane date. */
