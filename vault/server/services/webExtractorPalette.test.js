@@ -80,6 +80,38 @@ assert.doesNotThrow(() => collectColours(['this is { not css', '']), 'broken CSS
   assert.strictEqual(out.suggested.accent, null, 'no second vivid hue, so no accent');
   assert.ok(by('#faf9f5').variables.includes('--cream'));
 }
+// ---- refinement: what a real WordPress site taught (wiwc.com.au gave 85 colours for a palette of about 12) ----
+{
+  const { summarise, deltaE } = require('./webExtractorPalette');
+  // a colour NAME inside a variable name or another word is not a colour ("vivid-green-cyan" is not green)
+  const named = collectColours(['.a{color:var(--wp--preset--color--vivid-green-cyan)} .b{background:var(--x-red-blue)} .c{color:green} .d{border-color:var(--brand-pink, #123456)} .e{fill:blue}']).map;
+  assert.deepStrictEqual([...named.keys()].sort(), ['#0000ff', '#008000', '#123456'], 'only the real names (green, blue) and the real fallback count');
+  // the platform's own default settings are not the site's palette
+  const wp = collectColours([':root{--wp--preset--color--vivid-red:#cf2e2e;--wp--preset--gradient--x:linear-gradient(#020381,#2874fc);--wp-block-synced-color:#7a00df;--bs-blue:#0d6efd;--tw-ring-color:rgb(59 130 246 / .5);--accent:#9a7a4a} .has-vivid-red-color{color:var(--wp--preset--color--vivid-red)} a{color:var(--accent)}']);
+  assert.deepStrictEqual([...wp.map.keys()], ['#9a7a4a'], 'WordPress, Bootstrap and Tailwind defaults are left out, the site variable is kept');
+  // colours that look the same are joined into the most used one
+  assert.ok(deltaE([255, 255, 255], [254, 254, 254]) < 1 && deltaE([255, 255, 255], [155, 91, 70]) > 40);
+  const joined = summarise(collectColours(['a{color:#ffffff} b{color:#ffffff} c{color:#ffffff} d{color:#fefefe} e{color:#0b0d0f} f{color:#000000} g{color:#9a7a4a}']), '');
+  assert.deepStrictEqual(joined.colors.map((c) => c.hex), ['#ffffff', '#000000', '#9a7a4a'], 'white and near-white are one colour; black and near-black are one (a tie keeps the first by code)');
+  assert.strictEqual(joined.colors.find((c) => c.hex === '#ffffff').count, 4);
+  assert.strictEqual(joined.colors.find((c) => c.hex === '#ffffff').similar, 1);
+  assert.deepStrictEqual(joined.colors.find((c) => c.hex === '#ffffff').alsoHex, ['#fefefe']);
+  assert.strictEqual(joined.similarJoined, 2);
+  assert.strictEqual(joined.colourCount, 3);
+  // the main colours: the top five always, then those with real weight (2% and 3 uses), at most twelve; the rest are less-used shades
+  const many = [];
+  for (let i = 0; i < 30; i += 1) many.push(`.c${i}{color:hsl(${i * 12},70%,50%)}`.repeat(i < 8 ? 10 : 1));
+  const big = summarise(collectColours([many.join('\n')]), '');
+  assert.strictEqual(big.mainCount, 8, 'eight colours carry the weight, the 22 used once are less-used shades');
+  assert.ok(big.colors.filter((c) => !c.main).every((c) => c.count <= 1));
+  assert.ok(big.colors.slice(0, 8).every((c) => c.main));
+  const flat = summarise(collectColours([Array.from({ length: 40 }, (_, i) => `.c${i}{color:hsl(${i * 9},70%,50%)}`).join('\n')]), '');
+  assert.strictEqual(flat.mainCount, 5, 'when nothing stands out, the top five are the main colours');
+  // suggestions come from the main colours, never from a colour used once or twice
+  const odd = summarise(collectColours(['a{color:#9a7a4a} b{color:#9a7a4a} c{color:#9a7a4a} d{color:#9a7a4a} e{color:#9a7a4a} f{color:#9a7a4a} g{color:#9a7a4a} h{color:#9a7a4a} i{color:#1e2832} j{color:#1e2832} k{color:#1e2832} l{color:#4a5d6a} m{color:#4a5d6a} n{color:#4a5d6a} o{color:#c8d2d8} p{color:#c8d2d8} q{color:#c8d2d8} r{color:#e8edf0} s{color:#e8edf0} t{color:#e8edf0} u{background:#b42828}']), '');
+  assert.ok(odd.colors.find((c) => c.hex === '#b42828' && !c.main), 'a colour used once is not main');
+  assert.notStrictEqual(odd.suggested.accent, '#b42828', 'and is never suggested as the accent');
+}
 // a vivid colour beats a pale one for primary, and a link colour is not the text colour when a neutral one exists
 {
   const { summarise } = require('./webExtractorPalette');

@@ -38,6 +38,8 @@ const {
   assert.match(CATALOG.find((t) => t.id === 'download-images').does, /up to 60/);
   assert.match(CATALOG.find((t) => t.id === 'palette').notes, /inside pictures/, 'colours in pictures are not read');
   assert.match(CATALOG.find((t) => t.id === 'palette').does, /Click a swatch to copy/);
+  assert.match(CATALOG.find((t) => t.id === 'palette').does, /near-identical shades are joined/, 'the guide knows the palette is refined');
+  assert.match(CATALOG.find((t) => t.id === 'palette-more').does, /only used once or twice/);
   assert.match(CATALOG.find((t) => t.id === 'palette-pages').notes, /Up to six pages, not a whole website/);
   assert.match(NOT_POSSIBLE.join(' '), /except Colour palette/, 'the one-page rule names its exception');
   assert.match(CATALOG.find((t) => t.id === 'download-pdf').notes, /show as \?/);

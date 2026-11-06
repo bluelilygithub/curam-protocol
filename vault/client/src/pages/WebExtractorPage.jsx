@@ -47,6 +47,7 @@ export default function WebExtractorPage() {
   const [excludeTerms, setExcludeTerms] = useState('');
   const [selector, setSelector] = useState('');
   const [palettePages, setPalettePages] = useState(1);
+  const [paletteAll, setPaletteAll] = useState(false); // the Colour palette shows its main colours until this is turned on
   const [linkType, setLinkType] = useState('all');
   const [linkQuery, setLinkQuery] = useState('');
   const [loadingMode, setLoadingMode] = useState(null);
@@ -102,6 +103,7 @@ export default function WebExtractorPage() {
     setLoadingMode(runMode);
     setResults((r) => ({ ...r, [runMode]: null }));
     if (runMode === 'styled') setStyledView('preview');
+    if (runMode === 'palette') setPaletteAll(false);
     try {
       const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
       const stop = new AbortController();
@@ -701,7 +703,10 @@ export default function WebExtractorPage() {
           })()}
 
           {result?.mode === 'palette' && (() => {
-            const colors = result.colors || [];
+            const allColors = result.colors || [];
+            // the main colours by default; the less-used shades are one click away. Copy and download act on what is shown.
+            const lessUsed = allColors.filter((c) => !c.main).length;
+            const colors = paletteAll ? allColors : allColors.filter((c) => c.main);
             const brand = colors.filter((c) => c.kind === 'brand');
             const neutral = colors.filter((c) => c.kind !== 'brand');
             const sg = result.suggested || {};
@@ -727,6 +732,7 @@ export default function WebExtractorPage() {
                   <p className="text-xs" style={{ color: 'var(--color-text)' }}>{c.count} use{c.count === 1 ? '' : 's'} · {c.share}%</p>
                   <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }}>rgb({c.rgb.join(', ')}) · hsl({c.hsl[0]}, {c.hsl[1]}%, {c.hsl[2]}%)</p>
                   {roleLine(c) ? <p className="text-xs break-words" style={{ color: 'var(--color-muted)' }}>{roleLine(c)}</p> : null}
+                  {c.similar ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Includes {c.similar} near-identical shade{c.similar === 1 ? '' : 's'}{c.alsoHex && c.alsoHex.length ? ' (' + c.alsoHex.join(', ') + (c.similar > c.alsoHex.length ? ' …' : '') + ')' : ''}</p> : null}
                   {c.semiTransparent ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Also used partly see-through</p> : null}
                 </div>
               </div>
@@ -738,8 +744,9 @@ export default function WebExtractorPage() {
               ['Text', sg.text, 'The colour used most for text.'],
               ['Browser theme', result.themeColor, 'The colour the page asks the browser to use for its toolbar (theme-color), if it sets one.'],
             ].filter(([, hex]) => hex);
-            const found = colors.length
-              ? result.colourCount + ' colour' + (result.colourCount === 1 ? '' : 's') + ' found' + (result.colourCount > colors.length ? ' (the ' + colors.length + ' most used are shown)' : '')
+            const found = allColors.length
+              ? (paletteAll ? allColors.length + ' colours' : result.mainCount + ' main colour' + (result.mainCount === 1 ? '' : 's')) + (lessUsed && !paletteAll ? ' (and ' + lessUsed + ' less-used shade' + (lessUsed === 1 ? '' : 's') + ' hidden)' : '')
+                + (result.similarJoined ? ', ' + result.similarJoined + ' near-identical shade' + (result.similarJoined === 1 ? '' : 's') + ' joined' : '')
               : 'No colours found';
             return (
               <section className="space-y-4">
@@ -753,8 +760,8 @@ export default function WebExtractorPage() {
                   {colors.length > 0 && (
                     <div className="shrink-0 flex flex-wrap items-center gap-2">
                       <Tooltip text="Copy every hex code, one per line, most used first."><button type="button" onClick={() => copyText(colors.map((c) => c.hex).join('\n'))} className={BUTTON} style={BUTTON_STYLE}>Copy hex codes</button></Tooltip>
-                      <Tooltip text="Copy the palette as CSS variables (--color-primary, --brand-1, --neutral-1 and so on) to paste into a style sheet."><button type="button" data-guide="copy-palette" onClick={() => copyText(paletteToCss(result))} className={BUTTON} style={BUTTON_STYLE}>Copy as CSS</button></Tooltip>
-                      <Tooltip text="Download the palette as a CSV file for a spreadsheet: codes, RGB, HSL, how often each is used and for what."><button type="button" onClick={() => downloadCsv(paletteToRows(result), slug + '-colours.csv')} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button></Tooltip>
+                      <Tooltip text="Copy the palette as CSS variables (--color-primary, --brand-1, --neutral-1 and so on) to paste into a style sheet."><button type="button" data-guide="copy-palette" onClick={() => copyText(paletteToCss({ ...result, colors }))} className={BUTTON} style={BUTTON_STYLE}>Copy as CSS</button></Tooltip>
+                      <Tooltip text="Download the palette as a CSV file for a spreadsheet: codes, RGB, HSL, how often each is used and for what."><button type="button" onClick={() => downloadCsv(paletteToRows({ ...result, colors }), slug + '-colours.csv')} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button></Tooltip>
                     </div>
                   )}
                 </div>
@@ -781,6 +788,13 @@ export default function WebExtractorPage() {
                     <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Greys, whites and blacks</p>
                     <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{neutral.map((c) => swatch(c, false))}</div>
                   </div>
+                )}
+                {lessUsed > 0 && (
+                  <Tooltip text={paletteAll ? 'Show only the main colours, the ones that carry real weight on the site.' : 'Also show the colours that are only used once or twice: often one-off shades, plugin leftovers or colours inside embedded content.'}>
+                    <button type="button" data-guide="palette-more" aria-expanded={paletteAll} onClick={() => setPaletteAll((v) => !v)} className={BUTTON} style={BUTTON_STYLE}>
+                      {paletteAll ? 'Show only the main colours' : 'Show ' + lessUsed + ' less-used colour' + (lessUsed === 1 ? '' : 's')}
+                    </button>
+                  </Tooltip>
                 )}
                 {result.pages?.length > 1 && (
                   <div className="rounded-2xl border p-4 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>

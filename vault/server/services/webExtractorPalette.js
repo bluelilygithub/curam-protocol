@@ -24,7 +24,11 @@ const NAMED = {
   gray: '#808080', grey: '#808080', silver: '#c0c0c0', maroon: '#800000', navy: '#000080', teal: '#008080', lime: '#00ff00', aqua: '#00ffff',
   fuchsia: '#ff00ff', olive: '#808000', pink: '#ffc0cb',
 };
-const NAMED_RE = new RegExp(`\\b(${Object.keys(NAMED).join('|')})\\b`, 'gi');
+// a colour name only counts as a whole word: "green" yes, but not the "green" inside "vivid-green-cyan" or "greenhouse"
+const NAMED_RE = new RegExp(`(?<![\\w-])(${Object.keys(NAMED).join('|')})(?![\\w-])`, 'gi');
+// Settings that WordPress core, Bootstrap, Tailwind and Swiper ship with every site whether it uses them or not (WordPress alone adds about
+// forty preset colours and gradients). They are not the site's own palette, so they are left out.
+const NOISE_VAR_RE = /^--(wp-|wp--|bs-|tw-|swiper-)/;
 const TOKEN_RE = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(\s*[^)]*\)/gi;
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
@@ -126,7 +130,8 @@ function coloursIn(prop, value) {
   for (const m of v.matchAll(TOKEN_RE)) { const c = parseColour(m[0]); if (c) found.push(c); }
   const role = roleOf(prop);
   if (role !== 'other' || NAME_OK_PROP.test(prop)) {
-    for (const m of v.matchAll(NAMED_RE)) found.push({ hex: NAMED[m[1].toLowerCase()], alpha: 1 });
+    const noVars = v.replace(/var\([^)]*\)/gi, ' '); // a variable's name is not a colour name
+    for (const m of noVars.matchAll(NAMED_RE)) found.push({ hex: NAMED[m[1].toLowerCase()], alpha: 1 });
   }
   return found;
 }
@@ -155,6 +160,7 @@ function collectColours(cssTexts, acc = newAccumulator()) {
     root.walkDecls((decl) => {
       const prop = decl.prop.toLowerCase();
       const isVar = prop.startsWith('--');
+      if (isVar && NOISE_VAR_RE.test(prop)) return; // the platform's own default settings, not the site's palette
       // what a variable is used for: background: var(--surface) is a background use; --surface: var(--cream) makes --surface an alias of --cream
       for (const m of String(decl.value || '').matchAll(VAR_RE)) {
         if (isVar) {
@@ -198,6 +204,45 @@ function isNeutral(hsl) {
   return hsl[1] < 12 || hsl[2] > 96 || hsl[2] < 5 || (hsl[1] < 30 && (hsl[2] > 75 || hsl[2] < 20));
 }
 
+const SIMILAR_DELTA_E = 4; // colours closer than this look the same to the eye (about 2 is barely noticeable)
+const MAIN_MAX = 12;
+
+/** A colour as CIE L*a*b*, where distance matches how different two colours look. */
+function toLab([r, g, b]) {
+  const lin = (v) => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  const R = lin(r); const G = lin(g); const B = lin(b);
+  const X = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047;
+  const Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+  const Z = (B * 0.9505 + G * 0.1192 + R * 0.0193) / 1.08883;
+  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+}
+
+/** How different two colours look (CIE76 delta E). */
+function deltaE(a, b) {
+  const [l1, a1, b1] = toLab(a); const [l2, a2, b2] = toLab(b);
+  return Math.sqrt((l1 - l2) ** 2 + (a1 - a2) ** 2 + (b1 - b2) ** 2);
+}
+
+/**
+ * Join colours that look the same (#ffffff and #fefefe, #0b0d0f and #000). The list must be most used first: each colour joins the first
+ * more-used colour it is too close to, which keeps its own spelling, takes the counts, and records how many it absorbed in `similar`.
+ */
+function mergeSimilar(sorted) {
+  const out = [];
+  for (const c of sorted) {
+    const home = out.find((o) => deltaE(o.rgb, c.rgb) < SIMILAR_DELTA_E);
+    if (!home) { out.push({ ...c, roles: { ...c.roles }, variables: [...c.variables], similar: 0, alsoHex: [] }); continue; }
+    home.count += c.count;
+    for (const k of Object.keys(home.roles)) home.roles[k] += c.roles[k];
+    home.variables = [...new Set([...home.variables, ...c.variables])].slice(0, 4);
+    home.semiTransparent = home.semiTransparent || c.semiTransparent;
+    home.similar += 1 + (c.similar || 0);
+    if (home.alsoHex.length < 3) home.alsoHex.push(c.hex);
+  }
+  return out;
+}
+
 /** Counted colours -> the result: every colour with its use, plus a suggested background, text, primary and accent. */
 function summarise(acc, themeColor) {
   const { map, uses, varRoles, aliases } = acc;
@@ -235,22 +280,31 @@ function summarise(acc, themeColor) {
     });
   }
   list.sort((a, b) => b.count - a.count || a.hex.localeCompare(b.hex));
-  const colors = list.slice(0, MAX_COLOURS).map((c) => ({ ...c, share: total ? Math.round((c.count / total) * 1000) / 10 : 0 }));
+  const merged = mergeSimilar(list);
+  // the main palette: the colours that carry real weight on the site (at least 2% of all colour use, and at least 3 uses), 5 to 12 of them;
+  // everything else is a less-used shade, still listed but behind a "show more"
+  const mainMin = Math.max(3, total * 0.02);
+  const mainSet = new Set(merged.filter((c, i) => i < 5 || c.count >= mainMin).slice(0, MAIN_MAX).map((c) => c.hex));
+  const colors = merged.slice(0, MAX_COLOURS).map((c) => ({ ...c, share: total ? Math.round((c.count / total) * 1000) / 10 : 0, main: mainSet.has(c.hex) }));
 
-  const brand = colors.filter((c) => c.kind === 'brand');
+  // suggestions come from the main colours: a stray colour used twice is never the primary, the accent, the background or the text
+  const pool = colors.filter((c) => c.main);
+  const brand = pool.filter((c) => c.kind === 'brand');
   const pick = (arr, role) => arr.slice().sort((a, b) => b.roles[role] - a.roles[role] || b.count - a.count).find((c) => c.roles[role] > 0);
   // a brand colour is a vivid one: a pale cream or a near-black tint is a background or a text colour, not the colour of the brand
   const vivid = brand.filter((c) => c.hsl[1] >= 25 && c.hsl[2] >= 15 && c.hsl[2] <= 85);
   const primary = vivid[0] || brand[0] || null;
   const hueGap = (a, b) => { const d = Math.abs(a.hsl[0] - b.hsl[0]); return Math.min(d, 360 - d); };
   const accent = primary ? [...vivid, ...brand].find((c) => c !== primary && hueGap(c, primary) >= 30) || null : null;
-  const bg = pick(colors, 'background');
+  const bg = pick(pool, 'background');
   // body text is nearly always a plain dark neutral; a link colour is only taken when there is no neutral text colour
-  const others = colors.filter((c) => c !== bg);
+  const others = pool.filter((c) => c !== bg);
   const text = pick(others.filter((c) => c.kind === 'neutral'), 'text') || pick(others, 'text');
   return {
     colors,
-    colourCount: map.size,
+    colourCount: merged.length, // after near-identical shades are joined
+    mainCount: colors.filter((c) => c.main).length,
+    similarJoined: list.length - merged.length,
     suggested: { primary: primary && primary.hex, accent: accent && accent.hex, background: bg && bg.hex, text: text && text.hex },
     themeColor,
   };
@@ -372,4 +426,4 @@ async function buildPalette(pageUrl, body, opts = {}, deps = {}) {
   return { ...result, pages, pagesRead: read, files: fileCount, notice: notes.join(' ') };
 }
 
-module.exports = { buildPalette, parseColour, collectColours, newAccumulator, readHtmlColours, summarise, pickPages, rgbToHsl, isNeutral, PAGE_CHOICES };
+module.exports = { deltaE, mergeSimilar, buildPalette, parseColour, collectColours, newAccumulator, readHtmlColours, summarise, pickPages, rgbToHsl, isNeutral, PAGE_CHOICES };
