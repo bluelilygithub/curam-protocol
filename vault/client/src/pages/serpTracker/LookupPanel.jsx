@@ -39,11 +39,20 @@ function LookupResult({ lookup }) {
         <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
           {lookup.device === 'mobile' ? 'Mobile' : 'Desktop'} · {lookup.locationName} · top {lookup.depth} · {when(lookup.createdAt)} · cost {costText(lookup.costUsd)}
         </p>
+        {s.searched && (
+          <Tooltip text="What DataForSEO says it actually searched: which Google site, which place (as a DataForSEO place number) and which language. Use it to check the results are for Australia.">
+            <p className="text-xs mt-0.5 w-fit" style={{ color: 'var(--color-muted)' }}>
+              Searched as: {s.searched.seDomain ? `Google (${s.searched.seDomain})` : 'Google'}
+              {s.searched.locationCode != null ? ` · place ${s.searched.locationCode} (${lookup.locationName})` : ''}
+              {s.searched.languageCode ? ` · language ${s.searched.languageCode}` : ''}
+            </p>
+          </Tooltip>
+        )}
       </div>
 
       <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Fact label="Your site">
-          {!mine ? 'No site saved' : mine.status === 'ranked' ? `#${mine.bestPosition}` : `Not in the top ${lookup.depth}`}
+          {!mine ? 'No site saved' : mine.status === 'ranked' ? `#${mine.bestPosition}` : `Not found in the top ${lookup.depth}`}
         </Fact>
         <Fact label="Above your first result">
           {!mine || mine.itemsAboveMe == null ? '—' : `${mine.itemsAboveMe} other ${mine.itemsAboveMe === 1 ? 'box' : 'boxes'}`}
@@ -52,6 +61,12 @@ function LookupResult({ lookup }) {
           {!ai || !ai.present ? 'Not shown' : mine && ai.mineCited ? 'Names you' : 'Shown'}
         </Fact>
       </dl>
+
+      {mine && mine.uncertain && (
+        <p className="text-sm" style={{ color: '#b45309' }}>
+          Your site was not found, but {s.unknownDomainCount} {s.unknownDomainCount === 1 ? 'result does' : 'results do'} not show which website {s.unknownDomainCount === 1 ? 'it is' : 'they are'} (Google hides it for things like Pinterest pins), so your site could be one of them.
+        </p>
+      )}
 
       {mine && mine.status === 'ranked' && (
         <p className="text-sm" style={{ color: 'var(--color-text)' }}>
@@ -72,16 +87,36 @@ function LookupResult({ lookup }) {
       )}
 
       <div>
+        <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Sponsored ads</h4>
+        {!Array.isArray(s.ads) ? (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Ads were not recorded for this older lookup. Look it up again to see them.</p>
+        ) : s.ads.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No sponsored ads came back for this search. Ads change with the place, the device and the time, so this does not prove none are running.</p>
+        ) : (
+          <ol className="space-y-1.5">
+            {s.ads.map((a, i) => (
+              <li key={`${a.position}-${i}`} className="rounded-xl border px-3 py-2 text-sm" style={a.isMine ? { ...INNER, borderColor: 'var(--color-primary)' } : INNER}>
+                <span className="block font-medium truncate" style={{ color: 'var(--color-text)' }}>{a.title || a.domain}{a.isMine ? ' (you)' : ''}</span>
+                <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{a.domain || a.shownUrl}</span>
+                {a.description && <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{a.description}</span>}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      <div>
         <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Top 10 results</h4>
         <ol className="space-y-1.5">
           {(s.top10 || []).map((r) => (
             <li key={`${r.position}-${r.url}`} className="rounded-xl border px-3 py-2 text-sm flex gap-3" style={r.isMine ? { ...INNER, borderColor: 'var(--color-primary)' } : INNER}>
               <span className="font-semibold w-6 shrink-0" style={{ color: 'var(--color-text)' }}>{r.position}</span>
               <span className="min-w-0">
-                <span className="block font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.title || r.domain}{r.isMine ? ' (you)' : ''}</span>
+                <span className="block font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.title || r.domain || r.site}{r.isMine ? ' (you)' : ''}</span>
                 {safeHref(r.url)
-                  ? <a href={safeHref(r.url)} target="_blank" rel="noopener noreferrer" className="block text-xs underline truncate" style={{ color: 'var(--color-muted)' }}>{r.domain}</a>
-                  : <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{r.domain}</span>}
+                  ? <a href={safeHref(r.url)} target="_blank" rel="noopener noreferrer" className="block text-xs underline truncate" style={{ color: 'var(--color-muted)' }}>{r.shownUrl || r.domain || r.site || 'Open result'}</a>
+                  : <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{r.shownUrl || r.domain || r.site}</span>}
+                {!r.domain && <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{r.site ? `${r.site}: ` : ''}website not shown by Google</span>}
               </span>
             </li>
           ))}

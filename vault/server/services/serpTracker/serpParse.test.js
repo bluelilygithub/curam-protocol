@@ -74,4 +74,58 @@ assert.equal(messy.top10.find((r) => r.url === 'https://a.com/').absolute, null)
 assert.equal(messy.mine.bestPosition, 2); // b.com has no domain field: it is read from its url
 assert.equal(messy.layout.length, 3);
 
+// ---- shapes seen in a REAL Live answer (6 Nov 2026): Google redirect links, the real site only in `breadcrumb`, pins with no address
+const goto = (g, a, breadcrumb, site, extra = {}) => ({ type: 'organic', rank_group: g, rank_absolute: a, domain: 'google.com', url: `https://google.com/goto?url=CAES${g}opaque`, title: 't', breadcrumb, website_name: site, ...extra });
+const real = {
+  keyword: 'walk in wine cabinets', se_domain: 'google.com', location_code: 2036, language_code: 'en',
+  items: [
+    { type: 'ai_overview', rank_group: 1, rank_absolute: 1, references: [{ url: 'https://www.instagram.com/reel/x', domain: 'www.instagram.com', title: 'i' }] },
+    goto(1, 2, 'https://www.pinterest.com › pin', 'Pinterest'),
+    goto(2, 3, 'Pinterest · sgatling | 1 week ago', 'Pinterest · sgatling'), // no web address at all
+    { type: 'images', rank_group: 1, rank_absolute: 4 },
+    goto(3, 5, 'https://www.wiwc.com.au › cabinets › walk-in-wine-cabinet', 'Walk In Wine Cabinets'),
+    goto(4, 6, 'https://www.retravision.com.au › liebherr-single-zone-f...', 'Retravision'),
+  ],
+};
+let rp = parseSerp(real, { myDomain: 'wiwc.com.au', competitors: ['retravision.com.au'], depth: 10 });
+assert.deepEqual(rp.top10.map((r) => r.domain), ['pinterest.com', '', 'wiwc.com.au', 'retravision.com.au']); // google.com is never reported as a result's website
+assert.equal(rp.top10[1].site, 'Pinterest · sgatling'); // the site name is kept when there is no address
+assert.equal(rp.unknownDomainCount, 1);
+assert.equal(rp.mine.status, 'ranked'); // found through the breadcrumb, although `domain` said google.com
+assert.equal(rp.mine.bestPosition, 3);
+assert.equal(rp.mine.bestUrl, 'https://www.wiwc.com.au/cabinets/walk-in-wine-cabinet'); // the breadcrumb's arrows become slashes
+assert.equal(rp.mine.uncertain, false);
+assert.equal(rp.top10[2].isMine, true);
+assert.equal(rp.top10[0].url.startsWith('https://google.com/goto?'), true); // the redirect link is kept for opening
+assert.deepEqual(rp.searched, { seDomain: 'google.com', locationCode: 2036, languageCode: 'en' });
+assert.deepEqual(rp.ads, []); // no paid items: an empty list, shown to the person as "no ads returned"
+
+// not found while a result hides its website: not ranked, but flagged as uncertain, never silently "not ranked"
+rp = parseSerp({ ...real, items: real.items.filter((i) => !(i.breadcrumb || '').includes('wiwc')) }, { myDomain: 'wiwc.com.au', depth: 10 });
+assert.equal(rp.mine.status, 'not_in_top_10');
+assert.equal(rp.mine.bestPosition, null);
+assert.equal(rp.mine.uncertain, true);
+// and when every result's website is known, not found is certain
+rp = parseSerp({ keyword: 'k', items: [goto(1, 1, 'https://a.com › x', 'A'), goto(2, 2, 'https://b.com', 'B')] }, { myDomain: 'wiwc.com.au', depth: 10 });
+assert.equal(rp.mine.uncertain, false);
+assert.equal(rp.unknownDomainCount, 0);
+
+// a result genuinely on a Google property (not a redirect link) keeps its own domain
+rp = parseSerp({ keyword: 'k', items: [organic(1, 1, 'https://maps.google.com/place/x', 'maps.google.com')] }, { myDomain: 'wiwc.com.au', depth: 10 });
+assert.equal(rp.top10[0].domain, 'maps.google.com');
+assert.equal(rp.unknownDomainCount, 0);
+
+// ads: listed with their position, advertiser and text; my own ad is flagged; at most ten
+const withAds = { keyword: 'k', items: [
+  { type: 'paid', rank_group: 1, rank_absolute: 1, domain: 'www.wiwc.com.au', title: 'Wine cabinets', url: 'https://www.wiwc.com.au/ad', description: 'Buy now' },
+  { type: 'paid', rank_group: 2, rank_absolute: 2, domain: 'rival.com.au', title: 'Rival', url: 'https://rival.com.au/', description: 'Also buy' },
+  organic(1, 3, 'https://a.com/', 'a.com'),
+] };
+rp = parseSerp(withAds, { myDomain: 'wiwc.com.au', depth: 10 });
+assert.equal(rp.ads.length, 2);
+assert.deepEqual(rp.ads.map((a) => [a.position, a.domain, a.isMine]), [[1, 'wiwc.com.au', true], [2, 'rival.com.au', false]]);
+assert.equal(rp.ads[0].description, 'Buy now');
+assert.equal(rp.mine.itemsAboveMe, null); // I am not in the organic results, so there is nothing "above my first result"
+assert.equal(parseSerp({ keyword: 'k', items: [...Array.from({ length: 14 }, (_, i) => ({ type: 'paid', rank_group: i + 1, rank_absolute: i + 1, domain: 'x.com', url: 'https://x.com/' })), organic(1, 15, 'https://a.com/', 'a.com')] }, { depth: 10 }).ads.length, 10);
+
 console.log('serpParse.test.js: all passed');
