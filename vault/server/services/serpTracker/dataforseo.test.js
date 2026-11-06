@@ -94,7 +94,7 @@ const okBody = (balance = 12.5, cost = 0) => ({ status_code: 20000, cost, tasks:
   assert.deepEqual(posted, { taskId: 'task-1', costUsd: 0.0156 });
   assert.equal(sent.url, 'https://api.dataforseo.com/v3/serp/google/organic/task_post');
   assert.equal(sent.init.method, 'POST');
-  assert.deepEqual(JSON.parse(sent.init.body), [{ keyword: 'walk in wine cabinets', location_name: 'Australia', language_code: 'en', device: 'mobile', depth: 100, se_domain: 'google.com.au', priority: 1, load_async_ai_overview: true, tag: 'k1' }]);
+  assert.deepEqual(JSON.parse(sent.init.body), [{ keyword: 'walk in wine cabinets', location_name: 'Australia', language_code: 'en', device: 'mobile', depth: 100, priority: 1, load_async_ai_overview: true, tag: 'k1' }]);
   // AI Overview is only asked for when wanted (it can cost extra)
   await postSerpTask({ keyword: 'k', locationName: 'Australia', languageCode: 'en', device: 'desktop', depth: 10 }, { env: ENV, sleep: noSleep, fetchImpl: async (u, init) => { sent = JSON.parse(init.body)[0]; return res(200, { status_code: 20000, tasks: [{ id: 't', status_code: 20100, cost: 0 }] }); } });
   assert.equal('load_async_ai_overview' in sent, false);

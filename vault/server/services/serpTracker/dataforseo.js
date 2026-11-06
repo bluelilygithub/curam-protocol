@@ -101,16 +101,6 @@ async function getBalance(opts = {}) {
 // "Still being worked on" task codes are 40601 (handed) and 40602 (in queue) per the DataForSEO errors list; the docs pages read did not
 // show them, so any other task code is treated as a failure rather than "wait longer". Polling uses task_get (free), not tasks_ready, whose
 // shape the docs pages read did not show.
-// DataForSEO echoed se_domain "google.com" for location "Australia" (seen 6 Nov 2026), i.e. not the Australian index a person on
-// google.com.au sees. We name the Google domain ourselves for the countries we know; unknown locations leave it to DataForSEO.
-const SE_DOMAINS = { australia: 'google.com.au', 'new zealand': 'google.co.nz', 'united kingdom': 'google.co.uk', canada: 'google.ca', ireland: 'google.ie', 'south africa': 'google.co.za' };
-function seDomainFor(locationName) {
-  const first = String(locationName || '').split(',')[0].trim().toLowerCase();
-  const last = String(locationName || '').split(',').pop().trim().toLowerCase(); // "Brisbane,Queensland,Australia"
-  return SE_DOMAINS[last] || SE_DOMAINS[first] || null;
-}
-const seDomainField = (task) => { const d = task.seDomain || seDomainFor(task.locationName); return d ? { se_domain: d } : {}; };
-
 const TASK_CREATED = 20100;
 const TASK_OK = 20000;
 const TASK_PENDING = new Set([40601, 40602]);
@@ -126,7 +116,6 @@ async function postSerpTask(task, opts = {}) {
     language_code: task.languageCode,
     device: task.device,
     depth: task.depth,
-    ...seDomainField(task),
     priority: 1, // normal = the cheapest
     ...(task.loadAiOverview ? { load_async_ai_overview: true } : {}),
     ...(task.tag ? { tag: String(task.tag).slice(0, 255) } : {}),
@@ -175,7 +164,6 @@ async function liveSerp(task, opts = {}) {
     language_code: task.languageCode,
     device: task.device,
     depth: task.depth,
-    ...seDomainField(task),
     ...(task.loadAiOverview ? { load_async_ai_overview: true } : {}),
   }];
   const json = await request({ ...opts, method: 'POST', path: '/v3/serp/google/organic/live/advanced', body });
@@ -189,4 +177,4 @@ async function liveSerp(task, opts = {}) {
   return { costUsd: Number(t.cost) || 0, result, raw: json };
 }
 
-module.exports = { request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, liveSerp, seDomainFor, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };
+module.exports = { request, getBalance, postSerpTask, getSerpTask, waitForSerpTask, liveSerp, hasCredentials, authHeader, DataForSeoError, BASE_URL, MAX_RETRIES };
