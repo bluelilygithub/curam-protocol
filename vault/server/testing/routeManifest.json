@@ -3253,6 +3253,21 @@
   "POST /api/tasks": {
    "class": "authed"
   },
+  "GET /api/serp-tracker/status": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/site": {
+   "class": "authed"
+  },
+  "PUT /api/serp-tracker/site": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/runs": {
+   "class": "authed"
+  },
+  "POST /api/serp-tracker/run": {
+   "class": "authed"
+  },
   "POST /api/topic-research-tutor": {
    "class": "authed"
   },

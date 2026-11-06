@@ -258,6 +258,7 @@ app.use('/api/domains-tutor', requireFeature('domains'), aiLimiter, require('./r
 app.use('/api/dns-lookup-tutor',requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
 app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)
 app.use('/api/topic-research', requireFeature('topicResearch'), require('./routes/topicResearch'));
+app.use('/api/serp-tracker', requireFeature('serpTracker'), require('./routes/serpTracker')); // daily Google rankings + Search Console history (docs/serp-tracker.md)
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
@@ -315,6 +316,7 @@ const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startYoutubeFollows } = require('./cron/youtubeFollowsCron');
 const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
 const { startTopicResearchCron, startTopicResearchPurge } = require('./cron/topicResearchCron');
+const { startSerpTrackerCron } = require('./cron/serpTrackerCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -353,6 +355,7 @@ async function start() {
     startFitnessCron();
     startNoteRemindersCron(); // emails note reminders that have fallen due
     startTopicResearchCron(); // searches watched Topic Research topics that are due (calls feeds and search services)
+    startSerpTrackerCron(); // SERP Tracker daily run at 20:00 UTC (calls DataForSEO, a paid service)
   }
 
   // API key presence checks — visible in Railway logs

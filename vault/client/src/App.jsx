@@ -61,6 +61,7 @@ import BrowserAgentSettingsPage from './pages/BrowserAgentSettingsPage';
 import RestylePage from './pages/RestylePage';
 import DevicePreviewPage from './pages/DevicePreviewPage';
 import SearchConsolePage from './pages/SearchConsolePage';
+import SerpTrackerPage from './pages/SerpTrackerPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
 import ExpenseReviewPage from './pages/ExpenseReviewPage';
@@ -221,6 +222,7 @@ function App() {
               <Route path="/seo" element={<SeoAuditPage />} />
               <Route path="/seo/:id" element={<SeoAuditPage />} />
               <Route path="/search-console" element={<SearchConsolePage />} />
+              <Route path="/serp-tracker" element={<SerpTrackerPage />} />
               <Route path="/html" element={<HtmlAuditPage />} />
               <Route path="/html/:id" element={<HtmlAuditPage />} />
               <Route path="/web-extractor" element={<WebExtractorPage />} />

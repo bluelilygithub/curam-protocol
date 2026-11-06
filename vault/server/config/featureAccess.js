@@ -45,6 +45,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   cellarPlanner: false,
   // being built milestone by milestone (docs/topic-research.md): off until an admin switches it on
   topicResearch: false,
+  // daily Google rankings tracker, built stage by stage (docs/serp-tracker.md): off until an admin switches it on
+  serpTracker: false,
   // holds logins: off until an admin switches it on (Settings -> Feature Access)
   passwordVault: false,
   measurements: true,
@@ -67,6 +69,7 @@ const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
 const LIFECYCLE_VALUES = ['ga', 'preview', 'parked'];
 const FEATURE_LIFECYCLE = {
   cellarPlanner: 'preview',   // real-job validation and the rod fabricator's rack values are pending
+  serpTracker: 'preview',     // built stage by stage; stage 1 only checks the DataForSEO balance, no rankings collected yet
   topicResearch: 'preview',   // built milestone by milestone; drafts, source check and suggestions not yet run against a real model
   emailFollowUp: 'preview',   // not run against a real model or mailbox
   shelf: 'preview',           // Windows app: installer unsigned, no guide chat yet

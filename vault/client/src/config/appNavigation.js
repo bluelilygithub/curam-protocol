@@ -77,6 +77,7 @@ export const APP_NAV_GROUPS = [
     items: [
       { id: 'seo', label: 'SEO', path: '/seo', icon: 'scan-search', featureKey: 'seo', matchPrefix: true },
       { id: 'searchConsole', label: 'Search Console', path: '/search-console', icon: 'line-chart', featureKey: 'searchConsole', aliases: 'gsc google search queries' },
+      { id: 'serpTracker', label: 'SERP Tracker', path: '/serp-tracker', icon: 'line-chart', featureKey: 'serpTracker', aliases: 'rankings rank tracker google positions dataforseo' },
       { id: 'googleAds', label: 'Google Ads', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true, aliases: 'adwords keywords rsa' },
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
       { id: 'devicePreview', label: 'Device preview', path: '/device-preview', icon: 'smartphone', featureKey: 'restyle', aliases: 'responsive mobile phone tablet screen size ipad iphone' },

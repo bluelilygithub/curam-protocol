@@ -1255,6 +1255,48 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_reviews_draft ON topic_research_reviews ("draftId", "createdAt" DESC)`);
+    // SERP Tracker stage 1 (docs/serp-tracker.md): one tracked site per person, the daily runs, and every paid API call's cost.
+    // Later stages add serp_tasks / serp_snapshots / gsc_* etc. beside these; nothing here needs to change for them.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS serp_sites (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "profileJson" JSONB NOT NULL,
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_serp_sites_user ON serp_sites ("userId")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS serp_runs (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "siteId"       INTEGER NOT NULL REFERENCES serp_sites(id) ON DELETE CASCADE,
+        "startedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "finishedAt"   TIMESTAMPTZ,
+        "runDate"      DATE NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'running',
+        trigger        TEXT NOT NULL DEFAULT 'cron',
+        "balanceUsd"   NUMERIC(12,4),
+        "totalCostUsd" NUMERIC(12,6) NOT NULL DEFAULT 0,
+        "stepsJson"    JSONB NOT NULL DEFAULT '[]'::jsonb,
+        "errorsJson"   JSONB NOT NULL DEFAULT '[]'::jsonb
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_runs_site ON serp_runs ("siteId", "startedAt" DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS serp_api_costs (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "siteId"    INTEGER REFERENCES serp_sites(id) ON DELETE SET NULL,
+        "runId"     INTEGER REFERENCES serp_runs(id) ON DELETE SET NULL,
+        "costDate"  DATE NOT NULL,
+        endpoint    TEXT NOT NULL,
+        "costUsd"   NUMERIC(12,6) NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_api_costs_date ON serp_api_costs ("costDate")`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS topic_research_source_weights (
         "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -44,6 +44,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   emailFollowUp: false, // keep in step with server/config/featureAccess.js
   passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
   topicResearch: false, // keep in step with server/config/featureAccess.js
+  serpTracker: false, // keep in step with server/config/featureAccess.js
   shelf: false, // Vault Shelf Windows app keys: keep in step with server/config/featureAccess.js
 };
 
@@ -51,6 +52,7 @@ export const DEFAULT_FEATURE_ACCESS = {
 export const FEATURE_LIFECYCLE = {
   cellarPlanner: 'preview',
   topicResearch: 'preview',
+  serpTracker: 'preview',
   emailFollowUp: 'preview',
   shelf: 'preview',
   passwordVault: 'preview',
@@ -68,6 +70,7 @@ export const FEATURE_ACCESS_GROUPS = [
     items: [
       { key: 'seo', label: 'SEO' },
       { key: 'searchConsole', label: 'Search Console' },
+      { key: 'serpTracker', label: 'SERP Tracker' },
       { key: 'googleAds', label: 'Google Ads' },
       { key: 'domains', label: 'Domain' },
       { key: 'html', label: 'Page speed' },
