@@ -2,6 +2,31 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "220d5176",
+   "fullHash": "220d5176dbfe9b3851c411f2cf00f499e9c94991",
+   "committedAt": "2026-11-08T07:48:17+10:00",
+   "author": "mrb",
+   "subject": "Video Tools: fold Animated title into Title card (animated look, on a video or as a separate clip)",
+   "filesChanged": 8,
+   "insertions": 312,
+   "deletions": 110,
+   "area": "Video Tools",
+   "goal": "Remove the overlap between the new Animated title tool (a standalone title clip) and Title card: they were almost the same tool, and a standalone clip alone had little use.",
+   "whatChanged": "Animated title is no longer its own tool in Make. Title card has a Look choice: Standard card (unchanged) or Animated title, and for the animated look a Show it choice: On my video, or As a separate title clip. On my video lays the animated title over the person's video between a start and an end time (same timeline and times as the standard card); the video keeps its length and its sound is copied; the picture can be darkened behind the title (0 to 80 percent, chosen colour). The title is drawn with a see-through background but only for the moving moments (every frame of the first 1.9 s and of the fade-out, plus one picture for the long still part, about 75 pictures however long), and ffmpeg lays the picture list over the video. As a separate title clip keeps the earlier behaviour (no video needed, shape, length, sharpness, soft gradient). Brand Kit colours, logo and font work in both. New route POST /api/videos/animated-title/on-video; the clip route and the Brand Kit offer route are unchanged. Form, help box, tooltip, tutor catalogue (the separate entry removed, Title card entry extended, the not-possible wording corrected) and docs updated. No new package.",
+   "filesImpacted": [
+    "server/services/animatedTitle.js (overlay page mode, dimPct/dimColor, overlaySchedule, overlayConcat, makeAnimatedTitleOverVideo)",
+    "server/services/animatedTitle.test.js (schedule, overlay page, a real title over a video: inside its window only, sound and length kept, bad window refused)",
+    "server/routes/videos.js (POST /animated-title/on-video)",
+    "client/src/pages/videos/AnimatedTitleForm.jsx (overlay or clip mode)",
+    "client/src/pages/VideosPage.jsx (Title card Look and Show it, separate tool removed)",
+    "server/services/videoTutor.js",
+    "server/testing/routeManifest.json (1 route)",
+    "docs/video-tools.md"
+   ],
+   "benefit": "One place for titles: the animated look works on the person's own video, which is the common case, and still makes a standalone clip when there is no footage. No new package, so a normal fast deploy.",
+   "concerns": "Not run inside the Railway container (Chromium and memory there are unmeasured for this tool, and for the earlier Animated title and animated captions); Railway memory has had multi-GB spikes. Tried locally on an 8 s video from the library with a 5 s window and Brand Kit colours and logo, and a separate 5 s clip; not tried: a long or 1080p video (full-frame see-through pictures are bigger), a phone-rotated video, the brand font in this mode, Cancel from the button (tested at service level). Anyone who bookmarked the separate Animated title tool on 2026-11-08 will not find it (it was live for a few hours at most). No button or web address in the animated look (use the Standard card). Latin text only, two movements, no sound in a separate clip."
+  },
+  {
    "commit": "db529b97",
    "fullHash": "db529b97cf87c9dde11d8a520c97c14ec26f89fa",
    "committedAt": "2026-11-08T07:32:24+10:00",
