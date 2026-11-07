@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "928c294a",
+   "fullHash": "928c294a2512f2dfd5842114364a48eb83cc027c",
+   "committedAt": "2026-11-08T07:22:08+10:00",
+   "author": "mrb",
+   "subject": "Video Tools: Animated title (HTML page rendered to MP4 in a server browser, Brand Kit colours, logo and font)",
+   "filesChanged": 9,
+   "insertions": 679,
+   "deletions": 5,
+   "area": "Video Tools",
+   "goal": "Give Video Tools a way to make moving title screens (the ffmpeg tools only draw static or fading text), using the idea behind HyperFrames (write a page, render it to video) with the Brand Kit colours, logo and font.",
+   "whatChanged": "New tool Animated title in the Make group. The person types a headline and an optional supporting line, picks how it moves (slide in from the left, or fade in at the centre), the shape (widescreen, tall, square), 2 to 8 seconds and standard or Full HD, and may use the Brand Kit colours, logo and heading or body font. The server builds a small page from escaped text, a headless Chromium (Playwright, already in the image) moves its animations to each frame and takes a picture, and ffmpeg encodes the pictures to an MP4 (30 fps). A browser is started for each render and closed after it; every network request from the page except its own inline content is refused. Runs as a background job like Intro and ending (one per person, queue gate, Cancel, Resume). Brand Kit colours, logo and font are read on the server from the signed-in person's own kit; asking for one the kit lacks is a plain 409 before the job starts. Headline and supporting line use the shared mic field. Also added to the tutor chat catalogue (and its \"not possible\" list corrected: a title screen is possible, a title over an existing video is not), the help box and tooltips, the route inventory and docs/video-tools.md. No new package.",
+   "filesImpacted": [
+    "server/services/htmlVideoRender.js (new: page to frames to MP4, cancel, network blocked)",
+    "server/services/animatedTitle.js (new: checking, page builder, Brand Kit loading)",
+    "server/services/animatedTitle.test.js (new: includes a real render and Cancel)",
+    "server/routes/videos.js (POST /animated-title, GET /animated-title/brand)",
+    "client/src/pages/videos/AnimatedTitleForm.jsx (new: the form)",
+    "client/src/pages/VideosPage.jsx (menu entry, help, tooltip, tool section)",
+    "server/services/videoTutor.js (catalogue entry, NOT_POSSIBLE wording)",
+    "server/testing/routeManifest.json (2 routes)",
+    "docs/video-tools.md"
+   ],
+   "benefit": "Real animated titles in the person's own brand, made on the server in about 10 to 30 seconds, with no new package and so a normal fast deploy; a base for animated captions and lower-thirds later.",
+   "concerns": "Not run inside the Railway container: Chromium there has only been used by the Brand Kit reader, so check memory and render time after the first deploy. Measured on Windows 10 locally: 5 s at 720p about 8 s and 215 MB, at 1080p about 10 s and 640 MB (Chromium plus ffmpeg), after Railway's multi-GB memory spikes were being chased, so watch the graph. Two renders at once and the Cancel button were not tried on screen (Cancel is tested at service level; the job gate allows one render at a time). The brand body font and the 409 messages were tested with a stub database, not seen. Two movements only, no sound, one font, Latin text only, no transparent background (PNG frames were 6.6 times slower); standalone title screen, not laid over a video. The route inventory test still fails for 11 SERP Tracker routes from other work (not these)."
+  },
+  {
    "commit": "9f33bbc9",
    "fullHash": "9f33bbc931604c1e544f4f170e1afe25d7aef663",
    "committedAt": "2026-11-08T06:52:10+10:00",
