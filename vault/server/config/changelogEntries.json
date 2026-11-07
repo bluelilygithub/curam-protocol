@@ -2,6 +2,31 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "58ccec53",
+   "fullHash": "58ccec53886a501c3d1454a93f49b39a1e8231bf",
+   "committedAt": "2026-11-07T19:13:59+10:00",
+   "author": "mrb",
+   "subject": "Graphics: Watermark text and Batch Text can use the Brand Kit font",
+   "filesChanged": 8,
+   "insertions": 122,
+   "deletions": 22,
+   "area": "Graphics",
+   "goal": "Carry the brand font into the two remaining text tools that most often put a name on a picture.",
+   "whatChanged": "Watermark (text mode) and Batch Text accept fontSource brand-heading or brand-body and draw the text as vector outlines from the stored font file, the same way Text Overlay and Composite already do; a new centredLabel helper sizes the label box from the font. Batch Text loads the font once for the whole batch, so a missing or foreign font refuses the whole request with 409 in plain words instead of failing picture by picture. A Font drop-down appears in both tools only when a font file is stored. An image watermark ignores the setting, and any other value is the old Arial path, byte for byte. Guide chat entries, help text, the (i) paragraph and docs/brand-from-url.md were updated to match.",
+   "filesImpacted": [
+    "server/routes/graphics/compose.js (runWatermark context argument, /watermark, /batch-text)",
+    "server/services/graphicsBrandText.js (centredLabel)",
+    "server/routes/graphics/brandText.test.js (watermark and batch text cases)",
+    "client/src/pages/graphics/tools/WatermarkTool.jsx",
+    "client/src/pages/graphics/tools/BatchTextTool.jsx",
+    "client/src/pages/GraphicsPage.jsx (help text)",
+    "server/services/graphicsTutor.js",
+    "docs/brand-from-url.md"
+   ],
+   "benefit": "A watermark or a captioned batch in the owner's own brand font, with no effect on anyone who does not choose it.",
+   "concerns": "A watermark applied through Batch (op watermark) or a saved recipe, and the Pipeline text step, still use Arial: they call the watermark code with no signed-in user, so no font is loaded; fixing that means passing the user through those paths. Latin text only, as for Text Overlay. Seen in the local app on 2026-11-07: a text watermark in Montserrat (tiling and the 409 cases are covered by the server test, not by eye) and a two-picture Batch Text run whose first result was opened full size. Not run in the Railway container. This commit has not been pushed."
+  },
+  {
    "commit": "32cbfa70",
    "fullHash": "32cbfa70e9f6f5471b5c5bd0899494cea4ae0965",
    "committedAt": "2026-11-07T18:40:51+10:00",
