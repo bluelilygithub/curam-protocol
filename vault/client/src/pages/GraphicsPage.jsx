@@ -15,6 +15,8 @@ import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.m
 import Dialog from '../components/Dialog';
 import BrandFromSite from './graphics/BrandFromSite';
 import { mergeManualKit } from './graphics/brandSiteLogic.mjs';
+import { buildDesignMd, canBuildDesignMd } from './graphics/designMd.mjs';
+import { downloadBlob } from '../utils/exportHelpers';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -1086,7 +1088,21 @@ export default function GraphicsPage() {
                       </Tooltip>
                     </div>
                     <div className="flex items-center justify-between pt-2">
-                      <Tooltip text="Clear the saved Brand Kit."><button type="button" onClick={clearBrandKit} disabled={brandKitSaving || !brandKit} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-muted)' }}>Clear</button></Tooltip>
+                      <div className="flex items-center gap-4">
+                        <Tooltip text="Clear the saved Brand Kit."><button type="button" onClick={clearBrandKit} disabled={brandKitSaving || !brandKit} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-muted)' }}>Clear</button></Tooltip>
+                        <Tooltip text="Download the saved Brand Kit as a DESIGN.md file: its colours, fonts and corner style in plain text. Put it next to README.md in a project so an AI coding tool builds screens that match your brand.">
+                          <button
+                            type="button"
+                            onClick={() => downloadBlob(new Blob([buildDesignMd(brandKit)], { type: 'text/markdown;charset=utf-8' }), 'DESIGN.md')}
+                            disabled={!canBuildDesignMd(brandKit)}
+                            className="text-xs inline-flex items-center gap-1 transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                            style={{ color: 'var(--color-text)' }}
+                          >
+                            {getIcon('download', { size: 13 })}
+                            Download DESIGN.md
+                          </button>
+                        </Tooltip>
+                      </div>
                       <Tooltip text="Save this Brand Kit for reuse across tools.">
                         <button type="button" onClick={saveBrandKit} disabled={brandKitSaving} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90" style={{ background: 'var(--color-primary)' }}>
                           {brandKitSaving ? 'Saving…' : 'Save Brand Kit'}
