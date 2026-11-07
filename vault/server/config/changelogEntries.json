@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "e61457ad",
+   "fullHash": "e61457ade89162fa5dbf5a1ef3803ae1dcd4944d",
+   "committedAt": "2026-11-08T09:12:53+10:00",
+   "author": "mrb",
+   "subject": "Drawings: saved Excalidraw drawings per person (new tool, off by default; adds @excalidraw/excalidraw)",
+   "filesChanged": 34,
+   "insertions": 4179,
+   "deletions": 114,
+   "area": "Drawings",
+   "goal": "Give Vault a drawing tool: sketches, diagrams and plans on an endless page, saved to the person's account, by embedding the real Excalidraw editor (MIT licence) instead of building one.",
+   "whatChanged": "New tool Drawings at /drawings (list) and /drawings/:id (one drawing), under Content Creation. The list shows each saved drawing with a small preview, name, piece count and last change, with New drawing, Open a file (an .excalidraw file becomes a new drawing), search by name (with the microphone), Rename, Copy and Delete (inline Delete? Yes / No, an Undo toast, and the shared recycle bin keeps it 30 days). A drawing opens on the Excalidraw editor, loaded only when one is opened, with its fonts served from our own origin (a Vite plugin, like the OCR assets). It saves by itself 1.5 s after the last change and again on leaving, refuses a save from a stale tab (409, ask to reload), and exports PNG, SVG or an .excalidraw file to the person's computer. Excalidraw's own menu is cut down (its collaboration, paid-plan and social links are not shown). New table drawings (scene as TEXT up to 6 MB, preview, counts), routes at /api/drawings behind the new drawings flag, recycle-bin adapter, Drawings guide (/api/drawings-tutor), (i) box, 6-step tour (also in Settings), tooltips and the microphone on the name and search boxes, navigation entry, docs/drawings.md and notes in key-files, schema-notes and guide-chat docs. The flag is OFF by default and marked preview; admins can always open it. Adds the npm package @excalidraw/excalidraw.",
+   "filesImpacted": [
+    "package.json and package-lock.json (adds @excalidraw/excalidraw; npm also deduped a few @floating-ui versions in the lock file)",
+    "server/db.js (table drawings)",
+    "server/services/drawings.js, server/routes/drawings.js (rules, SQL, HTTP)",
+    "server/services/recycleBin/adapters/drawings.js",
+    "server/services/drawingsTutor.js, server/routes/drawingsTutor.js, server/config/guides.js",
+    "server/config/featureAccess.js and client/src/utils/featureAccess.js (flag drawings, preview, off)",
+    "server/index.js, server/testing/routeManifest.json (7 routes)",
+    "client/src/pages/DrawingsPage.jsx and client/src/pages/drawings/ (list, editor, helpers, guide wrapper, loader)",
+    "client/vite/excalidrawAssets.mjs and client/vite.config.js (fonts from our own origin)",
+    "client/src/utils/tours/drawingsTour.js, client/src/pages/SettingsPage.jsx, client/src/App.jsx, client/src/config/appNavigation.js",
+    "server/services/drawings.test.js, drawingsTutor.test.js, client/src/pages/drawings/sceneLogic.test.mjs",
+    "docs/drawings.md, docs/key-files.md, docs/schema-notes.md, docs/guide-chat.md"
+   ],
+   "benefit": "A proper sketching and diagram tool inside Vault with private, autosaved drawings, undo for deletes and export to PNG, SVG or file, with no editor code to maintain.",
+   "concerns": "SLOW DEPLOY: package.json and package-lock.json changed, so Railway rebuilds the image from the root npm install onwards (docs/deploy-speed.md); this was accepted before the push. Not run on Railway: memory, first-load time and font loading there are unmeasured, and the editor adds about 5 MB of script that loads only when a drawing is opened. In production mode the security policy blocks one thing, Excalidraw's font-compression helper (it builds code with eval); drawing, saving and all three exports still work, but exported SVG fonts are probably embedded whole; accepted, the policy is not loosened. A data-loss bug was found and fixed before this commit: leaving a drawing saved an empty page over the real one because the editor is already torn down by then; saves now use the last scene the editor reported. Tried locally by hand: new, draw, rename, leave and reopen, copy, delete and Undo, import a file, the three exports, the tour, the guide button (its real answers need a model key and were not tried). Not tried: large pictures, thousands of pieces, a phone, two tabs on screen (the 409 guard is tested on the server only), working offline. Off by default for members until an admin switches it on. No sharing, no live co-editing, no sending into Graphics, Notes or Chat. The route inventory test still fails for 11 SERP Tracker routes from other work, not these."
+  },
+  {
    "commit": "220d5176",
    "fullHash": "220d5176dbfe9b3851c411f2cf00f499e9c94991",
    "committedAt": "2026-11-08T07:48:17+10:00",
