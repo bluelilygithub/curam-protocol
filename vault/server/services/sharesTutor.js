@@ -37,6 +37,9 @@ const CATALOG = [
   { id: 'questions', label: 'Questions', group: 'Insight',
     does: 'Ask a question about your own portfolio in plain words, such as the largest position or what a sale would have returned. Answers use only the stored portfolio data, quote the numbers and are saved so you can look back.',
     notes: 'It explains figures. It never says whether to buy or sell.' },
+  { id: 'thesis', label: 'Thesis', group: 'Insight',
+    does: 'A journal of why you own each share. For a holding you write a short thesis, 3 to 7 assumptions that must stay true (each with how you would verify it), red lines that would prove you wrong, and optional value anchors and a five-sentence "mirror test". Check now asks a model whether your stored trades, news briefings and the previous check still support the thesis. It rates each assumption intact, weakening, impaired, broken or not enough evidence, flags any red line hit, gives a health score out of 10 and, from the second check on, says what changed since the last one. Past checks are kept.',
+    notes: 'It tests your own thesis; it never says whether to buy, sell or hold and never predicts a price. It cannot read company filings, so many ratings will be "not enough evidence". A share price move alone does not count against an assumption. A thesis for a share you do not hold is allowed. Deleting a thesis keeps it 30 days in the recycle bin.' },
   { id: 'metals', label: 'Metals', group: 'Insight',
     does: 'A separate book for physical gold purchases: total ounces, cost, current spot value and unrealised profit, with the gold price history and a drop alert.',
     notes: 'Kept apart from share holdings.' },
@@ -62,6 +65,8 @@ const NOT_POSSIBLE = [
   'Franking credits: the columns exist but nothing uses them yet.',
   'Exporting or backing up all the Shares data in one click (backups are taken from the server).',
   'Looking at the person\'s holdings, prices or figures: this chat cannot see them; the Questions tab can answer about them.',
+  'Reading company filings or earnings reports: the Thesis check uses only the person\'s own trades and the stored news briefings, so it cannot confirm results or management changes by itself.',
+  'Judging whether a thesis is right, or whether to act on it: the Thesis tab only reports whether the evidence still supports what the person wrote.',
   'Currencies other than Australian dollars on new trades.',
 ];
 

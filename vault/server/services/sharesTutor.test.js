@@ -24,6 +24,10 @@ for (const re of [/buy, sell or hold/, /Tax advice/, /Placing trades/, /only div
 const rules = service.RULES.join(' ');
 for (const re of [/average cost/, /trade date/, /net cash received/, /never add, change or delete/]) assert.match(rules, re);
 assert.match(service.CATALOG.find((t) => t.id === 'cgt').notes, /not tax advice/);
+const thesisTab = service.CATALOG.find((t) => t.id === 'thesis');
+assert.match(thesisTab.notes, /never says whether to buy, sell or hold/);
+assert.match(thesisTab.notes, /cannot read company filings/);
+assert.match(gaps, /company filings/);
 
 checkBasics({
   name: 'sharesTutor', service, askName: 'askSharesTutor', feature: 'shares_guide', toolWord: 'tab',

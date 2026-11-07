@@ -3458,6 +3458,48 @@ async function initSchema() {
       ON share_qa ("userId", "createdAt" DESC)
   `);
 
+  // ── Shares thesis journal (docs/shares-thesis.md) ─────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_theses (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      symbol        TEXT NOT NULL,
+      exchange      TEXT NOT NULL DEFAULT '',
+      thesis        TEXT NOT NULL DEFAULT '',
+      assumptions   JSONB NOT NULL DEFAULT '[]',
+      "redLines"    JSONB NOT NULL DEFAULT '[]',
+      anchors       JSONB NOT NULL DEFAULT '{}',
+      mirror        TEXT NOT NULL DEFAULT '',
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_share_theses_holding
+      ON share_theses ("userId", symbol, exchange)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_thesis_checks (
+      id            SERIAL PRIMARY KEY,
+      "thesisId"    INTEGER NOT NULL REFERENCES share_theses(id) ON DELETE CASCADE,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      verdict       TEXT NOT NULL,
+      "healthScore" INTEGER,
+      ratings       JSONB NOT NULL DEFAULT '[]',
+      "redLineHits" JSONB NOT NULL DEFAULT '[]',
+      drift         JSONB NOT NULL DEFAULT '[]',
+      summary       TEXT NOT NULL DEFAULT '',
+      "watchNext"   TEXT NOT NULL DEFAULT '',
+      "thesisSnapshot" JSONB NOT NULL DEFAULT '{}',
+      model         TEXT,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_thesis_checks_thesis
+      ON share_thesis_checks ("thesisId", "createdAt" DESC)
+  `);
+
   // ── Precious metals ───────────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS metal_purchases (

@@ -206,6 +206,7 @@ app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNe
 app.use('/api/shares/statements', requireFeature('shares'), require('./routes/sharesStatements'));
 app.use('/api/shares/documents', requireFeature('shares'), require('./routes/sharesDocuments'));
 app.use('/api/shares/pack', requireFeature('shares'), require('./routes/sharesPack'));
+app.use('/api/shares/thesis', requireFeature('shares'), require('./routes/sharesThesis')); // aiLimiter inside, on the check route only
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube-tutor', requireFeature('youtube'), aiLimiter, require('./routes/youtubeTutor')); // the YouTube guide chat (sees no searches, videos or notes)

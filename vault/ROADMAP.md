@@ -8,6 +8,7 @@ Shipped to production (`version-7`), each as its own push:
 
 - **Step 1 code — dividends:** withholding gross/net (derived, editable), franking columns, `paidOn` backfill and editing. Commit `6be2c7ef`.
 - **Step 2 code — CGT view:** parcels, held-days wording, FY totals. Commits `0b1d2aaf`, `eda71970`. *Not built yet:* the "what-if sell" part.
+- **Step 10, thesis journal (partly, 2026-11-07):** the Thesis tab and AI check are built; see `docs/shares-thesis.md`. Built out of order at the owner's request; steps 3-9 are still open. Watchlist, signal scorecard, income projection, scenarios, targets and rebalancing drift are not built. Awaiting a first real model check to judge the output.
 - **Not on the roadmap:** the Charts range fix and sub-tabs (commit `ca8540bd`).
 
 **Data verified:** all 27 trades were re-entered from the AUD prices paid on the CMC statements (confirmed by the user, 2026-10-02). This closes the step 3 spot-check for USD prices labelled AUD and puts the CGT view's AUD-as-stored basis on verified figures. It also means the USD price at purchase is not stored, so any step 6 currency-effect split would have to be estimated from historical exchange rates.
@@ -34,6 +35,6 @@ Shipped to production (`version-7`), each as its own push:
 7. **Events and alerts:** US filings feed (8-Ks) per holding, dividend calendar and yield on cost, earnings season view, alerts for large moves, upcoming earnings and parcels nearing 12 months.
 8. **Markets tab:** US sector indexes, ASX 200 headline, AUD/USD, US and AU 10-year yields, VIX, oil, copper, and a "your exposure" column.
 9. **Competitive analysis:** peers panel per holding (Finnhub peers; valuation, growth, margins, relative performance, earnings history), peer news in daily briefings, peer comparisons in the Questions tab.
-10. **Decision and forecasting tools:** thesis journal, watchlist, signal scorecard by stock and source, income projection, scenario tools, target tracking, rebalancing drift.
+10. **Decision and forecasting tools:** thesis journal (built 2026-11-07, `docs/shares-thesis.md`), watchlist, signal scorecard by stock and source, income projection, scenario tools, target tracking, rebalancing drift.
 
 **Later:** live reconciliation to CMC statements; corporate actions (sooner if step 3 finds a split); reconcile withholding against a CMC annual tax statement; Questions tab explaining performance; re-enable statement trade extraction once trade history is clean; prune unused charts. Fee tracking is on hold pending the accountant.

@@ -4101,6 +4101,21 @@
   },
   "DELETE /api/guitar-play/tips/:id/dismiss": {
    "class": "authed"
+  },
+  "GET /api/shares/thesis": {
+   "class": "authed"
+  },
+  "PUT /api/shares/thesis": {
+   "class": "authed"
+  },
+  "GET /api/shares/thesis/:id/checks": {
+   "class": "authed"
+  },
+  "POST /api/shares/thesis/:id/check": {
+   "class": "authed"
+  },
+  "DELETE /api/shares/thesis/:id": {
+   "class": "authed"
   }
  }
 }

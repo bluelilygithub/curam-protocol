@@ -9,6 +9,7 @@ import SharesChartsTab from '../components/shares/SharesChartsTab';
 import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 import SharesPackTab from '../components/shares/SharesPackTab';
+import SharesThesisTab from '../components/shares/SharesThesisTab';
 import SharesTutorChat from './shares/SharesTutorChat';
 import { useIcon } from '../providers/IconProvider';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'charts', label: 'Charts' },
   { id: 'news', label: 'News' },
   { id: 'questions', label: 'Questions' },
+  { id: 'thesis', label: 'Thesis' },
   { id: 'metals', label: 'Metals' },
 ];
 
@@ -795,7 +797,7 @@ export default function SharesPage() {
             {sharesInfo.show && (
               <ToolInfoModal title="How Shares Works" onClose={sharesInfo.close}>
                 <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                  Eight tabs, covering holdings tracking through to AI-assisted portfolio Q&amp;A:
+                  Eleven tabs, covering holdings tracking, tax records and AI-assisted portfolio Q&amp;A and thesis checks:
                 </p>
                 <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                   <p style={{ color: 'var(--color-text)' }}><strong>Portfolio</strong> shows current holdings, live quotes, and unrealized P&amp;L. <strong>Trades</strong> and <strong>Cash</strong> are the underlying ledgers — every buy/sell and every cash movement, avg-cost method for realized P&amp;L.</p>
@@ -803,6 +805,7 @@ export default function SharesPage() {
                   <p style={{ color: 'var(--color-text)' }}><strong>Charts</strong> — portfolio vs. benchmark moves, beat/lag movers, drawdown alerts, sector allocation, earnings timeline, move heatmap.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>News</strong> — daily AI-generated briefings per holding (bullish/bearish/watch/neutral signals) plus End of month trend summaries. Auto-generates at 4 AM; "Send Portfolio Note" triggers the same analyst-note email manually.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Questions</strong> is free-text Q&amp;A over your actual portfolio data — "What's my largest position?", "How would selling everything today perform?" — archived so you can revisit past answers.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Thesis</strong> is a journal of why you own each share: your assumptions, the red lines that would prove you wrong and what you think it is worth. <em>Check now</em> tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It never says to buy or sell, and it cannot read company filings, so thin evidence shows as "not enough evidence".</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Metals</strong> tracks physical precious-metals purchases separately from share holdings, with live spot price lookup.</p>
                 </div>
               </ToolInfoModal>
@@ -1371,6 +1374,8 @@ export default function SharesPage() {
             )}
 
             {tab === 'questions' && <QuestionsTab />}
+
+            {tab === 'thesis' && <SharesThesisTab />}
 
             {tab === 'metals' && <MetalsTab />}
             {canUseShares && <SharesTutorChat currentTab={tab} onOpenTab={setTab} />}
