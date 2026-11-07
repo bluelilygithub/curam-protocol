@@ -673,6 +673,27 @@
   "GET /api/domains/social": {
    "class": "authed"
   },
+  "POST /api/drawings-tutor": {
+   "class": "authed"
+  },
+  "GET /api/drawings": {
+   "class": "authed"
+  },
+  "POST /api/drawings": {
+   "class": "authed"
+  },
+  "POST /api/drawings/:id/duplicate": {
+   "class": "authed"
+  },
+  "GET /api/drawings/:id": {
+   "class": "authed"
+  },
+  "PUT /api/drawings/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/drawings/:id": {
+   "class": "authed"
+  },
   "POST /api/email-follow-up-tutor": {
    "class": "authed"
   },

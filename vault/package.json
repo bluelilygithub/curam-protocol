@@ -150,6 +150,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@excalidraw/excalidraw": "^0.18.1",
     "@google/generative-ai": "^0.21.0",
     "@imgly/background-removal-node": "^1.4.3",
     "@react-pdf/renderer": "^3.4.5",

@@ -1159,6 +1159,23 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_graphics_recipes_user ON graphics_recipes ("userId", "updatedAt" DESC)`);
+    // ── Drawings (docs/drawings.md): one Excalidraw scene per row, owned by one person. `scene` is the scene as Excalidraw's own JSON text
+    // (elements, appState and any pasted pictures), kept as TEXT so it comes back exactly as saved; the route checks it is valid and under
+    // 6 MB. `thumbnail` is a small JPEG data URL for the list. Deleting goes through the shared recycle bin (adapters/drawings.js).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS drawings (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title          TEXT NOT NULL,
+        scene          TEXT NOT NULL,
+        thumbnail      TEXT,
+        "elementCount" INTEGER NOT NULL DEFAULT 0,
+        "sceneBytes"   INTEGER NOT NULL DEFAULT 0,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_drawings_user ON drawings ("userId", "updatedAt" DESC)`);
     // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
     // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
     await client.query(`

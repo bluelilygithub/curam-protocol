@@ -17,6 +17,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   youtube: true,
   graphics: true,
   videos: true,
+  drawings: false, // new and not yet run on Railway: off until an admin switches it on (admins can always open it)
   music: true,
   recipes: true,
   pdf: true,
@@ -75,6 +76,7 @@ const FEATURE_LIFECYCLE = {
   shelf: 'preview',           // Windows app: installer unsigned, no guide chat yet
   passwordVault: 'preview',   // new, holds logins: off until an admin switches it on
   memory: 'parked',           // rarely used; hidden from menus by default
+  drawings: 'preview',        // new: the Excalidraw editor in Vault; not yet run on Railway (fonts, memory, the font-subsetting helper blocked by the CSP)
 };
 const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
 

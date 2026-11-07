@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ocrAssets } from '../planner-core/vite/ocrAssets.mjs';
+import { excalidrawAssets } from './vite/excalidrawAssets.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Languages the on-device text reader can load from our own origin (see planner-core/src/ocr/ocrEngine.ts OWN_LANGS).
@@ -10,7 +11,7 @@ const OCR_LANGUAGES = ['eng', 'fra', 'spa', 'deu', 'ita', 'por'];
 
 export default defineConfig({
   root: __dirname,
-  plugins: [react(), ocrAssets({ from: __dirname, langs: OCR_LANGUAGES })],
+  plugins: [react(), ocrAssets({ from: __dirname, langs: OCR_LANGUAGES }), excalidrawAssets({ from: __dirname })],
   resolve: {
     // planner-core: code shared with the Room / Garden Planner apps (speech recognition, OCR). Libraries stay de-duplicated to Vault's copy.
     alias: { '@planner-core': path.resolve(__dirname, '../planner-core/src') },

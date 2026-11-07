@@ -231,6 +231,8 @@ app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/map
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
 app.use('/api/videos', requireFeature('videos'), aiLimiter, require('./routes/videos'));
+app.use('/api/drawings-tutor', requireFeature('drawings'), aiLimiter, require('./routes/drawingsTutor')); // the Drawings guide chat (sees no drawings); before /api/drawings so the longer path is matched first
+app.use('/api/drawings', requireFeature('drawings'), require('./routes/drawings')); // saved Excalidraw drawings (docs/drawings.md)
 // aiLimiter is applied inside music.js to POST /jobs only — the client polls GET /jobs/:id every 2s,
 // which alone would exhaust the 30/min per-user limit.
 app.use('/api/music', requireFeature('music'), require('./routes/music'));

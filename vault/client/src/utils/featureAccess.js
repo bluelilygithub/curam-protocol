@@ -13,6 +13,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   youtube: true,
   graphics: true,
   videos: true,
+  drawings: false,
   music: true,
   recipes: true,
   pdf: true,
@@ -57,6 +58,7 @@ export const FEATURE_LIFECYCLE = {
   shelf: 'preview',
   passwordVault: 'preview',
   memory: 'parked',
+  drawings: 'preview',
 };
 export const LIFECYCLE_LABELS = {
   preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
@@ -95,6 +97,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'youtube', label: 'YouTube' },
       { key: 'graphics', label: 'Graphics' },
       { key: 'videos', label: 'Video Tools' },
+      { key: 'drawings', label: 'Drawings' },
       { key: 'music', label: 'Music' },
       { key: 'recipes', label: 'Recipes' },
       { key: 'pdf', label: 'PDF Tools' },
