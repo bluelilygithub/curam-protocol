@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import useAuthStore from '../store/authStore';
 
 // Same merged flags the menus use (GET /api/settings/feature-access). Fetched once per page
 // load and shared, so wrapping several routes costs one request.
@@ -19,16 +20,23 @@ function loadFlags() {
   return flagsPromise;
 }
 
-/** Renders its page only when the feature is on; otherwise sends the person Home. */
+/**
+ * Renders its page only when the feature is on; otherwise sends the person Home. An administrator is always let in, the same as the menu
+ * (Layout.jsx canUseFeature) and the server (requireFeature in middleware/auth.js). Without this, a feature that is off by default ("parked", such
+ * as Memory) showed in the admin's menu and then bounced them to the home page when they clicked it.
+ */
 export default function FeatureRoute({ feature, children }) {
+  const isAdmin = useAuthStore((s) => Boolean(s.user && s.user.isAdmin));
   const [allowed, setAllowed] = useState(null);
 
   useEffect(() => {
+    if (isAdmin) return undefined;
     let live = true;
     loadFlags().then((flags) => { if (live) setAllowed(flags[feature] !== false); });
     return () => { live = false; };
-  }, [feature]);
+  }, [feature, isAdmin]);
 
+  if (isAdmin) return children;
   if (allowed === null) return null;
   return allowed ? children : <Navigate to="/" replace />;
 }
