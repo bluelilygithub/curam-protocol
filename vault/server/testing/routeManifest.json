@@ -4116,6 +4116,9 @@
   },
   "DELETE /api/shares/thesis/:id": {
    "class": "authed"
+  },
+  "GET /api/changelog": {
+   "class": "admin"
   }
  }
 }

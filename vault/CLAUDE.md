@@ -16,6 +16,18 @@ Detail lives in `docs/`. This file holds the rules; follow the pointers when you
 
 ---
 
+## CHANGELOG — MANDATORY, EVERY COMMIT
+
+**Every commit gets an entry in the admin Changelog (`/changelog`) before it is pushed.** The owner reads it to see what each update did, what it touched, why, what it gained and what to watch. Full rules and the entry format: [`docs/changelog.md`](docs/changelog.md).
+
+1. Commit the work first. Then, **before `git push`**, add one entry per new commit to the top of `entries` in `server/config/changelogEntries.json` and commit that on its own as `Changelog: <what it covers>`. Push both together, so one deploy carries the code and its entry. (The entry needs the commit's hash, which only exists after the commit; that is why it is a second commit.)
+2. A commit that only adds changelog entries (subject starts `Changelog:`) is the one exemption. Every other commit needs an entry, including reverts, docs-only changes and commits the owner makes by hand.
+3. Each entry says: what changed, the code impacted (real file paths), the goal, the benefit, and **honest concerns** (cost, risk, untested paths, anything unverified; write `None noted.` only when that is true). Take the date, author, full hash and line counts from `git log --shortstat`, never by hand.
+4. **Before pushing, check nothing is missing:** compare `git log --format=%h origin/<branch>..HEAD` with the `commit` values in the file. Say plainly in the reply if you are pushing without an entry, and why.
+5. The entry text describes what the commit says it did. Do not claim it was verified unless it was.
+
+---
+
 ## Stack
 
 **Backend:** Node.js/Express · PostgreSQL 15 + pgvector · `pg` (no ORM) · node-cron · multer
@@ -44,6 +56,7 @@ Core files:
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
 - `server/services/modelResolver.js` — `getModelsForUser()`: `light` / `standard` / Gemini / DeepSeek
 - `server/services/SuggestionService.js` — all services/crons/agents emit inbox findings through it
+- `server/config/changelogEntries.json` + `client/src/pages/ChangelogPage.jsx` — the admin Changelog; **add an entry for every commit** (see the CHANGELOG rule above and `docs/changelog.md`)
 - `server/utils/cronLock.js` — `withCronLock(name, fn)` for every cron that sends mail, creates records or calls a paid API
 - `server/utils/safeFetch.js` + `server/services/htmlFetch.js` — SSRF guards; write every user-URL fetcher on them
 - `server/services/recycleBin/` — shared 30-day recycle bin; any tool that deletes uses `moveToBin()` (`docs/recycle-bin.md`)

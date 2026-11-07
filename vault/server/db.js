@@ -3458,6 +3458,30 @@ async function initSchema() {
       ON share_qa ("userId", "createdAt" DESC)
   `);
 
+  // ── Admin changelog (docs/changelog.md): what each commit did. Global (not per user), admin-only; seeded from server/config/changelogEntries.json
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS changelog_entries (
+      id              SERIAL PRIMARY KEY,
+      commit          TEXT NOT NULL UNIQUE,
+      "fullHash"      TEXT,
+      "committedAt"   TIMESTAMPTZ NOT NULL,
+      author          TEXT,
+      subject         TEXT NOT NULL,
+      area            TEXT NOT NULL DEFAULT '',
+      goal            TEXT NOT NULL DEFAULT '',
+      "whatChanged"   TEXT NOT NULL DEFAULT '',
+      "filesImpacted" JSONB NOT NULL DEFAULT '[]',
+      benefit         TEXT NOT NULL DEFAULT '',
+      concerns        TEXT NOT NULL DEFAULT '',
+      "filesChanged"  INTEGER,
+      insertions      INTEGER,
+      deletions       INTEGER,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_changelog_committed ON changelog_entries ("committedAt" DESC)`);
+  try { await require('./services/changelog').seedChangelog(); } catch (err) { console.warn('[changelog] seed skipped:', err.message); }
+
   // ── Shares thesis journal (docs/shares-thesis.md) ─────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_theses (

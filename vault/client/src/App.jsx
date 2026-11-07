@@ -37,6 +37,7 @@ import MusicPage from './pages/MusicPage';
 import RecipesPage from './pages/RecipesPage';
 import MeasurementsPage from './pages/MeasurementsPage';
 import PcHealthPage from './pages/PcHealthPage';
+import ChangelogPage from './pages/ChangelogPage';
 import PdfPage from './pages/PdfPage';
 import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
@@ -208,6 +209,7 @@ function App() {
               <Route path="/password-vault" element={<PasswordVaultPage />} />
               <Route path="/topic-research" element={<TopicResearchPage />} />
               <Route path="/pc-health" element={<PcHealthPage />} />
+              <Route path="/changelog" element={<ChangelogPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
               <Route path="/product-scout" element={<ProductScoutPage />} />

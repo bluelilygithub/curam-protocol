@@ -42,6 +42,7 @@ export const APP_NAV_GROUPS = [
       { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
       { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
       { id: 'pcHealth', label: 'PC Health', path: '/pc-health', icon: 'cpu', featureKey: null, adminOnly: true },
+      { id: 'changelog', label: 'Changelog', path: '/changelog', icon: 'history', featureKey: null, adminOnly: true },
     ],
   },
   {

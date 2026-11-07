@@ -245,6 +245,7 @@ app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)
+app.use('/api/changelog', requireAdmin, require('./routes/changelog')); // admin changelog: what each commit did (read-only)
 app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Health agent (admin only, read-only report on the admin's own PC)
 app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)
 app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burnerMail'));
