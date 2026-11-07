@@ -26,6 +26,7 @@ const cost = require('./graphics/cost');
 const recipes = require('./graphics/recipes');
 const describe = require('./graphics/describe');
 const printProfile = require('./graphics/printProfile');
+const brandFromUrl = require('./graphics/brandFromUrl');
 const { capImagePixels, makePaidGuard } = require('../middleware/graphicsLimits');
 
 // Safety nets for every route below: no oversized images, and a per-person limit on the paid AI tools.
@@ -46,5 +47,6 @@ router.use(cost);
 router.use(recipes);
 router.use(describe);
 router.use(printProfile);
+router.use(brandFromUrl);
 
 module.exports = router;

@@ -1678,6 +1678,15 @@
   "POST /api/graphics/blur-detect": {
    "class": "authed"
   },
+  "POST /api/graphics/brand-from-url": {
+   "class": "authed"
+  },
+  "POST /api/graphics/brand-from-url/:id/apply": {
+   "class": "authed"
+  },
+  "GET /api/graphics/brand-from-url/:id/font/:role": {
+   "class": "authed"
+  },
   "POST /api/graphics/collage": {
    "class": "authed"
   },
