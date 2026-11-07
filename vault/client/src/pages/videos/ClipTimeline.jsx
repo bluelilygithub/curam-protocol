@@ -4,6 +4,8 @@ import {
   clampStart, clampEnd, nudge, reachedEnd, normalizeRange, clampBlockStart, blockStartFromPointer,
   MIN_SPAN, clampView, zoomView, wholeView, isWhole, viewForSelection, ensureVisible, timeFromXView, pctView, visiblePct, stripTimes, lastFrameTime,
 } from './clipRange.mjs';
+import { prevCut, nextCut, snapTime } from './sceneCuts.mjs';
+import { findShotChanges } from './sceneScan';
 
 /**
  * The Clip / trim timeline, wired to the video player above it.
@@ -15,13 +17,18 @@ import {
  *  - a playhead that follows the video; click or drag on the strip to scrub (the video jumps there);
  *  - two markers (in / out): drag them and the video shows the exact frame at that marker;
  *    keyboard too (arrow keys 0.1 s, Shift+arrow 1 s);
- *  - buttons to take the point you are watching as the start or the end, to preview just the selection, and to jump to a marker.
+ *  - buttons to take the point you are watching as the start or the end, to preview just the selection, and to jump to a marker;
+ *  - SHOT CHANGES: "Find shot changes" looks through the video in the browser (nothing uploaded, nothing paid), marks each change on the bar, lets you jump to the
+ *    previous / next one, and can snap a dragged marker to a change so a trim does not cut a shot in half.
  *
  * `videoRef` is the page's <video>; `src` its URL (used only to draw the frame strip from a hidden copy).
  *
  * `blockSec`: when given (> 0) the selection is ONE block of exactly that length that slides along the video as a whole (Replace a
  * section, where the replacement clip's length is fixed). Only `startSec` / `onStartChange` are used then; the end is start + blockSec.
  */
+
+// how close (in seconds) a dragged marker has to be to a shot change to jump to it: about 2% of what is on screen, so it is gentle when zoomed in
+function snapWindow(view) { return Math.max(0.1, (view && view.span ? view.span : 0) * 0.02); }
 
 function fmt(sec) {
   if (!Number.isFinite(sec) || sec < 0) return '0:00.0';
@@ -31,6 +38,31 @@ function fmt(sec) {
 }
 
 const STRIP_COUNT = 16;
+
+/**
+ * Shot changes for this video, found only when asked for (it seeks the video about 90 times, so it is not done on every load). `find()` starts it;
+ * `status` is idle | working | done | failed. A different video clears the result and stops a search in progress.
+ */
+function useShotChanges(src) {
+  const [state, setState] = useState({ status: 'idle', cuts: [], done: 0, total: 0 });
+  const cancelRef = useRef(false);
+  useEffect(() => { cancelRef.current = false; setState({ status: 'idle', cuts: [], done: 0, total: 0 }); return () => { cancelRef.current = true; }; }, [src]);
+  const find = useCallback(async () => {
+    if (!src) return;
+    cancelRef.current = false;
+    setState({ status: 'working', cuts: [], done: 0, total: 0 });
+    try {
+      const cuts = await findShotChanges(src, {
+        isCancelled: () => cancelRef.current,
+        onProgress: (done, total) => { if (!cancelRef.current) setState((s) => ({ ...s, done, total })); },
+      });
+      if (!cancelRef.current) setState({ status: 'done', cuts, done: 0, total: 0 });
+    } catch {
+      if (!cancelRef.current) setState({ status: 'failed', cuts: [], done: 0, total: 0 });
+    }
+  }, [src]);
+  return { ...state, find };
+}
 
 /**
  * A row of small frames spread across the visible window, made by seeking a hidden copy of the video. Each picture is the frame at the
@@ -223,6 +255,12 @@ export default function ClipTimeline({
   }, [start, end, dur]);
 
   const frames = useFrameStrip(src, dur, view);
+  const shots = useShotChanges(src);
+  const [snap, setSnap] = useState(false); // snap a dragged marker to the nearest shot change
+  const snapRef = useRef(false);
+  snapRef.current = snap;
+  const cutsRef = useRef([]);
+  cutsRef.current = shots.cuts;
   const startFrame = useExactFrame(src, dur > 0 ? start : null);
   const endFrame = useExactFrame(src, dur > 0 ? lastFrameTime(start, end) : null);
 
@@ -270,15 +308,15 @@ export default function ClipTimeline({
       if (!mode || !dur) return;
       const t = timeFromXView(e.clientX, trackRef.current?.getBoundingClientRect(), viewRef.current);
       if (mode === 'block') {
-        const next = blockStartFromPointer(t, grabRef.current, block, dur);
+        const next = blockStartFromPointer(snapRef.current ? snapTime(t - grabRef.current, cutsRef.current, snapWindow(viewRef.current)) + grabRef.current : t, grabRef.current, block, dur);
         onStartChange(next);
         seek(next); // show the picture the new clip will start on
       } else if (mode === 'start') {
-        const next = clampStart(t, end);
+        const next = clampStart(snapRef.current ? snapTime(t, cutsRef.current, snapWindow(viewRef.current)) : t, end);
         onStartChange(next);
         seek(next); // show the exact frame the clip will start on
       } else if (mode === 'end') {
-        const next = clampEnd(t, start, dur);
+        const next = clampEnd(snapRef.current ? snapTime(t, cutsRef.current, snapWindow(viewRef.current)) : t, start, dur);
         onEndChange(next);
         seek(next); // show the exact frame the clip will end on
       } else {
@@ -362,6 +400,10 @@ export default function ClipTimeline({
             style={{ left: `${shown.left}%`, width: `${shown.width}%`, borderColor: 'var(--color-primary)' }}
           />
         )}
+        {/* shot changes found by "Find shot changes" */}
+        {shots.cuts.map((c) => { const p = pctView(c, view); return p >= 0 && p <= 100 ? (
+          <div key={c} data-cut={c} className="absolute top-0 bottom-0 w-px pointer-events-none" style={{ left: `${p}%`, background: '#fbbf24', boxShadow: '0 0 0 0.5px rgba(0,0,0,0.5)' }} />
+        ) : null; })}
         {/* the playhead */}
         {nowRaw >= 0 && nowRaw <= 100 && (
           <div className="absolute -top-1 -bottom-1 w-0.5 pointer-events-none" style={{ left: `${nowRaw}%`, background: '#fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.6)' }} />
@@ -454,6 +496,29 @@ export default function ClipTimeline({
         <Tooltip text="Show the whole video again.">
           <button type="button" className={btn} style={btnStyle} disabled={whole} onClick={() => setViewState(null)}>Whole video</button>
         </Tooltip>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5" data-guide="shot-changes">
+        <Tooltip text="Looks through the video in this browser for the places where the picture suddenly changes (a new shot). Nothing is uploaded and it costs nothing. Each change is marked in yellow on the bar. It takes a little while on a long video.">
+          <button type="button" className={btn} style={btnStyle} disabled={shots.status === 'working'} onClick={shots.find}>
+            {shots.status === 'working' ? `Looking… ${shots.total ? `${shots.done} of ${shots.total}` : ''}` : shots.status === 'done' ? 'Find again' : 'Find shot changes'}
+          </button>
+        </Tooltip>
+        <Tooltip text="Jump the video to the shot change just before where you are now.">
+          <button type="button" className={btn} style={btnStyle} disabled={prevCut(now, shots.cuts) == null} onClick={() => { const c = prevCut(now, shots.cuts); if (c != null) seek(c); }}>Previous shot</button>
+        </Tooltip>
+        <Tooltip text="Jump the video to the next shot change after where you are now.">
+          <button type="button" className={btn} style={btnStyle} disabled={nextCut(now, shots.cuts) == null} onClick={() => { const c = nextCut(now, shots.cuts); if (c != null) seek(c); }}>Next shot</button>
+        </Tooltip>
+        <Tooltip text="When ticked, a marker you drag jumps to a nearby shot change, so a trim does not cut a shot in half. Works after Find shot changes.">
+          <label className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-text)', opacity: shots.cuts.length ? 1 : 0.6 }}>
+            <input type="checkbox" checked={snap && shots.cuts.length > 0} disabled={!shots.cuts.length} onChange={(e) => setSnap(e.target.checked)} />
+            Snap markers to shot changes
+          </label>
+        </Tooltip>
+        <span className="text-[10px]" role="status" style={{ color: shots.status === 'failed' ? '#b45309' : 'var(--color-muted)' }}>
+          {shots.status === 'done' ? (shots.cuts.length ? `${shots.cuts.length} shot change${shots.cuts.length === 1 ? '' : 's'} found (yellow lines).` : 'No shot changes found: this looks like one continuous shot.')
+            : shots.status === 'failed' ? 'This browser could not read the video to look through it.' : ''}
+        </span>
       </div>
       {!whole && (
         <Tooltip text="Slide this to move the zoomed window along the video. The block or markers stay where they are.">

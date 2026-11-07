@@ -128,6 +128,32 @@ function parseCaptionXml(xml) {
   return parseCaptionSegments(xml).map((s) => s.text).join(' ');
 }
 
+/**
+ * Who wrote a caption track: 'manual' (a person, or the video's owner), 'auto' (YouTube's speech recognition) or 'unknown' (the track says neither).
+ * InnerTube marks automatic tracks with kind "asr" (and a track id starting "a."); a track that has an id but no such mark is a written one.
+ */
+function trackProvenance(track) {
+  if (!track || typeof track !== 'object') return 'unknown';
+  if (track.kind === 'asr' || /^a\./.test(String(track.vssId || ''))) return 'auto';
+  if (track.vssId || track.kind === 'standard') return 'manual';
+  return 'unknown';
+}
+
+/**
+ * Which caption track to read. Captions a person wrote beat automatic ones, because speech recognition mishears names, products and numbers. Order: the
+ * language asked for (written, then automatic), then English (written, then automatic), then any written track, then whatever is first.
+ * @returns {object|null} the track from InnerTube's list
+ */
+function pickCaptionTrack(tracks, languageCode) {
+  const list = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+  if (!list.length) return null;
+  const written = (t) => trackProvenance(t) !== 'auto';
+  const inLang = (code) => list.filter((t) => t.languageCode === code);
+  const wanted = languageCode ? inLang(languageCode) : [];
+  const english = inLang('en');
+  return wanted.find(written) || wanted[0] || english.find(written) || english[0] || list.find(written) || list[0];
+}
+
 // Fetch the raw caption track list for a video via InnerTube (shared by
 // fetchYoutubeTranscript and fetchYoutubeCaptionLanguages).
 async function fetchCaptionTracks(videoId) {
@@ -182,10 +208,8 @@ async function fetchYoutubeTranscript(url, languageCode) {
   // Step 1: get caption track list via InnerTube
   const captionTracks = await fetchCaptionTracks(videoId);
 
-  // Requested language, else prefer English, else fall back to first available
-  const track = (languageCode && captionTracks.find(t => t.languageCode === languageCode))
-    || captionTracks.find(t => t.languageCode === 'en')
-    || captionTracks[0];
+  // Requested language, else English, else the first available; a track a person wrote is preferred over an automatic one in each case
+  const track = pickCaptionTrack(captionTracks, languageCode);
   const trackUrl = track.baseUrl;
 
   // Safety: ensure track URL is from youtube.com
@@ -218,7 +242,8 @@ async function fetchYoutubeTranscript(url, languageCode) {
   const content = (header + transcriptText).substring(0, 50000);
 
   // `segments` has the timing (seconds) for callers that need it; `content` is the capped plain text everything else uses.
-  return { title, content, segments, languageCode: track.languageCode };
+  // `provenance` says who wrote the captions (manual / auto / unknown) so the page can say how far to trust them
+  return { title, content, segments, languageCode: track.languageCode, provenance: trackProvenance(track), languageName: track.name?.simpleText || track.languageCode };
 }
 
 async function fetchYoutubeReference(url) {
@@ -228,8 +253,10 @@ async function fetchYoutubeReference(url) {
   const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const title = (await fetchVideoTitle(videoId)) || 'YouTube video';
   let transcriptExcerpt = '';
+  let captions = null;
   try {
     const t = await fetchYoutubeTranscript(url);
+    captions = { provenance: t.provenance, languageCode: t.languageCode, languageName: t.languageName };
     transcriptExcerpt = String(t.content || '')
       .replace(/^\[YouTube Transcript:[^\]]*\]\s*/i, '')
       .trim()
@@ -243,8 +270,9 @@ async function fetchYoutubeReference(url) {
     title,
     thumbnailUrl,
     transcriptExcerpt,
+    captions, // { provenance: 'manual' | 'auto' | 'unknown', languageCode, languageName } or null when the video has no readable captions
     url: `https://www.youtube.com/watch?v=${videoId}`,
   };
 }
 
-module.exports = { parseCaptionSegments, parseCaptionXml, isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference, fetchYoutubeCaptionLanguages };
+module.exports = { trackProvenance, pickCaptionTrack, parseCaptionSegments, parseCaptionXml, isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference, fetchYoutubeCaptionLanguages };

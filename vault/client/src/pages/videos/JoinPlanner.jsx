@@ -5,12 +5,15 @@ import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import SlideshowLimitsModal from './SlideshowLimitsModal';
-import { JOIN_CAN, JOIN_FOOTNOTE, orderedJoinLimits } from './joinLimits.mjs';
+import { JOIN_CAN, orderedJoinLimits } from './joinLimits.mjs';
+import AiLookToggle, { useVisionInfo } from './AiLookToggle';
+import { captureAll, captureVideoFrames } from './visionCapture';
+import { visionNote, seesFootnote, FRAMES_PER_CLIP } from './visionFrames.mjs';
 import { useJoinCapabilities, blankJoinPlan, relabelJoins, joinDefaults, JoinPicker, ClipEffectsPanel, describePlan } from './JoinEffectsEditor';
 
 // "Describe how to join" step for Video Tools → Join videos. The server turns a plain-English description
 // into a plan (play order, a transition for each join, effects for each clip); the user reviews/edits it here
-// (or builds one by hand with no description), then the parent sends it with the clips to build the video. The planner sees the description and file names only — never the footage.
+// (or builds one by hand with no description), then the parent sends it with the clips to build the video. By default the planner sees the description and file names only. If the person ticks "Let the AI look", the browser also sends two small frames from each clip (never the videos); see AiLookToggle.jsx.
 // Pressing "Plan my join" first opens a modal explaining what Join can't do (and how to get around it);
 // nothing is planned until the user confirms there.
 
@@ -22,6 +25,9 @@ export default function JoinPlanner({ files, plan, onPlan }) {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [description, setDescription] = useState('');
   const [showLimits, setShowLimits] = useState(false);
+  const [look, setLook] = useState(false); // OFF every time: nothing is sent to the AI model unless the person ticks it
+  const [lookNote, setLookNote] = useState('');
+  const visionInfo = useVisionInfo();
   const [openClip, setOpenClip] = useState(null); // one clip's effects open at a time
   const caps = useJoinCapabilities();
 
@@ -35,10 +41,18 @@ export default function JoinPlanner({ files, plan, onPlan }) {
     setShowLimits(false);
     startProcessing('Planning your join…', 'Turning your description into a play order, transitions and effects.');
     try {
-      const res = await api.post('/api/videos/join/plan', {
-        description: description.trim(),
-        clips: files.map((f) => ({ name: f.name })),
-      });
+      let body = { description: description.trim(), clips: files.map((f) => ({ name: f.name })) };
+      setLookNote('');
+      if (look) {
+        // a couple of small frames per clip are made here, in the browser; the videos themselves are not uploaded
+        startProcessing('Preparing small frames from your clips…', 'Made in your browser. Only the small frames are sent, and only for this plan.');
+        const made = await captureAll(files, (f) => captureVideoFrames(f, FRAMES_PER_CLIP), (n, total) => startProcessing('Preparing small frames from your clips…', `Clip ${n} of ${total}. Made in your browser; only the small frames are sent.`));
+        if (!made.taken) throw new Error('This browser could not read your clips to make small frames. Untick the AI look to plan from your words and the file names.');
+        if (made.failed) setLookNote(`${made.failed} clip${made.failed === 1 ? '' : 's'} could not be read here, so the AI only had the file name${made.failed === 1 ? '' : 's'} for ${made.failed === 1 ? 'it' : 'them'}.`);
+        body = { ...body, look: true, clips: made.items };
+        startProcessing('Planning your join…', 'The AI is looking at small frames from your clips.');
+      }
+      const res = await api.post('/api/videos/join/plan', body);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not plan the join');
       onPlan(data);
@@ -81,7 +95,9 @@ export default function JoinPlanner({ files, plan, onPlan }) {
       <div>
         <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Describe how to join them (optional)</p>
         <p className="text-xs" style={mutedStyle}>
-          Say how the clips should flow — type it, or tap the mic and say it. The planner works from your words and the file names, so it can't see the footage: check the plan before building.
+          {look
+            ? 'Say how the clips should flow — type it, or tap the mic and say it. The AI will look at two small frames from each clip as well as your words, so it can suggest a sensible order. It can still misjudge what it sees, so check the plan before building.'
+            : "Say how the clips should flow — type it, or tap the mic and say it. The planner works from your words and the file names, so it can't see the footage unless you tick the box below: check the plan before building."}
         </p>
       </div>
       <Tooltip text="Describe the order and feel of the join, for example: outside shots first, then the inside, with slow dissolves. Type it or tap the mic and say it.">
@@ -98,6 +114,7 @@ export default function JoinPlanner({ files, plan, onPlan }) {
           />
         </div>
       </Tooltip>
+      <AiLookToggle what="clips" count={files.length} look={look} onChange={setLook} info={visionInfo} />
       <Tooltip text="Ask the AI to turn your description into a play order and transition you can edit before joining.">
         <button
           type="button"
@@ -137,7 +154,7 @@ export default function JoinPlanner({ files, plan, onPlan }) {
           heading="Before you plan: what Join videos can and can't do"
           can={JOIN_CAN}
           limits={orderedJoinLimits(description)}
-          footnote={JOIN_FOOTNOTE}
+          footnote={seesFootnote('clips', look)}
           confirmLabel="Continue — plan what's possible"
         />
       )}
@@ -145,6 +162,8 @@ export default function JoinPlanner({ files, plan, onPlan }) {
       {plan && (
         <div className="space-y-3 pt-1">
           {plan.summary && <p className="text-xs italic" style={{ color: 'var(--color-text)' }}>{plan.summary}</p>}
+          {visionNote(plan) && <p className="text-xs" style={mutedStyle}>{visionNote(plan)}</p>}
+          {lookNote && <p className="text-xs" style={{ color: '#b45309' }}>{lookNote}</p>}
           <p className="text-xs" style={mutedStyle}>Plan: {describePlan(plan)}</p>
           <label className="block space-y-1">
             <span className="text-xs" style={mutedStyle}>Set every transition to</span>

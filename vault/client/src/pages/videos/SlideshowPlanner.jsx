@@ -5,11 +5,15 @@ import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import SlideshowLimitsModal from './SlideshowLimitsModal';
+import AiLookToggle, { useVisionInfo } from './AiLookToggle';
+import { captureAll, captureImage } from './visionCapture';
+import { visionNote, seesFootnote } from './visionFrames.mjs';
 
 // "Describe the video" step for the Slideshow tool. The server turns a plain-English description
 // into a plan (order, per-slide timing/captions, transition, camera motion, colour mood); the
 // user reviews/edits it here, then the parent sends it with the images to build the video.
-// The planner sees the description and file names only — never the pictures themselves.
+// By default the planner sees the description and file names only. If the person ticks "Let the AI look", the browser also sends one small copy of each
+// picture (never the originals); see AiLookToggle.jsx, visionCapture.js and server/services/videoVision.js.
 
 export const PLAN_OPTIONS = {
   aspect: [['9:16', '9:16 · Reels/Stories'], ['16:9', '16:9 · Landscape'], ['1:1', '1:1 · Square'], ['4:5', '4:5 · Portrait']],
@@ -51,6 +55,9 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [description, setDescription] = useState('');
   const [showLimits, setShowLimits] = useState(false);
+  const [look, setLook] = useState(false); // OFF every time: nothing is sent to the AI model unless the person ticks it
+  const [lookNote, setLookNote] = useState('');
+  const visionInfo = useVisionInfo();
 
   // Pressing the button only opens the "what can't be done" modal; nothing is planned until the
   // user confirms there.
@@ -64,11 +71,18 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
     setShowLimits(false);
     startProcessing('Planning your video…', 'Turning your description into order, timing, transitions and look.');
     try {
-      const res = await api.post('/api/videos/slideshow/plan', {
-        description: description.trim(),
-        images: files.map((f) => ({ name: f.name })),
-        hasAudio,
-      });
+      let body = { description: description.trim(), images: files.map((f) => ({ name: f.name })), hasAudio };
+      setLookNote('');
+      if (look) {
+        // small copies are made here, in the browser; the pictures themselves are not uploaded
+        startProcessing('Preparing small copies of your pictures…', 'Made in your browser. Only the small copies are sent, and only for this plan.');
+        const made = await captureAll(files, async (f) => [await captureImage(f)]);
+        if (!made.taken) throw new Error('This browser could not read your pictures to make small copies. Untick the AI look to plan from your words and the file names.');
+        if (made.failed) setLookNote(`${made.failed} picture${made.failed === 1 ? '' : 's'} could not be read here, so the AI only had the file name${made.failed === 1 ? '' : 's'} for ${made.failed === 1 ? 'it' : 'them'}.`);
+        body = { ...body, look: true, images: made.items };
+        startProcessing('Planning your video…', 'The AI is looking at small copies of your pictures.');
+      }
+      const res = await api.post('/api/videos/slideshow/plan', body);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not plan the video');
       onPlan(data);
@@ -95,7 +109,9 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
       <div>
         <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Describe the video (optional)</p>
         <p className="text-xs" style={mutedStyle}>
-          Say what you want it to feel like. The planner works from your words and the file names — it can't see the pictures, so check the plan before building.
+          {look
+            ? 'Say what you want it to feel like. The AI will look at small copies of your pictures as well as your words, so it can suggest a sensible order. It can still misjudge a picture, so check the plan before building.'
+            : "Say what you want it to feel like. The planner works from your words and the file names — it can't see the pictures unless you tick the box below, so check the plan before building."}
         </p>
       </div>
       <VoiceInput
@@ -108,6 +124,7 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
         label="Describe the video"
         className="!text-xs"
       />
+      <AiLookToggle what="pictures" count={files.length} look={look} onChange={setLook} info={visionInfo} />
       <Tooltip text="Ask the AI to turn your description into a plan you can edit before building.">
         <button
           type="button"
@@ -126,12 +143,14 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
       )}
 
       {showLimits && (
-        <SlideshowLimitsModal description={description} onConfirm={generate} onCancel={() => setShowLimits(false)} />
+        <SlideshowLimitsModal description={description} onConfirm={generate} onCancel={() => setShowLimits(false)} footnote={seesFootnote('pictures', look)} />
       )}
 
       {plan && (
         <div className="space-y-3 pt-1">
           {plan.summary && <p className="text-xs italic" style={{ color: 'var(--color-text)' }}>{plan.summary}</p>}
+          {visionNote(plan) && <p className="text-xs" style={mutedStyle}>{visionNote(plan)}</p>}
+          {lookNote && <p className="text-xs" style={{ color: '#b45309' }}>{lookNote}</p>}
           <div className="grid grid-cols-2 gap-3">
             <PlanSelect label="Aspect" tip="Frame shape of the finished video." value={plan.aspect} options={PLAN_OPTIONS.aspect} onChange={(aspect) => set({ aspect })} />
             <PlanSelect label="Fit" tip="Show the whole image with bars, or fill the frame and trim the edges." value={plan.mode} options={PLAN_OPTIONS.mode} onChange={(mode) => set({ mode })} />

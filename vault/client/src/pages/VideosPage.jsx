@@ -10,6 +10,8 @@ import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import ThumbnailSuggest from './videos/ThumbnailSuggest';
+import { captionsLabel } from './videos/captionsLabel.mjs';
 import SlideshowPlanner from './videos/SlideshowPlanner';
 import JoinPlanner from './videos/JoinPlanner';
 import { describePlan } from './videos/JoinEffectsEditor';
@@ -324,6 +326,7 @@ const TOOL_HELP = {
       'Each clip is normalized to a shared resolution, frame rate, and audio format first',
       'Optional crossfade transition between clips, or a hard cut',
       'Adjustable max output width and quality',
+      'Describe how you want it joined and get a plan to edit. Tick "Let the AI look at a few frames from each clip" and the AI also sees two small frames from each clip (made in your browser, never your videos) so it can suggest a sensible order. It is off unless you tick it, and the cost is shown first',
     ],
   },
   slideshow: {
@@ -334,6 +337,7 @@ const TOOL_HELP = {
       'Letterboxed to your chosen aspect ratio (9:16, 16:9, 1:1, 4:5)',
       'Optional crossfade between slides, or a hard cut',
       'Optional audio track loops to fill or trims to match the total runtime',
+      'Describe the video and get a plan to edit. Tick "Let the AI look at my pictures" and the AI also sees a small copy of each picture (made in your browser, never your originals) so it can suggest a sensible order and fitting captions. It is off unless you tick it, and the cost is shown first',
     ],
   },
   'caption-studio': {
@@ -3095,7 +3099,7 @@ export default function VideosPage() {
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{youtubePreview.title}</p>
                       <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
-                        {youtubePreview.hasTranscript ? 'Transcript available for style matching' : 'No captions — thumbnail + title used'}
+                        {youtubePreview.hasTranscript ? `Transcript available for style matching${captionsLabel(youtubePreview.captions)}` : 'No captions — thumbnail + title used'}
                       </p>
                     </div>
                   </div>
@@ -5503,6 +5507,7 @@ export default function VideosPage() {
                 <input type="number" min={0} step={0.1} value={thumbTime} onChange={(e) => setThumbTime(Number(e.target.value))} className="w-32 px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </Tooltip>
             </label>
+            <ThumbnailSuggest src={previewUrl} current={thumbTime} onPick={setThumbTime} />
             <Tooltip text="Capture the frame at that timestamp as a JPG image.">
               <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('timeSec', String(thumbTime)); startProcessing('Capturing frame…', ''); try { const res = await api.postForm('/api/videos/thumbnail', fd); if (!res.ok) { const e = await res.json(); throw new Error(e.error); } const blob = await res.blob(); thumbBlobRef.current = blob; if (thumbUrl) URL.revokeObjectURL(thumbUrl); setThumbUrl(URL.createObjectURL(blob)); addToast('Thumbnail ready', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
                 Export JPG

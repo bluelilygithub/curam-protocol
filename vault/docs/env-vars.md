@@ -30,6 +30,7 @@ Moved out of CLAUDE.md.
 | `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |
 | `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
+| `VIDEO_VISION_MAX_USD` | Video Tools — hard cap (US$) on one Slideshow/Join plan when "Let the AI look" is ticked (default 0.25) |
 | `MUSIC_PROVIDER` / `MUSIC_REPLICATE_MODEL` / `MUSIC_REPLICATE_MODEL_VERSION` / `MUSIC_REPLICATE_VERSION` | Music — backend (default `replicate`; `fake` = test synth), Replicate model (default `meta/musicgen`), the model's `model_version` input (default `stereo-large`), and an optional pinned Replicate version id (default: latest, looked up once); uses `REPLICATE_API_TOKEN` |
 | `VOICE_PROVIDER` / `VOICE_REPLICATE_MODEL` / `VOICE_REPLICATE_VERSION` | Music voiceover — TTS backend (default `replicate`; `fake` = test tone), Replicate model (default `jaaari/kokoro-82m`), optional pinned version id; uses `REPLICATE_API_TOKEN` |
 | `MUSIC_MAX_VIDEO_SEC` / `MUSIC_JOB_TTL_MIN` / `MUSIC_MAX_CLIP_SECONDS` | Music — longest video accepted (default 300), how long finished jobs/files are kept (default 90 min), longest single generated clip (default 30) |

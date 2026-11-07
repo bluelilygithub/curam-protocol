@@ -41,7 +41,7 @@ const CATALOG = [
     does: 'Makes Reels/TikTok/Shorts (9:16, up to 60 seconds), Square (1:1) and Landscape (16:9) versions of one video in one go, and downloads them separately or as a zip.', needs: 'a video', makes: 'up to three MP4 files', notes: 'Crops to fill each shape; choose which part of the picture to keep.' },
   { id: 'clip', label: 'Clip / trim', group: 'Edit video',
     does: 'Cuts out a part of a video, from a start time to an end time, and saves just that part as a new video. The original is not changed. Has a timeline of pictures from the video: click or drag along it to move through the video and drag the start and end markers (the video shows the exact picture), or press Set start here / Set end here while watching, or type the times; Play selection previews the chosen part. Can also work from a direct video file link.',
-    needs: 'a video', makes: 'a shorter video', notes: 'There is a "keep original quality" option that makes no quality loss but may start a second or two early. Cutting a section OUT of the middle is not available for video (it is for audio in Trim audio).' },
+    needs: 'a video', makes: 'a shorter video', notes: 'Find shot changes looks through the video in the browser (free, nothing uploaded), marks each change in yellow on the timeline, has Previous shot / Next shot buttons, and an optional Snap markers to shot changes tick box so a trim does not cut a shot in half. It deliberately ignores flicker, strobes and constant fast movement, and can miss cuts faster than every half second. There is a "keep original quality" option that makes no quality loss but may start a second or two early. Cutting a section OUT of the middle is not available for video (it is for audio in Trim audio).' },
   { id: 'replace-section', label: 'Replace a section', group: 'Edit video',
     does: 'Swaps the picture of one stretch of a video for another clip, leaving the original soundtrack completely untouched so music and voice carry on without a break. The finished video is exactly as long as the original. Choose the exact start time; the replacement clip must be exactly the same length as the section it replaces. Optional transitions in and out (crossfade, dip to black or white, wipe, slide) happen inside the section.',
     needs: 'a video, and a replacement clip of exactly the same length as the section', makes: 'one video (same length as the original)',
@@ -66,9 +66,9 @@ const CATALOG = [
   { id: 'join', label: 'Join videos', group: 'Edit video',
     does: 'Joins two or more video clips into one, in an order you choose, with a hard cut or a transition (crossfade, dip to black or white, wipe, slide) between each pair and optional effects on each clip. You can describe in words how you want it joined and get a plan to edit.',
     needs: 'two or more videos', makes: 'one video',
-    notes: 'Join all the clips in one go rather than joining in stages, so quality is not lost by repeated re-saving.' },
+    notes: 'Join all the clips in one go rather than joining in stages, so quality is not lost by repeated re-saving. The planner normally works from your words and the clip file names only. If you tick Let the AI look at a few frames from each clip, your browser also sends two small frames from each clip (never the videos) so it can suggest a sensible order; it costs a little more, the estimate is shown first, and it is off unless you tick it.' },
   { id: 'slideshow', label: 'Slideshow', group: 'Make',
-    does: 'Turns 2-20 still pictures into a video with optional background audio, a chosen shape, a time per picture, transitions, gentle camera movement and captions. You can describe the look in words.', needs: 'pictures (and optionally an audio file)', makes: 'a video', notes: '' },
+    does: 'Turns 2-20 still pictures into a video with optional background audio, a chosen shape, a time per picture, transitions, gentle camera movement and captions. You can describe the look in words.', needs: 'pictures (and optionally an audio file)', makes: 'a video', notes: 'The planner normally works from your words and the file names only. If you tick Let the AI look at my pictures, your browser also sends one small copy of each picture (never the originals) so it can suggest a sensible order and fitting captions; it costs a little more, the estimate is shown first, and it is off unless you tick it. It can still misjudge a picture, so check the plan before building.' },
   { id: 'caption-studio', label: 'Caption studio', group: 'Titles and captions',
     does: 'Burns styled subtitles (font, size, colour, background, position) onto a video, from an SRT file, pasted captions, auto-transcription, or a script with no timestamps, which it times to the speech.',
     needs: 'a video and captions (or just a script)', makes: 'a video with captions', notes: 'Auto-transcribe and script timing need the Gemini setup. Captions are burned in; they cannot be switched off afterwards.' },
@@ -103,7 +103,7 @@ const CATALOG = [
   { id: 'info', label: 'File info', group: 'Library and info',
     does: 'Shows a video\'s length, size shape, codec and whether it has sound.', needs: 'a video', makes: 'information only', notes: '' },
   { id: 'thumbnail', label: 'Thumbnail', group: 'Export and convert',
-    does: 'Saves one picture (JPG) from a chosen moment in a video.', needs: 'a video', makes: 'a JPG picture', notes: '' },
+    does: 'Saves one picture (JPG) from a chosen moment in a video. Suggest good frames looks through the video in the browser (free, nothing uploaded) and offers up to four sharp, different frames; pressing one fills in the time.', needs: 'a video', makes: 'a JPG picture', notes: 'Suggestions skip dark, blank and near-duplicate frames.' },
 ];
 
 // Things people commonly ask for that Video Tools does NOT do. Used to say "beyond the toolset" with confidence.

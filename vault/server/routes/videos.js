@@ -67,6 +67,8 @@ const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlid
 const { interpretVoiceCommand, TOOL_SCHEMAS: VOICE_TOOL_SCHEMAS } = require('../services/videoVoiceCommand');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { planJoin, normalizeJoinPlan } = require('../services/videoJoinPlan');
+const { visionInfo, VisionInputError } = require('../services/videoVision');
+const { getModelsForUser } = require('../services/modelResolver');
 const { appendEndCard, normalizeEndCard } = require('../services/videoEndCard');
 const { joinClips } = require('../services/videoJoin/joinClips');
 const { joinCapabilities } = require('../services/videoJoin/capabilities');
@@ -301,6 +303,7 @@ router.post('/youtube-preview', async (req, res) => {
       thumbnailUrl: ref.thumbnailUrl,
       transcriptExcerpt: ref.transcriptExcerpt,
       hasTranscript: Boolean(ref.transcriptExcerpt),
+      captions: ref.captions || null, // who wrote them (manual / auto / unknown) and in which language
     });
   } catch (err) {
     getLogger().error({ err }, '[videos/youtube-preview]');
@@ -707,17 +710,30 @@ router.get('/join/capabilities', (req, res) => {
   res.json(joinCapabilities());
 });
 
-router.post('/join/plan', async (req, res) => {
+// What "Let the AI look" would cost and which model would do it, so the page can say so BEFORE anything is sent (no model is called here).
+router.get('/vision-info', async (req, res) => {
   try {
-    const { description, clips } = req.body || {};
+    res.json(await visionInfo(req.user.id, { getModels: getModelsForUser }));
+  } catch (err) {
+    getLogger().error({ err }, '[videos/vision-info]');
+    res.status(500).json({ error: 'Could not check the AI look.' });
+  }
+});
+
+router.post('/join/plan', aiLimiter, async (req, res) => {
+  try {
+    const { description, clips, look } = req.body || {};
     if (!Array.isArray(clips)) return res.status(400).json({ error: 'clips is required' });
+    // small frames travel only when the person ticked "Let the AI look" (look === true); otherwise they are dropped here, unread
     const plan = await planJoin(req.user.id, {
       description,
-      clips: clips.slice(0, 12).map((c) => ({ name: String(c?.name || '').slice(0, 80) })),
+      look: look === true,
+      clips: clips.slice(0, 12).map((c) => ({ name: String(c?.name || '').slice(0, 80), ...(look === true ? { frames: c?.frames } : {}) })),
     });
     res.json(plan);
   } catch (err) {
     getLogger().error({ err }, '[videos/join/plan]');
+    if (err instanceof VisionInputError) return res.status(400).json({ error: err.message });
     const userFacing = /Describe how|at least two|Maximum|unreadable/i.test(err.message);
     res.status(userFacing ? 400 : 500).json({ error: userFacing ? err.message : 'Could not plan the join — try again.' });
   }
@@ -1585,18 +1601,21 @@ router.post('/voice-command', aiLimiter, async (req, res) => {
 // "Describe the video" — turns a plain-English description into a reviewable slideshow plan
 // (order, per-slide timing/captions, transition, camera motion, colour mood). JSON in/out, no
 // ffmpeg and no uploads: the client sends only file NAMES, never the images themselves.
-router.post('/slideshow/plan', async (req, res) => {
+router.post('/slideshow/plan', aiLimiter, async (req, res) => {
   try {
-    const { description, images, hasAudio } = req.body || {};
+    const { description, images, hasAudio, look } = req.body || {};
     if (!Array.isArray(images)) return res.status(400).json({ error: 'images is required' });
+    // one small copy of each picture travels only when the person ticked "Let the AI look" (look === true); otherwise it is dropped here, unread
     const plan = await planSlideshow(req.user.id, {
       description,
-      images: images.slice(0, 20).map((i) => ({ name: String(i?.name || '').slice(0, 80) })),
+      look: look === true,
+      images: images.slice(0, 20).map((i) => ({ name: String(i?.name || '').slice(0, 80), ...(look === true ? { frames: i?.frames } : {}) })),
       hasAudio: Boolean(hasAudio),
     });
     res.json(plan);
   } catch (err) {
     getLogger().error({ err }, '[videos/slideshow/plan]');
+    if (err instanceof VisionInputError) return res.status(400).json({ error: err.message });
     const userFacing = /Describe the video|at least two|Maximum|unreadable/i.test(err.message);
     res.status(userFacing ? 400 : 500).json({ error: userFacing ? err.message : 'Could not plan the video — try again.' });
   }
