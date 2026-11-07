@@ -53,4 +53,17 @@ function estimateLiveUsd(depth, aiOverview) {
   return Math.ceil(Number(depth) / 10) * LIVE_PER_TEN_RESULTS_USD + (aiOverview ? AI_OVERVIEW_USD : 0);
 }
 
-module.exports = { logCost, monthSpend, monthBounds, monthlyCapUsd, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD, DEFAULT_CAP_USD };
+// Daily tracking uses DataForSEO's standard queue (task_post), billed per page of 10 results at about 30% of the Live price. From the one real queued
+// task on 6 Nov 2026: depth 100 cost US$0.006, so US$0.0006 per 10 results (charged for what was asked, not for what came back). An ESTIMATE
+// from that one price: the real cost of every post is read from the answer and logged. If DataForSEO changes its prices, change this number.
+const QUEUED_PER_TEN_RESULTS_USD = 0.0006;
+const TRACK_DEPTH_CAP = 30; // daily tracking reads at most the top 30: positions deeper than that are not actionable, and every extra page is billed
+const MAX_TRACK_READS = 3; // a keyword that misses the site is read again, up to 3 reads in all, before it is called "not found"
+
+/** Expected cost of one tracking pass over keywords x devices: `reads` is how many reads each one gets (1 = best case, MAX_TRACK_READS = every miss). */
+function estimateTrackingUsd({ keywords, devices, depth, reads = 1 }) {
+  const pages = Math.ceil(Math.min(Number(depth) || TRACK_DEPTH_CAP, TRACK_DEPTH_CAP) / 10);
+  return Number(keywords) * Number(devices) * pages * QUEUED_PER_TEN_RESULTS_USD * Number(reads);
+}
+
+module.exports = { QUEUED_PER_TEN_RESULTS_USD, TRACK_DEPTH_CAP, MAX_TRACK_READS, estimateTrackingUsd, logCost, monthSpend, monthBounds, monthlyCapUsd, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD, DEFAULT_CAP_USD };

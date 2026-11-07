@@ -125,6 +125,7 @@ export default function KeywordsPanel({ siteId, site }) {
   const [dir, setDir] = useState('desc');
   const [q, setQ] = useState('');
   const [striking, setStriking] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(false);
   const [list, setList] = useState(null); // null = loading
   const [selected, setSelected] = useState(null);
   const qTimer = useRef(null);
@@ -146,12 +147,13 @@ export default function KeywordsPanel({ siteId, site }) {
       const params = new URLSearchParams({ days, sort, dir });
       if (qDebounced) params.set('q', qDebounced);
       if (striking) params.set('striking', '1');
+      if (onlyNew) params.set('new', '1');
       const res = await api.get(`/api/serp-tracker/sites/${siteId}/keywords?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not load the keywords.');
       setList(data);
     } catch (err) { setList({ keywords: [], total: 0 }); addToast(err.message, 'error'); }
-  }, [siteId, days, sort, dir, qDebounced, striking, addToast]);
+  }, [siteId, days, sort, dir, qDebounced, striking, onlyNew, addToast]);
 
   useEffect(() => { setGsc(null); setList(null); setSelected(null); loadState(); }, [siteId, loadState]);
   useEffect(() => { if (gsc && gsc.selected) loadList(); }, [gsc && gsc.selected, loadList]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -282,6 +284,11 @@ export default function KeywordsPanel({ siteId, site }) {
                 {PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </Tooltip>
+            <Tooltip text="Searches your site started to show for during this period: its first day anywhere in the history falls inside it. It needs history from before the period to tell, so it does not work for All history.">
+              <label className="flex items-center gap-2 text-sm pb-1" style={{ color: 'var(--color-text)' }} data-guide="kw-new">
+                <input type="checkbox" checked={onlyNew} disabled={days === 'all'} onChange={(e) => setOnlyNew(e.target.checked)} /> New this period
+              </label>
+            </Tooltip>
             <Tooltip text="Keywords sitting at positions 8 to 20 with at least 10 impressions: just off page 1, so the cheapest ones to push up.">
               <label className="flex items-center gap-2 text-sm pb-1" style={{ color: 'var(--color-text)' }}>
                 <input type="checkbox" checked={striking} onChange={(e) => setStriking(e.target.checked)} /> Just off page 1
@@ -291,8 +298,11 @@ export default function KeywordsPanel({ siteId, site }) {
         </div>
 
         {list === null ? <Skeleton lines={6} label="Loading keywords" /> : list.keywords.length === 0 ? (
-          <EmptyState icon="line-chart" title={running ? 'Loading your history…' : q || striking ? 'No keywords match' : 'No keywords yet'}
-            body={running ? 'The first months are on their way. This fills in by itself.' : q || striking ? 'Try a shorter search, or switch off Just off page 1.' : 'Search Console has no figures for this property yet. A new property takes a few days to start showing data.'} />
+          <EmptyState icon="line-chart" title={running ? 'Loading your history…' : onlyNew && list.history && !list.history.newReady ? 'Not enough history to say what is new' : q || striking || onlyNew ? 'No keywords match' : 'No keywords yet'}
+            body={running ? 'The first months are on their way. This fills in by itself.'
+              : onlyNew && list.history && !list.history.newReady ? `History only starts on ${list.history.from ? dayLabel(list.history.from) : 'a recent day'}, so Vault cannot yet tell which searches are new over this period. Choose a shorter period, or check again as more history arrives.`
+              : onlyNew && !q && !striking ? 'No search started to show your site during this period.'
+              : q || striking || onlyNew ? 'Try a shorter search, or switch off Just off page 1 or New this period.' : 'Search Console has no figures for this property yet. A new property takes a few days to start showing data.'} />
         ) : (
           <>
             <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
@@ -304,6 +314,7 @@ export default function KeywordsPanel({ siteId, site }) {
                     <th scope="col" className={`${th} text-right`} onClick={() => sortBy('change')} aria-sort={sort === 'change' ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>Change{arrow('change')}</th>
                     <th scope="col" className={`${th} text-right`} onClick={() => sortBy('clicks')} aria-sort={sort === 'clicks' ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>Clicks{arrow('clicks')}</th>
                     <th scope="col" className={`${th} text-right`} onClick={() => sortBy('impressions')} aria-sort={sort === 'impressions' ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>Impressions{arrow('impressions')}</th>
+                    {onlyNew && <th scope="col" className="p-2 font-medium text-right">First seen</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -319,6 +330,7 @@ export default function KeywordsPanel({ siteId, site }) {
                         <td className="p-2 text-right whitespace-nowrap" style={{ color: ch.dir === 'up' ? '#15803d' : ch.dir === 'down' ? '#b91c1c' : 'var(--color-muted)' }}>{ch.text}</td>
                         <td className="p-2 text-right">{num(k.clicks)}</td>
                         <td className="p-2 text-right">{num(k.impressions)}</td>
+                        {onlyNew && <td className="p-2 text-right whitespace-nowrap">{k.firstSeen ? dayLabel(k.firstSeen) : '—'}</td>}
                       </tr>
                     );
                   })}

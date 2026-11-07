@@ -34,7 +34,7 @@ const CATALOG = [
     notes: 'Nothing uses them yet.' },
   { id: 'keywords', label: 'Keywords to track', group: 'Set up',
     does: 'One search per line. To say which page you want to rank for it, type a | after the words and then the full page address. Up to 50 searches.',
-    notes: 'The searches are saved now but are not collected every day yet; that is a later stage. A target page must be on your own site.' },
+    notes: 'The searches are only searched every day when Daily tracking is switched on for the site (it is off until the person switches it on). A target page must be on your own site.' },
   { id: 'competitors', label: 'Competitors', group: 'Set up',
     does: 'One competitor site per line. To watch particular pages of theirs, type a | then the page addresses separated by commas. Competitors named here are marked when Google\'s AI summary names them.',
     notes: 'Up to 20 competitors, 10 pages each. Each page must be on that competitor\'s own site.' },
@@ -47,6 +47,9 @@ const CATALOG = [
   { id: 'devices', label: 'Devices', group: 'Set up',
     does: 'Tick Desktop, Mobile or both. Google can show different results to each.',
     notes: 'At least one must be ticked.' },
+  { id: 'daily-tracking', label: 'Daily tracking', group: 'Set up',
+    does: 'A tick box, Track these keywords every day, with the estimated cost shown under it. When it is on, every day at 6:00 am Brisbane time Vault searches each keyword on each device through DataForSEO and keeps where the site was; the results appear under Tracked rankings on the Keywords tab.',
+    notes: 'It is OFF until the person switches it on, and it costs money: the estimate (a best case and a worst case, a day and a month) is shown first, with a warning if the worst case would pass the monthly spending limit. It reads the top 30 at most. A keyword that misses the site is read again, up to three reads, before it is called not found.' },
   { id: 'save-site', label: 'Save site details', group: 'Set up',
     does: 'Checks everything you typed and saves it. If something is wrong it lists every problem in plain words next to the form and saves nothing.',
     notes: 'A Quick lookup works without a site, but then it cannot tell you where your own site is.' },
@@ -86,15 +89,24 @@ const CATALOG = [
   { id: 'kw-table', label: 'Keyword list', group: 'Keywords',
     does: 'Every keyword the site ranks for, with average position, how that changed compared with the period just before, clicks and impressions. Search for a keyword, choose the period (7 days to all history), tick Just off page 1 for keywords at positions 8 to 20, and click a column heading to sort.',
     notes: 'Position is an average across the period, weighted by how often the site was shown, so a small number of impressions can make it jump. Search Console hides very rare searches, so the list is not every search that ever showed the site.' },
+  { id: 'kw-new', label: 'New this period', group: 'Keywords',
+    does: 'A tick box beside the keyword list. It keeps only searches the site started to show for during the chosen period, and adds a First seen column with the day each one first appeared.',
+    notes: 'It needs history from before the period to tell what is new, so it does not work for All history, and it shows nothing (and says why) until enough history has loaded. It is free.' },
   { id: 'kw-chart', label: 'Keyword chart', group: 'Keywords',
     does: 'Click a keyword in the list to chart its daily position over time (drawn upside down so up means better), or its clicks or impressions, over 3 months, 6 months or all history. A dashed line shows the 7-day average, and Show table gives the same figures as a table.',
     notes: 'The figures end about three days ago. Days when the site was not shown at all have no point.' },
+  { id: 'tracked-rankings', label: 'Tracked rankings', group: 'Keywords',
+    does: 'The second section of the Keywords tab: the positions Vault tracks every day through DataForSEO, one line per keyword and device, with the latest position, the change since the check before, how many reads found the site, and the day it was checked. Click a keyword for its history.',
+    notes: 'It is empty until Daily tracking is switched on in Site setup and a run has happened. These are scraped Google results, so they can differ from what a person sees in their browser; for the person\'s own sites the Search Console figures above are Google\'s own and the ones to trust. A search that failed is shown as failed, never as not found.' },
   { id: 'runs', label: 'Runs', group: 'Runs',
     does: 'The fourth tab. The daily checks and the ones you start by hand, for the chosen site.',
-    notes: 'Right now a run only checks that DataForSEO is connected and records the balance and the cost. Collecting your rankings every day is the next stage and is not switched on yet.' },
+    notes: 'A run checks that DataForSEO is connected and records the balance and the cost, and, for a site with Daily tracking switched on, also searches its keywords.' },
   { id: 'run-now', label: 'Check connection', group: 'Runs',
     does: 'Checks that DataForSEO is connected and shows the account balance, straight away instead of waiting for 6:00 am Brisbane time. It needs a saved site and a connected DataForSEO.',
     notes: 'At the moment this only reads the account balance, which is free. It does not search or collect any rankings; use the Lookup tab for that.' },
+  { id: 'run-tracking', label: 'Run tracking now', group: 'Runs',
+    does: 'Searches every keyword on each device through DataForSEO right now, instead of waiting for 6:00 am, and keeps where the site was. It shows the estimated cost and asks Yes / No first, then runs in the background for several minutes while the run list updates by itself.',
+    notes: 'It costs money and it works even when Daily tracking is switched off. The monthly spending limit stops it. Check connection is the free one.' },
   { id: 'run-list', label: 'Run list', group: 'Runs',
     does: 'Every run, newest first: whether it finished or failed, when, whether it was daily or by hand, the balance and the cost, and each step with what happened.',
     notes: 'A failed step is shown as a failure, never as a missing ranking.' },
@@ -110,11 +122,12 @@ const RULES = [
   'A person can track up to 20 sites, each web address once. Each site has its own details, lookups and runs; Quick lookups belong to no site.',
   'A site can be linked to one of the person\'s own CRM clients; the link changes nothing else.',
   'It shows only the signed-in person\'s own sites, lookups and runs.',
-  'The Keywords tab is free and uses Google Search Console. Its figures are Google\'s own across everyone who searched and end about three days ago; a lookup is a different thing (one paid search through DataForSEO, right now).',
+  'Daily tracking costs money, is OFF until the person switches it on, reads the top 30 at most, and reads a keyword again (up to three reads) when it misses the site; a search that failed is shown as failed, never as not found.',
+  'The Keywords list and its chart are free and use Google Search Console. Its figures are Google\'s own across everyone who searched and end about three days ago; a lookup is a different thing (one paid search through DataForSEO, right now).',
 ];
 
 const NOT_POSSIBLE = [
-  'Collecting Google results through DataForSEO every day and showing a history of where you ranked from those searches: that is a later stage and is not switched on yet. The Keywords tab gives a history for the person\'s own sites from Search Console instead.',
+  'Tracking a competitor\'s position every day: daily tracking only finds the person\'s own site (competitors are only marked when Google\'s AI summary names them).',
   'A weekly report: that is a later stage. (When a keyword slips sharply on Search Console, the Suggestions inbox gets an alert.)',
   'Keyword history for a site that is not in the connected Google account\'s Search Console, such as a competitor\'s, or from before a property was added to Search Console.',
   'Checking the pages listed for health: that is a later stage.',
@@ -137,7 +150,7 @@ Rules:
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
 - Every lookup costs money. Say so when a step makes a search.
 - A person may track several sites (one for each client). Say which site a step is for when it matters, and point at the Site box to switch.
-- Collecting Google results through DataForSEO every day and weekly reports are not built yet. Say so plainly rather than pointing at something that is not there. For "what do I rank for" or "how has this keyword moved" on the person's own sites, point at the Keywords tab (Search Console).
+- Weekly reports are not built yet. Say so plainly rather than pointing at something that is not there. For "what do I rank for" or "how has this keyword moved" on the person's own sites, point at the Keywords tab (Search Console first, then Tracked rankings). Daily tracking through DataForSEO exists but is OFF until the person switches it on in Site setup, and it costs money.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}
 

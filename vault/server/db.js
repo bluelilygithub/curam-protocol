@@ -1299,6 +1299,29 @@ async function initSchema() {
         PRIMARY KEY ("userId", "siteUrl")
       )
     `);
+    // Daily tracking (docs/serp-tracker.md, "Daily tracking"): one row per site, day, keyword and device, from DataForSEO's standard queue. A keyword that
+    // misses the site is read again (reads.js), so the row keeps every read ("readsJson") and the best position wins. Off by default for every site.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS serp_rankings (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "siteId"       INTEGER NOT NULL REFERENCES serp_sites(id) ON DELETE CASCADE,
+        "runDate"      DATE NOT NULL,
+        keyword        TEXT NOT NULL,
+        device         TEXT NOT NULL,
+        status         TEXT NOT NULL CHECK (status IN ('found', 'not_found', 'failed')),
+        position       INTEGER,
+        url            TEXT,
+        depth          INTEGER NOT NULL,
+        "readsJson"    JSONB NOT NULL DEFAULT '[]',
+        "organicCount" INTEGER,
+        "costUsd"      NUMERIC(10,5) NOT NULL DEFAULT 0,
+        error          TEXT,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("siteId", "runDate", keyword, device)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_rankings_series ON serp_rankings ("siteId", keyword, device, "runDate" DESC)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS serp_runs (
         id             SERIAL PRIMARY KEY,

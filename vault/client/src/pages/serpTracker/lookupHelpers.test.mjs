@@ -1,6 +1,6 @@
 // node client/src/pages/serpTracker/lookupHelpers.test.mjs   (pure; expected values worked out by hand)
 import assert from 'node:assert/strict';
-import { safeHref, positionText, costText, toggleOne, toggleAll, pruneSelection, deletedMessage, groupLayout, layoutName, estimateCost, pageText } from './lookupHelpers.mjs';
+import { readsText, safeHref, positionText, costText, toggleOne, toggleAll, pruneSelection, deletedMessage, groupLayout, layoutName, estimateCost, pageText } from './lookupHelpers.mjs';
 
 // links: only http(s)
 assert.equal(safeHref('https://www.wiwc.com.au/a'), 'https://www.wiwc.com.au/a');
@@ -63,5 +63,12 @@ assert.equal(pageText(11), 'page 2');
 assert.equal(pageText(118), 'page 12');
 assert.equal(pageText(null), '');
 assert.equal(pageText(0), '');
+
+// how many times a search was read
+assert.equal(readsText(undefined), '');
+assert.equal(readsText([{ position: 3, organic: 9 }]), '', 'a single read says nothing extra');
+assert.match(readsText([{ position: null, organic: 9 }, { position: null, organic: 9 }, { position: null, organic: 9 }]), /Read 3 times and the site was not found on any of them/);
+assert.match(readsText([{ position: null, organic: 9 }, { position: 4, organic: 9 }]), /Read 2 times: the site was found on 1 of them, and the best position \(#4\)/);
+assert.match(readsText([{ position: 6, organic: 9 }, { position: 2, organic: 9 }, { position: null, organic: 9 }]), /found on 2 of them.*#2/);
 
 console.log('lookupHelpers.test.mjs: all passed');

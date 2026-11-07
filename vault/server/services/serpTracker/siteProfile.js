@@ -8,6 +8,7 @@ const DEVICES = ['desktop', 'mobile'];
 const DEFAULTS = Object.freeze({
   locationName: 'Australia',
   languageCode: 'en',
+  dailyTracking: false, // OFF until the owner turns it on: it spends money every day (see costs.js estimateTrackingUsd)
   searchDomain: 'google.com.au', // the Google site searched (its Australian index); older saved sites without one get this too
   devices: ['desktop', 'mobile'],
   serpDepth: 100,
@@ -74,6 +75,7 @@ function validateProfile(raw) {
   const languageCode = cleanText(src.languageCode, 12) || DEFAULTS.languageCode;
   if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(languageCode)) errors.push('Language code should look like "en" or "en-AU".');
 
+  const dailyTracking = src.dailyTracking === true; // anything but a real true is off: a stray value must never switch on a paid daily job
   const searchDomain = cleanText(src.searchDomain, 30).toLowerCase().replace(/^www\./, '') || DEFAULTS.searchDomain;
   if (!/^google\.(com|com?\.[a-z]{2}|[a-z]{2})$/.test(searchDomain)) errors.push('Google site should look like "google.com.au".');
 
@@ -147,7 +149,7 @@ function validateProfile(raw) {
   }
 
   if (errors.length) return { ok: false, profile: null, errors };
-  return { ok: true, errors: [], profile: { name, domain, brandTerms, locationName, languageCode, searchDomain, devices, serpDepth: depth, timezone, keywords, competitors, healthCheckUrls } };
+  return { ok: true, errors: [], profile: { name, domain, brandTerms, locationName, languageCode, searchDomain, dailyTracking, devices, serpDepth: depth, timezone, keywords, competitors, healthCheckUrls } };
 }
 
 /** The calendar date ("YYYY-MM-DD") in `timeZone` at `now`. The brief groups every report by this Brisbane date. */

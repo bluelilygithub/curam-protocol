@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
 import api from '../../utils/apiClient';
+import { trackingEstimate, trackingWarning } from './trackingHelpers.mjs';
 
 // SERP Tracker, Site setup: the form for ONE site (a client's website). Controlled by the page; this only draws it. See docs/serp-tracker.md.
 
@@ -44,8 +45,11 @@ const REASONS = {
   unavailable: 'Your place could not be worked out just now.',
 };
 
-export default function SiteForm({ form, set, toggleDevice, errors, saving, onSave, isNew, savedAt, clients, clientId, onClientChange, clientName }) {
+export default function SiteForm({ form, set, toggleDevice, errors, saving, onSave, isNew, savedAt, clients, clientId, onClientChange, clientName, pricing = null, capUsd = null }) {
   const locInfo = useLocationCheck(form.locationName);
+  const keywordCount = String(form.keywordsText || '').split(String.fromCharCode(10)).filter((l) => l.trim()).length;
+  const estimate = trackingEstimate({ keywords: keywordCount, devices: (form.devices || []).length, depth: form.serpDepth }, pricing);
+  const warning = trackingWarning(estimate, capUsd);
   const [locating, setLocating] = useState(false);
   const [locNote, setLocNote] = useState('');
   const setPlace = (value) => set('locationName')({ target: { value } });
@@ -180,6 +184,19 @@ export default function SiteForm({ form, set, toggleDevice, errors, saving, onSa
             </label>
           ))}
         </div>
+      </fieldset>
+
+      <fieldset data-guide="daily-tracking" className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+        <legend className="text-xs font-medium px-1" style={muted}>Daily tracking (costs money)</legend>
+        <Tooltip text="Every day at 6:00 am Brisbane time Vault searches each keyword above, on each device, through DataForSEO and keeps where your site was. A keyword that misses your site is read again (up to three reads) before it is called not found. It is OFF until you switch it on, and the monthly spending limit stops it.">
+          <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+            <input type="checkbox" checked={form.dailyTracking === true} onChange={(e) => set('dailyTracking')({ target: { value: e.target.checked } })} />
+            Track these keywords every day
+          </label>
+        </Tooltip>
+        <p className="text-xs" style={muted}>{estimate ? estimate.text : 'Add at least one keyword and one device to see what daily tracking would cost.'}</p>
+        {warning && <p role="alert" className="text-xs" style={{ color: '#b45309' }}>{warning}</p>}
+        <p className="text-xs" style={muted}>Daily tracking reads the top 30 at most. For your own sites the Search Console figures on the Keywords tab are Google's own and are the ones to trust; these scraped positions are for comparing, and for sites you do not own in Search Console.</p>
       </fieldset>
 
       {errors.length > 0 && (

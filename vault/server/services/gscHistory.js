@@ -159,7 +159,12 @@ const SORTS = { clicks: 'clicks', impressions: 'impressions', position: 'positio
  * The keywords a property ranks for over the last `days` days (or all history), with the position from the period before for comparison.
  * Position is the average weighted by impressions. `striking` keeps positions 8 to 20 with at least `minImpressions` impressions.
  */
-async function listKeywords(pool, userId, siteUrl, { days = 28, sort = 'clicks', dir, q = '', striking = false, minImpressions = 10, limit = 200 } = {}) {
+/**
+ * `newOnly` keeps keywords whose FIRST day anywhere in the stored history falls inside the period (searches the site has just started to show for).
+ * It only means something when the history reaches back before the period (otherwise every keyword in a freshly loaded history looks new), so it
+ * returns nothing until then and says so in `history.newReady`.
+ */
+async function listKeywords(pool, userId, siteUrl, { days = 28, sort = 'clicks', dir, q = '', striking = false, newOnly = false, minImpressions = 10, limit = 200 } = {}) {
   const span = days === 'all' ? 100000 : Math.min(Math.max(Number(days) || 28, 1), 100000);
   const col = SORTS[sort] || 'clicks';
   const direction = (dir || (col === 'position' || col === 'query' ? 'asc' : 'desc')) === 'asc' ? 'ASC' : 'DESC';
@@ -168,9 +173,10 @@ async function listKeywords(pool, userId, siteUrl, { days = 28, sort = 'clicks',
   if (q && String(q).trim()) { params.push(`%${LIKE_ESCAPE(String(q).trim().slice(0, 100))}%`); like = `AND query ILIKE $${params.length}`; }
   const where = [];
   if (striking) { params.push(minImpressions); where.push(`cur.position >= 8 AND cur.position <= 20 AND cur.impressions >= $${params.length}`); }
+  if (newOnly) where.push('first.first_day > latest.d - $3::int AND latest.s <= latest.d - $3::int');
   params.push(Math.min(Math.max(Number(limit) || 200, 1), 1000));
   const sql = `
-    WITH latest AS (SELECT MAX(day) AS d FROM gsc_daily WHERE "userId" = $1 AND "siteUrl" = $2),
+    WITH latest AS (SELECT MAX(day) AS d, MIN(day) AS s FROM gsc_daily WHERE "userId" = $1 AND "siteUrl" = $2),
     cur AS (
       SELECT query, SUM(clicks)::int AS clicks, SUM(impressions)::int AS impressions,
              (SUM(position * impressions) / NULLIF(SUM(impressions), 0))::float AS position
@@ -178,19 +184,25 @@ async function listKeywords(pool, userId, siteUrl, { days = 28, sort = 'clicks',
     prev AS (
       SELECT query, (SUM(position * impressions) / NULLIF(SUM(impressions), 0))::float AS position
         FROM gsc_daily, latest WHERE "userId" = $1 AND "siteUrl" = $2 AND day > latest.d - 2 * $3::int AND day <= latest.d - $3::int GROUP BY query)
+    ${newOnly ? `, first AS (SELECT query, MIN(day) AS first_day FROM gsc_daily WHERE "userId" = $1 AND "siteUrl" = $2 GROUP BY query)` : ''}
     SELECT cur.query, cur.clicks, cur.impressions, cur.position, prev.position AS "prevPosition",
-           (prev.position - cur.position) AS change, COUNT(*) OVER () AS total
-      FROM cur LEFT JOIN prev USING (query)
+           (prev.position - cur.position) AS change, COUNT(*) OVER () AS total${newOnly ? ', first.first_day::text AS "firstSeen"' : ''}
+      FROM cur LEFT JOIN prev USING (query)${newOnly ? ' JOIN first USING (query) CROSS JOIN latest' : ''}
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY ${col === 'query' ? 'cur.query' : col === 'change' ? 'change' : `cur.${col}`} ${direction} NULLS LAST, cur.query
      LIMIT $${params.length}`;
   const { rows } = await pool.query(sql, params);
+  const bounds = (await pool.query('SELECT MIN(day)::text AS s, MAX(day)::text AS d FROM gsc_daily WHERE "userId" = $1 AND "siteUrl" = $2', [userId, siteUrl])).rows[0];
+  const spanDays = days === 'all' ? null : span;
   return {
+    // how far the history reaches, so the page can say why "new" is empty (it needs history from before the period) 
+    history: { from: bounds.s, to: bounds.d, newReady: Boolean(bounds.s && bounds.d && spanDays != null && bounds.s <= addDays(bounds.d, -spanDays)) },
     total: rows.length ? Number(rows[0].total) : 0,
     keywords: rows.map((r) => ({
       query: r.query, clicks: r.clicks, impressions: r.impressions,
       position: r.position == null ? null : Number(r.position), prevPosition: r.prevPosition == null ? null : Number(r.prevPosition),
       change: r.change == null ? null : Number(r.change), // positive = moved up (a smaller position number is better)
+      ...(r.firstSeen ? { firstSeen: r.firstSeen } : {}),
     })),
   };
 }

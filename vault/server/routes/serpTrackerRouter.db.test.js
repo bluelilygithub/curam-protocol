@@ -184,7 +184,7 @@ function serve(router) {
       assert.equal(s.dataForSeoConfigured, true);
       assert.equal(s.maxSites, 20);
       assert.equal(s.maxLookupDepth, 200);
-      assert.deepEqual(s.pricing, { perTenResultsUsd: 0.002, aiOverviewUsd: 0.002 });
+      assert.deepEqual(s.pricing, { perTenResultsUsd: 0.002, aiOverviewUsd: 0.002, queuedPerTenResultsUsd: 0.0006, trackDepthCap: 30, maxTrackReads: 3 });
       assert.ok(s.spentThisMonthUsd >= 1.25 && s.spentThisMonthUsd < 9, `this month ${s.spentThisMonthUsd}`);
       assert.ok(s.spentLastMonthUsd >= 0.5 && s.spentLastMonthUsd < 9, `last month ${s.spentLastMonthUsd}`);
     }
@@ -294,12 +294,51 @@ function serve(router) {
     assert.equal(r.body.lookup.summary.attempts, 1);
     await pool.query(`DELETE FROM serp_api_costs WHERE "siteId" = $1 AND endpoint LIKE '%depth=100%'`, [site1.id]);
 
-    // 4. shallow searches are never retried, even when short (a 10-result page is normally 8 to 10)
+    // 4. a shallow search is not retried for being SHORT (a 10-result page is normally 8 to 10), but a site that is not found is read again:
+    //    three reads, all paid, and "not found" is said only because every read missed
     n = 0;
     liveImpl = async () => { n++; return { costUsd: 0.002, result: shortAnswer(6), raw: {} }; };
     r = await call(A, 'POST', '/lookups', { keyword: 'shallow', depth: 20, aiOverview: false, siteId: site1.id });
+    assert.equal(n, 3, 'a miss for a site is read up to three times');
+    assert.equal(r.body.lookup.summary.attempts, 3);
+    assert.deepEqual(r.body.lookup.summary.reads, [{ position: null, organic: 6 }, { position: null, organic: 6 }, { position: null, organic: 6 }]);
+    assert.equal(r.body.lookup.myStatus, 'not_in_top_20');
+    assert.ok(Math.abs(r.body.lookup.costUsd - 0.006) < 1e-9, `all three reads are charged: ${r.body.lookup.costUsd}`);
+
+    // 4b. missed once, then found on the second read: stops there, the find is kept (best position wins), both reads are recorded
+    n = 0;
+    liveImpl = async () => { n++; return { costUsd: 0.002, result: n === 1 ? shortAnswer(9) : shortAnswer(9, 4), raw: { try: n } }; };
+    r = await call(A, 'POST', '/lookups', { keyword: 'found on the second read', depth: 20, aiOverview: false, siteId: site1.id });
+    assert.equal(n, 2, 'a find is trusted: no third read');
+    assert.equal(r.body.lookup.myPosition, 4);
+    assert.deepEqual(r.body.lookup.summary.reads.map((x) => x.position), [null, 4]);
+    assert.ok(Math.abs(r.body.lookup.costUsd - 0.004) < 1e-9);
+
+    // 4c. found at once: one read, nothing extra paid
+    n = 0;
+    liveImpl = async () => { n++; return { costUsd: 0.002, result: shortAnswer(9, 2), raw: {} }; };
+    r = await call(A, 'POST', '/lookups', { keyword: 'found at once', depth: 20, aiOverview: false, siteId: site1.id });
     assert.equal(n, 1);
+    assert.equal(r.body.lookup.myPosition, 2);
+    assert.equal(r.body.lookup.summary.reads.length, 1);
+
+    // 4d. a Quick lookup (no site) has nothing to look for, so it is read once
+    n = 0;
+    liveImpl = async () => { n++; return { costUsd: 0.002, result: shortAnswer(9), raw: {} }; };
+    r = await call(A, 'POST', '/lookups', { keyword: 'no site', depth: 20, aiOverview: false });
+    assert.equal(n, 1, 'no site, no extra reads');
     assert.equal(r.body.lookup.summary.attempts, 1);
+
+    // 4e. the monthly limit stops the extra reads of a miss too (the miss so far is kept and shown)
+    const spentMiss = (await call(A, 'GET', '/status')).body.spentThisMonthUsd;
+    n = 0;
+    liveImpl = async () => { n++; return { costUsd: 0.5, result: shortAnswer(9), raw: {} }; };
+    const missCapped = await mkApp({ env: { MAX_MONTHLY_SPEND_USD: String(spentMiss + 0.1) } });
+    r = await missCapped(A, 'POST', '/lookups', { keyword: 'cap stops extra reads', depth: 20, aiOverview: false, siteId: site1.id });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(n, 1, 'the first read put the month over the limit, so no second read');
+    await pool.query(`DELETE FROM serp_api_costs WHERE "siteId" = $1 AND "costUsd" = 0.5`, [site1.id]);
+    liveImpl = async () => ({ costUsd: 0.0123, result: FAKE_RESULT, raw: { tasks: [{ result: [FAKE_RESULT] }] } });
 
     // 5. the monthly limit stops the retries (the answer so far is still kept and shown): cap just above what is spent + one search
     const spentBefore = (await call(A, 'GET', '/status')).body.spentThisMonthUsd;
@@ -320,9 +359,9 @@ function serve(router) {
     r = await call(A, 'POST', '/lookups', { keyword: 'empty serp', siteId: site1.id });
     assert.equal(r.status, 502);
     assert.match(r.body.error, /no organic results/);
-    assert.match(r.body.error, /charged: US\$0\.5/);
+    assert.match(r.body.error, /charged: US\$1\.5/); // an unreadable answer for a site is read again like a miss: three reads of 0.5, all charged
     assert.equal((await call(A, 'GET', `/lookups?siteId=${site1.id}`)).body.lookups.length, before);
-    assert.equal(Number((await pool.query(`SELECT COUNT(*) FROM serp_api_costs WHERE "userId" = $1 AND "costUsd" = 0.5 AND "siteId" = $2`, [A, site1.id])).rows[0].count), 1); // charged to that site
+    assert.equal(Number((await pool.query(`SELECT COUNT(*) FROM serp_api_costs WHERE "userId" = $1 AND "costUsd" = 0.5 AND "siteId" = $2`, [A, site1.id])).rows[0].count), 3); // charged to that site, once for each of the three reads
 
     // DataForSEO refusing (account not verified): its reason is shown, nothing saved, nothing charged
     liveImpl = async () => { throw new DataForSeoError('DataForSEO answered HTTP 403. It said: Please verify your account before using the API.', { status: 403, code: 'HTTP' }); };
@@ -368,7 +407,7 @@ function serve(router) {
     assert.ok(r.body.deleted >= 1);
     assert.deepEqual((await call(A, 'GET', `/lookups?siteId=${site1.id}`)).body.lookups, []);
     assert.equal((await call(A, 'GET', `/lookups?siteId=${site2.id}`)).body.lookups.length, 1);
-    assert.equal((await call(A, 'GET', '/lookups?siteId=quick')).body.lookups.length, 2); // 'quick one' and the 'cheap' one made with no site
+    assert.equal((await call(A, 'GET', '/lookups?siteId=quick')).body.lookups.length, 3); // 'quick one', 'no site' (4d) and the 'cheap' one, all made with no site
     // everything
     const bLook = (await call(B, 'POST', '/lookups', { keyword: 'bs search' })).body.lookup.id;
     r = await call(A, 'DELETE', '/lookups', { all: true });
@@ -491,6 +530,77 @@ function serve(router) {
       assert.equal((await ck(K2, 'GET', `/sites/${mine.id}/keywords`)).status, 404);
     } finally {
       await pool.query('DELETE FROM users WHERE id = ANY($1)', [[K1, K2]]).catch(() => {});
+    }
+
+    // ---- tracked rankings (daily tracking): the paid search only ever runs when asked for, and the results are private to the site's owner
+    const T1 = await mk('t1');
+    const T2 = await mk('t2');
+    try {
+      const trackingCalls = [];
+      const fakeModule = { name: 'Rankings', run: async (ctx) => { trackingCalls.push(ctx.site.profile.dailyTracking); return 'fake tracked 4 searches'; } };
+      const ct = await mkApp({ trackingModule: fakeModule });
+      const st = (await ct(T1, 'GET', '/status')).body;
+      assert.equal(st.pricing.queuedPerTenResultsUsd, 0.0006);
+      assert.equal(st.pricing.trackDepthCap, 30);
+      assert.equal(st.pricing.maxTrackReads, 3);
+      const ts = (await ct(T1, 'POST', '/sites', { profile: { name: 'Track', domain: 'rank.test.com.au', keywords: [{ term: 'k1' }] } })).body.site;
+      assert.equal(ts.profile.dailyTracking, false, 'daily tracking is off for a new site');
+      const saved = (await ct(T1, 'PUT', `/sites/${ts.id}`, { profile: { ...ts.profile, dailyTracking: true } })).body.site;
+      assert.equal(saved.profile.dailyTracking, true, 'the owner can switch it on');
+      assert.equal((await ct(T1, 'PUT', `/sites/${ts.id}`, { profile: { ...ts.profile, dailyTracking: 'yes' } })).body.site.profile.dailyTracking, false, 'a stray value switches it off, never on');
+      await ct(T1, 'PUT', `/sites/${ts.id}`, { profile: { ...ts.profile, dailyTracking: false } });
+
+      // "Check connection" never searches; "Run tracking now" does, even with the switch off, and does not change the saved site
+      let rr = await ct(T1, 'POST', `/sites/${ts.id}/run`, {});
+      assert.equal(rr.body.run.steps.length, 1, 'a plain run only checks the balance');
+      assert.equal(trackingCalls.length, 0, 'the paid Rankings step did not run');
+      rr = await ct(T1, 'POST', `/sites/${ts.id}/run`, { tracking: false });
+      assert.equal(trackingCalls.length, 0, 'tracking: false is a plain run too');
+      rr = await ct(T1, 'POST', `/sites/${ts.id}/run`, { tracking: 'yes' });
+      assert.equal(trackingCalls.length, 0, 'only a real true asks for the paid search');
+      rr = await ct(T1, 'POST', `/sites/${ts.id}/run`, { tracking: true });
+      assert.equal(rr.status, 202, 'a tracking run starts in the background (it waits for the DataForSEO queue, longer than a web request should stay open)');
+      assert.deepEqual(rr.body, { started: true });
+      let tr = null;
+      for (let i = 0; i < 100; i++) { // the page watches the Runs list for it to finish
+        tr = (await ct(T1, 'GET', `/sites/${ts.id}/runs`)).body.runs[0];
+        if (tr && tr.status !== 'running') break;
+        await new Promise((r2) => setTimeout(r2, 100));
+      }
+      assert.equal(tr.status, 'ok');
+      assert.deepEqual(tr.steps.map((s) => [s.name, s.status, s.detail]), [['Account balance', 'ok', 'US$8.50 left'], ['Rankings', 'ok', 'fake tracked 4 searches']]);
+      assert.deepEqual(trackingCalls, [true], 'it ran with tracking on for this one run');
+      assert.equal((await ct(T1, 'GET', `/sites/${ts.id}`)).body.site.profile.dailyTracking, false, 'the saved site is unchanged');
+      assert.equal((await ct(T2, 'POST', `/sites/${ts.id}/run`, { tracking: true })).status, 404, 'not another person\'s site');
+
+      // reading the results: the latest row per keyword and device with the one before it, and a keyword's series
+      await pool.query(
+        `INSERT INTO serp_rankings ("userId", "siteId", "runDate", keyword, device, status, position, url, depth, "readsJson", "costUsd") VALUES
+           ($1,$2,'2026-11-06','k1','desktop','found',8,'https://rank.test.com.au/a',30,'[{"position":8,"organic":10}]',0.0018),
+           ($1,$2,'2026-11-07','k1','desktop','found',5,'https://rank.test.com.au/a',30,'[{"position":null,"organic":9},{"position":5,"organic":10}]',0.0036),
+           ($1,$2,'2026-11-07','k1','mobile','not_found',NULL,NULL,30,'[{"position":null,"organic":9},{"position":null,"organic":9},{"position":null,"organic":9}]',0.0054),
+           ($1,$2,'2026-11-07','k2','desktop','failed',NULL,NULL,30,'[]',0)`, [T1, ts.id]);
+      const list = (await ct(T1, 'GET', `/sites/${ts.id}/rankings`)).body.rankings;
+      assert.equal(list.length, 3, 'one entry per keyword and device');
+      const k1d = list.find((x) => x.keyword === 'k1' && x.device === 'desktop');
+      assert.deepEqual([k1d.latest.day, k1d.latest.position, k1d.previous.position], ['2026-11-07', 5, 8], 'the latest and the one before it, for the change');
+      assert.equal(k1d.latest.reads.length, 2);
+      const k1m = list.find((x) => x.keyword === 'k1' && x.device === 'mobile');
+      assert.deepEqual([k1m.latest.status, k1m.latest.position, k1m.previous], ['not_found', null, null], 'not found has a null position, never 0');
+      assert.equal(list.find((x) => x.keyword === 'k2').latest.status, 'failed', 'a failed search is listed as failed');
+      const hist = (await ct(T1, 'POST', `/sites/${ts.id}/rankings/history`, { keyword: 'k1', device: 'desktop', days: 'all' })).body.days;
+      assert.deepEqual(hist.map((d) => [d.day, d.position]), [['2026-11-06', 8], ['2026-11-07', 5]], 'oldest first');
+      assert.equal((await ct(T1, 'POST', `/sites/${ts.id}/rankings/history`, { keyword: 'k1', device: 'mobile', days: 'all' })).body.days.length, 1);
+      assert.equal((await ct(T1, 'POST', `/sites/${ts.id}/rankings/history`, {})).status, 400);
+      for (const [m, p, b] of [['GET', `/sites/${ts.id}/rankings`], ['POST', `/sites/${ts.id}/rankings/history`, { keyword: 'k1', device: 'desktop' }]]) {
+        assert.equal((await ct(T2, m, p, b)).status, 404, `${m} ${p} is not theirs`);
+      }
+      // deleting the site removes its rankings (they cascade), and another person's site never shows them
+      assert.equal(Number((await pool.query('SELECT COUNT(*) FROM serp_rankings WHERE "siteId" = $1', [ts.id])).rows[0].count), 4);
+      await ct(T1, 'DELETE', `/sites/${ts.id}`);
+      assert.equal(Number((await pool.query('SELECT COUNT(*) FROM serp_rankings WHERE "siteId" = $1', [ts.id])).rows[0].count), 0);
+    } finally {
+      await pool.query('DELETE FROM users WHERE id = ANY($1)', [[T1, T2]]).catch(() => {});
     }
 
     console.log('serpTrackerRouter.db.test.js: all passed');

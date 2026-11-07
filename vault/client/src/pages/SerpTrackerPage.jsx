@@ -13,6 +13,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { profileToForm, formToProfile } from './serpTracker/profileForm.mjs';
 import LookupPanel from './serpTracker/LookupPanel';
 import KeywordsPanel from './serpTracker/KeywordsPanel';
+import RankingsPanel from './serpTracker/RankingsPanel';
+import { trackingEstimate } from './serpTracker/trackingHelpers.mjs';
 import SiteForm from './serpTracker/SiteForm';
 import SerpTrackerTutorChat from './serpTracker/SerpTrackerTutorChat';
 import { SERP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './serpTracker/serpTrackerTools.mjs';
@@ -66,6 +68,9 @@ export default function SerpTrackerPage() {
   const [tab, setTab] = useState('setup');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [trackConfirm, setTrackConfirm] = useState(false); // the inline Yes / No before a paid tracking run
+  const [trackRefresh, setTrackRefresh] = useState(0); // bumped when a run finishes, so the Rankings table reloads
+  const wasRunning = useRef(false);
   const info = useToolInfoModal('vault_serp_tracker_info_seen');
   const formKey = useRef('');
 
@@ -222,6 +227,37 @@ export default function SerpTrackerPage() {
     }
   }
 
+  // "Run tracking now": starts the paid search in the background (it waits for the DataForSEO queue, several minutes) and the Runs list is watched below
+  async function runTracking() {
+    setTrackConfirm(false);
+    try {
+      const res = await api.post(`/api/serp-tracker/sites/${sel}/run`, { tracking: true });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { addToast(data.error || 'The tracking run could not be started.', 'error'); return; }
+      addToast('Tracking started. It takes several minutes: watch the run below.', 'success');
+      await loadRuns(sel);
+    } catch {
+      addToast('The tracking run could not be started.', 'error');
+    }
+  }
+
+  // while a run is going, check the list every few seconds; when it finishes, say how it went and refresh the Rankings table
+  const runActive = runs.some((r) => r.status === 'running');
+  useEffect(() => {
+    if (!runActive) {
+      if (wasRunning.current) {
+        wasRunning.current = false;
+        setTrackRefresh((n) => n + 1);
+        const latest = runs[0];
+        if (latest) addToast(latest.status === 'ok' ? 'The run finished.' : 'The run finished with a failure. See the details below.', latest.status === 'ok' ? 'success' : 'error');
+      }
+      return undefined;
+    }
+    wasRunning.current = true;
+    const t = setInterval(() => { if (typeof sel === 'number') loadRuns(sel); }, 8000);
+    return () => clearInterval(t);
+  }, [runActive, runs, sel, loadRuns, addToast]);
+
   if (!canUse) return <Navigate to="/" replace />;
 
   const cap = status?.capUsd;
@@ -313,7 +349,10 @@ export default function SerpTrackerPage() {
                 action={<button type="button" onClick={() => setTab('setup')} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Go to Site setup</button>} />
             </section>
           ) : (
-            <KeywordsPanel key={String(sel)} siteId={sel} site={site ? site.profile : null} />
+            <>
+              <KeywordsPanel key={String(sel)} siteId={sel} site={site ? site.profile : null} />
+              <RankingsPanel key={`rk-${sel}`} siteId={sel} site={site ? site.profile : null} onOpenSetup={() => setTab('setup')} refreshKey={trackRefresh} />
+            </>
           )
         ) : (
           <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-6">
@@ -324,7 +363,7 @@ export default function SerpTrackerPage() {
               </section>
             ) : (
               <SiteForm form={form} set={set} toggleDevice={toggleDevice} errors={errors} saving={saving} onSave={save} isNew={sel === 'new'}
-                savedAt={site ? site.updatedAt : null} clients={clients} clientId={clientId} onClientChange={setClientId} clientName={site ? site.clientName : null} />
+                savedAt={site ? site.updatedAt : null} clients={clients} clientId={clientId} onClientChange={setClientId} clientName={site ? site.clientName : null} pricing={status ? status.pricing : null} capUsd={status ? status.capUsd : null} />
             ))}
 
             {tab === 'setup' && (
@@ -351,15 +390,38 @@ export default function SerpTrackerPage() {
               <section className="rounded-2xl border p-6 space-y-4 xl:col-span-2" style={CARD} aria-labelledby="serp-runs-title">
                 <div className="flex items-center justify-between gap-3">
                   <h2 id="serp-runs-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Runs{site ? ` for ${site.profile.name || site.profile.domain}` : ''}</h2>
-                  <Tooltip text="Checks that DataForSEO is connected and shows your account balance. It searches nothing and costs nothing. Rankings are not collected here yet: use the Lookup tab.">
-                    <button type="button" onClick={runNow} disabled={!site || !status?.dataForSeoConfigured} data-guide="run-now"
-                      className="px-3.5 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                      {getIcon('play', { size: 14 })} Check connection
-                    </button>
-                  </Tooltip>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Tooltip text="Checks that DataForSEO is connected and shows your account balance. It searches nothing and costs nothing.">
+                      <button type="button" onClick={runNow} disabled={!site || !status?.dataForSeoConfigured} data-guide="run-now"
+                        className="px-3.5 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        {getIcon('play', { size: 14 })} Check connection
+                      </button>
+                    </Tooltip>
+                    <Tooltip text="Searches every keyword on each device through DataForSEO now, instead of waiting for 6:00 am, and keeps where your site was. This costs money (the estimate is shown before you confirm) and takes several minutes. It works even if daily tracking is off.">
+                      <button type="button" onClick={() => setTrackConfirm(true)} disabled={!site || !status?.dataForSeoConfigured || runActive || trackConfirm} data-guide="run-tracking"
+                        className="px-3.5 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        {getIcon('search', { size: 14 })} Run tracking now
+                      </button>
+                    </Tooltip>
+                  </div>
                 </div>
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>The daily run starts at 6:00 am Brisbane time, for every site you have added. A failed step is shown as a failure, never as a missing ranking.</p>
+                {trackConfirm && site && (() => {
+                  const est = trackingEstimate({ keywords: (site.profile.keywords || []).length, devices: (site.profile.devices || []).length, depth: site.profile.serpDepth }, status?.pricing);
+                  return (
+                    <div role="alert" className="rounded-xl border p-3 text-sm space-y-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}>
+                      <p>{est ? `This will search now. ${est.text}` : 'This site has no keywords or devices to search. Add some in Site setup first.'}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Run it?</span>
+                        <button type="button" disabled={!est} onClick={runTracking} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Yes</button>
+                        <button type="button" onClick={() => setTrackConfirm(false)} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>No</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {runActive && <p role="status" className="text-xs" style={{ color: 'var(--color-muted)' }}>A run is in progress. Searches in the DataForSEO queue take about 4 minutes, and a keyword that misses your site is read again, so this can take 10 to 15 minutes. This list updates by itself.</p>}
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>The daily run starts at 6:00 am Brisbane time, for every site you have added. It checks the connection and, for sites with Daily tracking switched on in Site setup, searches their keywords. A failed step is shown as a failure, never as a missing ranking.</p>
                 {!site ? (
                   <EmptyState icon="line-chart" title={sel === 'quick' ? 'Quick lookups have no runs' : 'Add the site first'} body={sel === 'quick' ? 'Runs belong to a site. Choose one of your sites in the site switcher.' : 'Save this site\'s details first, then the daily run can start.'} />
                 ) : runs.length === 0 ? (

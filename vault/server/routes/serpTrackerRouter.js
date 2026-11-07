@@ -14,8 +14,10 @@ const { ownsRow } = require('../utils/ownedLinks');
 const { validateProfile, DEFAULTS, localDate } = require('../services/serpTracker/siteProfile');
 const { listSites, loadSite, createSite, updateSite, deleteSite, listRuns, setGscSiteUrl, SiteError, MAX_SITES } = require('../services/serpTracker/store');
 const history = require('../services/gscHistory');
+const { readRecord, betterRead, isFound } = require('../services/serpTracker/reads');
+const rankings = require('../services/serpTracker/rankings');
 const { runSite, RunAlreadyActive } = require('../services/serpTracker/runner');
-const { monthSpend, monthlyCapUsd, logCost, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD } = require('../services/serpTracker/costs');
+const { monthSpend, monthlyCapUsd, logCost, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD, QUEUED_PER_TEN_RESULTS_USD, TRACK_DEPTH_CAP, MAX_TRACK_READS } = require('../services/serpTracker/costs');
 const { getBalance, hasCredentials, liveSerp, findLocation } =require('../services/serpTracker/dataforseo');
 const { parseSerp, SerpParseError } = require('../services/serpTracker/serpParse');
 const { saveLookup, listLookups, getLookup, deleteLookups, MAX_IDS } = require('../services/serpTracker/lookups');
@@ -28,6 +30,11 @@ const MAX_LOOKUP_DEPTH = 200; // the most DataForSEO's Live mode returns; deeper
 // fullest answer is kept, every attempt's cost is logged, and a retry is never made if it would pass the monthly limit.
 const RETRY_FROM_DEPTH = 50;
 const MAX_ATTEMPTS = 4;
+// 7 Nov 2026 (idea from OpenSEO): Google sometimes serves a scraper a results page that leaves out sites that really rank, so for a site a single
+// "not found" is not trusted. A lookup that misses the site is read again, up to MISS_READS reads in all, and says "not found" only when every
+// read missed; the best position wins (services/serpTracker/reads.js). Only up to MISS_RETRY_MAX_DEPTH results, where each read costs under a cent.
+const MISS_READS = 3;
+const MISS_RETRY_MAX_DEPTH = 50;
 const cleanKeyword = (raw) => (typeof raw === 'string' ? raw.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_KEYWORD) : '');
 const parseId = (raw) => { const n = Number(raw); return Number.isInteger(n) && n > 0 && n <= MAX_INT ? n : null; };
 
@@ -38,6 +45,7 @@ function createRouter(pool, {
   env = process.env,
   now = () => new Date(),
   modules = [],
+  trackingModule = null, // the Rankings module for a manual "Run tracking now" (null = the real one, loaded when first needed)
   // Search Console, for the Keywords tab (replaced by a fake in tests): is it connected, which properties can the person see, and one page of rows
   gscApi = {
     connection: (uid) => require('../services/gscService').connection(uid),
@@ -85,7 +93,7 @@ function createRouter(pool, {
       const [thisMonth, lastMonth] = await Promise.all([monthSpend(pool, today, 0), monthSpend(pool, today, 1)]);
       res.json({
         dataForSeoConfigured: deps.hasCredentials(env), capUsd: monthlyCapUsd(env), spentThisMonthUsd: thisMonth, spentLastMonthUsd: lastMonth, defaults: DEFAULTS,
-        maxSites: MAX_SITES, maxLookupDepth: MAX_LOOKUP_DEPTH, pricing: { perTenResultsUsd: LIVE_PER_TEN_RESULTS_USD, aiOverviewUsd: AI_OVERVIEW_USD },
+        maxSites: MAX_SITES, maxLookupDepth: MAX_LOOKUP_DEPTH, pricing: { perTenResultsUsd: LIVE_PER_TEN_RESULTS_USD, aiOverviewUsd: AI_OVERVIEW_USD, queuedPerTenResultsUsd: QUEUED_PER_TEN_RESULTS_USD, trackDepthCap: TRACK_DEPTH_CAP, maxTrackReads: MAX_TRACK_READS },
       });
     } catch (err) {
       fail(res, err, 'status', 'Could not load the SERP Tracker status.');
@@ -204,12 +212,49 @@ function createRouter(pool, {
     try {
       const site = await loadSite(pool, userId(req), id);
       if (!site) return res.status(404).json({ error: 'Not found' });
-      const result = await runSite({ pool, site, trigger: 'manual', deps: { ...deps, now, log: (m) => getLogger().warn(m) }, modules });
+      // "Check connection" (the default) only reads the balance. { tracking: true } is "Run tracking now": it ALSO searches every keyword x device
+      // (paid, in the standard queue), even when daily tracking is switched off for the site, because the person pressed it knowing the estimate.
+      const wantsTracking = req.body && req.body.tracking === true;
+      const runModules = wantsTracking ? [trackingModule || require('../services/serpTracker/rankCollect').rankingsModule] : modules;
+      const runSiteArg = wantsTracking ? { ...site, profile: { ...site.profile, dailyTracking: true } } : site;
+      const runDeps = { ...deps, now, log: (m) => getLogger().warn(m) };
+      if (wantsTracking) {
+        // A tracking run waits for DataForSEO's queue (about 4 minutes a round, up to three rounds), which is longer than a web request should stay
+        // open, so it runs in the background and the page watches the Runs list. The "already running" refusal is made here, before answering.
+        const active = await pool.query(`SELECT 1 FROM serp_runs WHERE "siteId" = $1 AND status = 'running' AND "startedAt" > NOW() - INTERVAL '2 hours' LIMIT 1`, [site.id]);
+        if (active.rows.length) return res.status(409).json({ error: 'A run for this site is already in progress.' });
+        runSite({ pool, site: runSiteArg, trigger: 'manual', deps: runDeps, modules: runModules }).catch((err) => getLogger().error({ err }, 'serp-tracker background tracking run failed'));
+        return res.status(202).json({ started: true });
+      }
+      const result = await runSite({ pool, site: runSiteArg, trigger: 'manual', deps: runDeps, modules: runModules });
       res.json({ run: result });
     } catch (err) {
       if (err instanceof RunAlreadyActive) return res.status(409).json({ error: err.message });
       fail(res, err, 'manual run', 'The run could not be started.');
     }
+  });
+
+  // ---- Tracked rankings (daily tracking through DataForSEO): the latest row for each keyword and device, and one keyword's series over time
+  router.get('/sites/:id/rankings', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    try {
+      if (!(await loadSite(pool, userId(req), id))) return res.status(404).json({ error: 'Not found' });
+      res.json({ rankings: await rankings.listLatest(pool, userId(req), id) });
+    } catch (err) { fail(res, err, 'rankings', 'Could not load the tracked rankings.'); }
+  });
+
+  // POST with the keyword in the body (what people search for stays out of URLs and logs): { keyword, device, days }
+  router.post('/sites/:id/rankings/history', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    const keyword = cleanKeyword(req.body && req.body.keyword);
+    if (!keyword) return res.status(400).json({ error: 'Choose a keyword.' });
+    try {
+      if (!(await loadSite(pool, userId(req), id))) return res.status(404).json({ error: 'Not found' });
+      const days = req.body.days === 'all' ? 'all' : Number(req.body.days) || 90;
+      res.json({ days: await rankings.series(pool, userId(req), id, keyword, req.body.device, days) });
+    } catch (err) { fail(res, err, 'rankings history', 'Could not load that keyword\'s history.'); }
   });
 
   // ---- Keywords: what the site really ranks for, from Search Console (Google's own figures), kept as history. Nothing here is paid.
@@ -274,7 +319,7 @@ function createRouter(pool, {
     } catch (err) { fail(res, err, 'gsc sync', 'Could not start the update.'); }
   });
 
-  // ?days=7|28|90|180|all &sort=clicks|impressions|position|keyword|change &dir=asc|desc &q=text &striking=1
+  // ?days=7|28|90|180|all &sort=clicks|impressions|position|keyword|change &dir=asc|desc &q=text &striking=1 &new=1 (first seen inside the period)
   router.get('/sites/:id/keywords', async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(404).json({ error: 'Not found' });
@@ -285,7 +330,7 @@ function createRouter(pool, {
       const days = req.query.days === 'all' ? 'all' : Number(req.query.days) || 28;
       const out = await history.listKeywords(pool, userId(req), site.gscSiteUrl, {
         days, sort: String(req.query.sort || 'clicks'), dir: req.query.dir === 'asc' || req.query.dir === 'desc' ? req.query.dir : undefined,
-        q: typeof req.query.q === 'string' ? req.query.q : '', striking: req.query.striking === '1',
+        q: typeof req.query.q === 'string' ? req.query.q : '', striking: req.query.striking === '1', newOnly: req.query.new === '1',
       });
       res.json(out);
     } catch (err) { fail(res, err, 'keywords', 'Could not load the keywords.'); }
@@ -332,11 +377,13 @@ function createRouter(pool, {
       const task = { keyword, locationName: (profile && profile.locationName) || DEFAULTS.locationName, languageCode: (profile && profile.languageCode) || DEFAULTS.languageCode, searchDomain: (profile && profile.searchDomain) || DEFAULTS.searchDomain, device, depth: rawDepth, loadAiOverview: aiOverview };
       const myDomain = profile ? profile.domain : null;
       const competitors = profile ? profile.competitors.map((c) => c.domain) : [];
-      let best = null; // { summary, raw } of the fullest readable answer so far
+      let best = null; // { summary, raw } of the best readable answer so far (the best position for the site, else the fullest answer)
       let totalCost = 0;
       let attempts = 0;
       let unreadable = null;
-      const maxAttempts = rawDepth >= RETRY_FROM_DEPTH ? MAX_ATTEMPTS : 1;
+      const reads = []; // one { position, organic } per readable read
+      const missRetry = Boolean(myDomain) && rawDepth <= MISS_RETRY_MAX_DEPTH;
+      const maxAttempts = rawDepth >= RETRY_FROM_DEPTH ? MAX_ATTEMPTS : (missRetry ? MISS_READS : 1);
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         if (attempt > 1) {
           const again = await capStatus(pool, costDate, env); // a retry only goes ahead if it still fits under the limit
@@ -355,11 +402,14 @@ function createRouter(pool, {
           unreadable = err.message;
           continue;
         }
-        if (!best || parsed.organicCount > best.summary.organicCount) best = { summary: parsed, raw: got.raw };
-        if (parsed.coverage.complete || (parsed.mine && parsed.mine.status === 'ranked')) break; // a full answer, or the site is found: done
+        reads.push(readRecord(parsed));
+        if (betterRead(parsed, best && best.summary)) best = { summary: parsed, raw: got.raw };
+        if (isFound(parsed)) break; // a find is trusted: done
+        if (!missRetry && parsed.coverage.complete) break; // a full answer and no site to look for: done
+        if (missRetry && attempt >= maxAttempts) break;
       }
       if (!best) return res.status(502).json({ error: `${unreadable} (The search was charged: US$${totalCost.toFixed(4)}.)` });
-      const summary = { ...best.summary, attempts };
+      const summary = { ...best.summary, attempts, reads };
       const saved = await saveLookup(pool, { userId: userId(req), siteId: site ? site.id : null, ...task, domain: myDomain, costUsd: totalCost, summary, raw: best.raw });
       res.json({ lookup: await getLookup(pool, userId(req), saved.id) });
     } catch (err) {

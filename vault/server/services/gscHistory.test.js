@@ -154,6 +154,41 @@ const { syncAllGsc } = require('../cron/serpTrackerCron');
     assert.deepStrictEqual(hist.map((d) => d.day), [h.addDays(dmax, -1), dmax]);
     assert.strictEqual((await h.keywordHistory(pool, A, SITE5, 'up', { days: 7 })).length, 7);
 
+    // ---- new keywords: first seen inside the period, and only once the history reaches back before it
+    const SITE7 = 'sc-domain:newq.test';
+    const nr = [];
+    for (let i = 0; i < 70; i++) nr.push({ keys: [h.addDays(dmax, -i), 'always there'], clicks: 2, impressions: 40, position: 5 });
+    for (let i = 0; i < 10; i++) nr.push({ keys: [h.addDays(dmax, -i), 'just appeared'], clicks: 1, impressions: 30, position: 14 });
+    for (let i = 40; i < 50; i++) nr.push({ keys: [h.addDays(dmax, -i), 'appeared 40 days ago'], clicks: 1, impressions: 30, position: 9 });
+    await h.syncSite({ pool, userId: A, siteUrl: SITE7, fetchRows: async ({ startDate, endDate }) => nr.filter((r) => r.keys[0] >= startDate && r.keys[0] <= endDate), today: TODAY });
+    const fresh = await h.listKeywords(pool, A, SITE7, { days: 28, newOnly: true });
+    assert.deepStrictEqual(fresh.keywords.map((k) => k.query), ['just appeared'], 'only a keyword first seen inside the period is new');
+    assert.strictEqual(fresh.keywords[0].firstSeen, h.addDays(dmax, -9), 'it says the day it first appeared');
+    assert.strictEqual(fresh.history.newReady, true);
+    assert.strictEqual(fresh.history.from, h.addDays(dmax, -69));
+    assert.strictEqual(fresh.history.to, dmax);
+    const wide = await h.listKeywords(pool, A, SITE7, { days: 90, newOnly: true });
+    assert.deepStrictEqual(wide.keywords, [], 'a 90-day period starts before the history does, so nothing can be called new');
+    assert.strictEqual(wide.history.newReady, false);
+    const allHist = await h.listKeywords(pool, A, SITE7, { days: 'all', newOnly: true });
+    assert.deepStrictEqual(allHist.keywords, [], '"all history" has nothing before it');
+    assert.strictEqual(allHist.history.newReady, false);
+    const plain = await h.listKeywords(pool, A, SITE7, { days: 28 });
+    assert.strictEqual(plain.keywords.length, 2, 'without the filter both keywords in the period are listed (the one from 40 days ago has nothing in it)');
+    assert.strictEqual(plain.keywords[0].firstSeen, undefined, 'firstSeen is only added for the new filter');
+    // a freshly loaded short history: everything would look new, so nothing is
+    const SITE8 = 'sc-domain:shorthist.test';
+    const sr = [];
+    for (let i = 0; i < 20; i++) sr.push({ keys: [h.addDays(dmax, -i), 'everything is new here'], clicks: 1, impressions: 20, position: 6 });
+    await h.syncSite({ pool, userId: A, siteUrl: SITE8, fetchRows: async ({ startDate, endDate }) => sr.filter((r) => r.keys[0] >= startDate && r.keys[0] <= endDate), today: TODAY });
+    const short = await h.listKeywords(pool, A, SITE8, { days: 28, newOnly: true });
+    assert.deepStrictEqual(short.keywords, [], 'a 20-day history cannot say what is new over 28 days');
+    assert.strictEqual(short.history.newReady, false);
+    // it combines with the other filters and with search
+    assert.deepStrictEqual((await h.listKeywords(pool, A, SITE7, { days: 28, newOnly: true, striking: true })).keywords.map((k) => k.query), ['just appeared'], 'position 14 is also just off page 1');
+    assert.deepStrictEqual((await h.listKeywords(pool, A, SITE7, { days: 28, newOnly: true, q: 'zzz' })).keywords, []);
+    assert.deepStrictEqual((await h.listKeywords(pool, B, SITE7, { days: 28, newOnly: true })).keywords, [], "another person's history is not theirs");
+
     // ---- another person sees none of it
     assert.strictEqual((await h.listKeywords(pool, B, SITE5, { days: 28 })).keywords.length, 0);
     assert.strictEqual((await h.keywordHistory(pool, B, SITE5, 'up', { days: 'all' })).length, 0);

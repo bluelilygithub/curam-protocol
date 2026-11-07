@@ -6,7 +6,7 @@ import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
-import { safeHref, positionText, costText, toggleOne, toggleAll, pruneSelection, deletedMessage, groupLayout, estimateCost, pageText } from './lookupHelpers.mjs';
+import { readsText, safeHref, positionText, costText, toggleOne, toggleAll, pruneSelection, deletedMessage, groupLayout, estimateCost, pageText } from './lookupHelpers.mjs';
 
 // SERP Tracker, Lookup tab: search Google right now through DataForSEO, read the answer, keep it, open it again, and delete saved lookups
 // (one, several or all, with Undo). See docs/serp-tracker.md. The server does the work; this only shows it.
@@ -41,6 +41,11 @@ function LookupResult({ lookup, onDeeper, onRetry, busy }) {
         <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
           {lookup.device === 'mobile' ? 'Mobile' : 'Desktop'} · {lookup.locationName} · {cov ? `${cov.returned} results checked (asked for ${cov.asked})` : `top ${lookup.depth}`} · {when(lookup.createdAt)} · cost {costText(lookup.costUsd)}{s.attempts > 1 ? ` (${s.attempts} tries)` : ''}
         </p>
+        {readsText(s.reads) && (
+          <Tooltip text="When your site is not found on the first read, Vault reads the same search again (up to three reads, each one paid) before saying it is not found, because Google sometimes serves a scraper a page that leaves a site out. A find is trusted at once, and the best position wins.">
+            <p className="text-xs mt-0.5 w-fit" role="status" style={{ color: 'var(--color-muted)' }}>{readsText(s.reads)}</p>
+          </Tooltip>
+        )}
         {s.searched && (
           <Tooltip text="What DataForSEO says it actually searched: which Google site, which place (as a DataForSEO place number) and which language. Use it to check the results are for Australia.">
             <p className="text-xs mt-0.5 w-fit" style={{ color: 'var(--color-muted)' }}>
@@ -343,7 +348,7 @@ export default function LookupPanel({ status, siteId = null, site = null, onSpen
               const estFind = estimateCost(100, false, status?.pricing);
               return (
                 <>
-                  {est != null && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Expected cost of this search: up to about {costText(est)}. The real cost is shown afterwards{depth >= 50 ? ' (a short answer from Google costs less, but is tried again, so it can cost a little more in all)' : ''}.</p>}
+                  {est != null && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Expected cost of this search: up to about {costText(est)}. The real cost is shown afterwards{depth >= 50 ? ' (a short answer from Google costs less, but is tried again, so it can cost a little more in all)' : site ? ' (if your site is not found, the search is read again, up to three reads in all, so a miss can cost up to three times this)' : ''}.</p>}
                   <div className="flex flex-wrap items-center gap-3">
                     <Tooltip text="Searches Google now through DataForSEO. This is a paid search; the cost is shown when it finishes. The result is saved to the list.">
                       <button type="submit" disabled={!connected || !keyword.trim() || busy} data-guide="lookup-run"

@@ -78,3 +78,16 @@ export function groupLayout(layout) {
   }
   return out;
 }
+
+/**
+ * The line saying how many times a search was read when the site was looked for more than once (a miss is read again, up to three times: see
+ * server/services/serpTracker/reads.js). `reads` is [{ position, organic }]; nothing is said for a single read or an older saved lookup.
+ */
+export function readsText(reads) {
+  const list = Array.isArray(reads) ? reads : [];
+  if (list.length < 2) return '';
+  const found = list.filter((r) => r && r.position != null);
+  if (!found.length) return `Read ${list.length} times and the site was not found on any of them, so this "not found" is more reliable than a single read.`;
+  const best = Math.min(...found.map((r) => r.position));
+  return `Read ${list.length} times: the site was found on ${found.length} of them, and the best position (#${best}) is the one shown. Google sometimes serves a page that leaves a site out.`;
+}

@@ -107,7 +107,7 @@ function realDeps() {
     return (await loadFeatureAccess(userId)).serpTracker !== false;
   };
   const log = (m) => console.warn(`[serp-tracker] ${m}`);
-  return { pool, loadAllSites, runSite, mayUse, log, modules: [], deps: { getBalance, hasCredentials, logCost, capture, makeFingerprint, log } };
+  return { pool, loadAllSites, runSite, mayUse, log, modules: [require('../services/serpTracker/rankCollect').rankingsModule], deps: { getBalance, hasCredentials, logCost, capture, makeFingerprint, log } };
 }
 
 function startSerpTrackerCron() {

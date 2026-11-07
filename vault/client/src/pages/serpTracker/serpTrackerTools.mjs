@@ -22,7 +22,7 @@ export const GROUP_TIPS = {
 export const TOOL_TIPS = {
   setup: 'Your site, the searches to track, your competitors and where Google is asked from. Also shows whether DataForSEO is connected and what it has cost this month.',
   lookup: 'Look up any search on Google right now, see where your site is, and keep the result to open again later.',
-  'search-keywords': 'The keywords your site really ranks for and a chart of where each has been, from Google Search Console. Free.',
+  'search-keywords': 'The keywords your site really ranks for and a chart of where each has been, from Google Search Console (free), plus the positions Vault tracks every day through DataForSEO if you switch that on.',
   runs: 'The daily checks and the ones you start by hand, with what each one found and cost.',
 };
 
@@ -43,8 +43,9 @@ export const HOW_IT_WORKS = [
   ['What a lookup costs', 'Every lookup is a paid search. The page shows an expected cost before you search and the real cost after it. Asking for more results costs more (about a fifth of a cent for each 10), and the AI summary adds a little. The tool keeps a running total for the month across all your sites and refuses a search that would pass the monthly limit.'],
   ['Saved lookups', 'The latest 50 for each site are kept (and 50 Quick lookups). Tick any number of them, or Select all, and delete them together. Deleted lookups are kept for 30 days, and the Undo on the message brings them back. The full original answer is kept for 90 days.'],
   ['Keywords', 'Connect Google Search Console once, choose the property that matches each site, and Vault loads up to 16 months of history (the most Google keeps). You then see every keyword the site really ranks for, with clicks, impressions and average position, how each moved compared with the period before, and keywords sitting just off page 1. Click a keyword for a chart of its position over time. These are Google\'s own figures across everyone who searched, so they are the figures to trust for your own sites, and they will not match one person\'s browser exactly. They end about three days ago, and a new property has no history from before it was added. It is free, and it updates itself every morning at 7:00 am Brisbane time.'],
-  ['Runs', 'Every day at 6:00 am Brisbane time, SERP Tracker checks that DataForSEO is connected and records the balance and cost. You can also press Check connection. A failed step is shown as a failure, never as a missing ranking. Collecting your rankings every day is the next stage and is not switched on yet.'],
-  ['What it does not do yet', 'It does not yet collect Google results through DataForSEO every day, or send a weekly report. Keywords and their history for your own sites come from Search Console and work now. Those other parts come in later stages.'],
+  ['Daily tracking', 'Switch on Track these keywords every day in Site setup and, at 6:00 am Brisbane time, Vault searches each keyword on each device through DataForSEO and keeps where your site was, shown under Tracked rankings on the Keywords tab. It is OFF until you switch it on, and Site setup shows what it would cost first. Google sometimes serves a scraper a results page that leaves a site out, so a keyword that misses your site is read again, up to three reads, and it is only called not found when every read missed. The monthly spending limit stops it, and a search that failed is shown as failed, never as not found. You can also press Run tracking now on the Runs tab. It reads the top 30 at most.'],
+  ['Runs', 'Every day at 6:00 am Brisbane time, SERP Tracker checks that DataForSEO is connected and records the balance and cost, and for sites with Daily tracking switched on it also does the tracking. You can press Check connection (free) or Run tracking now (paid, with the estimate shown first). A failed step is shown as a failure, never as a missing ranking.'],
+  ['What it does not do yet', 'It does not yet send a weekly report, track your competitors\' positions, or check the pages listed for health. Keywords and their history for your own sites come from Search Console, and daily tracking through DataForSEO is there but switched off until you turn it on. The rest comes in later stages.'],
 ];
 
 // Everything the guide can point at: the three tabs plus the controls on them. `tool` is the tab the Open button shows.
@@ -62,6 +63,7 @@ export const GUIDE_TOOLS = [
   { id: 'health-urls', label: 'Pages to health-check', tool: 'setup' },
   { id: 'location-depth', label: 'Where Google is asked from', tool: 'setup' },
   { id: 'devices', label: 'Devices', tool: 'setup' },
+  { id: 'daily-tracking', label: 'Daily tracking', tool: 'setup' },
   { id: 'save-site', label: 'Save site details', tool: 'setup' },
   { id: 'spending', label: 'DataForSEO and spending', tool: 'setup' },
   { id: 'lookup', label: 'Lookup', tool: 'lookup' },
@@ -75,8 +77,11 @@ export const GUIDE_TOOLS = [
   { id: 'kw-property', label: 'Search Console property', tool: 'search-keywords' },
   { id: 'kw-update', label: 'Update', tool: 'search-keywords' },
   { id: 'kw-table', label: 'Keyword list', tool: 'search-keywords' },
+  { id: 'kw-new', label: 'New this period', tool: 'search-keywords' },
   { id: 'kw-chart', label: 'Keyword chart', tool: 'search-keywords' },
+  { id: 'tracked-rankings', label: 'Tracked rankings', tool: 'search-keywords' },
   { id: 'runs', label: 'Runs', tool: 'runs' },
   { id: 'run-now', label: 'Check connection', tool: 'runs' },
+  { id: 'run-tracking', label: 'Run tracking now', tool: 'runs' },
   { id: 'run-list', label: 'Run list', tool: 'runs' },
 ];
