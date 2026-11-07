@@ -15,7 +15,7 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 | Tier | Tools | Notes |
 |---|---|---|
 | Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + Replicate (default) or FAL; needs `REPLICATE_API_TOKEN` or `FAL_API_KEY` |
-| Server (browser + ffmpeg) | Animated title | A server-side Chromium (Playwright) draws each frame of a small HTML page, ffmpeg encodes them; see **Animated title** below |
+| Server (browser + ffmpeg) | Title card (animated look), Caption studio (animated look) | A server-side Chromium (Playwright) draws each frame of a small HTML page, ffmpeg encodes them; see **Animated title** below |
 | Server (ffmpeg) | Clip, Convert, Join (+ crossfade), Reframe, Speed, Mute/replace audio, Normalize audio, Video → GIF, Export for Social, Overlay, Extract audio, Annotate (+ optional fade in/out), Slideshow, Caption studio, Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
 | Library (disk + DB) | Saved media, Caption studio (library source) | `video_library` table + files under `{UPLOAD_DIR}/video-library/{userId}/` |
 | Hosted or local | Audio → transcript (audio file → editable text or SRT), Auto-transcribe (video, in Caption studio) | Local dev: `whisper-cli` + model file. Hosted Vault (e.g. Railway): extracts the audio track and sends it to Gemini for a direct SRT transcript (`GEMINI_API_KEY` + a Gemini model in Settings) — paste SRT manually if neither is available |
@@ -30,7 +30,7 @@ The menu is arranged by **what you are doing**, in rough workflow order (reorgan
 
 | Group | Tools |
 |---|---|
-| **Make** | Generate clip, Slideshow, Animated title |
+| **Make** | Generate clip, Slideshow |
 | **Edit video** | Clip / trim, Replace a section, Join videos, Crop / reframe, Speed |
 | **Titles and captions** | Annotate, Title card, Call to action, Intro and ending, Overlay / watermark, Caption studio |
 | **Audio** | Extract audio, Isolate voice, Audio → transcript, Trim audio, Mix audio, Add music (opens Music), Mute / replace audio, Normalize audio |
@@ -60,16 +60,21 @@ The hosting gateway cuts a web request off after about five minutes, but the ser
 
 ---
 
-## Animated title (added 2026-11-08)
+## Animated title (a look of Title card; folded in 2026-11-08)
 
-An animated title screen (headline, optional supporting line, optional logo) made as a short video, in the person's Brand Kit colours, logo and font. In **Make**. No source video is needed. Idea from HyperFrames (heygen-com/hyperframes, Apache 2.0, "HTML in, video out"); this is a small renderer of our own, **no new package** (so no slow deploy).
+Title card has a **Look** choice: Standard card (ffmpeg, as before) or **Animated title**. It started as its own tool in Make; it was folded into Title card the same day because it overlapped it almost completely. An animated title can be shown two ways (the **Show it** choice):
 
-- **How it works:** `server/services/animatedTitle.js` builds a small HTML page from the person's choices (text is HTML-escaped; nothing else is accepted; no web address appears in the page). `server/services/htmlVideoRender.js` opens it in headless Chromium (Playwright, already in the image for the Brand Kit reader), moves the page's paused Web Animations to each frame's time (`window.seek(ms)`), takes a JPEG per frame and pipes them into ffmpeg (libx264, 30 fps, `nice` on Linux). The same input gives the same video. A browser is started per render and closed at the end, so nothing stays in memory. Every request the page makes except its own inline `data:` content is refused.
-- **Routes:** `POST /api/videos/animated-title` (multipart field `spec` = JSON: `headline` (required, 80), `subline` (120), `layout` `rise|centre`, `shape` `16:9|9:16|1:1`, `quality` `hd|full`, `seconds` 2 to 8, `fontSource` `standard|brand-heading|brand-body`, `useBrandColours`, `useLogo`, `background`/`text`/`accent` hex, `gradient`). Answers 202 `{ jobId }`; background job like Intro and ending (one at a time per person, `videoJobGate`, Cancel / Resume, result 30 minutes). `GET /api/videos/animated-title/brand` says what the Brand Kit offers (colours, logo yes/no, which fonts are saved; never the files).
-- **Brand Kit:** read on the server from the signed-in person's own kit (`graphicsBrandKit.loadKit/getFontFile`), never from what the browser sends. Colours: Brand Kit `primary` is the background (falls back to `background`), `onPrimary` (else `text`) the words, `accent` the line. A font is embedded as a base64 `@font-face`. Asking for a colour, logo or font the kit does not have is a plain 409 before the job starts.
-- **Cost of a render (measured on Windows 10, 8 Nov 2026):** 5 s at 720p: ~8 s and ~215 MB peak (Chromium + ffmpeg); 5 s at 1080p: ~10 s and ~640 MB. Frames as PNG (needed for a see-through title) were 6.6 times slower, so there is no transparent output yet.
-- **Tests:** `node server/services/animatedTitle.test.js` (checking, escaping, Brand Kit loading with a stub database, a real 2 s render with frame count and "the picture animates" check, and Cancel; the render part needs ffmpeg: set `LOCAL_FFMPEG_COMMAND` locally). Page: `client/src/pages/videos/AnimatedTitleForm.jsx`.
-- **Not done / limits:** two movements only; no sound; one font; Latin text only; no transparent background; not yet laid over an existing video (use the result as the first clip in Join videos); **not run inside the Railway container yet** (check memory and time after the first deploy; Chromium on Railway has only been used by the Brand Kit reader).
+- **On my video:** laid over the person's video between a start and an end time (same timeline and times as the standard card). The video keeps its length and its soundtrack is copied. The picture can be darkened behind the title (`dimPct` 0 to 80, `dimColor`). `POST /api/videos/animated-title/on-video` (multipart `video`, `startSec`, `endSec`, `spec`). The title is drawn with a see-through background, but only the **moving moments** (every frame of the first ~1.9 s and of the fade-out, and ONE picture for the long still part, `overlaySchedule`), so about 75 pictures whatever the length; ffmpeg lays the picture list over the video (`makeAnimatedTitleOverVideo`). The window is checked with `planTitleCard` (plain errors).
+- **As a separate title clip:** a short title video with no source video (shape widescreen / tall / square, 2 to 8 s, standard or Full HD, soft gradient background). `POST /api/videos/animated-title` (multipart field `spec`). No sound.
+
+Both are background jobs (one at a time per person, gate, Cancel, Resume). `GET /api/videos/animated-title/brand` says what the Brand Kit offers (colours, logo yes/no, which fonts; never the files). Idea from HyperFrames (heygen-com/hyperframes, Apache 2.0); the renderer is our own, **no new package**.
+
+- **How it works:** `server/services/animatedTitle.js` builds a small HTML page from the person's choices (text HTML-escaped; no web address in the page). `server/services/htmlVideoRender.js` opens it in headless Chromium (Playwright, already in the image), moves the page's paused Web Animations to a moment (`window.seek(ms)` / `window.show(ms)`), and either photographs every frame (clip: JPEG, piped to ffmpeg) or saves see-through PNGs for the moments that change (over a video). A browser is started per render and closed after. Every request the page makes except its own inline `data:` content is refused.
+- **Spec** (JSON): `headline` (required, 80), `subline` (120), `layout` `rise|centre`, `shape`, `quality` `hd|full`, `seconds` 2 to 8 (clip only), `fontSource` `standard|brand-heading|brand-body`, `useBrandColours`, `useLogo`, `background`/`text`/`accent`, `gradient` (clip only), `dimPct`, `dimColor` (over a video only).
+- **Brand Kit:** read on the server from the signed-in person's own kit (`graphicsBrandKit.loadKit/getFontFile`), never from the browser. `primary` is the background (falls back to `background`), `onPrimary` (else `text`) the words, `accent` the line. The font is embedded as a base64 `@font-face`. Asking for a colour, logo or font the kit does not have is a plain 409 before the job starts.
+- **Cost (measured on Windows 10, 8 Nov 2026):** clip, 5 s: 720p about 8 s and 215 MB peak, 1080p about 10 s and 640 MB. Over a video (640x360, 3 s window): about 5 s. Full-frame see-through PNGs of a large video are bigger; not measured at 1080p.
+- **Tests:** `node server/services/animatedTitle.test.js` (checking, escaping, Brand Kit loading with a stub database, the picture schedule, a real 2 s clip, a real title over a video: on screen inside its window and not before or after, sound and length kept, a window outside the video refused; Cancel). Locally set `LOCAL_FFMPEG_COMMAND` and `LOCAL_FFPROBE_COMMAND`. Page: `client/src/pages/videos/AnimatedTitleForm.jsx` (`mode` overlay or clip), inside the Title card section of `VideosPage.jsx`.
+- **Not done / limits:** two movements only; no sound in a separate clip; one font; Latin text only; no button or web address (use the Standard card for those); **not run inside the Railway container yet**; the over-video version was not tried on a long or high-resolution video or a phone-rotated one.
 
 ---
 

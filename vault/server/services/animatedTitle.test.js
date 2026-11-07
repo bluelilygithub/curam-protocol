@@ -46,6 +46,26 @@ const { frameTimes, RenderCancelled } = require('./htmlVideoRender');
   assert.ok(withAssets.includes("@font-face{font-family:'BrandTitleab12cd34'") && withAssets.includes('id="l"'));
   assert.ok(!svc.buildHtml(svc.normalizeSpec({ headline: 'Only a headline' }), svc.sizeFor('16:9', 'hd'), { background: '#000000', text: '#ffffff', accent: '#ffffff' }).includes('id="s"'), 'no supporting line, no rule');
 
+  // ---- 2b. the title laid over a video: which pictures to draw ----
+  assert.strictEqual(svc.normalizeSpec({ headline: 'a' }).dimPct, 35);
+  assert.strictEqual(svc.normalizeSpec({ headline: 'a', dimPct: 500 }).dimPct, 80);
+  assert.strictEqual(svc.normalizeSpec({ headline: 'a', dimPct: -4 }).dimPct, 0);
+  assert.strictEqual(svc.normalizeSpec({ headline: 'a', dimColor: 'blue' }).dimColor, '#000000');
+  for (const total of [800, 2500, 5000, 15000]) {
+    const sch = svc.overlaySchedule(total);
+    assert.strictEqual(sch[0].atMs, 0);
+    assert.strictEqual(sch.reduce((n, x) => n + x.durMs, 0), total, `the pictures cover the whole ${total} ms`);
+    for (let i = 1; i < sch.length; i += 1) assert.ok(sch[i].atMs > sch[i - 1].atMs, 'times go forward');
+  }
+  assert.ok(svc.overlaySchedule(15000).length < 90, 'a long title is still only about 75 pictures (one for the still part)');
+  assert.ok(svc.overlaySchedule(15000).some((x) => x.durMs > 10000), 'the still part is one long picture');
+  assert.strictEqual(svc.overlayConcat([{ atMs: 0, durMs: 500 }, { atMs: 500, durMs: 750 }], ['a.png', 'b.png']), "file 'a.png'\nduration 0.500\nfile 'b.png'\nduration 0.750\nfile 'b.png'\n");
+  const ov = svc.buildHtml(svc.normalizeSpec({ headline: 'Over video', subline: 'x', dimPct: 40 }), { width: 640, height: 360 }, { background: '#000000', text: '#ffffff', accent: '#ffffff' }, {}, { durationMs: 5000 });
+  assert.ok(/background:transparent/.test(ov) && !/linear-gradient/.test(ov), 'no background of its own over a video');
+  assert.ok(/rgba\(0,0,0,0\.40\)/.test(ov), 'the darkening is the colour and strength chosen');
+  assert.ok(ov.includes('window.show = function'), 'the page can be asked for a moment');
+  assert.ok(!/stage'\)\.animate/.test(svc.buildHtml(svc.normalizeSpec({ headline: 'x', dimPct: 0 }), { width: 640, height: 360 }, { background: '#000000', text: '#ffffff', accent: '#ffffff' }, {}, { durationMs: 3000 })), 'no darkening, no tint layer');
+
   // ---- 3. the Brand Kit is read on the server, for this person only; a missing part is a plain 409 ----
   const kit = { roles: { primary: '#9B5B46', onPrimary: '#FFFFFF', accent: '#E8C07D', background: '#faf7f2' }, logoDataUrl: 'data:image/png;base64,iVBORw0KGgo=' };
   const bytes = Buffer.from([0, 1, 0, 0, 1, 2, 3]);
@@ -107,6 +127,26 @@ const { frameTimes, RenderCancelled } = require('./htmlVideoRender');
     // already cancelled before it starts
     const ac2 = new AbortController(); ac2.abort();
     await assert.rejects(() => svc.makeAnimatedTitle({ spec: svc.normalizeSpec({ headline: 'x' }), brand: { colours: null, logoDataUrl: null, font: null }, outPath: path.join(dir, 'c.mp4'), signal: ac2.signal }), (e) => e.cancelled === true);
+
+    // the title laid over a video: only inside its window, the video keeps its length and its sound
+    const src = path.join(dir, 'in.mp4');
+    await new Promise((res, rej) => execFile(ffmpeg, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=#335577:s=640x360:r=25:d=6', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=6', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', src], (e) => (e ? rej(e) : res())));
+    const out3 = path.join(dir, 'over.mp4');
+    const work3 = path.join(dir, 'work3'); fs.mkdirSync(work3);
+    const t2 = Date.now();
+    const plan = await svc.makeAnimatedTitleOverVideo({ spec: svc.normalizeSpec({ headline: 'On the video', subline: 'second line', dimPct: 0 }), brand: { colours: null, logoDataUrl: null, font: null }, videoPath: src, outPath: out3, workDir: work3, startSec: 1, endSec: 4 });
+    assert.deepStrictEqual([plan.start, plan.end], [1, 4]);
+    console.log(`  title over a video in ${((Date.now() - t2) / 1000).toFixed(1)}s`);
+    const ffprobe = ffmpeg.replace(/ffmpeg(\.exe)?$/i, (m) => m.replace('ffmpeg', 'ffprobe'));
+    const probe3 = await new Promise((res, rej) => execFile(ffprobe, ['-v', 'error', '-show_entries', 'stream=codec_type,width,height', '-show_entries', 'format=duration', '-of', 'default=nw=1', out3], (e, o) => (e ? rej(e) : res(o))));
+    assert.match(probe3, /width=640/); assert.match(probe3, /codec_type=audio/, 'the sound is kept');
+    assert.ok(Math.abs(Number(/duration=([\d.]+)/.exec(probe3)[1]) - 6) < 0.3, 'the video keeps its length');
+    const grey = (file, t) => new Promise((res, rej) => execFile(ffmpeg, ['-v', 'error', '-ss', String(t), '-i', file, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', '-vf', 'scale=160:90', '-'], { encoding: 'buffer', maxBuffer: 1 << 22 }, (e, o) => (e ? rej(e) : res(o))));
+    const dif = async (t) => { const a = await grey(src, t); const b = await grey(out3, t); let n = 0; for (let i = 0; i < a.length; i += 1) n += Math.abs(a[i] - b[i]); return n / a.length; };
+    const before3 = await dif(0.5); const during3 = await dif(2.5); const after3 = await dif(5.2);
+    assert.ok(during3 > 3 * Math.max(before3, after3) && during3 > 3, `the title is on screen at 2.5 s (during ${during3.toFixed(2)}, before ${before3.toFixed(2)}, after ${after3.toFixed(2)})`);
+    assert.ok(before3 < 2 && after3 < 2, 'and not before or after its window');
+    await assert.rejects(() => svc.makeAnimatedTitleOverVideo({ spec: svc.normalizeSpec({ headline: 'x' }), brand: { colours: null, logoDataUrl: null, font: null }, videoPath: src, outPath: path.join(dir, 'z.mp4'), workDir: work3, startSec: 9, endSec: 12 }), /only 6\.0 s long/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

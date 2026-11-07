@@ -3526,6 +3526,9 @@
   "POST /api/videos/animated-title": {
    "class": "authed"
   },
+  "POST /api/videos/animated-title/on-video": {
+   "class": "authed"
+  },
   "POST /api/videos/audio-to-video": {
    "class": "authed"
   },

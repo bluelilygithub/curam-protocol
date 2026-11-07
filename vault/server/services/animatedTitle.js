@@ -4,8 +4,12 @@
 // HTML page from the person's choices (text is escaped, nothing else is accepted), and htmlVideoRender.js turns it into an MP4.
 // Colours, logo and font can come from the person's Brand Kit (Graphics -> Brand Kit): the server reads them, never the browser.
 
+const fs = require('fs/promises');
+const path = require('path');
 const kitStore = require('./graphicsBrandKit');
-const { renderHtmlToMp4 } = require('./htmlVideoRender');
+const { renderHtmlToMp4, renderStatePngs } = require('./htmlVideoRender');
+const { execFileAsync, FFMPEG, probeVideo } = require('./videoFfmpeg');
+const { planTitleCard } = require('./titleCard');
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const LAYOUTS = ['rise', 'centre'];
@@ -49,6 +53,9 @@ function normalizeSpec(input) {
     text: hexOr(i.text, DEFAULTS.text),
     accent: hexOr(i.accent, DEFAULTS.accent),
     gradient: i.gradient !== false,
+    // only used when the title is laid over a video (Title card, animated look): how much the picture is darkened behind the words
+    dimPct: Number.isFinite(Number(i.dimPct)) ? Math.min(80, Math.max(0, Math.round(Number(i.dimPct)))) : 35,
+    dimColor: hexOr(i.dimColor, '#000000'),
   };
 }
 
@@ -73,7 +80,7 @@ function shade(hex, amount) {
  * The page that is rendered. `assets` is { fontDataUrl, fontFormat, fontFamily, logoDataUrl } (any may be missing). Everything is inline:
  * no address of any kind appears in it. `colours` are the final colours { background, text, accent }.
  */
-function buildHtml(spec, size, colours, assets = {}) {
+function buildHtml(spec, size, colours, assets = {}, overlay = null) {
   const { width, height } = size;
   const portrait = height > width;
   const base = Math.min(width, height);
@@ -84,20 +91,23 @@ function buildHtml(spec, size, colours, assets = {}) {
     ? `@font-face{font-family:'${assets.fontFamily}';src:url(${assets.fontDataUrl}) format('${assets.fontFormat}');font-weight:400;font-style:normal}`
     : '';
   const bg = spec.gradient ? `linear-gradient(135deg, ${colours.background}, ${shade(colours.background, 0.14)})` : colours.background;
+  // laid over a video: no background of our own, only the darkening (if any), and a soft shadow so the words stay readable
+  const pageBg = overlay ? 'transparent' : colours.background;
+  const tint = overlay && spec.dimPct > 0 ? `rgba(${[16, 8, 0].map((sh) => (parseInt(spec.dimColor.slice(1), 16) >> sh) & 255).join(',')},${(spec.dimPct / 100).toFixed(2)})` : null;
   const centre = spec.layout === 'centre';
   const align = centre ? 'center' : 'left';
   const logoSize = Math.round(base * 0.12);
-  const D = spec.seconds * 1000;
+  const D = overlay ? overlay.durationMs : spec.seconds * 1000;
   const fadeOut = Math.min(600, D / 4);
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 ${fontFace}
-html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:${colours.background}}
-.stage{position:absolute;left:0;top:0;width:100%;height:100%;background:${bg}}
+html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:${pageBg}}
+.stage{position:absolute;left:0;top:0;width:100%;height:100%;background:${overlay ? (tint || 'transparent') : bg}}
 .block{position:absolute;left:${centre ? 0 : 8}%;width:${centre ? 100 : 84}%;top:50%;transform:translateY(-50%);text-align:${align};font-family:${family}}
 .logo{display:block;height:${logoSize}px;max-width:${Math.round(width * 0.4)}px;margin:0 ${centre ? 'auto' : '0'} ${Math.round(base * 0.04)}px;object-fit:contain;opacity:0}
-.head{margin:0;color:${colours.text};font-size:${headSize}px;line-height:1.15;font-weight:${assets.fontDataUrl ? 400 : 700};opacity:0;padding:0 ${centre ? '6%' : '0'}}
+.head{margin:0;${overlay ? 'text-shadow:0 2px 14px rgba(0,0,0,.55);' : ''}color:${colours.text};font-size:${headSize}px;line-height:1.15;font-weight:${assets.fontDataUrl ? 400 : 700};opacity:0;padding:0 ${centre ? '6%' : '0'}}
 .rule{height:${Math.max(3, Math.round(base * 0.008))}px;width:${centre ? 18 : 40}%;margin:${Math.round(base * 0.035)}px ${centre ? 'auto' : '0'};background:${colours.accent};transform-origin:${centre ? 'center' : 'left'};transform:scaleX(0)}
-.sub{margin:0;color:${colours.text};font-size:${subSize}px;line-height:1.3;opacity:0;padding:0 ${centre ? '8%' : '0'}}
+.sub{margin:0;${overlay ? 'text-shadow:0 2px 10px rgba(0,0,0,.55);' : ''}color:${colours.text};font-size:${subSize}px;line-height:1.3;opacity:0;padding:0 ${centre ? '8%' : '0'}}
 </style></head><body><div class="stage"></div><div class="block">
 ${assets.logoDataUrl ? `<img class="logo" id="l" alt="" src="${assets.logoDataUrl}">` : ''}
 <h1 class="head" id="h">${esc(spec.headline)}</h1>
@@ -117,9 +127,11 @@ ${spec.subline ? `<p class="sub" id="s">${esc(spec.subline)}</p>` : ''}
   add('h', rise, 750, 250);
   add('r', [{transform:'scaleX(0)'},{transform:'scaleX(1)'}], 800, 750);
   add('s', [{opacity:0,transform:'translateY(24px)'},{opacity:1,transform:'none'}], 700, 1150);
+  ${overlay && tint ? "list.push(document.querySelector('.stage').animate([{opacity:0,offset:0},{opacity:1,offset:" + (400 / D).toFixed(4) + "},{opacity:1,offset:" + ((D - fadeOut) / D).toFixed(4) + "},{opacity:0,offset:1}], { duration: " + D + ", fill: 'both' }));" : ''}
   list.push(document.querySelector('.block').animate([{opacity:1},{opacity:0}], { duration: ${fadeOut}, delay: D - ${fadeOut}, fill: 'both' }));
   list.forEach(function (a) { a.pause(); });
   window.seek = function (ms) { list.forEach(function (a) { a.currentTime = ms; }); };
+  window.show = function (ms) { window.seek(ms); };
   window.seek(0);
 })();
 </script></body></html>`;
@@ -179,7 +191,61 @@ async function makeAnimatedTitle({ spec, brand, outPath, signal, log, render = r
   return render({ html, width: size.width, height: size.height, seconds: spec.seconds, outPath, signal, log });
 }
 
+/**
+ * Which moments of an overlay title to draw, and how long each picture stays: every frame while things move (the first ~1.9 s) and
+ * during the fade-out, and ONE picture for the long still part in between. A 5 s title is about 75 pictures instead of 150, and a
+ * 15 s one is still about 75. Returns [{ atMs, durMs }] whose durations add up to totalMs.
+ */
+function overlaySchedule(totalMs, fps = 30) {
+  const step = 1000 / fps;
+  const fadeStart = totalMs - Math.min(600, totalMs / 4);
+  const holdAt = Math.min(1900, fadeStart);
+  const at = [];
+  for (let t = 0; t < holdAt - 1; t += step) at.push(t);
+  if (holdAt < fadeStart) at.push(holdAt);
+  for (let t = fadeStart; t < totalMs - 1; t += step) at.push(t);
+  const ms = at.map((t) => Math.round(t));
+  return ms.map((t, i) => ({ atMs: t, durMs: (i + 1 < ms.length ? ms[i + 1] : totalMs) - t })); // from the rounded times, so the lengths add up exactly
+}
+
+/** The picture list for ffmpeg's concat reader: one file and how long it stays. */
+function overlayConcat(schedule, names) {
+  const lines = [];
+  schedule.forEach((s, i) => lines.push(`file '${names[i]}'`, `duration ${(s.durMs / 1000).toFixed(3)}`));
+  lines.push(`file '${names[schedule.length - 1]}'`); // the last picture is repeated, as the format needs
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * The animated title laid over a video between startSec and endSec (Title card, animated look). The title is drawn with a see-through
+ * background (only the moving moments, see overlaySchedule) and ffmpeg lays it over the video; the video keeps its length and its
+ * soundtrack is copied. Returns the checked window { start, end }.
+ */
+async function makeAnimatedTitleOverVideo({ spec, brand, videoPath, outPath, workDir, startSec, endSec, signal, log = () => {}, render = renderStatePngs }) {
+  const info = await probeVideo(videoPath);
+  if (!info.width || !info.height) throw new AnimatedTitleError('Could not read your video. Check it is a valid video file.');
+  const plan = planTitleCard({ videoSec: info.duration, startSec, endSec });
+  const turned = info.rotation === 90 || info.rotation === 270;
+  const w = (turned ? info.height : info.width) - ((turned ? info.height : info.width) % 2);
+  const h = (turned ? info.width : info.height) - ((turned ? info.width : info.height) % 2);
+  const totalMs = Math.round((plan.end - plan.start) * 1000);
+  const colours = brand.colours || { background: spec.background, text: spec.text, accent: spec.accent };
+  const html = buildHtml(spec, { width: w, height: h }, colours, { ...(brand.font || {}), logoDataUrl: brand.logoDataUrl }, { durationMs: totalMs });
+  const schedule = overlaySchedule(totalMs);
+  const started = Date.now();
+  const names = await render({ html, width: w, height: h, states: schedule.map((s) => [s.atMs]), outDir: workDir, signal });
+  log(`drew ${names.length} title pictures at ${w}x${h} in ${Math.round((Date.now() - started) / 1000)}s`);
+  await fs.writeFile(path.join(workDir, 'title.txt'), overlayConcat(schedule, names), 'utf8');
+  const filter = `[0:v]scale=${w}:${h},setsar=1,format=yuv420p[base];[1:v]format=rgba,setpts=PTS+${plan.start}/TB[ov];[base][ov]overlay=x=0:y=0:eof_action=pass:format=auto:enable='between(t,${plan.start},${plan.end})'[v]`;
+  const args = ['-y', '-i', videoPath, '-f', 'concat', '-safe', '0', '-i', path.join(workDir, 'title.txt'), '-filter_complex', filter, '-map', '[v]'];
+  if (info.hasAudio) args.push('-map', '0:a', '-c:a', 'copy');
+  args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outPath);
+  await execFileAsync(FFMPEG, args, 900000, { signal });
+  return plan;
+}
+
 module.exports = {
+  overlaySchedule, overlayConcat, makeAnimatedTitleOverVideo,
   normalizeSpec, sizeFor, buildHtml, brandOffer, loadBrand, makeAnimatedTitle, AnimatedTitleError,
   LAYOUTS, SHAPES, QUALITIES, FONT_SOURCES, MIN_SEC, MAX_SEC, DEFAULTS,
 };

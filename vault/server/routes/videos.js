@@ -1428,6 +1428,49 @@ router.post('/animated-captions', upload.fields([{ name: 'video', maxCount: 1 }]
   }
 });
 
+// Title card, animated look, ON A VIDEO: the animated title laid over the person's video between a start and an end time (the video keeps
+// its length and its sound). The separate-clip version is POST /animated-title above. Colours, logo and font from the Brand Kit as there.
+router.post('/animated-title/on-video', upload.single('video'), async (req, res) => {
+  try {
+    if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
+    if (!enforceAggregateUploadSize(res, [req.file])) return;
+    const spec = animatedTitleService.normalizeSpec(parseJsonBodyField(req.body?.spec));
+    if (spec.error) return res.status(400).json({ error: spec.error });
+    const startSec = Number(req.body?.startSec);
+    const endSec = Number(req.body?.endSec);
+    if (!Number.isFinite(startSec) || startSec < 0) return res.status(400).json({ error: 'Set when the title starts.' });
+    if (!Number.isFinite(endSec)) return res.status(400).json({ error: 'Set when the title ends.' });
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    const brand = await animatedTitleService.loadBrand(dbPool, req.user.id, spec);
+    const base = path.basename(String(req.file.originalname || 'video'), path.extname(String(req.file.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
+    const jobId = startBackgroundJob(req.user.id, 'animated-title-on-video', (signal) => withTempDir(async (dir) => {
+      const videoPath = await writeUpload(dir, req.file);
+      const outPath = path.join(dir, 'titled.mp4');
+      try {
+        await animatedTitleService.makeAnimatedTitleOverVideo({ spec, brand, videoPath, outPath, workDir: dir, startSec, endSec, signal, log: (m) => getLogger().info(`[videos/animated-title] ${m}`) });
+      } catch (err) {
+        // plain-worded planning errors (window outside the video...) and cancels pass through; anything else is logged and made plain
+        if (err.cancelled || err.stderr !== undefined || err.killed || err.name === 'AbortError' || err instanceof animatedTitleService.AnimatedTitleError || /card|video|seconds/i.test(String(err.message))) throw err;
+        getLogger().error({ err }, '[videos/animated-title] on-video render');
+        const e = new Error('The title could not be drawn on this server. Try again in a minute.');
+        e.status = 500;
+        throw e;
+      }
+      return { buffer: await readOutputFile(outPath), fileName: `${base}-titled.mp4`, mime: 'video/mp4' };
+    }), {
+      describeError: (err) => describeVideoError(err).message,
+      onError: (err) => getLogger().error({ err }, `[videos/animated-title] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: (m) => getLogger().info(`[videos/animated-title] ${m}`),
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    if (err instanceof animatedTitleService.AnimatedTitleError) return res.status(err.status).json({ error: err.message });
+    getLogger().error({ err }, '[videos/animated-title] on-video start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
+
 // Progress and result of a background job (the person's own only).
 router.get('/jobs/:id', (req, res) => {
   const status = getBackgroundJobStatus(req.params.id, req.user.id);

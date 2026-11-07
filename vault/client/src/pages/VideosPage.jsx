@@ -299,6 +299,8 @@ const TOOL_HELP = {
       'Tint colour and strength (0 keeps the picture in full colour), and separate fade-in and fade-out times',
       'The video keeps its length and its sound is not touched',
       'One card per run. Run the result through again to add another',
+      'Look: Standard card, or Animated (the headline slides or fades in, a line draws across, then the supporting line). Animated can go on your video between the start and end times, or be made as a separate title clip with no video, in a shape and length you choose',
+      'Animated can use your Brand Kit colours, logo and font. It runs in the background and can take a minute',
     ],
   },
   'end-card': {
@@ -340,18 +342,6 @@ const TOOL_HELP = {
       'Optional crossfade between slides, or a hard cut',
       'Optional audio track loops to fill or trims to match the total runtime',
       'Describe the video and get a plan to edit. Tick "Let the AI look at my pictures" and the AI also sees a small copy of each picture (made in your browser, never your originals) so it can suggest a sensible order and fitting captions. It is off unless you tick it, and the cost is shown first',
-    ],
-  },
-  'animated-title': {
-    title: 'Animated title',
-    what: 'Make a short animated title screen (headline, supporting line and optionally your logo) as a video, in your Brand Kit colours and font.',
-    features: [
-      'Type a headline and an optional supporting line',
-      'Two ways of moving: slide in from the left, or fade in at the centre',
-      'Widescreen, tall (Reels and Stories) or square, 2 to 8 seconds long, standard or Full HD sharpness',
-      'Use the colours, logo and fonts saved in Brand Kit (Graphics), or choose your own colours',
-      'The result is a video you can watch, download, or use in another tool, for example as the first clip in Join videos',
-      'It is drawn on the server and can take 10 to 30 seconds. You can cancel it while it runs',
     ],
   },
   'caption-studio': {
@@ -412,12 +402,11 @@ const TOOL_TIPS = {
   reframe: 'Change the shape of a video (tall, square or widescreen) by cropping it or adding bars.',
   speed: 'Make a video play slower or faster, from a quarter speed up to four times.',
   annotate: 'Put one line of text on a video, such as a title or a credit, in the font, colour and position you choose.',
-  'title-card': 'Show a message card (headline, line, button, web address) on the video between a start and an end time you choose, anywhere in it.',
+  'title-card': 'Show a message card on the video between a start and an end time you choose, or make an animated title in your brand colours, over the video or as a separate clip.',
   'end-card': 'Add a closing message to the end of a video: a headline, a button-style label and a web address.',
   overlay: 'Place a logo or picture on top of a video, in the corner and size you choose.',
   join: 'Join two or more video clips into one, with a cut or a transition between each.',
   slideshow: 'Turn 2 to 20 pictures into a video, with optional music, transitions and captions.',
-  'animated-title': 'Make a short animated title screen as a video, in your own colours, logo and font.',
   'caption-studio': 'Put styled subtitles on a video, from captions you already have or from a script that has no timestamps.',
   'mix-audio': 'Combine a voice recording and background music into one audio file. The music dips while the voice speaks.',
   'extend-ending': 'Hold the first and last pictures of a video with a title over each, while the music plays on and fades out.',
@@ -443,7 +432,6 @@ const TOOL_GROUPS = [
     tools: [
       { id: 'generate', label: 'Generate clip', desc: 'Brief + optional image seed, reference video or YouTube example' },
       { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
-      { id: 'animated-title', label: 'Animated title', desc: 'A moving title screen in your brand colours and font' },
     ],
   },
   {
@@ -1276,6 +1264,9 @@ export default function VideosPage() {
   const [tcEnd, setTcEnd] = useState('');          // typed as the person types it; empty = 5 seconds after the start
   const [tcDuration, setTcDuration] = useState(0);
   const [tcCard, setTcCard] = useState({ ...CTA_DEFAULTS, fadeSec: 0.5, fadeOutSec: 0.5 });
+  const [tcLook, setTcLook] = useState('standard'); // 'standard' card (ffmpeg) or 'animated' title (drawn on the server)
+  const [tcWhere, setTcWhere] = useState('video'); // animated only: 'video' (over my video) or 'clip' (a separate title clip)
+  const tcOnVideo = tcLook === 'standard' || tcWhere === 'video'; // does this need the person's video and the timeline?
   const tcStartSec = parseClock(tcStart || '0') ?? 0;
   const tcEndSec = tcEnd === '' ? tcStartSec + Math.min(5, Math.max(1, (tcDuration || 6) - tcStartSec)) : parseClock(tcEnd);
   useEffect(() => { if (tool === 'title-card') { setTcStart('0:00'); setTcEnd(''); setTcDuration(0); } }, [sourceFile, tool]);
@@ -1428,7 +1419,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'title-card' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow' || tool === 'animated-title') clearComposeResult();
+    if (tool === 'annotate' || tool === 'title-card' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -3396,7 +3387,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && tool !== 'animated-title' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -3405,7 +3396,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && tool !== 'animated-title' && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' || tool === 'replace-section' || tool === 'title-card' ? clipVideoRef : undefined}
@@ -4897,8 +4888,32 @@ export default function VideosPage() {
           <section className="space-y-3">
             <ToolHeader id="title-card" label="Title card" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Show a message card on your video from a start time to an end time, anywhere in it. It sits over the playing picture, so the video keeps its length and its sound is not touched. Choose your video above.
+              Show a message card on your video from a start time to an end time, anywhere in it. It sits over the playing picture, so the video keeps its length and its sound is not touched.{tcOnVideo ? ' Choose your video above.' : ' This one is made on its own, so you do not need a video.'}
             </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Look</span>
+                <Tooltip text="Standard is a still message card. Animated moves in: the headline slides or fades in, a line draws across and the supporting line follows. It can use your Brand Kit colours, logo and font.">
+                  <select value={tcLook} onChange={(e) => setTcLook(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="standard">Standard card</option>
+                    <option value="animated">Animated title</option>
+                  </select>
+                </Tooltip>
+              </label>
+              {tcLook === 'animated' && (
+                <label className="block space-y-1">
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Show it</span>
+                  <Tooltip text="On my video lays the title over your video between the start and end times. As a separate clip makes a short title video on its own, which you can post as it is or join onto a video.">
+                    <select value={tcWhere} onChange={(e) => setTcWhere(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      <option value="video">On my video</option>
+                      <option value="clip">As a separate title clip</option>
+                    </select>
+                  </Tooltip>
+                </label>
+              )}
+            </div>
+            {tcOnVideo && (
+            <>
             <ClipTimeline
               src={previewUrl}
               videoRef={clipVideoRef}
@@ -4929,6 +4944,10 @@ export default function VideosPage() {
                   ? 'The card needs to be on screen for at least half a second. Move the end later than the start.'
                   : `On screen for ${(tcEndSec - tcStartSec).toFixed(1)} seconds.${tcDuration && tcEndSec > tcDuration + 0.05 ? ' The end is after the end of the video, so it will be held at the end of the video.' : ''}`}
             </p>
+            </>
+            )}
+            {tcLook === 'standard' ? (
+            <>
             <EndCardFields cta={tcCard} setCta={setTcCard} lockTiming windowed />
             <Tooltip text="Put the card on your video between the start and end times. Your original video is not changed.">
               <button
@@ -4951,6 +4970,28 @@ export default function VideosPage() {
                 Add title card
               </button>
             </Tooltip>
+            </>
+            ) : (
+            <AnimatedTitleForm
+              mode={tcWhere === 'video' ? 'overlay' : 'clip'}
+              busy={!ffmpegOk}
+              onBuild={(spec) => {
+                if (!String(spec.headline || '').trim()) { addToast('Type a headline for the title', 'error'); return; }
+                const fd = new FormData();
+                fd.append('spec', JSON.stringify(spec));
+                if (tcWhere === 'video') {
+                  if (!requireFile()) return;
+                  if (tcEndSec === null || tcEndSec - tcStartSec < 0.5) { addToast('Set an end time at least half a second after the start', 'error'); return; }
+                  fd.append('video', sourceFile);
+                  fd.append('startSec', String(tcStartSec));
+                  fd.append('endSec', String(tcEndSec));
+                  runJobVideo('animated-title/on-video', fd, { label: 'Adding the animated title…', resultFilename: 'titled.mp4', forTool: 'title-card' });
+                } else {
+                  runJobVideo('animated-title', fd, { label: 'Making the animated title…', resultFilename: 'animated-title.mp4', forTool: 'title-card' });
+                }
+              }}
+            />
+            )}
             {resultForTool === 'title-card' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -5210,27 +5251,6 @@ export default function VideosPage() {
               </button>
             </Tooltip>
             {resultForTool === 'slideshow' && (
-              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
-            )}
-          </section>
-        )}
-
-        {tool === 'animated-title' && (
-          <section className="space-y-3">
-            <ToolHeader id="animated-title" label="Animated title" onHelp={setHelpTool} getIcon={getIcon} />
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Make a short animated title screen as a video, in your Brand Kit colours, logo and font. You do not need to choose a video first.
-            </p>
-            <AnimatedTitleForm
-              busy={!ffmpegOk}
-              onBuild={(spec) => {
-                if (!String(spec.headline || '').trim()) { addToast('Type a headline for the title', 'error'); return; }
-                const fd = new FormData();
-                fd.append('spec', JSON.stringify(spec));
-                runJobVideo('animated-title', fd, { label: 'Making the animated title…', resultFilename: 'animated-title.mp4', forTool: 'animated-title' });
-              }}
-            />
-            {resultForTool === 'animated-title' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>
