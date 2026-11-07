@@ -1687,6 +1687,15 @@
   "GET /api/graphics/brand-from-url/:id/font/:role": {
    "class": "authed"
   },
+  "GET /api/graphics/brand-kit/fonts": {
+   "class": "authed"
+  },
+  "DELETE /api/graphics/brand-kit/fonts/:role": {
+   "class": "authed"
+  },
+  "GET /api/graphics/brand-kit/fonts/:role/file": {
+   "class": "authed"
+  },
   "POST /api/graphics/collage": {
    "class": "authed"
   },

@@ -1159,6 +1159,27 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_graphics_recipes_user ON graphics_recipes ("userId", "updatedAt" DESC)`);
+    // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
+    // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS graphics_brand_fonts (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role           TEXT NOT NULL CHECK (role IN ('heading', 'body')),
+        family         TEXT NOT NULL,
+        weight         INTEGER NOT NULL,
+        "renderFamily" TEXT NOT NULL,
+        ext            TEXT NOT NULL CHECK (ext IN ('ttf', 'otf')),
+        bytes          INTEGER NOT NULL,
+        sha256         TEXT NOT NULL,
+        source         TEXT,
+        "sourceUrl"    TEXT,
+        data           BYTEA NOT NULL,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", role)
+      )
+    `);
     // ── Topic Research (docs/topic-research.md): saved topics, one row per search run, the articles found (one per normalised URL per person) and
     // which run saw which article. Briefs and source weights arrive in later milestones. Site profile + feed list live in `settings`.
     await client.query(`

@@ -27,6 +27,7 @@ const recipes = require('./graphics/recipes');
 const describe = require('./graphics/describe');
 const printProfile = require('./graphics/printProfile');
 const brandFromUrl = require('./graphics/brandFromUrl');
+const brandKit = require('./graphics/brandKit');
 const { capImagePixels, makePaidGuard } = require('../middleware/graphicsLimits');
 
 // Safety nets for every route below: no oversized images, and a per-person limit on the paid AI tools.
@@ -48,5 +49,6 @@ router.use(recipes);
 router.use(describe);
 router.use(printProfile);
 router.use(brandFromUrl);
+router.use(brandKit);
 
 module.exports = router;
