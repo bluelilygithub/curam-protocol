@@ -12,7 +12,8 @@ const rateLimit = require('express-rate-limit');
 const { getLogger } = require('../middleware/requestContext');
 const { ownsRow } = require('../utils/ownedLinks');
 const { validateProfile, DEFAULTS, localDate } = require('../services/serpTracker/siteProfile');
-const { listSites, loadSite, createSite, updateSite, deleteSite, listRuns, SiteError, MAX_SITES } = require('../services/serpTracker/store');
+const { listSites, loadSite, createSite, updateSite, deleteSite, listRuns, setGscSiteUrl, SiteError, MAX_SITES } = require('../services/serpTracker/store');
+const history = require('../services/gscHistory');
 const { runSite, RunAlreadyActive } = require('../services/serpTracker/runner');
 const { monthSpend, monthlyCapUsd, logCost, capStatus, estimateLiveUsd, LIVE_PER_TEN_RESULTS_USD, AI_OVERVIEW_USD } = require('../services/serpTracker/costs');
 const { getBalance, hasCredentials, liveSerp, findLocation } =require('../services/serpTracker/dataforseo');
@@ -37,6 +38,12 @@ function createRouter(pool, {
   env = process.env,
   now = () => new Date(),
   modules = [],
+  // Search Console, for the Keywords tab (replaced by a fake in tests): is it connected, which properties can the person see, and one page of rows
+  gscApi = {
+    connection: (uid) => require('../services/gscService').connection(uid),
+    listProperties: (uid) => require('../services/gscService').listSites(uid),
+    queryRows: (uid, siteUrl, body) => require('../services/gscService').queryRows(uid, siteUrl, body),
+  },
   geocoder = null, // reverse place lookup for "Use my location" (services/geocode.js); null = that button says it is unavailable
   runsPerHour = 6,
   lookupsPerHour = 30,
@@ -203,6 +210,100 @@ function createRouter(pool, {
       if (err instanceof RunAlreadyActive) return res.status(409).json({ error: err.message });
       fail(res, err, 'manual run', 'The run could not be started.');
     }
+  });
+
+  // ---- Keywords: what the site really ranks for, from Search Console (Google's own figures), kept as history. Nothing here is paid.
+  // Every route checks the site is the caller's first, and every history query is filtered by "userId" and the site's own property.
+  const gscFailMessage = (err) => {
+    const m = String((err && err.message) || '');
+    if (/not connected/i.test(m)) return 'Search Console is not connected. Connect it on the Search Console page first.';
+    if (/invalid_grant|unauthor|401|403|permission/i.test(m)) return 'Google would not let Vault read that Search Console property. Reconnect Search Console, or check you have access to it.';
+    return 'Could not reach Search Console just now. Try again in a minute.';
+  };
+
+  // the state of the connection for this site: connected?, the properties the person can see, the one chosen (or suggested), the history's progress
+  router.get('/sites/:id/gsc', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    try {
+      const site = await loadSite(pool, userId(req), id);
+      if (!site) return res.status(404).json({ error: 'Not found' });
+      const conn = await gscApi.connection(userId(req));
+      if (!conn.connected) return res.json({ connected: false });
+      let properties = [];
+      let propertiesError = null;
+      try { properties = (await gscApi.listProperties(userId(req))).map((p) => ({ siteUrl: p.siteUrl, permissionLevel: p.permissionLevel })); } catch (err) { propertiesError = gscFailMessage(err); }
+      const suggested = site.gscSiteUrl ? null : history.pickProperty(site.profile.domain, properties);
+      const progress = site.gscSiteUrl ? await history.syncProgress(pool, userId(req), site.gscSiteUrl) : null;
+      res.json({ connected: true, email: conn.email, properties, propertiesError, selected: site.gscSiteUrl, suggested, progress });
+    } catch (err) { fail(res, err, 'gsc state', 'Could not load the Search Console state.'); }
+  });
+
+  // choose the property this site reads from (or clear it with { siteUrl: null }); it must be one the person can see
+  router.put('/sites/:id/gsc', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    const want = req.body && req.body.siteUrl;
+    try {
+      if (!(await loadSite(pool, userId(req), id))) return res.status(404).json({ error: 'Not found' });
+      if (want === null) { await setGscSiteUrl(pool, userId(req), id, null); return res.json({ ok: true, selected: null }); }
+      if (typeof want !== 'string' || !want) return res.status(400).json({ error: 'Choose a Search Console property.' });
+      let properties;
+      try { properties = await gscApi.listProperties(userId(req)); } catch (err) { return res.status(400).json({ error: gscFailMessage(err) }); }
+      if (!properties.some((p) => p.siteUrl === want && p.permissionLevel !== 'siteUnverifiedUser')) return res.status(400).json({ error: 'That is not a Search Console property you can read.' });
+      await setGscSiteUrl(pool, userId(req), id, want);
+      res.json({ ok: true, selected: want });
+    } catch (err) { fail(res, err, 'gsc select', 'Could not save the choice.'); }
+  });
+
+  // start (or carry on) loading the history in the background; the page polls GET /sites/:id/gsc for progress
+  router.post('/sites/:id/gsc/sync', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    try {
+      const site = await loadSite(pool, userId(req), id);
+      if (!site) return res.status(404).json({ error: 'Not found' });
+      if (!site.gscSiteUrl) return res.status(400).json({ error: 'Choose the Search Console property for this site first.' });
+      const uid = userId(req);
+      const siteUrl = site.gscSiteUrl;
+      const fetchRows = ({ startDate, endDate, startRow, rowLimit }) => gscApi.queryRows(uid, siteUrl, { startDate, endDate, dimensions: ['date', 'query'], rowLimit, startRow });
+      // not awaited: a 16 month load takes a while, and the sync saves its progress after each month
+      history.syncSite({ pool, userId: uid, siteUrl, fetchRows, log: (m) => getLogger().warn(m) })
+        .catch((err) => getLogger().error({ err }, 'serp-tracker gsc sync crashed'));
+      res.status(202).json({ ok: true });
+    } catch (err) { fail(res, err, 'gsc sync', 'Could not start the update.'); }
+  });
+
+  // ?days=7|28|90|180|all &sort=clicks|impressions|position|keyword|change &dir=asc|desc &q=text &striking=1
+  router.get('/sites/:id/keywords', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    try {
+      const site = await loadSite(pool, userId(req), id);
+      if (!site) return res.status(404).json({ error: 'Not found' });
+      if (!site.gscSiteUrl) return res.json({ keywords: [], total: 0 });
+      const days = req.query.days === 'all' ? 'all' : Number(req.query.days) || 28;
+      const out = await history.listKeywords(pool, userId(req), site.gscSiteUrl, {
+        days, sort: String(req.query.sort || 'clicks'), dir: req.query.dir === 'asc' || req.query.dir === 'desc' ? req.query.dir : undefined,
+        q: typeof req.query.q === 'string' ? req.query.q : '', striking: req.query.striking === '1',
+      });
+      res.json(out);
+    } catch (err) { fail(res, err, 'keywords', 'Could not load the keywords.'); }
+  });
+
+  // POST with the keyword in the body (what people search for stays out of URLs and logs): { query, days }
+  router.post('/sites/:id/keywords/history', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    const query = cleanKeyword(req.body && req.body.query);
+    if (!query) return res.status(400).json({ error: 'Choose a keyword.' });
+    try {
+      const site = await loadSite(pool, userId(req), id);
+      if (!site) return res.status(404).json({ error: 'Not found' });
+      if (!site.gscSiteUrl) return res.json({ days: [] });
+      const days = req.body.days === 'all' ? 'all' : Number(req.body.days) || 90;
+      res.json({ days: await history.keywordHistory(pool, userId(req), site.gscSiteUrl, query, { days }) });
+    } catch (err) { fail(res, err, 'keyword history', 'Could not load that keyword\'s history.'); }
   });
 
   // ---- Lookup: a live search now, saved so it can be reopened. For a site (its place, language and domain are used) or a Quick lookup (no site).

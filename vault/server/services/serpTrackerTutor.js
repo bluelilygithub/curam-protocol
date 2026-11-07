@@ -74,12 +74,27 @@ const CATALOG = [
   { id: 'select-delete', label: 'Select and delete', group: 'Lookup',
     does: 'Tick the box beside any lookups, or tick Select all at the top, then press Delete selected. Delete all removes every saved lookup in the list you are looking at (one site\'s, or the Quick lookups). Both ask "Yes / No" first.',
     notes: 'Deleted lookups are kept for 30 days and the Undo on the message brings them back (the original DataForSEO answer is not brought back). They can also be restored from Settings, Recycle bin.' },
+  { id: 'search-keywords', label: 'Keywords', group: 'Keywords',
+    does: 'The third tab. The keywords the chosen site really ranks for, from Google Search Console, and a chart of where any keyword has been over time. Connect Search Console once, choose the property that matches the site, and Vault loads up to 16 months of history.',
+    notes: 'It is free. These are Google\'s own figures across everyone who searched, not one scraped page, so they are the ones to trust for the person\'s own sites; they will not match one person\'s browser exactly. They end about three days ago, a brand new property has no history from before it was added, and it only works for properties the connected Google account can see. It updates itself every morning at 7:00 am Brisbane time.' },
+  { id: 'kw-property', label: 'Search Console property', group: 'Keywords',
+    does: 'Where the site\'s keywords come from. If Search Console is not connected it points to the Search Console page. Otherwise choose the property that matches the site (Vault suggests the one that matches the address) and press Use this property and load history. Change property switches to another.',
+    notes: 'A property is how Google Search Console names a website. Loading takes a few minutes and shows its progress; the newest months appear first so the person can look around while the older ones arrive. The history already loaded is kept if the property is changed.' },
+  { id: 'kw-update', label: 'Update', group: 'Keywords',
+    does: 'Pulls the latest days from Search Console now, and carries on loading older history if an earlier load was cut off.',
+    notes: 'It also happens by itself every morning at 7:00 am Brisbane time. It is free. If it fails, the message says why and Update carries on from where it stopped.' },
+  { id: 'kw-table', label: 'Keyword list', group: 'Keywords',
+    does: 'Every keyword the site ranks for, with average position, how that changed compared with the period just before, clicks and impressions. Search for a keyword, choose the period (7 days to all history), tick Just off page 1 for keywords at positions 8 to 20, and click a column heading to sort.',
+    notes: 'Position is an average across the period, weighted by how often the site was shown, so a small number of impressions can make it jump. Search Console hides very rare searches, so the list is not every search that ever showed the site.' },
+  { id: 'kw-chart', label: 'Keyword chart', group: 'Keywords',
+    does: 'Click a keyword in the list to chart its daily position over time (drawn upside down so up means better), or its clicks or impressions, over 3 months, 6 months or all history. A dashed line shows the 7-day average, and Show table gives the same figures as a table.',
+    notes: 'The figures end about three days ago. Days when the site was not shown at all have no point.' },
   { id: 'runs', label: 'Runs', group: 'Runs',
-    does: 'The third tab. The daily checks and the ones you start by hand, for the chosen site.',
+    does: 'The fourth tab. The daily checks and the ones you start by hand, for the chosen site.',
     notes: 'Right now a run only checks that DataForSEO is connected and records the balance and the cost. Collecting your rankings every day is the next stage and is not switched on yet.' },
-  { id: 'run-now', label: 'Run now', group: 'Runs',
-    does: 'Starts today\'s check for the chosen site straight away instead of waiting for 6:00 am Brisbane time. It needs a saved site and a connected DataForSEO.',
-    notes: 'At the moment this only reads the account balance, which is free.' },
+  { id: 'run-now', label: 'Check connection', group: 'Runs',
+    does: 'Checks that DataForSEO is connected and shows the account balance, straight away instead of waiting for 6:00 am Brisbane time. It needs a saved site and a connected DataForSEO.',
+    notes: 'At the moment this only reads the account balance, which is free. It does not search or collect any rankings; use the Lookup tab for that.' },
   { id: 'run-list', label: 'Run list', group: 'Runs',
     does: 'Every run, newest first: whether it finished or failed, when, whether it was daily or by hand, the balance and the cost, and each step with what happened.',
     notes: 'A failed step is shown as a failure, never as a missing ranking.' },
@@ -95,12 +110,14 @@ const RULES = [
   'A person can track up to 20 sites, each web address once. Each site has its own details, lookups and runs; Quick lookups belong to no site.',
   'A site can be linked to one of the person\'s own CRM clients; the link changes nothing else.',
   'It shows only the signed-in person\'s own sites, lookups and runs.',
+  'The Keywords tab is free and uses Google Search Console. Its figures are Google\'s own across everyone who searched and end about three days ago; a lookup is a different thing (one paid search through DataForSEO, right now).',
 ];
 
 const NOT_POSSIBLE = [
-  'Collecting your rankings every day and showing a history of where you ranked: that is the next stage and is not switched on yet.',
-  'A weekly report, alerts or notifications when your ranking changes.',
-  'Importing Search Console data, or checking the pages listed for health, yet: those are later stages.',
+  'Collecting Google results through DataForSEO every day and showing a history of where you ranked from those searches: that is a later stage and is not switched on yet. The Keywords tab gives a history for the person\'s own sites from Search Console instead.',
+  'A weekly report: that is a later stage. (When a keyword slips sharply on Search Console, the Suggestions inbox gets an alert.)',
+  'Keyword history for a site that is not in the connected Google account\'s Search Console, such as a competitor\'s, or from before a property was added to Search Console.',
+  'Checking the pages listed for health: that is a later stage.',
   'Tracking more than 20 sites, or the same web address twice.',
   'Searching further down than the top 200 results: that needs DataForSEO\'s slower queued mode, which is not switched on.',
   'Showing a client\'s SEO results inside the CRM client page: the link only tells you whose site it is for now.',
@@ -120,7 +137,7 @@ Rules:
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
 - Every lookup costs money. Say so when a step makes a search.
 - A person may track several sites (one for each client). Say which site a step is for when it matters, and point at the Site box to switch.
-- Daily ranking collection, history, reports and alerts are not built yet. Say so plainly rather than pointing at something that is not there.
+- Collecting Google results through DataForSEO every day and weekly reports are not built yet. Say so plainly rather than pointing at something that is not there. For "what do I rank for" or "how has this keyword moved" on the person's own sites, point at the Keywords tab (Search Console).
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}
 

@@ -29,8 +29,67 @@ async function runAllSites({ pool, loadAllSites, runSite, mayUse, deps, modules 
   return out;
 }
 
+/**
+ * The Keywords tab's daily Search Console update: every tracked site that has a property chosen, one after another (a failure on one never stops
+ * the next), skipping people who no longer have the tool or whose Search Console is not connected. Free: it only reads Google.
+ * Everything is passed in so a test needs no database or network.
+ */
+async function syncAllGsc({ pool, loadAllSites, mayUse, connection, queryRows, history, capture, makeFingerprint, log = () => {} }) {
+  const sites = (await loadAllSites(pool)).filter((s) => s.gscSiteUrl);
+  const out = { sites: sites.length, synced: 0, failed: 0, skipped: 0, alerts: 0 };
+  const seen = new Set();
+  for (const site of sites) {
+    const key = `${site.userId}|${site.gscSiteUrl}`;
+    if (seen.has(key)) continue; // two sites on one property are loaded once
+    seen.add(key);
+    try {
+      if (!(await mayUse(site.userId)) || !(await connection(site.userId)).connected) { out.skipped += 1; continue; }
+      const fetchRows = ({ startDate, endDate, startRow, rowLimit }) => queryRows(site.userId, site.gscSiteUrl, { startDate, endDate, dimensions: ['date', 'query'], rowLimit, startRow });
+      const r = await history.syncSite({ pool, userId: site.userId, siteUrl: site.gscSiteUrl, fetchRows, log });
+      if (!r.started) { out.skipped += 1; continue; }
+      if (!r.ok) {
+        out.failed += 1;
+        await capture({
+          userId: site.userId, source: 'serpTracker', category: 'alert',
+          fingerprint: makeFingerprint('serpTracker', `gscsync:${site.gscSiteUrl}`),
+          title: `Search Console update failed for ${site.profile.name || site.profile.domain}`,
+          body: `${r.error} Open SERP Tracker, Keywords, and press Update. If it keeps failing, reconnect Search Console.`, context: '/serp-tracker',
+        });
+        continue;
+      }
+      out.synced += 1;
+      out.alerts += await history.captureDrops({ pool, userId: site.userId, siteUrl: site.gscSiteUrl, label: site.profile.name || site.profile.domain, capture, makeFingerprint });
+    } catch (err) {
+      out.failed += 1;
+      log(`gsc update for site ${site.id} could not be done: ${err && err.message}`);
+    }
+  }
+  return out;
+}
+
 let task = null;
 let purgeTask = null;
+let gscTask = null;
+
+/** Daily 21:00 UTC = 7:00 am Brisbane: bring each site's Search Console history up to date (and raise an alert for a keyword that slipped). */
+function startGscDailySync() {
+  if (gscTask) return;
+  gscTask = cron.schedule('0 21 * * *', async () => {
+    try {
+      const r = await withCronLock('serp-tracker-gsc-daily', async () => {
+        const base = realDeps();
+        const gsc = require('../services/gscService');
+        return syncAllGsc({
+          pool: base.pool, loadAllSites: base.loadAllSites, mayUse: base.mayUse, connection: gsc.connection, queryRows: gsc.queryRows,
+          history: require('../services/gscHistory'), capture: require('../services/SuggestionService').capture,
+          makeFingerprint: require('../services/SuggestionService').makeFingerprint, log: base.log,
+        });
+      });
+      if (r) console.log(`[serp-tracker] Search Console update: ${r.synced} of ${r.sites} sites, ${r.failed} failed, ${r.skipped} skipped, ${r.alerts} alerts`);
+    } catch (err) { console.warn('[serp-tracker] Search Console update failed:', err.message); }
+  }, { timezone: 'UTC' });
+  console.log('[serp-tracker] Search Console daily update scheduled at 21:00 UTC (7:00 am Brisbane)');
+}
 
 /** Real dependencies, loaded only when the job actually starts. */
 function realDeps() {
@@ -73,4 +132,4 @@ function startSerpTrackerPurge() {
   console.log('[serp-tracker] 90-day raw answer clean-up scheduled daily at 03:40');
 }
 
-module.exports = { runAllSites, realDeps, startSerpTrackerCron, startSerpTrackerPurge };
+module.exports = { runAllSites, syncAllGsc, realDeps, startSerpTrackerCron, startSerpTrackerPurge, startGscDailySync };

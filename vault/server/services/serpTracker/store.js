@@ -21,10 +21,11 @@ const siteWire = (r) => ({
   profile: parseJson(r.profileJson),
   clientId: r.clientId == null ? null : r.clientId,
   clientName: r.clientName == null ? null : r.clientName,
+  gscSiteUrl: r.gscSiteUrl == null ? null : r.gscSiteUrl,
   updatedAt: r.updatedAt,
 });
 
-const SITE_SELECT = `SELECT s.id, s."userId", s."profileJson", s."clientId", s."updatedAt", c.name AS "clientName"
+const SITE_SELECT = `SELECT s.id, s."userId", s."profileJson", s."clientId", s."gscSiteUrl", s."updatedAt", c.name AS "clientName"
                        FROM serp_sites s LEFT JOIN clients c ON c.id = s."clientId" AND c."userId" = s."userId"`;
 
 async function listSites(pool, userId) {
@@ -95,8 +96,14 @@ async function deleteSite(pool, bin, userId, id) {
 
 /** Every tracked site, for the daily job (the job is the only caller that reads across people). */
 async function loadAllSites(pool) {
-  const { rows } = await pool.query('SELECT id, "userId", "profileJson" FROM serp_sites ORDER BY id');
-  return rows.map((r) => ({ id: r.id, userId: r.userId, profile: parseJson(r.profileJson) }));
+  const { rows } = await pool.query('SELECT id, "userId", "profileJson", "gscSiteUrl" FROM serp_sites ORDER BY id');
+  return rows.map((r) => ({ id: r.id, userId: r.userId, profile: parseJson(r.profileJson), gscSiteUrl: r.gscSiteUrl || null }));
+}
+
+/** Choose (or clear, with null) the Search Console property a site reads its keywords from. Ownership is checked here too. @returns true if it was theirs */
+async function setGscSiteUrl(pool, userId, id, siteUrl) {
+  const { rowCount } = await pool.query('UPDATE serp_sites SET "gscSiteUrl" = $3 WHERE id = $1 AND "userId" = $2', [id, userId, siteUrl]);
+  return rowCount > 0;
 }
 
 async function listRuns(pool, userId, siteId, limit = 30) {
@@ -112,4 +119,4 @@ async function listRuns(pool, userId, siteId, limit = 30) {
   }));
 }
 
-module.exports = { listSites, loadSite, createSite, updateSite, deleteSite, loadAllSites, listRuns, domainTaken, SiteError, MAX_SITES, BIN_TYPE };
+module.exports = { setGscSiteUrl, listSites, loadSite, createSite, updateSite, deleteSite, loadAllSites, listRuns, domainTaken, SiteError, MAX_SITES, BIN_TYPE };

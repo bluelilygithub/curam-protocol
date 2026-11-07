@@ -430,6 +430,69 @@ function serve(router) {
     assert.equal((await call(A, 'GET', `/lookups?siteId=${restored.id}`)).body.lookups.length, 50); // its lookups came back with it
     assert.equal((await call(A, 'GET', `/lookups?siteId=${restored.id}`)).body.lookups[0].rawKept, false);
 
+    // ---- Keywords tab (Search Console history): two fresh people, a fake Search Console
+    const K1 = await mk('k1');
+    const K2 = await mk('k2');
+    try {
+      let connected = false;
+      const fakeRows = async (_uid, _siteUrl, { startDate, endDate, startRow }) => {
+        if (startRow) return [];
+        const out = [];
+        for (let d = startDate; d <= endDate; d = new Date(new Date(`${d}T00:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10)) out.push({ keys: [d, 'walk in wine cabinets'], clicks: 1, impressions: 10, position: 6 });
+        return out;
+      };
+      const gscApi = {
+        connection: async () => ({ connected, email: 'o@example.test' }),
+        listProperties: async () => [{ siteUrl: 'sc-domain:kwtest.com.au', permissionLevel: 'siteOwner' }, { siteUrl: 'sc-domain:unverified.com.au', permissionLevel: 'siteUnverifiedUser' }],
+        queryRows: fakeRows,
+      };
+      const ck = await mkApp({ gscApi });
+      const mine = (await ck(K1, 'POST', '/sites', { profile: { name: 'KW', domain: 'www.kwtest.com.au' } })).body.site;
+      assert.ok(mine && mine.id);
+
+      assert.deepEqual((await ck(K1, 'GET', `/sites/${mine.id}/gsc`)).body, { connected: false }, 'not connected says so');
+      connected = true;
+      const st = (await ck(K1, 'GET', `/sites/${mine.id}/gsc`)).body;
+      assert.equal(st.connected, true);
+      assert.equal(st.suggested, 'sc-domain:kwtest.com.au', 'the property is matched to the site by its domain');
+      assert.equal(st.selected, null);
+
+      // another person cannot see, choose, load or read anything of this site
+      for (const [m, p, b] of [['GET', `/sites/${mine.id}/gsc`], ['PUT', `/sites/${mine.id}/gsc`, { siteUrl: 'sc-domain:kwtest.com.au' }], ['POST', `/sites/${mine.id}/gsc/sync`, {}], ['GET', `/sites/${mine.id}/keywords`], ['POST', `/sites/${mine.id}/keywords/history`, { query: 'x' }]]) {
+        assert.equal((await ck(K2, m, p, b)).status, 404, `${m} ${p} is not theirs`);
+      }
+      assert.equal((await ck(K1, 'PUT', `/sites/${mine.id}/gsc`, { siteUrl: 'sc-domain:someone-elses.com' })).status, 400, 'a property the person cannot see is refused');
+      assert.equal((await ck(K1, 'PUT', `/sites/${mine.id}/gsc`, { siteUrl: 'sc-domain:unverified.com.au' })).status, 400, 'an unverified property is refused');
+      assert.equal((await ck(K1, 'PUT', `/sites/${mine.id}/gsc`, {})).status, 400);
+      assert.equal((await ck(K1, 'POST', `/sites/${mine.id}/gsc/sync`, {})).status, 400, 'no property chosen yet: nothing to load');
+      assert.deepEqual((await ck(K1, 'GET', `/sites/${mine.id}/keywords`)).body, { keywords: [], total: 0 });
+
+      assert.equal((await ck(K1, 'PUT', `/sites/${mine.id}/gsc`, { siteUrl: 'sc-domain:kwtest.com.au' })).body.selected, 'sc-domain:kwtest.com.au');
+      assert.equal((await ck(K1, 'POST', `/sites/${mine.id}/gsc/sync`, {})).status, 202);
+      let prog = null;
+      for (let i = 0; i < 100; i++) { // the load runs in the background; the page polls for it
+        prog = (await ck(K1, 'GET', `/sites/${mine.id}/gsc`)).body.progress;
+        if (prog && prog.status === 'ok') break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      assert.equal(prog && prog.status, 'ok');
+      assert.equal(prog.percent, 100);
+      const kw = (await ck(K1, 'GET', `/sites/${mine.id}/keywords?days=all`)).body;
+      assert.equal(kw.keywords.length, 1);
+      assert.equal(kw.keywords[0].query, 'walk in wine cabinets');
+      assert.equal(kw.keywords[0].position, 6);
+      assert.equal((await ck(K1, 'GET', `/sites/${mine.id}/keywords?days=all&q=zzz`)).body.keywords.length, 0);
+      assert.equal((await ck(K1, 'GET', `/sites/${mine.id}/keywords?days=all&striking=1`)).body.keywords.length, 0, 'position 6 is not in striking distance');
+      const hist = (await ck(K1, 'POST', `/sites/${mine.id}/keywords/history`, { query: 'walk in wine cabinets', days: 'all' })).body.days;
+      assert.ok(hist.length > 400, `a daily series came back (${hist.length} days)`);
+      assert.ok(hist[0].day < hist[hist.length - 1].day, 'oldest first');
+      assert.equal((await ck(K1, 'POST', `/sites/${mine.id}/keywords/history`, {})).status, 400);
+      assert.equal((await ck(K1, 'PUT', `/sites/${mine.id}/gsc`, { siteUrl: null })).body.selected, null, 'the choice can be cleared');
+      assert.equal((await ck(K2, 'GET', `/sites/${mine.id}/keywords`)).status, 404);
+    } finally {
+      await pool.query('DELETE FROM users WHERE id = ANY($1)', [[K1, K2]]).catch(() => {});
+    }
+
     console.log('serpTrackerRouter.db.test.js: all passed');
   } finally {
     for (const s of servers) s.close();

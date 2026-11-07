@@ -88,6 +88,7 @@ app.use(helmet({
 // much smaller, body (2 MB of JSON or one 10 MB picture).
 app.use('/api/quick-ingest', require('./routes/quickIngest').ingestRouter);
 
+app.use(require('./lib/memoryLog').largeRequestLogger()); // notes any request with a body of 5 MB or more (path only), so an upload can be matched to a memory spike
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
@@ -317,7 +318,7 @@ const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startYoutubeFollows } = require('./cron/youtubeFollowsCron');
 const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
 const { startTopicResearchCron, startTopicResearchPurge } = require('./cron/topicResearchCron');
-const { startSerpTrackerCron, startSerpTrackerPurge } = require('./cron/serpTrackerCron');
+const { startSerpTrackerCron, startSerpTrackerPurge, startGscDailySync } = require('./cron/serpTrackerCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -344,6 +345,8 @@ async function start() {
   startBurnerMailPurge(); // removes burner addresses a day after they expire; sends nothing, so it runs everywhere
   startTopicResearchPurge(); // clears Topic Research page text kept over 30 days; sends nothing, so it runs everywhere
   startSerpTrackerPurge(); // empties SERP Tracker raw answers kept over 90 days; sends nothing, so it runs everywhere
+  // Memory log: a line every 5 minutes and extra detail on any jump of 300 MB (container total, what Railway bills, plus the biggest processes). See server/lib/memoryLog.js.
+  require('./lib/memoryLog').startMemoryLog({ extra: () => ({ ocr: require('./services/translateOcrPool').status() }) });
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');
@@ -358,6 +361,7 @@ async function start() {
     startNoteRemindersCron(); // emails note reminders that have fallen due
     startTopicResearchCron(); // searches watched Topic Research topics that are due (calls feeds and search services)
     startSerpTrackerCron(); // SERP Tracker daily run at 20:00 UTC (calls DataForSEO, a paid service)
+    startGscDailySync(); // SERP Tracker Keywords: Search Console history update at 21:00 UTC = 7:00 am Brisbane (free, reads Google only)
   }
 
   // API key presence checks — visible in Railway logs

@@ -12,14 +12,15 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { profileToForm, formToProfile } from './serpTracker/profileForm.mjs';
 import LookupPanel from './serpTracker/LookupPanel';
+import KeywordsPanel from './serpTracker/KeywordsPanel';
 import SiteForm from './serpTracker/SiteForm';
 import SerpTrackerTutorChat from './serpTracker/SerpTrackerTutorChat';
 import { SERP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './serpTracker/serpTrackerTools.mjs';
 import { costText } from './serpTracker/lookupHelpers.mjs';
 
 // SERP Tracker (docs/serp-tracker.md). A site switcher on top (one site per client or website, or a Quick lookup with no site) and three tabs
-// that follow it: Site setup, Lookup (a search on Google right now, saved and reopenable) and Runs (the daily checks). Rankings history, Search
-// Console and the weekly report arrive in later stages.
+// that follow it: Site setup, Lookup (a search on Google right now, saved and reopenable), Keywords (what the site ranks for and each keyword's
+// history, from Search Console) and Runs (the daily checks). DataForSEO daily collection and the weekly report arrive in later stages.
 
 const CARD = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 const FIELD = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -243,7 +244,7 @@ export default function SerpTrackerPage() {
             </Tooltip>
           </div>
           <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            See where each of your sites shows on Google. Look up any search now and keep the result. Collecting rankings every day is the next stage.
+            See where each of your sites shows on Google. Look up any search now, and see the keywords each site really ranks for and how they have moved (from Search Console).
           </p>
         </div>
 
@@ -304,6 +305,16 @@ export default function SerpTrackerPage() {
           ) : (
             <LookupPanel key={String(sel)} status={status} siteId={typeof sel === 'number' ? sel : null} site={site ? site.profile : null} onSpendChanged={refreshStatus} />
           )
+        ) : tab === 'search-keywords' ? (
+          typeof sel !== 'number' ? (
+            <section className="rounded-2xl border" style={CARD}>
+              <EmptyState icon="line-chart" title={sel === 'quick' ? 'Quick lookups have no keywords' : 'Add the site first'}
+                body={sel === 'quick' ? 'Keywords belong to a site. Choose one of your sites in the site switcher.' : 'Save this site\'s details on the Site setup tab, then connect it to Search Console here.'}
+                action={<button type="button" onClick={() => setTab('setup')} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Go to Site setup</button>} />
+            </section>
+          ) : (
+            <KeywordsPanel key={String(sel)} siteId={sel} site={site ? site.profile : null} />
+          )
         ) : (
           <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-6">
             {tab === 'setup' && (sel === 'quick' ? (
@@ -340,11 +351,11 @@ export default function SerpTrackerPage() {
               <section className="rounded-2xl border p-6 space-y-4 xl:col-span-2" style={CARD} aria-labelledby="serp-runs-title">
                 <div className="flex items-center justify-between gap-3">
                   <h2 id="serp-runs-title" className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Runs{site ? ` for ${site.profile.name || site.profile.domain}` : ''}</h2>
-                  <Tooltip text="Runs today's check for this site now instead of waiting for 6:00 am Brisbane time. At this stage it only checks the balance, which is free.">
+                  <Tooltip text="Checks that DataForSEO is connected and shows your account balance. It searches nothing and costs nothing. Rankings are not collected here yet: use the Lookup tab.">
                     <button type="button" onClick={runNow} disabled={!site || !status?.dataForSeoConfigured} data-guide="run-now"
                       className="px-3.5 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
                       style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                      {getIcon('play', { size: 14 })} Run now
+                      {getIcon('play', { size: 14 })} Check connection
                     </button>
                   </Tooltip>
                 </div>
@@ -352,7 +363,7 @@ export default function SerpTrackerPage() {
                 {!site ? (
                   <EmptyState icon="line-chart" title={sel === 'quick' ? 'Quick lookups have no runs' : 'Add the site first'} body={sel === 'quick' ? 'Runs belong to a site. Choose one of your sites in the site switcher.' : 'Save this site\'s details first, then the daily run can start.'} />
                 ) : runs.length === 0 ? (
-                  <EmptyState icon="line-chart" title="No runs yet" body="Press Run now to check the connection, or wait for the first daily run." />
+                  <EmptyState icon="line-chart" title="No runs yet" body="Press Check connection to confirm DataForSEO is connected, or wait for the first daily run." />
                 ) : (
                   <ul className="space-y-3" data-guide="run-list">
                     {runs.map((r) => (

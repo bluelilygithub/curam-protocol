@@ -66,6 +66,12 @@ Not rate-limited: recipes (grocery pricing is live-search only, no model call), 
 
 `server/services/sentryStats.js` (`getOverview()`) + `GET /api/admin/sentry-overview` + `SentryPanel` in `client/src/pages/AdminPage.jsx`: pulls unresolved-issue count/list and 24h event volume straight from the Sentry REST API (`/api/0/projects/{org}/{project}/issues/` + `/stats/`), read-only, gated on `SENTRY_AUTH_TOKEN`. Always shows an "Open in Sentry" link to the project regardless of token state. Issue list is capped at 10 (page limit) — beyond that the count badge shows `10+` rather than a false exact number.
 
+## Memory log (8 Nov 2026)
+
+`server/lib/memoryLog.js`, started from `server/index.js`. Railway bills the **whole container's** memory by the minute, and in Oct 2026 showed RAM spikes of many GB with nothing in the app logs to explain them. Each line carries the Node process (rss, heap, external, arrayBuffers) **and the container total from the cgroup** (`containerMb`, what Railway bills: it includes Chromium, ffmpeg, LibreOffice and any child process; null on a Windows dev machine) plus the translate OCR pool's state. A line is written every 5 minutes; an extra line, with the **five biggest processes** (read from /proc) and the **last five large requests**, whenever the container moves 300 MB or more since the last line, or is above 1.5 GB (at most one a minute). Requests announcing a body of **5 MB or more** are logged on arrival (`large request`: method, path only, size; never the query string or body). Find them in the Railway logs by searching for `memory container` or `large request`; match a spike on Railway's Memory graph to the nearest line. Tests: `node server/lib/memoryLog.test.js`.
+
+**Finding 7 Nov 2026 (why this exists, and the first fix):** translate's OCR pool was built at every boot (4 tesseract.js workers x 8 languages, kept forever): measured locally 857 MB resting with it, 283 MB without. It is now started on first use and shut down after 5 idle minutes (`server/services/translateOcrPool.js`, `OCR_WORKERS`). The multi-GB spikes on Railway's graph are **not yet explained**; this log is how to find them.
+
 ## What's not done yet
 
 - Error-rate / 429-count / slow-query-count from the app's own request logs are not yet surfaced in the admin dashboard (only Sentry's own issue/event data is, via the panel above) — cross-referencing app-side rate-limit/slow-query metrics with Sentry issues is still a log-only exercise.

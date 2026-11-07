@@ -34,23 +34,9 @@ const sendEmail = require('../utils/sendEmail');
 
 const router = express.Router();
 
-// ── Tesseract worker pool (initialised once at module load) ───────────────────
-let scheduler = null;
-const OCR_LANGS = 'eng+fra+deu+spa+ita+por+chi_sim+jpn';
-
-async function getScheduler() {
-  if (scheduler) return scheduler;
-  const { createScheduler, createWorker } = require('tesseract.js');
-  scheduler = createScheduler();
-  const workers = await Promise.all(
-    Array.from({ length: 4 }, () => createWorker(OCR_LANGS))
-  );
-  workers.forEach(w => scheduler.addWorker(w));
-  console.log('[translate] Tesseract worker pool ready (4 workers)');
-  return scheduler;
-}
-
-getScheduler().catch(err => console.error('[translate] Tesseract init failed:', err.message));
+// ── Tesseract worker pool: started on the first scanned page, shut down when idle (services/translateOcrPool.js). It used to be built at
+// boot with four workers and kept forever, which was ~575 MB of the app's resting memory. ──────────────────────────────────────────────
+const { getScheduler } = require('../services/translateOcrPool');
 
 const upload = multer({
   storage: multer.memoryStorage(),

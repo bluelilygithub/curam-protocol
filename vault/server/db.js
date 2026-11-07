@@ -1269,6 +1269,36 @@ async function initSchema() {
     // stage 1 allowed one site per person (unique index); several sites per person (one per client) are allowed now, so the unique index goes
     await client.query(`DROP INDEX IF EXISTS idx_serp_sites_user`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_serp_sites_user_all ON serp_sites ("userId")`);
+    // Keywords tab: the Search Console property a site reads from, and the kept history (docs/serp-tracker.md, "Keywords"). History is keyed by the
+    // property (not the site row) so deleting and re-adding a site does not lose it; it is never trimmed (the owner chose to keep all of it).
+    await client.query(`ALTER TABLE serp_sites ADD COLUMN IF NOT EXISTS "gscSiteUrl" TEXT`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gsc_daily (
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "siteUrl"   TEXT NOT NULL,
+        day         DATE NOT NULL,
+        query       TEXT NOT NULL,
+        clicks      INTEGER NOT NULL DEFAULT 0,
+        impressions INTEGER NOT NULL DEFAULT 0,
+        position    REAL,
+        PRIMARY KEY ("userId", "siteUrl", day, query)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_gsc_daily_query ON gsc_daily ("userId", "siteUrl", query, day)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gsc_sync_state (
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "siteUrl"      TEXT NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'idle',
+        "backfilledTo" DATE,
+        "newestDay"    DATE,
+        "totalRows"    INTEGER NOT NULL DEFAULT 0,
+        "startedAt"    TIMESTAMPTZ,
+        "finishedAt"   TIMESTAMPTZ,
+        "lastError"    TEXT,
+        PRIMARY KEY ("userId", "siteUrl")
+      )
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS serp_runs (
         id             SERIAL PRIMARY KEY,

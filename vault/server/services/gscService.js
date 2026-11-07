@@ -148,7 +148,22 @@ async function latestSnapshot(userId) {
   return { ...report, fetchedAt: rows[0].createdAt };
 }
 
+/** Is Search Console connected for this person? @returns {{ connected: boolean, email: string|null }} */
+async function connection(userId) {
+  const { rows } = await pool.query('SELECT email FROM gsc_tokens WHERE "userId"=$1', [userId]);
+  return { connected: rows.length > 0, email: rows[0] ? rows[0].email : null };
+}
+
+/** One Search Analytics request for a property (used by the history sync). `body` is the API request body. @returns the rows array (may be empty) */
+async function queryRows(userId, siteUrl, body) {
+  const auth = await getAuthClient(userId);
+  const res = await client(auth).searchanalytics.query({ siteUrl, requestBody: body });
+  return res.data.rows || [];
+}
+
 module.exports = {
+  connection,
+  queryRows,
   getOAuth2Client,
   listSites,
   fetchSnapshot,

@@ -9,6 +9,7 @@ Moved out of CLAUDE.md.
 | `ANTHROPIC_API_KEY` | Claude |
 | `GEMINI_API_KEY` | Gemini + embeddings |
 | `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` | Gmail, Calendar, Drive OAuth |
+| `OCR_WORKERS` | Translate OCR (tesseract.js) workers, 1 to 8, default 2. The pool starts on the first scanned page and shuts down after 5 minutes idle (`services/translateOcrPool.js`); it used to be 4 workers built at boot and kept forever (~575 MB of resting memory, measured 7 Nov 2026) |
 | `ENCRYPTION_KEY` | Encrypts stored OAuth tokens — **do not lose** |
 | `DATABASE_URL` | PostgreSQL connection |
 | `UPLOAD_DIR` | Railway volume mount path |
