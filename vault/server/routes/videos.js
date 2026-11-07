@@ -56,6 +56,8 @@ const { speakToWav } = require('../services/voiceover');
 const extendEndingService = require('../services/extendEnding');
 const replaceSectionService = require('../services/replaceSection');
 const titleCardService = require('../services/titleCard');
+const animatedTitleService = require('../services/animatedTitle');
+const { pool: dbPool } = require('../db');
 const { askTutor } = require('../services/videoTutor');
 const {
   startJob: startBackgroundJob, getJobStatus: getBackgroundJobStatus, getJobResult: getBackgroundJobResult, cancelJob: cancelBackgroundJob,
@@ -1329,6 +1331,50 @@ router.post('/replace-section', upload.fields([{ name: 'video', maxCount: 1 }, {
   } catch (err) {
     if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
     getLogger().error({ err }, '[videos/replace-section] start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
+
+// "Animated title": an animated title screen (headline, supporting line, optional logo) made from a small page rendered in a server
+// browser (services/htmlVideoRender.js). Colours, logo and font can come from the person's Brand Kit; the server reads them, never
+// the browser. Background job like the other long builds.
+router.get('/animated-title/brand', async (req, res) => {
+  try {
+    res.json(await animatedTitleService.brandOffer(dbPool, req.user.id));
+  } catch (err) {
+    getLogger().error({ err }, '[videos/animated-title/brand]');
+    res.status(500).json({ error: 'Could not read your Brand Kit. Try again.' });
+  }
+});
+
+router.post('/animated-title', upload.none(), async (req, res) => {
+  try {
+    const spec = animatedTitleService.normalizeSpec(parseJsonBodyField(req.body?.spec));
+    if (spec.error) return res.status(400).json({ error: spec.error });
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    const brand = await animatedTitleService.loadBrand(dbPool, req.user.id, spec); // 409 in plain words when the Brand Kit lacks something asked for
+    const jobId = startBackgroundJob(req.user.id, 'animated-title', (signal) => withTempDir(async (dir) => {
+      const outPath = path.join(dir, 'title.mp4');
+      try {
+        await animatedTitleService.makeAnimatedTitle({ spec, brand, outPath, signal, log: (m) => getLogger().info(`[videos/animated-title] ${m}`) });
+      } catch (err) {
+        if (err.cancelled || err.stderr !== undefined || err.killed) throw err; // described safely by describeVideoError (or the job was cancelled)
+        getLogger().error({ err }, '[videos/animated-title] render');
+        const e = new Error('The title could not be drawn on this server. Try again in a minute.');
+        e.status = 500;
+        throw e;
+      }
+      return { buffer: await readOutputFile(outPath), fileName: 'animated-title.mp4', mime: 'video/mp4' };
+    }), {
+      describeError: (err) => describeVideoError(err).message,
+      onError: (err) => getLogger().error({ err }, `[videos/animated-title] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: (m) => getLogger().info(`[videos/animated-title] ${m}`),
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    if (err instanceof animatedTitleService.AnimatedTitleError) return res.status(err.status).json({ error: err.message });
+    getLogger().error({ err }, '[videos/animated-title] start');
     return res.status(500).json({ error: 'Could not start the job. Try again.' });
   }
 });

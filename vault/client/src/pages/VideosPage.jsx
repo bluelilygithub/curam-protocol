@@ -23,6 +23,7 @@ import { applyEditedText, srtLines } from './videos/transcriptSrt.mjs';
 import ScriptTimer from './videos/ScriptTimer';
 import ClipTimeline from './videos/ClipTimeline';
 import TutorChat from './videos/TutorChat';
+import AnimatedTitleForm from './videos/AnimatedTitleForm';
 import { parseClock, formatClock } from './videos/clock.mjs';
 import { describeFit } from './videos/replaceCheck.mjs';
 import Dialog from '../components/Dialog';
@@ -340,6 +341,18 @@ const TOOL_HELP = {
       'Describe the video and get a plan to edit. Tick "Let the AI look at my pictures" and the AI also sees a small copy of each picture (made in your browser, never your originals) so it can suggest a sensible order and fitting captions. It is off unless you tick it, and the cost is shown first',
     ],
   },
+  'animated-title': {
+    title: 'Animated title',
+    what: 'Make a short animated title screen (headline, supporting line and optionally your logo) as a video, in your Brand Kit colours and font.',
+    features: [
+      'Type a headline and an optional supporting line',
+      'Two ways of moving: slide in from the left, or fade in at the centre',
+      'Widescreen, tall (Reels and Stories) or square, 2 to 8 seconds long, standard or Full HD sharpness',
+      'Use the colours, logo and fonts saved in Brand Kit (Graphics), or choose your own colours',
+      'The result is a video you can watch, download, or use in another tool, for example as the first clip in Join videos',
+      'It is drawn on the server and can take 10 to 30 seconds. You can cancel it while it runs',
+    ],
+  },
   'caption-studio': {
     title: 'Caption studio',
     what: 'Burn styled subtitles onto a video, sourced from pasted SRT or auto-transcription.',
@@ -402,6 +415,7 @@ const TOOL_TIPS = {
   overlay: 'Place a logo or picture on top of a video, in the corner and size you choose.',
   join: 'Join two or more video clips into one, with a cut or a transition between each.',
   slideshow: 'Turn 2 to 20 pictures into a video, with optional music, transitions and captions.',
+  'animated-title': 'Make a short animated title screen as a video, in your own colours, logo and font.',
   'caption-studio': 'Put styled subtitles on a video, from captions you already have or from a script that has no timestamps.',
   'mix-audio': 'Combine a voice recording and background music into one audio file. The music dips while the voice speaks.',
   'extend-ending': 'Hold the first and last pictures of a video with a title over each, while the music plays on and fades out.',
@@ -427,6 +441,7 @@ const TOOL_GROUPS = [
     tools: [
       { id: 'generate', label: 'Generate clip', desc: 'Brief + optional image seed, reference video or YouTube example' },
       { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
+      { id: 'animated-title', label: 'Animated title', desc: 'A moving title screen in your brand colours and font' },
     ],
   },
   {
@@ -1409,7 +1424,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'title-card' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
+    if (tool === 'annotate' || tool === 'title-card' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow' || tool === 'animated-title') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -3355,7 +3370,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && tool !== 'animated-title' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -3364,7 +3379,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && tool !== 'animated-title' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' || tool === 'replace-section' || tool === 'title-card' ? clipVideoRef : undefined}
@@ -5169,6 +5184,27 @@ export default function VideosPage() {
               </button>
             </Tooltip>
             {resultForTool === 'slideshow' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'animated-title' && (
+          <section className="space-y-3">
+            <ToolHeader id="animated-title" label="Animated title" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Make a short animated title screen as a video, in your Brand Kit colours, logo and font. You do not need to choose a video first.
+            </p>
+            <AnimatedTitleForm
+              busy={!ffmpegOk}
+              onBuild={(spec) => {
+                if (!String(spec.headline || '').trim()) { addToast('Type a headline for the title', 'error'); return; }
+                const fd = new FormData();
+                fd.append('spec', JSON.stringify(spec));
+                runJobVideo('animated-title', fd, { label: 'Making the animated title…', resultFilename: 'animated-title.mp4', forTool: 'animated-title' });
+              }}
+            />
+            {resultForTool === 'animated-title' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>

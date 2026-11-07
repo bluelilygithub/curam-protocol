@@ -15,6 +15,7 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 | Tier | Tools | Notes |
 |---|---|---|
 | Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + Replicate (default) or FAL; needs `REPLICATE_API_TOKEN` or `FAL_API_KEY` |
+| Server (browser + ffmpeg) | Animated title | A server-side Chromium (Playwright) draws each frame of a small HTML page, ffmpeg encodes them; see **Animated title** below |
 | Server (ffmpeg) | Clip, Convert, Join (+ crossfade), Reframe, Speed, Mute/replace audio, Normalize audio, Video → GIF, Export for Social, Overlay, Extract audio, Annotate (+ optional fade in/out), Slideshow, Caption studio, Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
 | Library (disk + DB) | Saved media, Caption studio (library source) | `video_library` table + files under `{UPLOAD_DIR}/video-library/{userId}/` |
 | Hosted or local | Audio → transcript (audio file → editable text or SRT), Auto-transcribe (video, in Caption studio) | Local dev: `whisper-cli` + model file. Hosted Vault (e.g. Railway): extracts the audio track and sends it to Gemini for a direct SRT transcript (`GEMINI_API_KEY` + a Gemini model in Settings) — paste SRT manually if neither is available |
@@ -29,7 +30,7 @@ The menu is arranged by **what you are doing**, in rough workflow order (reorgan
 
 | Group | Tools |
 |---|---|
-| **Make** | Generate clip, Slideshow |
+| **Make** | Generate clip, Slideshow, Animated title |
 | **Edit video** | Clip / trim, Replace a section, Join videos, Crop / reframe, Speed |
 | **Titles and captions** | Annotate, Title card, Call to action, Intro and ending, Overlay / watermark, Caption studio |
 | **Audio** | Extract audio, Isolate voice, Audio → transcript, Trim audio, Mix audio, Add music (opens Music), Mute / replace audio, Normalize audio |
@@ -56,6 +57,19 @@ The hosting gateway cuts a web request off after about five minutes, but the ser
 - **Polite ffmpeg:** on Linux ffmpeg is started through `nice -n 10`, so a big encode never starves the website of processor time.
 - **Timing in the log:** `[videos/extend-ending] job <id> queued`, `started after waiting Ns`, `building: video 62.0s 1280x720@30, audio=mix, intro=3s, ending=5s, titles=intro+ending`, `music fitted to 70.0s after Ns`, `encoded after Ns`, `done in Ns` / `failed after Ns: <reason>`. The first thing to read when a build is slow or fails.
 - **Time limits:** the music-fitting step used to be killed after exactly 5 minutes (a 300 000 ms limit in `musicFit.js`); it now has 15 minutes like the main encode. Other ffmpeg steps keep the 8-minute default (`VIDEO_FFMPEG_TIMEOUT_MS`).
+
+---
+
+## Animated title (added 2026-11-08)
+
+An animated title screen (headline, optional supporting line, optional logo) made as a short video, in the person's Brand Kit colours, logo and font. In **Make**. No source video is needed. Idea from HyperFrames (heygen-com/hyperframes, Apache 2.0, "HTML in, video out"); this is a small renderer of our own, **no new package** (so no slow deploy).
+
+- **How it works:** `server/services/animatedTitle.js` builds a small HTML page from the person's choices (text is HTML-escaped; nothing else is accepted; no web address appears in the page). `server/services/htmlVideoRender.js` opens it in headless Chromium (Playwright, already in the image for the Brand Kit reader), moves the page's paused Web Animations to each frame's time (`window.seek(ms)`), takes a JPEG per frame and pipes them into ffmpeg (libx264, 30 fps, `nice` on Linux). The same input gives the same video. A browser is started per render and closed at the end, so nothing stays in memory. Every request the page makes except its own inline `data:` content is refused.
+- **Routes:** `POST /api/videos/animated-title` (multipart field `spec` = JSON: `headline` (required, 80), `subline` (120), `layout` `rise|centre`, `shape` `16:9|9:16|1:1`, `quality` `hd|full`, `seconds` 2 to 8, `fontSource` `standard|brand-heading|brand-body`, `useBrandColours`, `useLogo`, `background`/`text`/`accent` hex, `gradient`). Answers 202 `{ jobId }`; background job like Intro and ending (one at a time per person, `videoJobGate`, Cancel / Resume, result 30 minutes). `GET /api/videos/animated-title/brand` says what the Brand Kit offers (colours, logo yes/no, which fonts are saved; never the files).
+- **Brand Kit:** read on the server from the signed-in person's own kit (`graphicsBrandKit.loadKit/getFontFile`), never from what the browser sends. Colours: Brand Kit `primary` is the background (falls back to `background`), `onPrimary` (else `text`) the words, `accent` the line. A font is embedded as a base64 `@font-face`. Asking for a colour, logo or font the kit does not have is a plain 409 before the job starts.
+- **Cost of a render (measured on Windows 10, 8 Nov 2026):** 5 s at 720p: ~8 s and ~215 MB peak (Chromium + ffmpeg); 5 s at 1080p: ~10 s and ~640 MB. Frames as PNG (needed for a see-through title) were 6.6 times slower, so there is no transparent output yet.
+- **Tests:** `node server/services/animatedTitle.test.js` (checking, escaping, Brand Kit loading with a stub database, a real 2 s render with frame count and "the picture animates" check, and Cancel; the render part needs ffmpeg: set `LOCAL_FFMPEG_COMMAND` locally). Page: `client/src/pages/videos/AnimatedTitleForm.jsx`.
+- **Not done / limits:** two movements only; no sound; one font; Latin text only; no transparent background; not yet laid over an existing video (use the result as the first clip in Join videos); **not run inside the Railway container yet** (check memory and time after the first deploy; Chromium on Railway has only been used by the Brand Kit reader).
 
 ---
 

@@ -3517,6 +3517,12 @@
   "POST /api/videos/annotate": {
    "class": "authed"
   },
+  "GET /api/videos/animated-title/brand": {
+   "class": "authed"
+  },
+  "POST /api/videos/animated-title": {
+   "class": "authed"
+  },
   "POST /api/videos/audio-to-video": {
    "class": "authed"
   },
