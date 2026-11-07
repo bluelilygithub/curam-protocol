@@ -2,6 +2,58 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "5c1ded47",
+   "fullHash": "5c1ded474efd17ee58551f6e453cb9ad78bbb962",
+   "committedAt": "2026-11-07T17:12:00+10:00",
+   "author": "mrb",
+   "subject": "Admin Changelog page, with the first 25 entries and a rule to add one per commit",
+   "filesChanged": 14,
+   "insertions": 975,
+   "deletions": 1,
+   "area": "Admin",
+   "goal": "Give the owner one place to see what each update did, what it touched, why, what it gained and what to watch, and make sure it is kept up to date.",
+   "whatChanged": "New admin-only Changelog page (Business menu, /changelog). Entries are grouped by Day, Week (Monday start), Month or Year and each opens to show what changed, the code impacted, the goal, the benefit and the concerns; a \"Concerns\" tag shows on rows that have one, and Expand all opens everything. Entries are loaded on boot by commit hash from a JSON file and never overwrite an existing row. The first 25 entries (4 to 7 Nov 2026) were written from the git history. CLAUDE.md and docs/changelog.md now require an entry for every commit, added in a \"Changelog:\" commit before pushing.",
+   "filesImpacted": [
+    "client/src/pages/ChangelogPage.jsx (new)",
+    "client/src/pages/changelog/groupEntries.mjs and its test (new)",
+    "server/services/changelog.js (new)",
+    "server/routes/changelog.js (new, behind requireAdmin)",
+    "server/config/changelogEntries.json (new)",
+    "server/db.js (new changelog_entries table, seeding)",
+    "server/index.js",
+    "client/src/App.jsx",
+    "client/src/config/appNavigation.js",
+    "server/testing/routeManifest.json",
+    "CLAUDE.md",
+    "docs/changelog.md (new)",
+    "docs/key-files.md"
+   ],
+   "benefit": "A readable history of the app's changes for the owner, with risks called out, and a standing rule that keeps it current.",
+   "concerns": "The entry text is Claude's reading of each commit's message and file list, so it says what a commit claims to do and is not proof it works. The changelog is only as current as the rule is followed: nothing writes entries automatically or blocks a push without one. The route-manifest test still fails on 11 SERP Tracker routes that were already missing before this commit (not caused by it)."
+  },
+  {
+   "commit": "02548b1b",
+   "fullHash": "02548b1b6f6a2ee3f3c4a825ffaa9880001a8db8",
+   "committedAt": "2026-11-07T17:11:59+10:00",
+   "author": "mrb",
+   "subject": "Shares: 9-step guided tour of the whole page",
+   "filesChanged": 5,
+   "insertions": 158,
+   "deletions": 3,
+   "area": "Shares",
+   "goal": "Give the Shares page the guided tour that every tool is meant to have.",
+   "whatChanged": "A 9-step tour of the whole Shares page: quotes and the tab row, Trades and Cash as the source, CGT/Statements/Accountant pack, Charts and News, Questions, Thesis, Metals and where to get help. It switches tabs as it goes and returns to Portfolio. It starts from a \"Take the tour\" link beside the title or from Settings, Tours (/shares?tour=1), and starting it closes the first-visit info box that would otherwise sit behind it.",
+   "filesImpacted": [
+    "client/src/utils/tours/sharesTour.js (new)",
+    "client/src/pages/SharesPage.jsx (data-tour markers, link, ?tour=1 start)",
+    "client/src/pages/SettingsPage.jsx (Shares Tour entry)",
+    "docs/shares-thesis.md",
+    "docs/features.md"
+   ],
+   "benefit": "New and returning users get a walk through every Shares tab, including the new Thesis tab, and the tour can be retaken from Settings.",
+   "concerns": "Checked in a browser on a local copy (all 9 steps, no console errors, finishing sets the done flag). The wording makes claims about each tab, so it needs updating when a tab changes; a tab added later gets no step until someone adds one and updates the step count in the file."
+  },
+  {
    "commit": "efe5db8f",
    "fullHash": "efe5db8ff0f2307f86ad9f1ea8e1545bb2b9f629",
    "committedAt": "2026-11-07T16:51:57+10:00",
