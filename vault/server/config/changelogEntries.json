@@ -2,6 +2,157 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "32cbfa70",
+   "fullHash": "32cbfa70e9f6f5471b5c5bd0899494cea4ae0965",
+   "committedAt": "2026-11-07T18:40:51+10:00",
+   "author": "mrb",
+   "subject": "Graphics Brand Kit: guide chat, help text and docs for the website reading",
+   "filesChanged": 4,
+   "insertions": 121,
+   "deletions": 7,
+   "area": "Graphics",
+   "goal": "Keep the guide chat, help text and docs in step with the new feature.",
+   "whatChanged": "The Graphics guide chat now knows the Brand Kit's \"Get from a website\" box, the stored fonts, the DESIGN.md download and the Font choice in Text Overlay and Composite, and that Watermark, Batch Text and Pipeline text still use the standard font; one new \"cannot do\" line (sites that need a login or block automated visitors, gradient colours). Help box and (i) text updated. New docs/brand-from-url.md covers the design, safety, the font spike findings and the honest limits, and is linked from docs/graphics-tools.md. No tour was added: Graphics has no tour definition to extend.",
+   "filesImpacted": [
+    "server/services/graphicsTutor.js",
+    "client/src/pages/GraphicsPage.jsx (help text only)",
+    "docs/graphics-tools.md",
+    "docs/brand-from-url.md (new)"
+   ],
+   "benefit": "The guide answers correctly about the new tools, and the design and its limits are written down for the next session.",
+   "concerns": "The help and (i) text were built and tested (guide drift tests pass) but not opened in the browser. The whole series was tested together: all brand tests, the existing graphics tests, the guide and tool-count tests and a client build pass on this final tree; the earlier six commits were not built or tested one by one."
+  },
+  {
+   "commit": "1223de07",
+   "fullHash": "1223de07d30acc4077cf57e1564fdfa9e202b405",
+   "committedAt": "2026-11-07T18:40:50+10:00",
+   "author": "mrb",
+   "subject": "Graphics: Text Overlay and Composite text layers can use the Brand Kit font",
+   "filesChanged": 7,
+   "insertions": 325,
+   "deletions": 16,
+   "area": "Graphics",
+   "goal": "Make the brand font usable in graphics, not only stored.",
+   "whatChanged": "Text Overlay and the text layers of Composite accept fontSource brand-heading or brand-body. The text is drawn as vector outlines from the stored font file with opentype.js and put into the same SVG as before, so background pill, outline, alignment, wrapping, opacity and position are unchanged; this avoids the named-font problems found in the Windows/Linux check (librsvg ignores @font-face, an unregistered name falls back differently per system, colour fringes on thin strokes). Widths come from the same file, with pair kerning. A missing or unreadable brand font answers 409 in plain words and never quietly draws another font; anything else is the old Arial path. A Font drop-down appears only when a font file is stored, and Bold/Normal is greyed out for a brand font.",
+   "filesImpacted": [
+    "server/services/graphicsBrandText.js (new)",
+    "server/routes/graphics/compose.js (buildTextOverlaySvg, wrapTextLines, /text, /composite)",
+    "server/routes/graphics/brandText.test.js (new)",
+    "client/src/pages/graphics/tools/TextOverlayTool.jsx",
+    "client/src/pages/graphics/tools/CompositeTool.jsx",
+    "client/src/pages/graphics/brandSiteLogic.mjs and its test"
+   ],
+   "benefit": "Headlines and captions in the owner's own brand font, identical shapes on Windows and Linux, with no effect on anyone who does not choose it.",
+   "concerns": "Latin text only (no ligatures beyond pair kerning, no right-to-left; only the Latin part of a font is stored); a missing character draws as the font's missing-glyph box. Only Text Overlay and Composite text layers use it; Watermark, Batch Text and the Pipeline text step still use Arial. Seen in the local app on Text Overlay (plain, with pill and outline, wrapped); the Composite screen was seen with its new drop-down but a full Composite run was covered by the server test, not by eye. Not run in the Railway container. This is one of seven commits cut from finished work after the fact, so this commit's files were assembled by hand to be a coherent step; only the final tree (the last commit of the seven) was built and tested as a whole."
+  },
+  {
+   "commit": "faec3ed1",
+   "fullHash": "faec3ed1aa35663a9d3b1c57e944f52b6be6f445",
+   "committedAt": "2026-11-07T18:40:50+10:00",
+   "author": "mrb",
+   "subject": "Graphics Brand Kit: Download DESIGN.md",
+   "filesChanged": 3,
+   "insertions": 243,
+   "deletions": 1,
+   "area": "Graphics",
+   "goal": "Give the saved Brand Kit a plain-text form that AI coding tools can read.",
+   "whatChanged": "A Download DESIGN.md button in the Brand Kit window. The file is built in the browser from the saved kit: colours by role with real contrast ratios, the dark look, typography with CSS font-family lines, corner style, a :root block of --brand-* variables and a few rules. Sections with nothing to say are left out and a hand-filled kit gives a smaller file; the logo picture, font file and internal names are never put in it.",
+   "filesImpacted": [
+    "client/src/pages/graphics/designMd.mjs and its test (new)",
+    "client/src/pages/GraphicsPage.jsx (button)"
+   ],
+   "benefit": "The brand read from a website can be dropped next to README.md in any project so a coding tool builds on-brand screens.",
+   "concerns": "Built and shown in the local app with the browser download intercepted, so the text was read but the actual file save to disk was not exercised. The sans-serif fall-back in the CSS lines is a guess and the file says so. The rules are generic. This is one of seven commits cut from finished work after the fact, so this commit's files were assembled by hand to be a coherent step; only the final tree (the last commit of the seven) was built and tested as a whole."
+  },
+  {
+   "commit": "e1612761",
+   "fullHash": "e16127618d1e980abfe6e6439ae41529d9d4f57f",
+   "committedAt": "2026-11-07T18:40:49+10:00",
+   "author": "mrb",
+   "subject": "Graphics Brand Kit: \"Get from a website\" in the Brand Kit window",
+   "filesChanged": 4,
+   "insertions": 425,
+   "deletions": 23,
+   "area": "Graphics",
+   "goal": "Let the owner use the reader from the Brand Kit window.",
+   "whatChanged": "A \"Get from a website\" box at the top of the Brand Kit window: address (with microphone, Enter reads), the global processing window with steps and Cancel, then a preview of swatches by role, a corner sample, the heading and body fonts drawn in the real downloaded files, and logo candidates; the owner ticks what to keep and presses Use selected. Saving the Brand Kit by hand now carries over fields the window does not show (it replaced the whole value before and would have erased them), typing a different font name drops the stored heading file, and Clear also removes the stored font files. Pure helpers live in brandSiteLogic.mjs, named differently from the component because on Windows (and so in Vite) BrandFromSite and brandFromSite are the same file name and the wrong one was imported.",
+   "filesImpacted": [
+    "client/src/pages/graphics/BrandFromSite.jsx (new)",
+    "client/src/pages/graphics/brandSiteLogic.mjs and its test (new)",
+    "client/src/pages/GraphicsPage.jsx (kit loading, merge on save, clear, dialog width and wording)"
+   ],
+   "benefit": "Filling the Brand Kit from a website in one step, with nothing saved until the owner presses Use selected.",
+   "concerns": "Seen working locally on 2026-11-07 on one real site (read, preview, Use selected, hand save kept the new fields, Clear emptied them, a private address showed a plain error). Not looked at: phone width, dark theme and the other four themes, pressing Cancel mid-read. Two bugs were found by using it and fixed in this commit (the same-name import, and a flag that stayed off after React's development double mount). This is one of seven commits cut from finished work after the fact, so this commit's files were assembled by hand to be a coherent step; only the final tree (the last commit of the seven) was built and tested as a whole."
+  },
+  {
+   "commit": "f592015d",
+   "fullHash": "f592015dbb357e8aa28431de4b576e26db50e59b",
+   "committedAt": "2026-11-07T18:40:49+10:00",
+   "author": "mrb",
+   "subject": "Graphics Brand Kit: keep a website reading (graphics_brand_fonts table, Use this route)",
+   "filesChanged": 7,
+   "insertions": 569,
+   "deletions": 0,
+   "area": "Graphics",
+   "goal": "Keep a chosen reading: store the font files and save the ticked parts into the Brand Kit safely.",
+   "whatChanged": "New table graphics_brand_fonts (the converted font file, one heading and one body row per person, role and extension checked). POST /api/graphics/brand-from-url/:id/apply copies only the ticked parts (colours, corners, logo, heading font, body font) into the Brand Kit JSON in settings and the font table in one transaction (the kit row is locked; a failure rolls both back). The font is re-checked first (TrueType/OpenType header, 4 MB cap, the recorded sha256, the BrandFont name); only a PNG logo is accepted. A name-only font replaces the kit's font name and removes an older stored file for that role. Also GET (list, file) and DELETE routes for the stored fonts. New optional kit fields (roles, palette, dark, radius, headingFont, bodyFont, source) never disturb a kit without them; fields the code does not know are kept.",
+   "filesImpacted": [
+    "server/db.js (new table graphics_brand_fonts)",
+    "server/services/graphicsBrandKit.js (new)",
+    "server/services/graphicsBrandKit.test.js (new)",
+    "server/routes/graphics/brandKit.js (new)",
+    "server/routes/graphics.js",
+    "server/testing/routeManifest.json",
+    "docs/schema-notes.md"
+   ],
+   "benefit": "A reading becomes part of the Brand Kit without a half-saved state, and the kit JSON that every Graphics tool loads stays small.",
+   "concerns": "A new table is created on the next boot (idempotent, small). Font files are kept as bytea, up to 4 MB each and two per person. Not put in the recycle bin on purpose (a reading can be repeated), which the owner may want to reverse. Tested against a scratch Postgres schema using the real table definition, and the cross-user ownership sweep passed, but its log did not name the new routes, so the unit test is the evidence for the owner-only rule. This is one of seven commits cut from finished work after the fact, so this commit's files were assembled by hand to be a coherent step; only the final tree (the last commit of the seven) was built and tested as a whole."
+  },
+  {
+   "commit": "aa3d6883",
+   "fullHash": "aa3d6883eb3fbd4798d8d9eac259703a8a95c248",
+   "committedAt": "2026-11-07T18:40:48+10:00",
+   "author": "mrb",
+   "subject": "Graphics Brand Kit: POST /api/graphics/brand-from-url and a short-lived proposal store",
+   "filesChanged": 5,
+   "insertions": 302,
+   "deletions": 0,
+   "area": "Graphics",
+   "goal": "Expose the reader to the Brand Kit screen without sending font files to the browser.",
+   "whatChanged": "POST /api/graphics/brand-from-url reads one site and returns the proposal; GET .../:id/font/:role serves the converted font for a preview. The proposal and its fonts are kept in server memory for 30 minutes (6 per person, 120 in all) under a random id that only the person who made it can use. One read at a time per person and 12 an hour. Errors are plain words; the log records the host only. Route inventory updated.",
+   "filesImpacted": [
+    "server/routes/graphics/brandFromUrl.js (new)",
+    "server/routes/graphics/brandFromUrl.test.js (new)",
+    "server/services/brandFromUrl/proposalStore.js (new)",
+    "server/routes/graphics.js",
+    "server/testing/routeManifest.json"
+   ],
+   "benefit": "The screen can show a preview with the real fonts while megabytes of font data never travel to the browser and back.",
+   "concerns": "The store is in memory per server instance, so a restart or a different instance during a rolling deploy loses a reading (the person reads again); the 12 an hour and one-at-a-time limits are per instance too. Tested with a stubbed reader and once end to end by hand against a live site. This is one of seven commits cut from finished work after the fact, so this commit's files were assembled by hand to be a coherent step; only the final tree (the last commit of the seven) was built and tested as a whole."
+  },
+  {
+   "commit": "0743a621",
+   "fullHash": "0743a621f3b8ab4ccbc8fadde8b6d14b78da54ee",
+   "committedAt": "2026-11-07T18:40:47+10:00",
+   "author": "mrb",
+   "subject": "Graphics Brand Kit: read a website's colours, fonts, corners and logo (server reader)",
+   "filesChanged": 5,
+   "insertions": 1114,
+   "deletions": 0,
+   "area": "Graphics",
+   "goal": "Let Graphics learn a brand (colours, fonts, corners, logo) from any public website, as the first step of filling the Brand Kit from a URL.",
+   "whatChanged": "New server reader: opens one public page in the Chromium the Browser Agent already uses (desktop, phone and dark-mode looks) and proposes colour roles, heading and body fonts as plain TTF/OTF files, a corner style and logo candidates. Colours are weighted by how much of the page they cover, with cookie bars and sale banners damped. Font files seen on the page are converted from woff2 with fontTools (already installed), cut to one weight if variable, and renamed to a unique plain name so sharp draws exactly the file's outlines; Google Fonts is the fall-back. Every request the page makes, including every redirect leg, is checked with checkSsrf through the browser's request-pause protocol. Nothing is exposed or saved yet.",
+   "filesImpacted": [
+    "server/services/brandFromUrl/index.js (new)",
+    "server/services/brandFromUrl/pageScript.js (new, runs inside the page)",
+    "server/services/brandFromUrl/brandRoles.js (new)",
+    "server/services/brandFromUrl/brand_font.py (new)",
+    "server/services/brandFromUrl/brandFromUrl.test.js (new)"
+   ],
+   "benefit": "A real reading of a site's look instead of a guess, with no new dependency and no Dockerfile or package.json change, so no slow deploy.",
+   "concerns": "Colours come from computed styles, so gradients and background images are not counted (on stripe.com the main colour came out green, not purple). A font whose CSS name differs from the name inside its file (stripe.com's sohne-var) is not matched, so only its name is kept. Chromium resolves names itself after the address check, so DNS rebinding is not fully covered (acceptable for a signed-in tool). A read takes 10 to 30 seconds and a few hundred MB of browser, at most 2 at once. Tried by hand on two real sites only. Not reachable from the app yet."
+  },
+  {
    "commit": "5c1ded47",
    "fullHash": "5c1ded474efd17ee58551f6e453cb9ad78bbb962",
    "committedAt": "2026-11-07T17:12:00+10:00",
