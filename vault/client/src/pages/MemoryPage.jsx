@@ -88,8 +88,18 @@ function MemoryPage() {
       api.get('/api/memory'),
       api.get('/api/memory/stats'),
     ]);
-    setMemories(await listRes.json());
-    setStats(await statsRes.json());
+    const listData = await listRes.json().catch(() => null);
+    const statsData = await statsRes.json().catch(() => null);
+    // An error reply is { error } with a 4xx or 5xx status. It used to be stored as if it were the list or the figures, which is how the page
+    // came to say "undefined memories stored" with nothing to show what was wrong.
+    if (!listRes.ok) throw new Error((listData && listData.error) || 'Your memories could not be loaded.');
+    setMemories(Array.isArray(listData) ? listData : []);
+    if (statsRes.ok && statsData) {
+      setStats(statsData);
+    } else {
+      setStats(null);
+      setMessage({ type: 'error', text: `The memory summary could not be loaded: ${(statsData && statsData.error) || 'the server did not answer properly'}` });
+    }
   }, []);
 
   useEffect(() => {
