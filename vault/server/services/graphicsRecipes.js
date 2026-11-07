@@ -8,6 +8,7 @@ const NAME_MAX = 80;
 const OUT_FORMATS = ['png', 'jpg', 'webp', 'avif'];
 const NUMBER_KEYS = ['value', 'width', 'height', 'opacity', 'scale', 'fontSize'];
 const TEXT_KEYS = ['color', 'fit', 'aspect', 'strategy', 'text', 'position'];
+const FONT_SOURCES = ['brand-heading', 'brand-body'];
 
 class RecipeError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -26,6 +27,8 @@ function sanitizeRecipe(input, { ops, maxSteps }) {
     const out = { op };
     for (const k of NUMBER_KEYS) if (s[k] !== undefined && s[k] !== null && s[k] !== '' && Number.isFinite(Number(s[k]))) out[k] = Number(s[k]);
     for (const k of TEXT_KEYS) if (typeof s[k] === 'string' && s[k].trim()) out[k] = s[k].trim().slice(0, 200);
+    // a text step may name a Brand Kit font; only the choice is kept, never a font (it is read from the Brand Kit when the recipe runs)
+    if (op === 'watermark' && FONT_SOURCES.includes(s.fontSource)) out.fontSource = s.fontSource;
     return out;
   });
   const fmt = String(input?.outFormat || '').toLowerCase();

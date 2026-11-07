@@ -14,7 +14,7 @@ import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
 import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.mjs';
 import Dialog from '../components/Dialog';
 import BrandFromSite from './graphics/BrandFromSite';
-import { mergeManualKit } from './graphics/brandSiteLogic.mjs';
+import { mergeManualKit, kitIsDirty } from './graphics/brandSiteLogic.mjs';
 import { buildDesignMd, canBuildDesignMd } from './graphics/designMd.mjs';
 import { downloadBlob } from '../utils/exportHelpers';
 
@@ -172,7 +172,7 @@ const TOOL_HELP = {
   batch: {
     title: 'Batch',
     what: 'Apply one operation to many images at once.',
-    features: ['Modes: Convert format, Resize, Watermark, Compress, Run a recipe, Strip metadata', 'Convert/Resize/Watermark/Compress run in a single server round-trip (up to 25 images)', 'Per-file result with individual downloads', '"Download all" button for the full set', 'One bad file never stops the rest of the batch'],
+    features: ['Modes: Convert format, Resize, Watermark, Compress, Run a recipe, Strip metadata', 'Convert/Resize/Watermark/Compress run in a single server round-trip (up to 25 images)', 'Per-file result with individual downloads', '"Download all" button for the full set', 'One bad file never stops the rest of the batch', 'The text watermark can use your Brand Kit font, and so can a saved recipe that has a text step in a brand font'],
   },
   pdf2img: {
     title: 'PDF → Images',
@@ -222,7 +222,7 @@ const TOOL_HELP = {
   pipeline: {
     title: 'Pipeline',
     what: 'Chain multiple edits into one repeatable server-side pass, and save the steps as a recipe.',
-    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo, plus the AI steps remove background and upscale (these cost a little; the cost is shown first)', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch (a recipe with an AI step runs as a background job with progress and Cancel)', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
+    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo, plus the AI steps remove background and upscale (these cost a little; the cost is shown first)', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch (a recipe with an AI step runs as a background job with progress and Cancel)', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip', 'An Add text step can use your Brand Kit heading or body font; a saved recipe keeps the choice and reads the font from the Brand Kit when it runs'],
   },
   annotate: {
     title: 'Annotate',
@@ -419,6 +419,9 @@ export default function GraphicsPage() {
   const [brandKitDraft, setBrandKitDraft] = useState({ logoDataUrl: '', colors: ['', '', ''], fontFamily: '' });
 
   const [brandKitSaving, setBrandKitSaving] = useState(false);
+
+  // is the by-hand part of the Brand Kit window (logo, colours, font name) different from what is saved? Decides which big button shows.
+  const brandKitDirty = kitIsDirty(brandKit, brandKitDraft);
 
   const [status, setStatus] = useState(null);
 
@@ -1090,24 +1093,35 @@ export default function GraphicsPage() {
                     <div className="flex items-center justify-between pt-2">
                       <div className="flex items-center gap-4">
                         <Tooltip text="Clear the saved Brand Kit."><button type="button" onClick={clearBrandKit} disabled={brandKitSaving || !brandKit} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-muted)' }}>Clear</button></Tooltip>
+                        {brandKitDirty && canBuildDesignMd(brandKit) && (
+                          <Tooltip text="Download the saved Brand Kit as a DESIGN.md file: its colours, fonts and corner style in plain text. Put it next to README.md in a project so an AI coding tool builds screens that match your brand.">
+                            <button
+                              type="button"
+                              onClick={() => downloadBlob(new Blob([buildDesignMd(brandKit)], { type: 'text/markdown;charset=utf-8' }), 'DESIGN.md')}
+                              disabled={!canBuildDesignMd(brandKit)}
+                              className="text-xs inline-flex items-center gap-1 transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                              style={{ color: 'var(--color-text)' }}
+                            >
+                              {getIcon('download', { size: 13 })}
+                              Download DESIGN.md
+                            </button>
+                          </Tooltip>
+                        )}
+                      </div>
+                      {brandKitDirty || !canBuildDesignMd(brandKit) ? (
+                        <Tooltip text="Save the logo, colours and font name you typed or picked above into your Brand Kit. A reading from a website is already saved when you press Use selected.">
+                          <button type="button" onClick={saveBrandKit} disabled={brandKitSaving} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90" style={{ background: 'var(--color-primary)' }}>
+                            {brandKitSaving ? 'Saving…' : 'Save Brand Kit'}
+                          </button>
+                        </Tooltip>
+                      ) : (
                         <Tooltip text="Download the saved Brand Kit as a DESIGN.md file: its colours, fonts and corner style in plain text. Put it next to README.md in a project so an AI coding tool builds screens that match your brand.">
-                          <button
-                            type="button"
-                            onClick={() => downloadBlob(new Blob([buildDesignMd(brandKit)], { type: 'text/markdown;charset=utf-8' }), 'DESIGN.md')}
-                            disabled={!canBuildDesignMd(brandKit)}
-                            className="text-xs inline-flex items-center gap-1 transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
-                            style={{ color: 'var(--color-text)' }}
-                          >
-                            {getIcon('download', { size: 13 })}
+                          <button type="button" onClick={() => downloadBlob(new Blob([buildDesignMd(brandKit)], { type: 'text/markdown;charset=utf-8' }), 'DESIGN.md')} className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+                            {getIcon('download', { size: 15 })}
                             Download DESIGN.md
                           </button>
                         </Tooltip>
-                      </div>
-                      <Tooltip text="Save this Brand Kit for reuse across tools.">
-                        <button type="button" onClick={saveBrandKit} disabled={brandKitSaving} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90" style={{ background: 'var(--color-primary)' }}>
-                          {brandKitSaving ? 'Saving…' : 'Save Brand Kit'}
-                        </button>
-                      </Tooltip>
+                      )}
                     </div>
                   </div>
                 </Dialog>

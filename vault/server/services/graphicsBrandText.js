@@ -96,4 +96,26 @@ function centredLabel(font, text, { size, padX, minHeight, color, opacity }) {
   return { markup: `<path d="${d}" fill="${color}" fill-opacity="${opacity}" />`, width, height };
 }
 
-module.exports = { brandRoleOf, loadBrandFont, measure, lineHeightFor, linePathData, centredLabel, BrandTextError, parseFontBuffer };
+/** The brand font sources ('brand-heading', 'brand-body') that the text steps (op 'watermark') of a pipeline or recipe ask for. */
+function sourcesNeeded(steps) {
+  const out = new Set();
+  for (const s of Array.isArray(steps) ? steps : []) {
+    if (s && s.op === 'watermark' && brandRoleOf(s.fontSource)) out.add(String(s.fontSource));
+  }
+  return [...out];
+}
+
+/**
+ * Loads the brand fonts a pipeline or recipe needs, once for the whole run: { 'brand-heading': { font, ... }, ... } (empty when no step
+ * asks for one). Throws BrandTextError (409, plain words) when one is missing, so a batch is refused before the first picture.
+ */
+async function loadBrandFontsFor(db, userId, steps) {
+  const out = {};
+  for (const source of sourcesNeeded(steps)) {
+    // eslint-disable-next-line no-await-in-loop
+    out[source] = await loadBrandFont(db, userId, source);
+  }
+  return out;
+}
+
+module.exports = { brandRoleOf, loadBrandFont, measure, lineHeightFor, linePathData, centredLabel, sourcesNeeded, loadBrandFontsFor, BrandTextError, parseFontBuffer };

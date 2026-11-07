@@ -51,6 +51,7 @@ const { getRecipe } = require('../../services/graphicsRecipes');
 const { runResize } = require('./transform');
 const { runPixelTask } = require('../../services/graphicsWorker');
 const { runWatermark } = require('./compose');
+const brandText = require('../../services/graphicsBrandText');
 
 const MAX_UPSCALE_OUTPUT_MP = Number(process.env.GRAPHICS_MAX_UPSCALE_MP) || 64;
 
@@ -750,6 +751,17 @@ async function prepareBatch(req, res) {
   if (op === 'pipeline' && Array.isArray(sharedParams.steps) && sharedParams.steps.some((s) => s?.op === 'logo')) {
     sharedParams.brandLogoDataUrl = await loadBrandLogo(req.user.id);
   }
+  // Brand Kit fonts for text: loaded once for the whole batch, from the signed-in person's own kit (never from what the browser sent).
+  // A text watermark and a pipeline/recipe text step may name one; a missing font refuses the whole batch before the first picture.
+  const ctx = {};
+  delete sharedParams.brandFonts;
+  try {
+    if (op === 'watermark') ctx.brand = await brandText.loadBrandFont(pool, req.user.id, sharedParams.fontSource);
+    if (op === 'pipeline') sharedParams.brandFonts = await brandText.loadBrandFontsFor(pool, req.user.id, sharedParams.steps);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+    return null;
+  }
 
   const aiSteps = op === 'pipeline' ? paidSteps.paidSteps(sharedParams.steps) : [];
   let totalUsd = 0;
@@ -769,11 +781,11 @@ async function prepareBatch(req, res) {
     }
     totalUsd = paidSteps.priceJob(sharedParams.steps, sizes, recipePrices()).usd;
   }
-  return { op, runner, items, sharedParams, aiSteps, totalUsd };
+  return { op, runner, items, sharedParams, ctx, aiSteps, totalUsd };
 }
 
 /** Runs the pictures one after another. `report(index, result)` is called as each finishes; `shouldStop()` is checked between pictures. */
-async function runBatchItems({ op, runner, items, sharedParams, userId, report, shouldStop = () => false }) {
+async function runBatchItems({ op, runner, items, sharedParams, ctx = {}, userId, report, shouldStop = () => false }) {
   for (let index = 0; index < items.length; index += 1) {
     if (shouldStop()) return;
     const item = items[index];
@@ -785,7 +797,7 @@ async function runBatchItems({ op, runner, items, sharedParams, userId, report, 
     let result;
     try {
       // eslint-disable-next-line no-await-in-loop
-      result = await runner(merged);
+      result = op === 'watermark' ? await runner(merged, ctx) : await runner(merged); // only the text watermark takes the loaded brand font
     } catch (err) {
       result = { error: err.message || `${op} failed` };
     }

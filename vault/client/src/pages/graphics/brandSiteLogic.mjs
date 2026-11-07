@@ -96,3 +96,25 @@ export function fontChoices(kit) {
 export function effectiveFontSource(kit, chosen) {
   return fontChoices(kit).some((c) => c.value === chosen) ? chosen : 'standard';
 }
+
+/**
+ * The choices for a saved step (a recipe's text step): the kit's own, plus the font the step already names if the kit no longer has it,
+ * so the screen shows the truth ("none saved") instead of quietly showing the standard font while the recipe would refuse to run.
+ */
+export function stepFontChoices(kit, current) {
+  const out = fontChoices(kit);
+  if ((current === 'brand-heading' || current === 'brand-body') && !out.some((c) => c.value === current)) {
+    out.push({ value: current, label: `${current === 'brand-heading' ? 'Brand heading' : 'Brand body'} (none saved)` });
+  }
+  return out;
+}
+
+/** Is the Brand Kit window's by-hand form different from the saved kit? (logo, up to three colours, font name) */
+export function kitIsDirty(kit, draft) {
+  const saved = kit && typeof kit === 'object' ? kit : {};
+  const colours = (draft?.colors || []).filter(Boolean).slice(0, 3);
+  const savedColours = (Array.isArray(saved.colors) ? saved.colors : []).filter(Boolean).slice(0, 3);
+  return (draft?.logoDataUrl || '') !== (saved.logoDataUrl || '')
+    || colours.join(',') !== savedColours.join(',')
+    || String(draft?.fontFamily || '').trim() !== String(saved.fontFamily || '').trim();
+}

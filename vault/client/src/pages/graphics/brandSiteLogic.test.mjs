@@ -1,6 +1,6 @@
 // node client/src/pages/graphics/brandSiteLogic.test.mjs
 import assert from 'node:assert/strict';
-import { defaultUse, useIsEmpty, applyBody, summaryOfChanged, roleList, logoLabel, radiusCss, fontSummary, mergeManualKit, fontChoices, effectiveFontSource } from './brandSiteLogic.mjs';
+import { defaultUse, useIsEmpty, applyBody, summaryOfChanged, roleList, logoLabel, radiusCss, fontSummary, mergeManualKit, fontChoices, effectiveFontSource, stepFontChoices, kitIsDirty } from './brandSiteLogic.mjs';
 
 const file = { bytes: 48676, renderFamily: 'BrandFont17ff0821' };
 const brand = {
@@ -66,5 +66,22 @@ const k2 = { headingFont: { family: 'M', stored: true } };
 assert.equal(effectiveFontSource(k2, 'brand-heading'), 'brand-heading');
 assert.equal(effectiveFontSource(k2, 'brand-body'), 'standard', 'the kit no longer has it: back to the standard font');
 assert.equal(effectiveFontSource(null, 'brand-heading'), 'standard');
+
+// a saved step that names a font the kit does not have is shown as such
+assert.deepEqual(stepFontChoices(null, 'brand-heading').map((c) => c.value), ['standard', 'brand-heading']);
+assert.equal(stepFontChoices(null, 'brand-heading')[1].label, 'Brand heading (none saved)');
+assert.deepEqual(stepFontChoices({ headingFont: { family: 'M', stored: true } }, 'brand-heading').map((c) => c.value), ['standard', 'brand-heading'], 'no duplicate when the kit has it');
+assert.deepEqual(stepFontChoices(null, 'standard').map((c) => c.value), ['standard']);
+assert.deepEqual(stepFontChoices(null, undefined).map((c) => c.value), ['standard']);
+
+// has the by-hand form changed since the kit was saved?
+const savedKit = { logoDataUrl: 'data:image/png;base64,A', colors: ['#111111', '#222222'], fontFamily: 'Montserrat', roles: { primary: '#111111' } };
+assert.equal(kitIsDirty(savedKit, { logoDataUrl: 'data:image/png;base64,A', colors: ['#111111', '#222222', ''], fontFamily: 'Montserrat' }), false, 'same logo, colours and font: nothing to save');
+assert.equal(kitIsDirty(savedKit, { logoDataUrl: 'data:image/png;base64,A', colors: ['#111111', '#222222', ''], fontFamily: ' Montserrat ' }), false, 'spaces around the name do not count');
+assert.equal(kitIsDirty(savedKit, { logoDataUrl: '', colors: ['#111111', '#222222', ''], fontFamily: 'Montserrat' }), true, 'logo removed');
+assert.equal(kitIsDirty(savedKit, { logoDataUrl: 'data:image/png;base64,A', colors: ['#111111', '#333333', ''], fontFamily: 'Montserrat' }), true, 'colour changed');
+assert.equal(kitIsDirty(savedKit, { logoDataUrl: 'data:image/png;base64,A', colors: ['#111111', '#222222', ''], fontFamily: 'Inter' }), true, 'font name changed');
+assert.equal(kitIsDirty(null, { logoDataUrl: '', colors: ['', '', ''], fontFamily: '' }), false, 'nothing saved and nothing typed');
+assert.equal(kitIsDirty(null, { logoDataUrl: '', colors: ['#111111', '', ''], fontFamily: '' }), true, 'nothing saved and a colour picked');
 
 console.log('brandSiteLogic tests: ok');

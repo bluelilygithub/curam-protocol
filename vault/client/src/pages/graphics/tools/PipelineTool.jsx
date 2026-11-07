@@ -4,10 +4,11 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { useUrlImport, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatBytes, ResultPlaceholder, useGraphicsRecipes, CostNote, useImageSize } from '../shared';
+import { stepFontChoices } from '../brandSiteLogic.mjs';
 
 export default function PipelineTool({ active }) {
   const getIcon = useIcon();
-  const { handoff, renderSendTo, setHelpTool, setPreviewImage } = useGraphics();
+  const { brandKit, handoff, renderSendTo, setHelpTool, setPreviewImage } = useGraphics();
   const { urlImporting, importFromUrl } = useUrlImport();
 
   const [pipeSource, setPipeSource] = useState(null);
@@ -85,7 +86,11 @@ export default function PipelineTool({ active }) {
     if (s.color) out.color = s.color;
     if (s.op === 'resize') { out.width = Number(s.width) || undefined; out.fit = s.fit || 'inside'; }
     if (s.op === 'crop') { out.aspect = s.aspect; out.strategy = s.strategy; }
-    if (s.op === 'watermark') { out.text = s.text; out.position = s.position; out.opacity = Number(s.opacity); }
+    if (s.op === 'watermark') {
+      out.text = s.text; out.position = s.position; out.opacity = Number(s.opacity);
+      // sent as chosen even when the kit has lost the font, so a run says plainly that none is saved instead of silently drawing Arial
+      if (s.fontSource === 'brand-heading' || s.fontSource === 'brand-body') out.fontSource = s.fontSource;
+    }
     if (s.op === 'logo') { out.position = s.position; out.scale = Number(s.scale); out.opacity = Number(s.opacity); }
     if (s.op === 'upscale') out.scale = Number(s.scale);
     return out;
@@ -267,6 +272,11 @@ export default function PipelineTool({ active }) {
                       )}
                       {def.text && (
                         <Tooltip text="The words to put on the picture."><input type="text" value={s.text} maxLength={200} onChange={e => updatePipeStep(s.id, { text: e.target.value })} className="w-full px-2 py-1.5 rounded-lg border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
+                      )}
+                      {def.text && (stepFontChoices(brandKit, s.fontSource).length > 1) && (
+                        <Tooltip text="Draw this text in a font from your Brand Kit. The standard font is Arial. A saved recipe keeps only the choice: the font is read from your Brand Kit when it runs."><select value={s.fontSource || 'standard'} onChange={e => updatePipeStep(s.id, { fontSource: e.target.value })} className="w-full px-2 py-1.5 rounded-lg border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                          {stepFontChoices(brandKit, s.fontSource).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select></Tooltip>
                       )}
                       {(def.text || def.logo) && (
                         <div className="flex items-center gap-2">

@@ -29,6 +29,14 @@ stub('../../db', {
         if (uid === 1 && role === 'heading') return { rows: [{ role, family: 'Test Serif', weight: 400, renderFamily: 'BrandFonttest0001', ext: 'ttf', bytes: fontBytes.length, sha256: fontSha, data: fontBytes }] };
         return { rows: [] };
       }
+      if (/FROM graphics_recipes/.test(sql)) {
+        const [id, uid] = params;
+        const step = { op: 'watermark', text: 'Recipe text', position: 'center', opacity: 0.9, color: '#ffffff', fontSize: 48 };
+        if (uid === 1 && id === 77) return { rows: [{ id: 77, name: 'brand recipe', steps: [{ ...step, fontSource: 'brand-heading' }], outFormat: null, outQuality: null, updatedAt: new Date() }] };
+        if (uid === 1 && id === 78) return { rows: [{ id: 78, name: 'needs body', steps: [{ ...step, fontSource: 'brand-body' }], outFormat: null, outQuality: null, updatedAt: new Date() }] };
+        if (uid === 1 && id === 79) return { rows: [{ id: 79, name: 'plain recipe', steps: [step], outFormat: null, outQuality: null, updatedAt: new Date() }] };
+        return { rows: [] };
+      }
       return { rows: [{ value: '[]' }] };
     },
   },
@@ -193,6 +201,94 @@ const pixels = async (url) => (await sharp(Buffer.from(String(url).split(',')[1]
     assert.strictEqual(btNo.status, 409, 'a missing brand font refuses the whole batch in plain words');
     assert.match(btNo.body.error, /No brand body font is saved/);
     assert.strictEqual((await post('/batch-text', { ...btReq, fontSource: 'brand-heading' }, 2)).status, 409);
+
+    // ---- Batch watermark, Pipeline text step and saved recipes (the whole graphics router) ----
+    const full = require('../graphics');
+    const app2 = express();
+    app2.use(express.json({ limit: '30mb' }));
+    app2.use((req, _res, next) => { req.user = { id: Number(req.headers['x-user'] || 1) }; next(); });
+    app2.use('/api/graphics', full);
+    const server2 = await new Promise((r) => { const s2 = http.createServer(app2).listen(0, () => r(s2)); });
+    const base2 = `http://127.0.0.1:${server2.address().port}/api/graphics`;
+    const call2 = async (method, route, body, user = 1) => {
+      const res = await fetch(base2 + route, { method, headers: { 'content-type': 'application/json', 'x-user': String(user) }, body: body ? JSON.stringify(body) : undefined });
+      return { status: res.status, body: await res.json() };
+    };
+    try {
+      const items = [{ imageDataUrl }, { imageDataUrl: dataUrl(await sharp({ create: { width: 600, height: 400, channels: 3, background: '#405060' } }).png().toBuffer(), 'image/png') }];
+      const wmParams = { type: 'text', text: 'Batch mark', color: '#ffffff', position: 'center', opacity: 0.9, fontSize: 48 };
+      const picOf = async (r) => sha((await pixels(r.imageDataUrl)).data);
+
+      // Batch: a text watermark
+      const bStd = await call2('POST', '/batch', { op: 'watermark', items, params: wmParams });
+      const bBrand = await call2('POST', '/batch', { op: 'watermark', items, params: { ...wmParams, fontSource: 'brand-heading' } });
+      assert.strictEqual(bStd.status, 200);
+      assert.strictEqual(bBrand.status, 200, JSON.stringify(bBrand.body));
+      assert.ok(bBrand.body.results.every((r) => r.imageDataUrl && !r.error), 'every picture of the batch came back');
+      assert.notStrictEqual(await picOf(bBrand.body.results[0]), await picOf(bStd.body.results[0]), 'the batch watermark is drawn in the brand font');
+      for (const v of ['standard', 'arial', '', null]) {
+        const r = await call2('POST', '/batch', { op: 'watermark', items, params: { ...wmParams, fontSource: v } });
+        assert.strictEqual(await picOf(r.body.results[0]), await picOf(bStd.body.results[0]), `batch fontSource ${JSON.stringify(v)} is the standard font`);
+      }
+      const bNo = await call2('POST', '/batch', { op: 'watermark', items, params: { ...wmParams, fontSource: 'brand-body' } });
+      assert.strictEqual(bNo.status, 409, 'a missing brand font refuses the whole batch before the first picture');
+      assert.match(bNo.body.error, /No brand body font is saved/);
+      assert.strictEqual((await call2('POST', '/batch', { op: 'watermark', items, params: { ...wmParams, fontSource: 'brand-heading' } }, 2)).status, 409, "another person's font is not used");
+
+      // Pipeline: the 'Add text' step
+      const step = { op: 'watermark', text: 'Pipeline mark', position: 'center', opacity: 0.9, color: '#ffffff', fontSize: 48 };
+      const pStd = await call2('POST', '/pipeline', { imageDataUrl, steps: [step] });
+      const pBrand = await call2('POST', '/pipeline', { imageDataUrl, steps: [{ ...step, fontSource: 'brand-heading' }] });
+      assert.strictEqual(pStd.status, 200);
+      assert.strictEqual(pBrand.status, 200, JSON.stringify(pBrand.body));
+      assert.notStrictEqual(await picOf(pBrand.body), await picOf(pStd.body), 'the pipeline text step is drawn in the brand font');
+      assert.strictEqual(await picOf((await call2('POST', '/pipeline', { imageDataUrl, steps: [{ ...step, fontSource: 'arial' }] })).body), await picOf(pStd.body), 'an unknown value is the standard font');
+      assert.strictEqual((await call2('POST', '/pipeline', { imageDataUrl, steps: [{ ...step, fontSource: 'brand-body' }] })).status, 409);
+      assert.strictEqual((await call2('POST', '/pipeline', { imageDataUrl, steps: [{ ...step, fontSource: 'brand-heading' }] }, 2)).status, 409);
+      // a fontSource on a step that has no text is ignored
+      assert.strictEqual((await call2('POST', '/pipeline', { imageDataUrl, steps: [{ op: 'grayscale', fontSource: 'brand-body' }] })).status, 200);
+
+      // Batch: a saved recipe with a brand-font text step
+      const rBrand = await call2('POST', '/batch', { op: 'pipeline', items, params: { recipeId: 77 } });
+      assert.strictEqual(rBrand.status, 200, JSON.stringify(rBrand.body));
+      assert.ok(rBrand.body.results.every((r) => r.imageDataUrl && !r.error));
+      const rPlain = await call2('POST', '/batch', { op: 'pipeline', items, params: { recipeId: 79 } });
+      assert.notStrictEqual(await picOf(rBrand.body.results[0]), await picOf(rPlain.body.results[0]), 'the recipe text step is drawn in the brand font');
+      assert.strictEqual((await call2('POST', '/batch', { op: 'pipeline', items, params: { recipeId: 78 } })).status, 409, 'a recipe that needs a font that is not saved refuses the whole batch');
+      assert.strictEqual((await call2('POST', '/batch', { op: 'pipeline', items, params: { recipeId: 77 } }, 2)).status, 404, "another person's recipe is not found");
+
+      // what the browser sends can never stand in for the person's own fonts
+      const injected = await call2('POST', '/batch', { op: 'pipeline', items, params: { recipeId: 77, brandFonts: { 'brand-heading': { font: 'not a font' } } } });
+      assert.strictEqual(injected.status, 200, JSON.stringify(injected.body));
+      assert.strictEqual(await picOf(injected.body.results[0]), await picOf(rBrand.body.results[0]), 'an injected brandFonts value is ignored');
+      const injected2 = await call2('POST', '/batch', { op: 'pipeline', items, params: { steps: [{ ...step, fontSource: 'brand-body' }], brandFonts: { 'brand-body': { font: 'not a font' } } } });
+      assert.strictEqual(injected2.status, 409, 'and cannot supply a font the person does not have');
+
+      // the same recipe as a background job
+      const job = await call2('POST', '/batch-job', { op: 'pipeline', items, params: { recipeId: 77 } });
+      assert.strictEqual(job.status, 202, JSON.stringify(job.body));
+      let state = null;
+      for (let i = 0; i < 40; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        state = (await call2('GET', `/batch-jobs/${job.body.jobId}`)).body;
+        if (state && ['done', 'finished', 'complete', 'completed'].includes(String(state.status))) break;
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      const jobResults = (await call2('GET', `/batch-jobs/${job.body.jobId}/results`)).body;
+      assert.ok(Array.isArray(jobResults.results) && jobResults.results.length === 2 && jobResults.results.every((r) => r && r.imageDataUrl), `the background job finished with both pictures (${JSON.stringify(state).slice(0, 120)})`);
+      assert.strictEqual((await call2('POST', '/batch-job', { op: 'pipeline', items, params: { recipeId: 78 } })).status, 409, 'a job that needs a missing font does not start');
+
+      // saved recipes keep only a valid choice, and only on text steps
+      const { sanitizeRecipe } = require('../../services/graphicsRecipes');
+      const rules = { ops: ['watermark', 'grayscale'], maxSteps: 12 };
+      const kept = sanitizeRecipe({ name: 'r', steps: [{ op: 'watermark', text: 'x', fontSource: 'brand-heading' }, { op: 'watermark', text: 'y', fontSource: 'arial' }, { op: 'grayscale', fontSource: 'brand-body' }] }, rules);
+      assert.strictEqual(kept.steps[0].fontSource, 'brand-heading');
+      assert.strictEqual(kept.steps[1].fontSource, undefined, 'an unknown choice is dropped');
+      assert.strictEqual(kept.steps[2].fontSource, undefined, 'a step with no text has no font');
+    } finally {
+      server2.close();
+    }
 
     console.log('brandText tests: ok');
   } finally {

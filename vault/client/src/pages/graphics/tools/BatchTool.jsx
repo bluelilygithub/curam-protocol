@@ -4,16 +4,19 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { readFileAsDataUrl, useProcessingWhile, formatBytes, useGraphicsRecipes, CostNote } from '../shared';
+import { fontChoices, effectiveFontSource } from '../brandSiteLogic.mjs';
 import { BATCH_KEEP } from '../historyStore.mjs';
 
 export default function BatchTool({ active }) {
   const getIcon = useIcon();
-  const { setHelpTool, recordHistory } = useGraphics();
+  const { brandKit, setHelpTool, recordHistory } = useGraphics();
 
   const [batchFiles, setBatchFiles] = useState([]);
   // "Run a recipe": a saved Pipeline recipe applied to every picture (server reads the steps from the recipe, see Pipeline -> Save recipe)
   const { recipes } = useGraphicsRecipes();
   const [batchRecipeId, setBatchRecipeId] = useState('');
+  // declared here, before the lines below that read it: it used to sit further down, and reading a `const` before its line throws at render
+  const [batchOp, setBatchOp] = useState('convert');
   // A recipe with an AI step (remove background / upscale) costs money per picture: it is priced before it starts, and sent a few pictures at a time.
   const chosenRecipe = batchOp === 'recipe' ? recipes.find((r) => String(r.id) === String(batchRecipeId)) : null;
   const aiOps = (chosenRecipe?.steps || []).filter((s) => s.op === 'removebg' || s.op === 'upscale').map((s) => s.op);
@@ -39,7 +42,6 @@ export default function BatchTool({ active }) {
     return () => { off = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingKey, aiOps.length]);
-  const [batchOp, setBatchOp] = useState('convert');
   const [batchFormat, setBatchFormat] = useState('webp');
   const [batchQuality, setBatchQuality] = useState('82');
   const [batchWidth, setBatchWidth] = useState('1600');
@@ -51,6 +53,9 @@ export default function BatchTool({ active }) {
   const [batchWmText, setBatchWmText] = useState('© My Brand');
 
   const [batchWmColor, setBatchWmColor] = useState('#ffffff');
+  const [batchWmFontSource, setBatchWmFontSource] = useState('standard');
+  const batchWmFontOptions = fontChoices(brandKit);
+  const batchWmFont = effectiveFontSource(brandKit, batchWmFontSource);
   const [batchWmPosition, setBatchWmPosition] = useState('bottom-right');
   const [batchWmOpacity, setBatchWmOpacity] = useState('0.5');
   const [batchCompressQuality, setBatchCompressQuality] = useState('75');
@@ -85,7 +90,7 @@ export default function BatchTool({ active }) {
       return params;
     }
     if (batchOp === 'watermark') {
-      return { type: 'text', text: batchWmText, color: batchWmColor, position: batchWmPosition, opacity: Number(batchWmOpacity) };
+      return { type: 'text', text: batchWmText, color: batchWmColor, position: batchWmPosition, opacity: Number(batchWmOpacity), ...(batchWmFont !== 'standard' ? { fontSource: batchWmFont } : {}) };
     }
     if (batchOp === 'compress') return { quality: Number(batchCompressQuality) };
     if (batchOp === 'recipe') return { recipeId: Number(batchRecipeId) };
@@ -350,6 +355,14 @@ export default function BatchTool({ active }) {
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Watermark text</label>
                 <Tooltip text="Text to stamp onto every image in the batch."><input type="text" value={batchWmText} onChange={e => setBatchWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
+                {batchWmFontOptions.length > 1 && (
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font</label>
+                    <Tooltip text="Draw the watermark text in a font from your Brand Kit. The standard font is Arial."><select value={batchWmFont} onChange={e => setBatchWmFontSource(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      {batchWmFontOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select></Tooltip>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
                 <div>

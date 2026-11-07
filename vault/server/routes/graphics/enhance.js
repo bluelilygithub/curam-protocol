@@ -23,6 +23,7 @@ const {
   upscaleCostForSize,
 } = require('./shared');
 const { runWatermark } = require('./compose');
+const brandText = require('../../services/graphicsBrandText');
 const { guardPaidJob } = require('../../middleware/graphicsLimits');
 const paid = require('../../services/graphicsPaidSteps');
 
@@ -64,6 +65,8 @@ function recipePrices() {
 }
 
 // ctx.brandLogoDataUrl is the person's Brand Kit logo (the 'logo' step uses it; a recipe never stores a picture).
+// ctx.brandFonts is { 'brand-heading': { font }, 'brand-body': { font } }, the person's Brand Kit fonts loaded by the caller; a text step with a
+// fontSource uses one of them (a recipe stores only the choice, never a font).
 async function applyPipelineStep(buffer, step, ctx = {}) {
   const op = String(step?.op || '');
   const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -82,11 +85,14 @@ async function applyPipelineStep(buffer, step, ctx = {}) {
   if (op === 'watermark' || op === 'logo') {
     if (op === 'watermark' && !String(step.text || '').trim()) throw stepError('The text step needs some words');
     if (op === 'logo' && !ctx.brandLogoDataUrl) throw stepError('This recipe adds your Brand Kit logo, but no logo is saved. Add one in Brand Kit first.');
+    const brandRole = op === 'watermark' ? brandText.brandRoleOf(step.fontSource) : null;
+    const brand = brandRole ? (ctx.brandFonts && ctx.brandFonts[String(step.fontSource)]) : null;
+    if (brandRole && !brand) throw stepError(`This step draws text in your Brand ${brandRole} font, but none is saved. Add one in Brand Kit first.`);
     const upright = await sharp(buffer).rotate().png({ compressionLevel: 1 }).toBuffer();
     const common = { imageDataUrl: pngDataUrl(upright), opacity: clamp(num(step.opacity, op === 'logo' ? 0.9 : 0.5), 0, 1), position: step.position };
     const out = op === 'logo'
       ? await runWatermark({ ...common, type: 'image', watermarkDataUrl: ctx.brandLogoDataUrl, scale: clamp(num(step.scale, 20), 1, 100) })
-      : await runWatermark({ ...common, type: 'text', text: step.text, color: step.color, fontSize: step.fontSize });
+      : await runWatermark({ ...common, type: 'text', text: step.text, color: step.color, fontSize: step.fontSize }, { brand });
     return dataUrlToBuffer(out.imageDataUrl);
   }
 
@@ -153,7 +159,7 @@ async function applyPipelineStep(buffer, step, ctx = {}) {
 
 // The whole pipeline as one function, so the single-image route, Batch ("Run a recipe") and saved recipes all use exactly this.
 // `format` / `quality` are optional: the picture's own format is kept unless one is asked for (png, jpg, webp, avif).
-async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoDataUrl, userId, deps }) {
+async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoDataUrl, brandFonts, userId, deps }) {
   let buffer = imageDataUrlToBuffer(String(imageDataUrl || ''));
   if (!buffer) throw stepError('A valid image is required');
   const list = Array.isArray(steps) ? steps : [];
@@ -174,7 +180,7 @@ async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoData
   if (wanted) fmt = wanted;
   for (const step of valid) {
     // eslint-disable-next-line no-await-in-loop
-    buffer = await applyPipelineStep(buffer, step, { brandLogoDataUrl, userId, deps });
+    buffer = await applyPipelineStep(buffer, step, { brandLogoDataUrl, brandFonts, userId, deps });
   }
   const opts = outputOptionsFor(fmt);
   if (wanted && ['jpeg', 'webp', 'avif'].includes(fmt) && quality != null) opts.quality = clampInt(quality, 1, 100, opts.quality);
@@ -198,6 +204,7 @@ router.post('/pipeline', async (req, res) => {
   try {
     const steps = Array.isArray(req.body?.steps) ? req.body.steps : [];
     const brandLogoDataUrl = steps.some((s) => s?.op === 'logo') ? await loadBrandLogo(req.user.id) : null;
+    const brandFonts = await brandText.loadBrandFontsFor(pool, req.user.id, steps); // 409 in plain words when a text step names a font that is not saved
     // Steps that call a paid AI service: take a "jobs at once" slot and check the daily limit for what this run will cost, before it starts.
     if (paid.paidSteps(steps).length) {
       const buf = imageDataUrlToBuffer(String(req.body?.imageDataUrl || ''));
@@ -205,7 +212,7 @@ router.post('/pipeline', async (req, res) => {
       const price = paid.priceJob(steps, [orientedSize(meta)], recipePrices());
       if (!(await guardPaidJob(pool, req, res, { totalUsd: price.usd }))) return;
     }
-    res.json(await runPipeline({ imageDataUrl: req.body?.imageDataUrl, steps, format: req.body?.format, quality: req.body?.quality, brandLogoDataUrl, userId: req.user.id }));
+    res.json(await runPipeline({ imageDataUrl: req.body?.imageDataUrl, steps, format: req.body?.format, quality: req.body?.quality, brandLogoDataUrl, brandFonts, userId: req.user.id }));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Pipeline failed' });
   }
