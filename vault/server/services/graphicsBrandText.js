@@ -84,4 +84,16 @@ function linePathData(font, text, { x, top, size, lineHeight, anchor }) {
   return font.getPath(String(text), left, baseline, size, KERNING).toPathData(2);
 }
 
-module.exports = { brandRoleOf, loadBrandFont, measure, lineHeightFor, linePathData, BrandTextError, parseFontBuffer };
+/**
+ * One centred label (a watermark or a batch caption) as an SVG <path> of outlines, for a box of `width` x `height` px. The box height is at
+ * least what the font needs. `color` must already be a checked #rrggbb. Returns { markup, width, height } where width/height are the box
+ * sizes to use (the label's width plus `padX` on both sides, and the taller of `height` and the font's own line height).
+ */
+function centredLabel(font, text, { size, padX, minHeight, color, opacity }) {
+  const width = Math.ceil(measure(font, text, size)) + padX;
+  const height = Math.max(minHeight, lineHeightFor(font, size));
+  const d = linePathData(font, text, { x: width / 2, top: 0, size, lineHeight: height, anchor: 'middle' });
+  return { markup: `<path d="${d}" fill="${color}" fill-opacity="${opacity}" />`, width, height };
+}
+
+module.exports = { brandRoleOf, loadBrandFont, measure, lineHeightFor, linePathData, centredLabel, BrandTextError, parseFontBuffer };

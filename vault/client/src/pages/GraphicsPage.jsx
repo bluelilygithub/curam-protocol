@@ -232,12 +232,12 @@ const TOOL_HELP = {
   watermark: {
     title: 'Watermark',
     what: 'Overlay text or an image logo on a photo.',
-    features: ['Text mode: custom text, colour, auto-scaled font size', 'Image mode: upload a PNG logo, scale as % of image width', 'Position: 7 options (corners, edges, centre)', 'Opacity slider', 'Tile: repeat the watermark across the whole image'],
+    features: ['Text mode: custom text, colour, auto-scaled font size', 'Image mode: upload a PNG logo, scale as % of image width', 'Position: 7 options (corners, edges, centre)', 'Opacity slider', 'Tile: repeat the watermark across the whole image', 'Text mode can use your Brand Kit heading or body font when the Brand Kit has a font file'],
   },
   batchtext: {
     title: 'Batch Text',
     what: 'Stamp a text label onto many images at once.',
-    features: ['Template variables: {filename}, {index}, {n}, {date}', 'Up to 20 images per run', 'Position: 7 options (corners, edges, centre)', 'Font size, text colour and opacity controls', 'Optional backing rectangle for contrast over busy images', 'Per-image thumbnail + individual download in results'],
+    features: ['Template variables: {filename}, {index}, {n}, {date}', 'Up to 20 images per run', 'Position: 7 options (corners, edges, centre)', 'Font size, text colour and opacity controls', 'Optional backing rectangle for contrast over busy images', 'Labels can use your Brand Kit heading or body font when the Brand Kit has a font file', 'Per-image thumbnail + individual download in results'],
   },
   collage: {
     title: 'Collage',
@@ -697,7 +697,7 @@ export default function GraphicsPage() {
                       <p style={{ color: 'var(--color-text)' }}><strong>Retouch</strong> — real masked editing, not just full re-rolls: <strong>Inpaint/Remove</strong> paints an area (brush or magic-wand select) and describes what should replace it; <strong>Background</strong> removes/replaces with AI precision; <strong>Extract Element</strong> isolates a painted region as a transparent PNG; <strong>Recolor</strong> and <strong>Eraser</strong> handle targeted color/pixel changes; <strong>Redact</strong> blurs or pixelates faces, plates, or sensitive text.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> — Crop/Resize, Canvas Extend (pad outward), Perspective Correct, and Smart Crop (content-aware — attention, entropy, or a fixed direction, not a naive center-crop).</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Enhance</strong> — Effects, Adjust (every slider change is a step you can untick on its own, with Undo and Redo), Color Grading, and Pipeline (chain up to 12 edits, including crop to a shape, text, your Brand Kit logo and the AI steps remove background and upscale, then save the steps as a named recipe and run it on up to 25 pictures from Batch).</p>
-                      <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> — Annotate, Watermark, Text Overlay and Composite (text can use your Brand Kit font), Batch Text, Collage, Favicon/Icons (full manifest from one image), SVG (vectorize — 3 detail presets, 2–64 color control), and AI Icon Library (one cohesive themed set in a single pass).</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> — Annotate, Watermark, Text Overlay, Composite, Watermark and Batch Text (text can use your Brand Kit font), Collage, Favicon/Icons (full manifest from one image), SVG (vectorize — 3 detail presets, 2–64 color control), and AI Icon Library (one cohesive themed set in a single pass).</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> — Upscale is fidelity-first with a Replicate model and a creativity dial, not a blunt resize. Plus Convert, Compress, Batch, Export for Social (every platform's crop bundled as one ZIP), PDF→Images, Print Ready, Auto-enhance — all deterministic, no AI cost, safe to re-run.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Alt text &amp; names (AI-suggested alt text and file names for you to check), Blur Detection, Image Diff, Remove Meta, File Info.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Good to know</strong> — tools that use AI show their estimated cost, and what is left of your daily limit, before they run. <strong>Recent results</strong> (button above the tool search, off until you switch it on) keeps your last 40 finished pictures in this browser only, so you can open one again; your browser can clear that storage, so download anything you need to keep.</p>

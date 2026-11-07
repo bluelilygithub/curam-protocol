@@ -150,6 +150,50 @@ const pixels = async (url) => (await sharp(Buffer.from(String(url).split(',')[1]
     const otherComposite = await post('/composite', { imageDataUrl, overlays: [{ type: 'text', text: 'x', fontSource: 'brand-heading' }] }, 2);
     assert.strictEqual(otherComposite.status, 409);
 
+    // ---- Watermark (text mode) and Batch Text ----
+    const wmReq = { imageDataUrl, type: 'text', text: 'Brand Watermark', color: '#ffffff', fontSize: 48, opacity: 0.9, position: 'center' };
+    const wmStd = await post('/watermark', wmReq);
+    const wmBrand = await post('/watermark', { ...wmReq, fontSource: 'brand-heading' });
+    assert.strictEqual(wmStd.status, 200);
+    assert.strictEqual(wmBrand.status, 200, JSON.stringify(wmBrand.body));
+    const w1 = await pixels(wmStd.body.imageDataUrl);
+    const w2 = await pixels(wmBrand.body.imageDataUrl);
+    assert.notStrictEqual(sha(w1.data), sha(w2.data), 'the watermark is drawn in the brand font');
+    assert.notStrictEqual(sha(w2.data), sha(base0), 'and it really drew something');
+    for (const fs2 of ['standard', 'arial', '', null]) {
+      const r = await post('/watermark', { ...wmReq, fontSource: fs2 });
+      assert.strictEqual(sha((await pixels(r.body.imageDataUrl)).data), sha(w1.data), `watermark fontSource ${JSON.stringify(fs2)} is the standard font`);
+    }
+    const wmTiled = await post('/watermark', { ...wmReq, fontSource: 'brand-heading', tile: true });
+    assert.strictEqual(wmTiled.status, 200, 'a tiled brand-font watermark works');
+    assert.strictEqual((await post('/watermark', { ...wmReq, fontSource: 'brand-body' })).status, 409);
+    assert.strictEqual((await post('/watermark', { ...wmReq, fontSource: 'brand-heading' }, 2)).status, 409, "another person's font is not used");
+    // image watermarks have no font: the setting is ignored, not an error
+    const logo = await sharp({ create: { width: 60, height: 30, channels: 4, background: '#ff0000' } }).png().toBuffer();
+    const imgWm = await post('/watermark', { imageDataUrl, type: 'image', watermarkDataUrl: dataUrl(logo, 'image/png'), fontSource: 'brand-heading' });
+    assert.strictEqual(imgWm.status, 200);
+
+    const photo2 = dataUrl(await sharp({ create: { width: 600, height: 400, channels: 3, background: '#405060' } }).png().toBuffer(), 'image/png');
+    const btReq = { images: [{ imageDataUrl, name: 'one.png' }, { imageDataUrl: photo2, name: 'two.png' }], text: '{filename} {index}/{n}', color: '#ffffff', fontSize: 40, background: '#000000', position: 'south' };
+    const btStd = await post('/batch-text', btReq);
+    const btBrand = await post('/batch-text', { ...btReq, fontSource: 'brand-heading' });
+    assert.strictEqual(btStd.status, 200);
+    assert.strictEqual(btBrand.status, 200, JSON.stringify(btBrand.body));
+    assert.strictEqual(btBrand.body.count, 2);
+    assert.ok(btBrand.body.results.every((r) => r.imageDataUrl && !r.error), 'every picture of the batch came back');
+    assert.strictEqual(btBrand.body.results[0].label, 'one 1/2', 'the template still works');
+    const bt1 = await pixels(btStd.body.results[0].imageDataUrl);
+    const bt2 = await pixels(btBrand.body.results[0].imageDataUrl);
+    assert.notStrictEqual(sha(bt1.data), sha(bt2.data), 'the batch captions are drawn in the brand font');
+    for (const fs2 of ['standard', 'arial', '', null]) {
+      const r = await post('/batch-text', { ...btReq, fontSource: fs2 });
+      assert.strictEqual(sha((await pixels(r.body.results[0].imageDataUrl)).data), sha(bt1.data), `batch text fontSource ${JSON.stringify(fs2)} is the standard font`);
+    }
+    const btNo = await post('/batch-text', { ...btReq, fontSource: 'brand-body' });
+    assert.strictEqual(btNo.status, 409, 'a missing brand font refuses the whole batch in plain words');
+    assert.match(btNo.body.error, /No brand body font is saved/);
+    assert.strictEqual((await post('/batch-text', { ...btReq, fontSource: 'brand-heading' }, 2)).status, 409);
+
     console.log('brandText tests: ok');
   } finally {
     server.close();

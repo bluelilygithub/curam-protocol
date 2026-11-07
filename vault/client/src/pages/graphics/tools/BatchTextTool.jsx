@@ -4,10 +4,11 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { readFileAsDataUrl, formatBytes, downloadDataUrl } from '../shared';
+import { fontChoices, effectiveFontSource } from '../brandSiteLogic.mjs';
 
 export default function BatchTextTool({ active }) {
   const getIcon = useIcon();
-  const { setHelpTool } = useGraphics();
+  const { brandKit, setHelpTool } = useGraphics();
 
   // Batch text
   const [btImages, setBtImages] = useState([]);
@@ -16,6 +17,9 @@ export default function BatchTextTool({ active }) {
   const [btPosition, setBtPosition] = useState('bottom-right');
   const [btColor, setBtColor] = useState('#ffffff');
   const [btFontSize, setBtFontSize] = useState(36);
+  const [btFontSource, setBtFontSource] = useState('standard');
+  const btFontOptions = fontChoices(brandKit);
+  const btFont = effectiveFontSource(brandKit, btFontSource);
   const [btOpacity, setBtOpacity] = useState(0.85);
   const [btBg, setBtBg] = useState('');
   const [btBusy, setBtBusy] = useState(false);
@@ -46,6 +50,7 @@ export default function BatchTextTool({ active }) {
         position: btPosition,
         color: btColor,
         fontSize: btFontSize,
+        ...(btFont !== 'standard' ? { fontSource: btFont } : {}),
         opacity: btOpacity,
         background: btBg || undefined,
       });
@@ -104,6 +109,14 @@ export default function BatchTextTool({ active }) {
                   <option value="top">Top centre</option>
                 </select></Tooltip>
               </div>
+              {btFontOptions.length > 1 && (
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font</label>
+                  <Tooltip text="Draw the labels in a font from your Brand Kit. The standard font is Arial."><select value={btFont} onChange={e => setBtFontSource(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    {btFontOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select></Tooltip>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font size: {btFontSize}px</label>
                 <Tooltip text="Size of the label text."><input type="range" min="8" max="120" step="2" value={btFontSize} onChange={e => setBtFontSize(Number(e.target.value))} className="w-full" /></Tooltip>

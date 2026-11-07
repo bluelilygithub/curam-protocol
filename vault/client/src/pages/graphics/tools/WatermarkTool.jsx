@@ -4,6 +4,7 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { useProcessingWhile, loadImageInto, renderExport, downloadDataUrl, ResultPlaceholder } from '../shared';
+import { fontChoices, effectiveFontSource } from '../brandSiteLogic.mjs';
 
 export default function WatermarkTool({ active }) {
   const getIcon = useIcon();
@@ -12,6 +13,9 @@ export default function WatermarkTool({ active }) {
   const [wmSource, setWmSource] = useState(null);
   const [wmType, setWmType] = useState('text');
   const [wmText, setWmText] = useState('© My Brand');
+  const [wmFontSource, setWmFontSource] = useState('standard');
+  const wmFontOptions = fontChoices(brandKit);
+  const wmFont = effectiveFontSource(brandKit, wmFontSource);
   const [wmColor, setWmColor] = useState('#ffffff');
   const [wmImage, setWmImage] = useState(null);
   const [wmPosition, setWmPosition] = useState('bottom-right');
@@ -37,6 +41,7 @@ export default function WatermarkTool({ active }) {
       if (wmType === 'text') {
         body.text = wmText;
         body.color = wmColor;
+        if (wmFont !== 'standard') body.fontSource = wmFont;
       } else {
         if (!wmImage?.imageDataUrl) throw new Error('Add a watermark image');
         body.watermarkDataUrl = wmImage.imageDataUrl;
@@ -98,6 +103,14 @@ export default function WatermarkTool({ active }) {
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Watermark text</label>
                   <Tooltip text="Text to stamp onto the image, e.g. a name or copyright notice."><input type="text" value={wmText} onChange={e => setWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
+                  {wmFontOptions.length > 1 && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font</label>
+                      <Tooltip text="Draw the watermark text in a font from your Brand Kit. The standard font is Arial."><select value={wmFont} onChange={e => setWmFontSource(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        {wmFontOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select></Tooltip>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>

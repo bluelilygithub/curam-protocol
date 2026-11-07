@@ -38,7 +38,8 @@ function escapeXml(str) {
   return String(str).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 }
 
-async function runWatermark(params) {
+// `ctx.brand` ({ font }, from brandText.loadBrandFont) draws a text watermark in the brand font; callers that pass nothing (Batch, Pipeline) get Arial.
+async function runWatermark(params, ctx = {}) {
   const imageDataUrl = String(params?.imageDataUrl || '');
   const buffer = dataUrlToBuffer(imageDataUrl);
   if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
@@ -60,10 +61,15 @@ async function runWatermark(params) {
     if (!text) throw Object.assign(new Error('Watermark text is required'), { status: 400 });
     const color = parseHexColor(params?.color)?.hex || '#ffffff';
     const fontSize = clampInt(params?.fontSize, 8, 600, Math.max(16, Math.round(base.width * 0.06)));
-    const w = Math.ceil(measureTextWidth(text, fontSize, 'bold')) + 24;
-    const h = Math.ceil(fontSize * 1.5);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${op}" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text></svg>`;
-    overlay = Buffer.from(svg);
+    if (ctx.brand) {
+      const label = brandText.centredLabel(ctx.brand.font, text, { size: fontSize, padX: 24, minHeight: Math.ceil(fontSize * 1.5), color, opacity: op });
+      overlay = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${label.width}" height="${label.height}">${label.markup}</svg>`);
+    } else {
+      const w = Math.ceil(measureTextWidth(text, fontSize, 'bold')) + 24;
+      const h = Math.ceil(fontSize * 1.5);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${op}" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text></svg>`;
+      overlay = Buffer.from(svg);
+    }
   } else {
     const wmBuf = dataUrlToBuffer(params?.watermarkDataUrl || '');
     if (!wmBuf) throw Object.assign(new Error('A watermark image is required'), { status: 400 });
@@ -93,7 +99,8 @@ async function runWatermark(params) {
 
 router.post('/watermark', async (req, res) => {
   try {
-    const result = await runWatermark(req.body || {});
+    const brand = await brandText.loadBrandFont(pool, req.user.id, req.body?.fontSource);
+    const result = await runWatermark(req.body || {}, { brand });
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Watermark failed' });
@@ -592,6 +599,8 @@ router.post('/batch-text', async (req, res) => {
     const opacity = Math.max(0, Math.min(1, Number(req.body?.opacity) || 0.85));
     const gravity = GRAVITY_MAP[req.body?.position] || 'southeast';
     const today = new Date().toISOString().slice(0, 10);
+    // the brand font is loaded once for the whole batch; a missing one refuses the whole request (409) rather than drawing another font
+    const brand = await brandText.loadBrandFont(pool, req.user.id, req.body?.fontSource);
 
     const results = [];
     for (let idx = 0; idx < items.length; idx += 1) {
@@ -613,10 +622,18 @@ router.post('/batch-text', async (req, res) => {
           .replace(/\{n\}/gi, String(items.length))
           .replace(/\{date\}/gi, today);
 
-        const w = Math.ceil(measureTextWidth(label, fontSize, 'bold')) + 28;
-        const h = Math.ceil(fontSize * 1.6);
+        let w = Math.ceil(measureTextWidth(label, fontSize, 'bold')) + 28;
+        let h = Math.ceil(fontSize * 1.6);
 
-        let svgInner = `<text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${opacity}" text-anchor="middle" dominant-baseline="middle">${escapeXml(label)}</text>`;
+        let svgInner;
+        if (brand) {
+          const lab = brandText.centredLabel(brand.font, label, { size: fontSize, padX: 28, minHeight: Math.ceil(fontSize * 1.6), color, opacity });
+          w = lab.width;
+          h = lab.height;
+          svgInner = lab.markup;
+        } else {
+          svgInner = `<text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${opacity}" text-anchor="middle" dominant-baseline="middle">${escapeXml(label)}</text>`;
+        }
         if (bgHex) {
           svgInner = `<rect width="${w}" height="${h}" fill="${bgHex}" fill-opacity="${Math.min(1, opacity * 1.2)}" rx="4"/>` + svgInner;
         }
@@ -637,7 +654,7 @@ router.post('/batch-text', async (req, res) => {
 
     res.json({ ok: true, count: results.length, results });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Batch text failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Batch text failed' });
   }
 });
 
