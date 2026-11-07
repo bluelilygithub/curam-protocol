@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "ea20be4c",
+   "fullHash": "ea20be4ced7dc881723988bae23428bddc81363e",
+   "committedAt": "2026-11-07T19:52:33+10:00",
+   "author": "mrb",
+   "subject": "Graphics: brand font in Batch, Pipeline and saved recipes; Brand Kit button; fix Batch crash on open",
+   "filesChanged": 12,
+   "insertions": 253,
+   "deletions": 36,
+   "area": "Graphics",
+   "goal": "Finish the brand font so every text tool can use it, make the Brand Kit window's main button useful, and fix a crash found while testing.",
+   "whatChanged": "The brand font (heading or body) now also works for the text watermark in Batch, the Pipeline \"Add text\" step and saved recipes. The font is loaded from the signed-in person's own Brand Kit once per batch, background job or run, and anything the browser sends as brandFonts is deleted and replaced. A recipe stores only the choice (kept only on text steps, and only if valid) and reads the font when it runs; a step that names a font the Brand Kit does not have refuses the whole batch, job or pipeline before the first picture with a plain 409 message, and the Pipeline screen shows such a choice as \"Brand heading (none saved)\". Font drop-downs added to Batch (watermark) and to the Pipeline text step. In the Brand Kit window the main footer button is now Download DESIGN.md when nothing typed by hand is waiting to be saved, and Save Brand Kit when the logo, colours or font name differ from the saved kit (a small Download link stays beside Clear then); a reading from a website is already saved by Use selected. Also fixes the Batch tool crashing the page when opened: its recipe lines read the batchOp state before the line that declared it, which was the case since the recipe-in-Batch commits of 2026-10-25. Guide chat, help text and docs/brand-from-url.md updated.",
+   "filesImpacted": [
+    "server/routes/graphics/enhance.js (text step takes the loaded brand fonts; /pipeline loads them)",
+    "server/routes/graphics/optimise.js (prepareBatch loads fonts for op watermark and pipelines, runBatchItems passes the context)",
+    "server/services/graphicsBrandText.js (sourcesNeeded, loadBrandFontsFor)",
+    "server/services/graphicsRecipes.js (keeps a valid fontSource on text steps only)",
+    "server/routes/graphics/brandText.test.js (batch, pipeline, recipes, job, injection, other person)",
+    "client/src/pages/graphics/tools/BatchTool.jsx (font drop-down, batchOp declared first)",
+    "client/src/pages/graphics/tools/PipelineTool.jsx (font drop-down on the text step)",
+    "client/src/pages/graphics/brandSiteLogic.mjs and its test (stepFontChoices, kitIsDirty)",
+    "client/src/pages/GraphicsPage.jsx (footer button, help text)",
+    "server/services/graphicsTutor.js",
+    "docs/brand-from-url.md"
+   ],
+   "benefit": "The brand font works everywhere text is drawn, including repeatable recipes and batches; the Brand Kit window's main button now does the useful thing; and the Batch tool opens again.",
+   "concerns": "The Batch crash fix is a one-line move, but the bug was in committed code since 2026-10-25, so the Batch tool is probably broken on the live site until this is deployed. A recipe that names a brand font refuses to run (whole batch, nothing processed) until the Brand Kit has that font again, by design. The Batch tool's recipe list still only refreshes after a page reload (already the case, not changed). The Brand Kit button logic compares the by-hand form with the saved kit, so an edit that is reverted by hand counts as no change. Seen in the local app on 2026-11-07: the footer flip, a Batch text watermark, a Pipeline text step and a saved recipe run through Batch, all in Montserrat; the background-job path and the 409 cases are covered by the server test, not by eye. Latin text only. Not run in the Railway container. This commit has not been pushed."
+  },
+  {
    "commit": "58ccec53",
    "fullHash": "58ccec53886a501c3d1454a93f49b39a1e8231bf",
    "committedAt": "2026-11-07T19:13:59+10:00",
