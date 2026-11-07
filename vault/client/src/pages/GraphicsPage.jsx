@@ -13,6 +13,8 @@ import { GoalStart, GoalBar } from './graphics/GoalStart';
 import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
 import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.mjs';
 import Dialog from '../components/Dialog';
+import BrandFromSite from './graphics/BrandFromSite';
+import { mergeManualKit } from './graphics/brandSiteLogic.mjs';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -442,34 +444,35 @@ export default function GraphicsPage() {
       .then(r => r.json())
       .then(setStatus)
       .catch(() => setStatus({ ok: false, hosted: true, provider: 'Graphics provider', error: 'Unable to check graphics service' }));
-    api.get('/api/settings')
-      .then(r => r.json())
-      .then(settings => {
-        const raw = settings?.graphics_brand_kit;
-        if (!raw) return;
-        try {
-          const parsed = JSON.parse(raw);
-          setBrandKit(parsed);
-          setBrandKitDraft({
-            logoDataUrl: parsed.logoDataUrl || '',
-            colors: [0, 1, 2].map(i => parsed.colors?.[i] || ''),
-            fontFamily: parsed.fontFamily || '',
-          });
-        } catch { /* ignore malformed stored value */ }
-      })
-      .catch(() => {});
+    loadBrandKit();
   }, []);
+
+  // Reads the saved kit into the page. Also called after "Get from a website" saved new parts of it on the server.
+  const loadBrandKit = () => api.get('/api/settings')
+    .then(r => r.json())
+    .then(settings => {
+      const raw = settings?.graphics_brand_kit;
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        setBrandKit(parsed);
+        setBrandKitDraft({
+          logoDataUrl: parsed.logoDataUrl || '',
+          colors: [0, 1, 2].map(i => parsed.colors?.[i] || ''),
+          fontFamily: parsed.fontFamily || '',
+        });
+      } catch { /* ignore malformed stored value */ }
+    })
+    .catch(() => {});
 
   const saveBrandKit = async () => {
     setBrandKitSaving(true);
     try {
-      const kit = {
-        logoDataUrl: brandKitDraft.logoDataUrl || '',
-        colors: brandKitDraft.colors.filter(Boolean).slice(0, 3),
-        fontFamily: brandKitDraft.fontFamily.trim(),
-      };
+      // the kit can hold more than this window shows (colour roles, corners, font files ...): carry it over, or saving would drop it
+      const { kit, dropHeadingFile } = mergeManualKit(brandKit, brandKitDraft);
       const res = await api.post('/api/settings', { key: 'graphics_brand_kit', value: JSON.stringify(kit) });
       if (!res.ok) throw new Error('Failed to save Brand Kit');
+      if (dropHeadingFile) api.delete('/api/graphics/brand-kit/fonts/heading').catch(() => {});
       setBrandKit(kit);
       setBrandKitOpen(false);
     } catch (err) {
@@ -483,6 +486,8 @@ export default function GraphicsPage() {
     setBrandKitSaving(true);
     try {
       await api.post('/api/settings', { key: 'graphics_brand_kit', value: '' });
+      // the font files that came from a website go with the kit (a 404 just means there was none)
+      await Promise.all(['heading', 'body'].map(role => api.delete(`/api/graphics/brand-kit/fonts/${role}`).catch(() => {})));
       setBrandKit(null);
       setBrandKitDraft({ logoDataUrl: '', colors: ['', '', ''], fontFamily: '' });
     } catch { /* best-effort */ } finally {
@@ -1015,18 +1020,19 @@ export default function GraphicsPage() {
               <Dialog raw onClose={() => setBrandKitOpen(false)}
         overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
         overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
-        panelClassName="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
+        panelClassName="w-full max-w-xl rounded-2xl border shadow-xl overflow-hidden"
         panelStyle={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         onClick={e => e.stopPropagation()}
       >
                   <div className="px-5 py-4 border-b flex items-start justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
                     <div>
                       <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Brand Kit</h2>
-                      <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>Save a logo, colours and a font once — reuse them across Text Overlay, Composite and Watermark.</p>
+                      <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>Save a logo, colours and a font once — reuse them across Text Overlay, Composite and Watermark. Or read them from a website.</p>
                     </div>
                     <button type="button" onClick={() => setBrandKitOpen(false)} className="flex-shrink-0 hover:opacity-60 mt-0.5" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 16 })}</button>
                   </div>
                   <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <BrandFromSite onApplied={loadBrandKit} />
                     <div>
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Logo</label>
                       <Tooltip text="Upload a logo image to reuse as a quick-add layer in Composite.">
