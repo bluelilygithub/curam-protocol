@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "db529b97",
+   "fullHash": "db529b97cf87c9dde11d8a520c97c14ec26f89fa",
+   "committedAt": "2026-11-08T07:32:24+10:00",
+   "author": "mrb",
+   "subject": "Video Tools: animated captions look in Caption studio (word by word, Brand Kit colours and font)",
+   "filesChanged": 10,
+   "insertions": 624,
+   "deletions": 29,
+   "area": "Video Tools",
+   "goal": "Give Caption studio a modern look where the words follow the speech (the spoken word lights up, or words pop in one at a time), building on the server-side page renderer added for Animated title.",
+   "whatChanged": "Caption studio has a new Look choice: Standard subtitles (unchanged) or Animated, word by word. Animated takes the same video (upload or library) and the same SRT / script / auto-transcribe inputs. Options: how the words move (light up the spoken word, or pop in), position, size, text / spoken-word / box colours, an optional box behind the words, and a font; Brand Kit colours and heading or body font can be used (read on the server, plain 409 if missing). Each caption's time is shared out over its words by length (SRT has no word times). Words are grouped into short pages (at most 5 words, about 34 letters, stopping after punctuation). The caption strip is drawn once per word change in headless Chromium as see-through PNGs, and ffmpeg lays the picture list over the video with the soundtrack copied; a 60 s talk is about 150 pictures, not 1,800 frames. Runs as a background job (one per person, gate, Cancel, Resume). New route POST /api/videos/animated-captions. probeVideo now also returns rotation so a rotated phone video gets the right strip size (an added field only). Tutor catalogue, help box and docs updated. No new package.",
+   "filesImpacted": [
+    "server/services/animatedCaptions.js (new: word timing, pages, timeline, band page, ffmpeg overlay)",
+    "server/services/animatedCaptions.test.js (new: includes a real video and Cancel)",
+    "server/services/htmlVideoRender.js (renderStatePngs: see-through picture per state)",
+    "server/routes/videos.js (POST /animated-captions)",
+    "server/services/videoFfmpeg.js (probeVideo returns rotation)",
+    "client/src/pages/videos/AnimatedCaptionOptions.jsx (new: options panel)",
+    "client/src/pages/VideosPage.jsx (Look choice, animated branch of the studio, help text)",
+    "server/services/videoTutor.js (catalogue)",
+    "server/testing/routeManifest.json (1 route)",
+    "docs/video-tools.md"
+   ],
+   "benefit": "Captions that follow the speech in the person's own brand, made on the server with no new package (a normal fast deploy), for short videos and social posts.",
+   "concerns": "Not run inside the Railway container: Chromium and ffmpeg memory and time there are unmeasured for this tool (the earlier Animated title also awaits that check), and Railway memory has had multi-GB spikes. Word timing is an estimate (time shared over the words by length), so a word can light up early or late. Tried locally on an 8 s video from a library source with Brand Kit colours and a font; not tried: a long video (limit about 1,500 words), a phone-rotated video, a video upload from the page, Cancel from the button (tested at service level). Brand text colour is the kit's onPrimary colour, which could be dark on a dark video for an unusual kit. Latin text only. The studio's Save-to-library tick does not apply to the animated look (the result has its own Save button). probeVideo's new rotation field is used only here."
+  },
+  {
    "commit": "928c294a",
    "fullHash": "928c294a2512f2dfd5842114364a48eb83cc027c",
    "committedAt": "2026-11-08T07:22:08+10:00",
