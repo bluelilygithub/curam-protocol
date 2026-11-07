@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
@@ -10,6 +10,8 @@ import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 import SharesPackTab from '../components/shares/SharesPackTab';
 import SharesThesisTab from '../components/shares/SharesThesisTab';
+import Tooltip from '../components/Tooltip';
+import { startSharesTour, TOUR_KEY as SHARES_TOUR_KEY } from '../utils/tours/sharesTour';
 import SharesTutorChat from './shares/SharesTutorChat';
 import { useIcon } from '../providers/IconProvider';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
@@ -348,6 +350,13 @@ export default function SharesPage() {
   const canUseShares = isAdmin || featureAccess.shares !== false;
 
   const [tab, setTab] = useState('portfolio');
+  // The guided tour: from the link by the title, or from Settings -> Tours (/shares?tour=1)
+  const [tourParams, setTourParams] = useSearchParams();
+  const startTour = () => {
+    try { localStorage.removeItem(SHARES_TOUR_KEY); } catch (_) { /* ignore */ }
+    sharesInfo.close(); // the first-visit (i) box would sit behind the tour
+    startSharesTour(setTab);
+  };
   const [dashboard, setDashboard] = useState(null);
   const [charts, setCharts] = useState(null);
   const [chartRange, setChartRange] = useState('30d'); // today | 7d | 30d | 90d | 12m | fy | all
@@ -430,6 +439,14 @@ export default function SharesPage() {
       setLoading(false);
     }
   }, [addToast]);
+
+  useEffect(() => {
+    if (!loading && tourParams.get('tour')) {
+      const next = new URLSearchParams(tourParams); next.delete('tour');
+      setTourParams(next, { replace: true });
+      setTimeout(startTour, 300);
+    }
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerateNews = async () => {
     setGeneratingNews(true);
@@ -786,6 +803,7 @@ export default function SharesPage() {
               Shares
               <button
                 onClick={sharesInfo.open}
+                data-tour="shares-info"
                 title="How Shares works"
                 style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
@@ -793,6 +811,9 @@ export default function SharesPage() {
               >
                 {getIcon('info', { size: 14 })}
               </button>
+              <Tooltip text="Take the guided tour of Shares: the records, tax tabs, news, questions, thesis journal and where to get help (9 steps).">
+                <button type="button" onClick={startTour} className="ml-2 text-xs font-normal underline hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>Take the tour</button>
+              </Tooltip>
             </h1>
             {sharesInfo.show && (
               <ToolInfoModal title="How Shares Works" onClose={sharesInfo.close}>
@@ -815,6 +836,7 @@ export default function SharesPage() {
           <button
             type="button"
             onClick={handleRefresh}
+            data-tour="shares-refresh"
             disabled={refreshing}
             className="text-sm px-3 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
             style={{ background: 'var(--color-primary)', color: '#fff' }}
@@ -834,6 +856,7 @@ export default function SharesPage() {
             <button
               key={t.id}
               type="button"
+              data-tour={`shares-tab-${t.id}`}
               onClick={() => setTab(t.id)}
               className="px-3 py-2 text-sm whitespace-nowrap hover:opacity-70 transition-opacity duration-200"
               style={{

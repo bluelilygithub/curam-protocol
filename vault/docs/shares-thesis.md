@@ -26,10 +26,14 @@ A check rates each assumption `intact`, `weakening`, `impaired`, `broken` or `un
 - `client/src/components/shares/SharesThesisTab.jsx`: list on the left (two columns from `xl`), editor or open thesis on the right. Tooltips on the controls, microphone on every text field, `ProcessingModal` while a check runs.
 - Guide chat: a `thesis` entry in `CATALOG` in `server/services/sharesTutor.js`, plus two "not possible" lines (no filings, no judging the thesis). The "How Shares Works" box on the page also describes the tab.
 
+## The Shares tour
+
+A 9-step Shepherd tour of the whole Shares page (`client/src/utils/tours/sharesTour.js`, key `vault_tour_shares_completed`): welcome, Refresh quotes and the tab row, Trades and Cash as the source, CGT/Statements/Accountant pack, Charts and News, Questions, Thesis, Metals, help. It switches tabs as it goes (`setTab`) and returns to Portfolio at the end. Start it from the "Take the tour" link beside the page title or Settings → Tours → Shares Tour (`/shares?tour=1`). Tabs carry `data-tour="shares-tab-<id>"`, so a new tab can get a step the same way; keep `TOTAL_STEPS` and the step numbers in step. Starting it closes the first-visit (i) box. Checked in a browser 2026-11-07 (all 9 steps, no console errors, finish sets the key).
+
 ## Tests
 
 `node server/services/sharesThesis.test.js` (no model, no database): input cleaning, the downgrade rules, scoring and verdict order, prompt content and the advice rules. `node server/services/sharesTutor.test.js` keeps the guide and the page tabs in step. The full path (save, check with a stubbed model, delete, restore) was run once against the local database on 2026-11-07; the live model call has **not** been run yet, so read the first real check critically.
 
 ## Not built
 
-A compass tour for the Shares page (the page has none yet, and the tour should cover all its tabs, not just this one); a scheduled check after each earnings season; the pre-buy checklist's pass/fail gates (left out on purpose: they lean towards buy/avoid verdicts); earnings review from filings (needs roadmap step 7); the repo's cross-check of key figures (belongs in the step 3 data health panel).
+A scheduled check after each earnings season; the pre-buy checklist's pass/fail gates (left out on purpose: they lean towards buy/avoid verdicts); earnings review from filings (needs roadmap step 7); the repo's cross-check of key figures (belongs in the step 3 data health panel).
