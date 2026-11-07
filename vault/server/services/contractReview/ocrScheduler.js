@@ -19,6 +19,7 @@
  */
 
 const OCR_LANGS = 'eng';
+const { workerCountFromEnv } = require('../translateOcrPool'); // same OCR_WORKERS setting, default 2
 const IDLE_SHUTDOWN_MS = 5 * 60 * 1000; // 5 minutes of no OCR activity
 
 let schedulerPromise = null;
@@ -47,11 +48,12 @@ async function getScheduler() {
     schedulerPromise = (async () => {
       const { createScheduler, createWorker } = require('tesseract.js');
       const scheduler = createScheduler();
+      const count = workerCountFromEnv();
       const workers = await Promise.all(
-        Array.from({ length: 4 }, () => createWorker(OCR_LANGS))
+        Array.from({ length: count }, () => createWorker(OCR_LANGS))
       );
       workers.forEach((w) => scheduler.addWorker(w));
-      console.log('[contract-review] Tesseract worker pool ready (4 workers, eng only)');
+      console.log(`[contract-review] Tesseract worker pool ready (${count} workers, eng only)`);
       return scheduler;
     })();
   }
