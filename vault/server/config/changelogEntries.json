@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "9f33bbc9",
+   "fullHash": "9f33bbc931604c1e544f4f170e1afe25d7aef663",
+   "committedAt": "2026-11-08T06:52:10+10:00",
+   "author": "mrb",
+   "subject": "Contract Review OCR pool uses OCR_WORKERS (default 2, was fixed 4)",
+   "filesChanged": 2,
+   "insertions": 5,
+   "deletions": 3,
+   "area": "Contract Review",
+   "goal": "Cut memory use: Contract Review always started 4 OCR workers, while Translate was already cut to 2 on 2026-11-07 after multi-GB memory spikes on Railway.",
+   "whatChanged": "The Contract Review OCR pool now reads the same OCR_WORKERS setting as Translate (1 to 8, default 2) instead of a fixed 4. It still starts only when a scanned contract needs it, handles English only, and shuts down after 5 idle minutes. The ready log line shows the real worker count. docs/env-vars.md says OCR_WORKERS now covers both pools.",
+   "filesImpacted": [
+    "server/services/contractReview/ocrScheduler.js (worker count from workerCountFromEnv)",
+    "docs/env-vars.md (OCR_WORKERS row)"
+   ],
+   "benefit": "Less memory while Contract Review OCR is running (two fewer English workers), and one setting for both OCR pools.",
+   "concerns": "A scanned contract may OCR somewhat slower with 2 workers than with 4 (the scheduler queues the extra pages). Checked only that the module loads and the Translate pool test passes; no real scanned contract was run. Whether this explains the multi-GB spikes is not known: the Translate boot pool was the likelier cause and was fixed earlier. This commit has not been pushed."
+  },
+  {
    "commit": "ea20be4c",
    "fullHash": "ea20be4ced7dc881723988bae23428bddc81363e",
    "committedAt": "2026-11-07T19:52:33+10:00",
