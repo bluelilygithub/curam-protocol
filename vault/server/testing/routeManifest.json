@@ -3271,6 +3271,9 @@
   "POST /api/serp-tracker-tutor": {
    "class": "authed"
   },
+  "POST /api/memory-tutor": {
+   "class": "authed"
+  },
   "GET /api/serp-tracker/sites": {
    "class": "authed"
   },

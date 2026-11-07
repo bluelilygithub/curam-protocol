@@ -35,6 +35,7 @@ import { TOUR_KEY as TOPIC_RESEARCH_TOUR_KEY } from '../utils/tours/topicResearc
 import TopicResearchModelCard from './topicResearch/TopicResearchModelCard';
 import EmailFollowUpModelCard from './emailFollowUp/EmailFollowUpModelCard';
 import { TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
+import { TOUR_KEY as MEMORY_TOUR_KEY } from '../utils/tours/memoryTour';
 import { TOUR_KEY as TALK_TOUR_KEY } from '../utils/tours/talkTour';
 import { TOUR_KEY as FITNESS_TOUR_KEY } from '../utils/tours/fitnessTour';
 import { TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/musicTour';
@@ -2679,6 +2680,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(GUITAR_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Memory Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step tour — what Memory is for, adding a fact (typing or talking), searching by meaning, the list, deleting, and where to get help
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(MEMORY_TOUR_KEY);
+                navigate('/memory?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(MEMORY_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

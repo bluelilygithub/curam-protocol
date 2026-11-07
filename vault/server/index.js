@@ -159,6 +159,7 @@ app.use('/api/study-decks', require('./routes/studyDecks'));
 app.use('/api/student-quizzes', require('./routes/studentQuizzes'));
 app.use('/api/fetch-url', require('./routes/fetchUrl'));
 app.use('/api/web-search', require('./routes/webSearch'));
+app.use('/api/memory-tutor', requireFeature('memory'), aiLimiter, require('./routes/memoryTutor')); // the Memory guide chat (sees no memory, search or setting); before /api/memory so the longer path is matched first
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/suggestions', require('./routes/suggestions'));
 app.use('/api/dashboard', require('./routes/dashboard'));

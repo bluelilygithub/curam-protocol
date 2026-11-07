@@ -38,6 +38,7 @@ const GUIDES = {
   domains: { name: 'Domain guide', endpoint: '/api/domains-tutor' },
   usage: { name: 'Usage & Cost guide', endpoint: '/api/usage-tutor' },
   'serp-tracker': { name: 'SERP Tracker guide', endpoint: '/api/serp-tracker-tutor' },
+  memory: { name: 'Memory guide', endpoint: '/api/memory-tutor' },
 };
 
 module.exports = { GUIDES };
