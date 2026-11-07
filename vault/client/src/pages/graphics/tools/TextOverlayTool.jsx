@@ -4,6 +4,7 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { useProcessingWhile, loadImageInto, renderExport, downloadDataUrl, ResultPlaceholder } from '../shared';
+import { fontChoices, effectiveFontSource } from '../brandSiteLogic.mjs';
 
 export default function TextOverlayTool({ active }) {
   const getIcon = useIcon();
@@ -18,6 +19,10 @@ export default function TextOverlayTool({ active }) {
   const [txBackground, setTxBackground] = useState('');
   const [txAlign, setTxAlign] = useState('center');
   const [txFontWeight, setTxFontWeight] = useState('bold');
+  const [txFontSource, setTxFontSource] = useState('standard');
+  const fontOptions = fontChoices(brandKit);
+  const fontSource = effectiveFontSource(brandKit, txFontSource);
+  const brandFont = fontSource !== 'standard';
   const [txMaxWidth, setTxMaxWidth] = useState('90');
   const [txStrokeColor, setTxStrokeColor] = useState('');
   const [txStrokeWidth, setTxStrokeWidth] = useState('2');
@@ -41,6 +46,7 @@ export default function TextOverlayTool({ active }) {
         maxWidth: Number(txMaxWidth),
         position: txPosition,
       };
+      if (brandFont) body.fontSource = fontSource;
       if (txFontSize) body.fontSize = Number(txFontSize);
       if (txStrokeColor) { body.strokeColor = txStrokeColor; body.strokeWidth = Number(txStrokeWidth); }
       const res = await api.post('/api/graphics/text', body);
@@ -115,6 +121,14 @@ export default function TextOverlayTool({ active }) {
                 <Tooltip text="Text size in pixels. Leave blank to size it automatically to fit."><input type="number" min="8" max="600" value={txFontSize} onChange={e => setTxFontSize(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
             </div>
+            {fontOptions.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font</label>
+                <Tooltip text="Draw the text in a font from your Brand Kit. Brand fonts are read from a website in Brand Kit; the standard font is Arial."><select value={fontSource} onChange={e => setTxFontSource(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  {fontOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select></Tooltip>
+              </div>
+            )}
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Align</label>
@@ -126,7 +140,7 @@ export default function TextOverlayTool({ active }) {
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Weight</label>
-                <Tooltip text="How bold the overlay text appears."><select value={txFontWeight} onChange={e => setTxFontWeight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                <Tooltip text={brandFont ? 'A brand font has its own weight, set when it was read from the website. This setting is not used.' : 'How bold the overlay text appears.'}><select value={txFontWeight} onChange={e => setTxFontWeight(e.target.value)} disabled={brandFont} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="bold">Bold</option>
                   <option value="normal">Normal</option>
                 </select></Tooltip>

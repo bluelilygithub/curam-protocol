@@ -1,6 +1,6 @@
 // node client/src/pages/graphics/brandSiteLogic.test.mjs
 import assert from 'node:assert/strict';
-import { defaultUse, useIsEmpty, applyBody, summaryOfChanged, roleList, logoLabel, radiusCss, fontSummary, mergeManualKit } from './brandSiteLogic.mjs';
+import { defaultUse, useIsEmpty, applyBody, summaryOfChanged, roleList, logoLabel, radiusCss, fontSummary, mergeManualKit, fontChoices, effectiveFontSource } from './brandSiteLogic.mjs';
 
 const file = { bytes: 48676, renderFamily: 'BrandFont17ff0821' };
 const brand = {
@@ -57,5 +57,14 @@ assert.equal(m.dropHeadingFile, true);
 m = mergeManualKit({ headingFont: { family: 'A', weight: 400, stored: false } }, { logoDataUrl: '', colors: [], fontFamily: 'B' });
 assert.equal(m.dropHeadingFile, false, 'nothing to remove when no file was stored');
 assert.deepEqual(mergeManualKit(null, { logoDataUrl: '', colors: ['#111111'], fontFamily: '' }).kit, { logoDataUrl: '', colors: ['#111111'], fontFamily: '' }, 'an empty kit works as before');
+
+// fonts a text tool can use
+assert.deepEqual(fontChoices(null).map((c) => c.value), ['standard']);
+assert.deepEqual(fontChoices({ headingFont: { family: 'Montserrat', stored: true }, bodyFont: { family: 'Inter', stored: false } }).map((c) => c.value), ['standard', 'brand-heading'], 'a font that is only a name is not offered');
+assert.equal(fontChoices({ headingFont: { family: 'Montserrat', stored: true }, bodyFont: { family: 'Inter', stored: true } })[2].label, 'Brand body: Inter');
+const k2 = { headingFont: { family: 'M', stored: true } };
+assert.equal(effectiveFontSource(k2, 'brand-heading'), 'brand-heading');
+assert.equal(effectiveFontSource(k2, 'brand-body'), 'standard', 'the kit no longer has it: back to the standard font');
+assert.equal(effectiveFontSource(null, 'brand-heading'), 'standard');
 
 console.log('brandSiteLogic tests: ok');

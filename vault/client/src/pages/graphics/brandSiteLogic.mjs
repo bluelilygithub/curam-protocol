@@ -80,3 +80,19 @@ export function mergeManualKit(oldKit, draft) {
   }
   return { kit, dropHeadingFile };
 }
+
+/**
+ * The fonts a text tool can offer: the standard one, plus the brand heading and body fonts when a font FILE is saved in the kit
+ * (`stored`). A font that is only a name cannot be drawn, so it is not offered.
+ */
+export function fontChoices(kit) {
+  const out = [{ value: 'standard', label: 'Standard (Arial)' }];
+  if (kit?.headingFont?.stored) out.push({ value: 'brand-heading', label: `Brand heading: ${kit.headingFont.family}` });
+  if (kit?.bodyFont?.stored) out.push({ value: 'brand-body', label: `Brand body: ${kit.bodyFont.family}` });
+  return out;
+}
+
+/** The value to send: the chosen one if the kit still offers it, otherwise the standard font (the kit may have changed since it was chosen). */
+export function effectiveFontSource(kit, chosen) {
+  return fontChoices(kit).some((c) => c.value === chosen) ? chosen : 'standard';
+}

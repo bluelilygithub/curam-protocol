@@ -15,6 +15,8 @@ const { getModelsForUser } = require('../../services/modelResolver');
 const { logUsage } = require('../../utils/logUsage');
 const { runPixelTask } = require('../../services/graphicsWorker');
 const { measureTextWidth } = require('../../services/graphicsTextMetrics');
+const { pool } = require('../../db');
+const brandText = require('../../services/graphicsBrandText');
 const {
   dataUrlToBuffer,
   outputFormatFor,
@@ -103,13 +105,15 @@ router.post('/watermark', async (req, res) => {
 // with an optional background pill and outline stroke for legibility.
 
 // Widths come from the real Arial/Liberation Sans metrics (graphicsTextMetrics), the font the SVG is drawn in.
-function wrapTextLines(text, fontSize, maxWidthPx, fontWeight) {
+function wrapTextLines(text, fontSize, maxWidthPx, fontWeight, brand) {
+  // `brand` ({ font }) measures with the brand font file instead of Arial
+  const width = (str) => (brand ? brandText.measure(brand.font, str, fontSize) : measureTextWidth(str, fontSize, fontWeight));
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let current = '';
   words.forEach((word) => {
     const candidate = current ? `${current} ${word}` : word;
-    if (current && measureTextWidth(candidate, fontSize, fontWeight) > maxWidthPx) {
+    if (current && width(candidate) > maxWidthPx) {
       lines.push(current);
       current = word;
     } else {
@@ -123,11 +127,13 @@ function wrapTextLines(text, fontSize, maxWidthPx, fontWeight) {
 // Builds a standalone SVG (as a Buffer) containing word-wrapped text, an
 // optional background pill/box, and an optional stroke outline. Shared by
 // /text and /composite so there is exactly one implementation.
-function buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth }) {
-  const lines = wrapTextLines(text, fontSize, maxWidthPx, fontWeight);
-  const lineHeight = Math.ceil(fontSize * 1.25);
+// `brand` ({ font }, from graphicsBrandText.loadBrandFont) draws the lines as outlines of the brand font instead of as Arial text.
+function buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth, brand }) {
+  const lines = wrapTextLines(text, fontSize, maxWidthPx, fontWeight, brand);
+  const lineHeight = brand ? brandText.lineHeightFor(brand.font, fontSize) : Math.ceil(fontSize * 1.25);
   const padding = Math.ceil(fontSize * 0.4);
-  const widest = Math.max(...lines.map((line) => measureTextWidth(line, fontSize, fontWeight)), 1);
+  const lineWidth = (line) => (brand ? brandText.measure(brand.font, line, fontSize) : measureTextWidth(line, fontSize, fontWeight));
+  const widest = Math.max(...lines.map(lineWidth), 1);
   const boxW = Math.ceil(Math.min(maxWidthPx, widest)) + padding * 2;
   const boxH = lines.length * lineHeight + padding * 2;
   const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
@@ -138,6 +144,14 @@ function buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, ma
   const bgRect = backgroundColor
     ? `<rect x="0" y="0" width="${boxW}" height="${boxH}" fill="${escapeXml(backgroundColor)}" />`
     : '';
+  if (brand) {
+    const paths = lines.map((line, i) => {
+      const d = brandText.linePathData(brand.font, line, { x: xPos, top: padding + lineHeight * i, size: fontSize, lineHeight, anchor });
+      return `<path d="${d}" fill="${escapeXml(color)}"${strokeAttr} />`;
+    }).join('');
+    const brandSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${boxW}" height="${boxH}">${bgRect}${paths}</svg>`;
+    return { svg: Buffer.from(brandSvg), width: boxW, height: boxH };
+  }
   const tspans = lines.map((line, i) => {
     const y = padding + lineHeight * i + lineHeight * 0.8;
     return `<tspan x="${xPos}" y="${y}">${escapeXml(line)}</tspan>`;
@@ -197,8 +211,9 @@ router.post('/text', async (req, res) => {
     const strokeColor = parseHexColor(req.body?.strokeColor)?.hex || null;
     const strokeWidth = clampInt(req.body?.strokeWidth, 1, 40, strokeColor ? 2 : 0);
     const gravity = GRAVITY_MAP[req.body?.position] || 'centre';
+    const brand = await brandText.loadBrandFont(pool, req.user.id, req.body?.fontSource);
 
-    const { svg } = buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth });
+    const { svg } = buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth, brand });
     const input = await fitOverlay(svg, base.width, base.height);
     const out = await sharp(buffer).rotate().composite([{ input, gravity }]).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
@@ -221,7 +236,7 @@ const COMPOSITE_MAX_OVERLAYS = 8;
 // buildImageOverlayBuffer (the same resize+alpha approach as /watermark's
 // image mode). `position` is either a GRAVITY_MAP key, or {x,y} — a fraction
 // (0-1) of the base image for percent offsets, otherwise treated as pixels.
-async function buildOverlayComposite(overlay, baseMeta) {
+async function buildOverlayComposite(overlay, baseMeta, userId) {
   const type = overlay?.type === 'image' ? 'image' : 'text';
   const opacity = Number.isFinite(Number(overlay?.opacity)) ? Math.min(1, Math.max(0, Number(overlay.opacity))) : 1;
   let input;
@@ -238,7 +253,8 @@ async function buildOverlayComposite(overlay, baseMeta) {
     const maxWidthPx = Math.round(baseMeta.width * (maxWidthPct / 100));
     const strokeColor = parseHexColor(overlay?.strokeColor)?.hex || null;
     const strokeWidth = clampInt(overlay?.strokeWidth, 1, 40, strokeColor ? 2 : 0);
-    const { svg } = buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth });
+    const brand = await brandText.loadBrandFont(pool, userId, overlay?.fontSource);
+    const { svg } = buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth, brand });
     input = await applyOverlayOpacity(svg, opacity);
   } else {
     const scale = clampInt(overlay?.scale, 1, 100, 25) / 100;
@@ -286,7 +302,7 @@ router.post('/composite', async (req, res) => {
       // Order matters: first overlay is the bottom of the stack. Sequential
       // await keeps composites in the order overlays were given.
       // eslint-disable-next-line no-await-in-loop
-      composites.push(await buildOverlayComposite(overlay, base));
+      composites.push(await buildOverlayComposite(overlay, base, req.user.id));
     }
 
     const out = await sharp(buffer).rotate().composite(composites).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();

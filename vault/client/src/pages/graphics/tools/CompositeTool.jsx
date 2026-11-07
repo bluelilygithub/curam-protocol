@@ -4,6 +4,7 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { useProcessingWhile, loadImageInto, renderExport, downloadDataUrl, ResultPlaceholder } from '../shared';
+import { fontChoices, effectiveFontSource } from '../brandSiteLogic.mjs';
 
 export default function CompositeTool({ active }) {
   const getIcon = useIcon();
@@ -26,6 +27,7 @@ export default function CompositeTool({ active }) {
     color: '#ffffff',
     backgroundColor: '',
     fontWeight: 'bold',
+    fontSource: 'standard',
     align: 'center',
     maxWidth: 90,
     position: 'center',
@@ -67,6 +69,7 @@ export default function CompositeTool({ active }) {
             color: l.color,
             backgroundColor: l.backgroundColor || 'transparent',
             fontWeight: l.fontWeight,
+            ...(effectiveFontSource(brandKit, l.fontSource) !== 'standard' ? { fontSource: effectiveFontSource(brandKit, l.fontSource) } : {}),
             align: l.align,
             maxWidth: Number(l.maxWidth) || 90,
             position: l.position,
@@ -157,10 +160,17 @@ export default function CompositeTool({ active }) {
                               </Tooltip>
                             ))}
                           </div>
-                          <Tooltip text="How bold this text layer appears."><select value={layer.fontWeight} onChange={e => updateCmLayer(layer.id, { fontWeight: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                            <option value="bold">Bold</option>
-                            <option value="normal">Normal</option>
-                          </select></Tooltip>
+                          <div className="space-y-2">
+                            {fontChoices(brandKit).length > 1 && (
+                              <Tooltip text="Draw this layer in a font from your Brand Kit. The standard font is Arial."><select value={effectiveFontSource(brandKit, layer.fontSource)} onChange={e => updateCmLayer(layer.id, { fontSource: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                                {fontChoices(brandKit).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select></Tooltip>
+                            )}
+                            <Tooltip text={effectiveFontSource(brandKit, layer.fontSource) !== 'standard' ? 'A brand font has its own weight. This setting is not used.' : 'How bold this text layer appears.'}><select value={layer.fontWeight} onChange={e => updateCmLayer(layer.id, { fontWeight: e.target.value })} disabled={effectiveFontSource(brandKit, layer.fontSource) !== 'standard'} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              <option value="bold">Bold</option>
+                              <option value="normal">Normal</option>
+                            </select></Tooltip>
+                          </div>
                         </div>
                       </>
                     ) : (
