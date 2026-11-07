@@ -75,6 +75,8 @@ async function probeVideo(filePath) {
     codec: video?.codec_name || null,
     hasAudio: Boolean(audio),
     format: data.format?.format_name || null,
+    // a phone video is stored sideways with a turn flag; players (and ffmpeg) turn it, so the shown size is width/height swapped
+    rotation: Math.abs(Number((video?.side_data_list || []).map((d) => d.rotation).find((r) => r !== undefined) ?? video?.tags?.rotate ?? 0)) % 360,
   };
 }
 

@@ -73,6 +73,18 @@ An animated title screen (headline, optional supporting line, optional logo) mad
 
 ---
 
+## Animated captions (a look of Caption studio, added 2026-11-08)
+
+Caption studio has a **Look** choice: Standard subtitles (ffmpeg burn-in, as before) or **Animated, word by word**: either the whole phrase is shown and the spoken word lights up (`highlight`), or the words appear one at a time (`pop`). Same video source (upload or library), same SRT / script / auto-transcribe inputs, same "no timestamps? time the script first" step.
+
+- **How it works:** `server/services/animatedCaptions.js`. The SRT is parsed (`parseSrtLoose`); each cue's time is shared over its words by length (`wordTimings`, an estimate: SRT has no word times, so a word can be a little early or late); words are grouped into short pages of at most 5 words and about 34 letters, stopping after punctuation (`pagesOf`); `buildTimeline` makes one segment per word plus empty segments for the gaps, a later page taking over at once if cues overlap. A small page (the **caption band**: full width of the video, a strip of its height) is drawn in headless Chromium once for each segment (`renderStatePngs` in `htmlVideoRender.js`, see-through PNGs), and ffmpeg lays that picture list (concat demuxer with durations) over the video with `overlay`; the soundtrack is copied. A 60 s talk is about 150 pictures, not 1,800 frames (see-through PNG frames are 6.6 times slower than JPEG, so drawing only the changes is what makes this affordable). Rotated phone videos use the shown size (`probeVideo` now also returns `rotation`).
+- **Route:** `POST /api/videos/animated-captions` (multipart: `video` or `libraryId`, `srtText`, `options` JSON: `style` `highlight|pop`, `position` `bottom|middle|top`, `size` `small|medium|large`, `text`/`highlight`/`boxColor` hex, `box`, `fontSource` `standard|brand-heading|brand-body`, `useBrandColours`). 202 `{ jobId }`; background job (one at a time per person, gate, Cancel, Resume), result 30 minutes. Brand Kit colours (text, accent for the spoken word, main colour for the box) and font are read on the server (`animatedTitle.loadBrand`); a missing one is a plain 409 before the job starts.
+- **Limits:** up to 1,800 pictures (about 1,500 words); Latin text; the word timing is an estimate; no sound changes; the result cannot be saved to the library by the studio's checkbox (use the result's own Save to library button).
+- **Tests:** `node server/services/animatedCaptions.test.js` (options, word timing, pages, timeline, escaping, picture list, then a real video: the sound is kept, a caption is on screen at a word time and absent in a gap, Cancel). Locally set `LOCAL_FFMPEG_COMMAND` and `LOCAL_FFPROBE_COMMAND`.
+- **Not yet checked:** Railway's container (Chromium and memory), a long video, a library source, a phone-rotated video.
+
+---
+
 ## Tutor (the mini chat)
 
 The chat panel fills 80% of the screen height and has a **wider / narrower** icon in its header (remembered in the browser); its question box is a tall multi-line box (Enter sends, Shift+Enter adds a line), so a spoken question is visible in full. A graduation-cap button at the bottom right of Video Tools (`client/src/pages/videos/TutorChat.jsx`) opens a small chat. Type, or use the microphone, what you want to make ("put my script on a video as captions"). The tutor checks the tools that really exist and answers with a **verdict** and numbered **steps**, each step naming one tool with an **Open <tool> →** button that opens it in the page (the chat stays open):

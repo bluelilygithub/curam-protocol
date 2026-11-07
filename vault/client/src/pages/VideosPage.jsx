@@ -24,6 +24,7 @@ import ScriptTimer from './videos/ScriptTimer';
 import ClipTimeline from './videos/ClipTimeline';
 import TutorChat from './videos/TutorChat';
 import AnimatedTitleForm from './videos/AnimatedTitleForm';
+import AnimatedCaptionOptions, { ANIMATED_CAPTION_DEFAULTS } from './videos/AnimatedCaptionOptions';
 import { parseClock, formatClock } from './videos/clock.mjs';
 import { describeFit } from './videos/replaceCheck.mjs';
 import Dialog from '../components/Dialog';
@@ -362,6 +363,7 @@ const TOOL_HELP = {
       'Wrote your own script with no timestamps? Paste it in the captions box (or use "I have a script, not captions"); when you burn, Vault listens to the video and times each line to the speech',
       'Same typography controls as Annotate — font, weight, size, text and background colour',
       'Optionally save the captioned result straight to the library',
+      'Look: Standard subtitles, or Animated, word by word (the spoken word lights up, or the words pop in one at a time), in your Brand Kit colours and font if you like. Animated captions run in the background and are timed by sharing each caption over its words, so a word can be a little early or late',
     ],
   },
   'saved-library': {
@@ -1364,6 +1366,8 @@ export default function VideosPage() {
   const [textBackgroundColor, setTextBackgroundColor] = useState('#000000');
   const [textBackgroundTransparent, setTextBackgroundTransparent] = useState(false);
   const [captionSaveToLibrary, setCaptionSaveToLibrary] = useState(true);
+  const [captionLook, setCaptionLook] = useState('standard'); // 'standard' (burned in by ffmpeg) or 'animated' (word by word)
+  const [animCap, setAnimCap] = useState(ANIMATED_CAPTION_DEFAULTS);
 
   const previewUrl = useMemo(() => {
     if (sourceFile) return URL.createObjectURL(sourceFile);
@@ -1640,6 +1644,28 @@ export default function VideosPage() {
     }
     if (!captionLibraryId && !sourceFile) {
       addToast('Choose a library video or upload a file', 'error');
+      return;
+    }
+    if (captionLook === 'animated') {
+      // Animated look: a background job (the pictures are drawn on the server). No timestamps? Time the text first, as for the standard look.
+      let animSrt = srtText;
+      if (!hasCaptionTimes(srtText)) {
+        startProcessing('Timing your captions…', 'Listening to the video so each line appears when it is spoken.');
+        try {
+          animSrt = await timeScriptNow({ file: captionLibraryId ? null : sourceFile, libraryId: captionLibraryId, script: srtText });
+          setSrtText(animSrt);
+        } catch (err) {
+          addToast(err.message, 'error');
+          return;
+        } finally {
+          stopProcessing();
+        }
+      }
+      const fd = new FormData();
+      if (captionLibraryId) fd.append('libraryId', captionLibraryId); else fd.append('video', sourceFile);
+      fd.append('srtText', animSrt);
+      fd.append('options', JSON.stringify(animCap));
+      await runJobVideo('animated-captions', fd, { label: 'Drawing the animated captions…', resultFilename: 'animated-captions.mp4', forTool: 'caption-studio' });
       return;
     }
     const styleFields = textStyleFields();
@@ -5247,22 +5273,38 @@ export default function VideosPage() {
               )}
             </div>
 
-            <PositionGrid value={textPosition} onChange={setTextPosition} label="Caption position" />
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Look</span>
+              <Tooltip text="Standard puts each caption on the picture as plain subtitles. Animated shows the words as they are spoken: the spoken word lights up, or the words pop in one at a time.">
+                <select value={captionLook} onChange={(e) => setCaptionLook(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="standard">Standard subtitles</option>
+                  <option value="animated">Animated, word by word</option>
+                </select>
+              </Tooltip>
+            </label>
 
-            <CaptionStyleFields
-              fontFamily={textFontFamily}
-              setFontFamily={setTextFontFamily}
-              fontSize={textFontSize}
-              setFontSize={setTextFontSize}
-              fontColor={textFontColor}
-              setFontColor={setTextFontColor}
-              fontWeight={textFontWeight}
-              setFontWeight={setTextFontWeight}
-              backgroundColor={textBackgroundColor}
-              setBackgroundColor={setTextBackgroundColor}
-              backgroundTransparent={textBackgroundTransparent}
-              setBackgroundTransparent={setTextBackgroundTransparent}
-            />
+            {captionLook === 'animated' ? (
+              <AnimatedCaptionOptions value={animCap} onChange={setAnimCap} />
+            ) : (
+              <>
+                <PositionGrid value={textPosition} onChange={setTextPosition} label="Caption position" />
+
+                <CaptionStyleFields
+                  fontFamily={textFontFamily}
+                  setFontFamily={setTextFontFamily}
+                  fontSize={textFontSize}
+                  setFontSize={setTextFontSize}
+                  fontColor={textFontColor}
+                  setFontColor={setTextFontColor}
+                  fontWeight={textFontWeight}
+                  setFontWeight={setTextFontWeight}
+                  backgroundColor={textBackgroundColor}
+                  setBackgroundColor={setTextBackgroundColor}
+                  backgroundTransparent={textBackgroundTransparent}
+                  setBackgroundTransparent={setTextBackgroundTransparent}
+                />
+              </>
+            )}
 
             <ScriptTimer
               file={sourceFile}
@@ -5328,18 +5370,20 @@ export default function VideosPage() {
               </Tooltip>
             </div>
 
-            <Tooltip text="Automatically store the captioned video in Saved media once it's done.">
-              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                <input
-                  type="checkbox"
-                  checked={captionSaveToLibrary}
-                  onChange={(e) => setCaptionSaveToLibrary(e.target.checked)}
-                />
-                Save captioned result to library
-              </label>
-            </Tooltip>
+            {captionLook !== 'animated' && (
+              <Tooltip text="Automatically store the captioned video in Saved media once it's done.">
+                <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                  <input
+                    type="checkbox"
+                    checked={captionSaveToLibrary}
+                    onChange={(e) => setCaptionSaveToLibrary(e.target.checked)}
+                  />
+                  Save captioned result to library
+                </label>
+              </Tooltip>
+            )}
 
-            <Tooltip text="Burn the styled subtitles into the video.">
+            <Tooltip text={captionLook === 'animated' ? 'Draw the animated captions on the video. It runs in the background and can take a minute or two. Your original video is not changed.' : 'Burn the styled subtitles into the video.'}>
               <button
                 type="button"
                 onClick={handleCaptionStudio}

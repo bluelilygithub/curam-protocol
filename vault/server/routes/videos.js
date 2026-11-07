@@ -57,6 +57,7 @@ const extendEndingService = require('../services/extendEnding');
 const replaceSectionService = require('../services/replaceSection');
 const titleCardService = require('../services/titleCard');
 const animatedTitleService = require('../services/animatedTitle');
+const animatedCaptionsService = require('../services/animatedCaptions');
 const { pool: dbPool } = require('../db');
 const { askTutor } = require('../services/videoTutor');
 const {
@@ -1375,6 +1376,54 @@ router.post('/animated-title', upload.none(), async (req, res) => {
     if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
     if (err instanceof animatedTitleService.AnimatedTitleError) return res.status(err.status).json({ error: err.message });
     getLogger().error({ err }, '[videos/animated-title] start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
+
+// "Animated captions" (a look of Caption studio): the same video and SRT, drawn word by word (the spoken word lights up, or the words
+// pop in). The caption pictures are drawn in a server browser and laid over the video by ffmpeg (services/animatedCaptions.js). The
+// video is uploaded (field `video`) or a saved library video (`libraryId`). Colours and font can come from the person's Brand Kit.
+router.post('/animated-captions', upload.fields([{ name: 'video', maxCount: 1 }]), async (req, res) => {
+  try {
+    const videoFile = req.files?.video?.[0];
+    const libraryId = parseAssetId(req.body?.libraryId);
+    const asset = !videoFile && libraryId ? await getAsset(req.user.id, libraryId) : null;
+    if (!videoFile?.buffer?.length && !(asset && asset.mediaType === 'video')) return res.status(400).json({ error: 'Choose a video first.' });
+    if (videoFile && !enforceAggregateUploadSize(res, [videoFile])) return;
+    let srt;
+    try {
+      srt = prepareCaptionSrt(String(req.body?.srtText || ''));
+    } catch (err) {
+      if (err.code === 'CAPTIONS_INVALID') return res.status(400).json({ error: err.message });
+      throw err;
+    }
+    const options = animatedCaptionsService.normalizeOptions(parseJsonBodyField(req.body?.options));
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    // 409 in plain words when the Brand Kit lacks a colour set or font that was asked for
+    const brand = await animatedTitleService.loadBrand(dbPool, req.user.id, { useBrandColours: options.useBrandColours, useLogo: false, fontSource: options.fontSource });
+    const jobId = startBackgroundJob(req.user.id, 'animated-captions', (signal) => withTempDir(async (dir) => {
+      const videoPath = videoFile ? await writeUpload(dir, videoFile) : asset.filePath;
+      const outPath = path.join(dir, 'animated-captions.mp4');
+      try {
+        await animatedCaptionsService.makeAnimatedCaptions({ videoPath, srt, options, brand, outPath, workDir: dir, signal, log: (m) => getLogger().info(`[videos/animated-captions] ${m}`) });
+      } catch (err) {
+        if (err.cancelled || err.stderr !== undefined || err.killed || err.name === 'AbortError' || err instanceof animatedCaptionsService.AnimatedCaptionsError) throw err;
+        getLogger().error({ err }, '[videos/animated-captions] render');
+        const e = new Error('The captions could not be drawn on this server. Try again in a minute.');
+        e.status = 500;
+        throw e;
+      }
+      return { buffer: await readOutputFile(outPath), fileName: 'animated-captions.mp4', mime: 'video/mp4' };
+    }), {
+      describeError: (err) => describeVideoError(err).message,
+      onError: (err) => getLogger().error({ err }, `[videos/animated-captions] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: (m) => getLogger().info(`[videos/animated-captions] ${m}`),
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    if (err instanceof animatedTitleService.AnimatedTitleError) return res.status(err.status).json({ error: err.message });
+    getLogger().error({ err }, '[videos/animated-captions] start');
     return res.status(500).json({ error: 'Could not start the job. Try again.' });
   }
 });

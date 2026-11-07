@@ -97,4 +97,47 @@ async function renderHtmlToMp4({ html, width, height, seconds, outPath, signal, 
   }
 }
 
-module.exports = { renderHtmlToMp4, frameTimes, RenderCancelled, FPS };
+/**
+ * Draws a page once for each state and saves a see-through PNG of it: `window.show(...state)` is called in the page for each entry of
+ * `states` (an array of argument arrays), then the page is photographed with a transparent background. Used for captions, where the
+ * picture only changes when a word changes (a few hundred pictures, not thirty a second). Returns the file names in order.
+ * @param {{ html: string, width: number, height: number, states: any[][], outDir: string, signal?: AbortSignal, loadChromium?: () => object }} o
+ */
+async function renderStatePngs({ html, width, height, states, outDir, signal, loadChromium = () => require('playwright').chromium }) {
+  if (signal?.aborted) throw new RenderCancelled();
+  const path = require('path');
+  let browser = null;
+  let aborted = false;
+  const onAbort = () => { aborted = true; if (browser) browser.close().catch(() => {}); };
+  if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    browser = await loadChromium().launch({ headless: true, args: ['--disable-dev-shm-usage', '--block-new-web-contents'] });
+    if (aborted) throw new RenderCancelled();
+    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+    await page.route('**/*', (route) => {
+      const url = route.request().url();
+      return url.startsWith('data:') || url === 'about:blank' ? route.continue() : route.abort();
+    });
+    await page.setContent(html, { waitUntil: 'load' });
+    await page.evaluate(() => (document.fonts && document.fonts.ready) || null);
+    const names = [];
+    for (let i = 0; i < states.length; i += 1) {
+      if (aborted) throw new RenderCancelled();
+      // eslint-disable-next-line no-await-in-loop
+      await page.evaluate((args) => window.show(...args), states[i]);
+      const name = `cap-${String(i).padStart(5, '0')}.png`;
+      // eslint-disable-next-line no-await-in-loop
+      await page.screenshot({ type: 'png', omitBackground: true, path: path.join(outDir, name) });
+      names.push(name);
+    }
+    return names;
+  } catch (err) {
+    if (aborted) throw new RenderCancelled();
+    throw err;
+  } finally {
+    if (signal) signal.removeEventListener('abort', onAbort);
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+module.exports = { renderHtmlToMp4, renderStatePngs, frameTimes, RenderCancelled, FPS };
