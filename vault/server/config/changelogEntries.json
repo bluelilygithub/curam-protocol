@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "c2a81f99",
+   "fullHash": "c2a81f996f256e4992ce2499df16405c1669ba9e",
+   "committedAt": "2026-11-08T12:05:02+10:00",
+   "author": "mrb",
+   "subject": "Drawings: undo/redo, keep shape, two-way arrows, loop routing, snap to grid",
+   "filesChanged": 11,
+   "insertions": 295,
+   "deletions": 17,
+   "area": "Drawings",
+   "goal": "Act on the owner's feedback after first real use of Draw it for me: stretch everything without bending it, two-way arrows, loops in decision flows, snap to grid, and a multi-step undo/redo.",
+   "whatChanged": "Undo and Redo buttons above the board drive the board's own unlimited history (a whole generated diagram is one step); Ctrl+Z and Ctrl+Shift+Z work anywhere on the page. Keep shape / Free (remembered) decides whether dragging a corner keeps proportions, with a real Shift doing the opposite for one drag, by overriding the shift state on pointer events during a stretch. Two-way arrow button for selected arrows; Draw it for me may now return two-way edges and merges an arrow each way between two boxes into one. Loop arrows are routed round the outside of the diagram with sharp corners, leaving from underneath when a box sits beside the source, never crossing a box; decision diamonds are larger so text stays on one line. Snap to grid toggles the board's grid, saved with the drawing. Guide chat catalog, help text, tour, tooltips and docs/drawings.md updated.",
+   "filesImpacted": [
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/diagramLayout.mjs",
+    "client/src/pages/drawings/diagramLayout.test.mjs",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "client/src/providers/iconMap.js",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/services/drawingDiagram.js",
+    "server/services/drawingDiagram.test.js",
+    "server/services/drawingsTutor.js",
+    "server/services/drawingsTutor.test.js",
+    "docs/drawings.md"
+   ],
+   "benefit": "Diagrams can be resized, edited and corrected without redrawing; loops and two-way relationships read clearly; boxes line up; mistakes are easy to step back from.",
+   "concerns": "Tested on screen only with a stand-in AI, never a real model. Keep shape relies on overriding event.shiftKey, which depends on Excalidraw internals and may need rework when the library is upgraded; verified with Select all on a drag-box selection, not on single boxes or pictures. Snap to grid was confirmed by button state and saved setting, not by dragging a box. Ctrl+Z shortcuts were not exercised; only the buttons were. Undo history is per visit and is not saved. Undo/Redo buttons read the board's own button state every 400 ms."
+  },
+  {
    "commit": "3b0f4244",
    "fullHash": "3b0f424422cbd1c5ed042730587ee1428ae5c4b2",
    "committedAt": "2026-11-08T10:57:34+10:00",
