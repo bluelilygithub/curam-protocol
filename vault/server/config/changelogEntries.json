@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "cfb7bbd4",
+   "fullHash": "cfb7bbd41231b5e9628614ace8bf4ebba9961844",
+   "committedAt": "2026-11-08T10:26:56+10:00",
+   "author": "mrb",
+   "subject": "Drawings: In a note button (go from a drawing to the notes it was sent to)",
+   "filesChanged": 9,
+   "insertions": 97,
+   "deletions": 5,
+   "area": "Drawings",
+   "goal": "A drawing that has been sent to a note had no way back to that note (the note links to the drawing, not the other way round).",
+   "whatChanged": "The drawing editor now shows an In a note button beside To Notes whenever the drawing has been sent to a note: with one note it goes straight to it, with several it reads In N notes and shows a short list of titles (newest first) to choose from. Anything waiting is saved before leaving, as for Your drawings. It appears straight after To Notes without a reload. New route GET /api/drawings/:id/notes finds the signed-in person's notes whose text contains the link To Notes writes, \"](/drawings/ID)\" (matched with the closing bracket, so drawing 7 never matches drawing 70), newest change first, at most 20; another person's drawing is \"not found\". No new table: the note's own text is the record, so notes made earlier already work, a note the person linked by hand counts, and deleting a note or removing its link makes the button go away. Guide, help text, docs and tests updated.",
+   "filesImpacted": [
+    "server/services/drawings.js (linkedNotes)",
+    "server/routes/drawings.js (GET /:id/notes)",
+    "server/testing/routeManifest.json (1 route)",
+    "client/src/pages/drawings/DrawingEditor.jsx (the button and list, reloaded after To Notes)",
+    "client/src/pages/drawings/drawingsTools.mjs, server/services/drawingsTutor.js and its test (guide wording)",
+    "server/services/drawings.test.js (a notes table in the scratch schema; exact matching, another person, 404s)",
+    "docs/drawings.md"
+   ],
+   "benefit": "You can go from a drawing to the note it is in with one click, matching the existing link from the note back to the drawing.",
+   "concerns": "Found by the note's link text, not a stored relationship: if the link line is edited out of the note, or the note is deleted, the button stops listing it; a note that merely contains the same Markdown link counts. Capped at 20 notes. Tried on screen locally with one note and with two (opened the right note each time); not tried on Railway, and not tried on a drawing with many notes. The list of drawings does not show it (open the drawing first). A LIKE search over the person's notes runs when a drawing opens: fine at normal note counts, not measured on a very large notes table. No package change, so a normal fast deploy."
+  },
+  {
    "commit": "ee9a38d7",
    "fullHash": "ee9a38d7b58bf347e8e48508aaaefc6e921037e9",
    "committedAt": "2026-11-08T10:09:22+10:00",
