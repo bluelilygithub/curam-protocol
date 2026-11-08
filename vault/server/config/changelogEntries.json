@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d021fb3b",
+   "fullHash": "d021fb3b18eecaa5dad2bdbc0a5bbc011004cde2",
+   "committedAt": "2026-11-09T08:02:26+10:00",
+   "author": "mrb",
+   "subject": "Plans: a client project's dates follow its plans",
+   "filesChanged": 16,
+   "insertions": 277,
+   "deletions": 15,
+   "area": "Plans",
+   "goal": "Stop a client project's start and target end dates drifting away from the plans that schedule its work, without ever overwriting dates the person typed.",
+   "whatChanged": "A client project's start and target end dates now follow the plans filed under it: the earliest start and the latest finish of its draft and active plans that have dates (server/services/projectPlanDates.js; a plan that is Done, Archived or undated does not count). They stay the project's own columns, so the Client work list, Notes' related items and the Tasks timeline show them with no change. The first time plans take over, the typed dates are kept in new columns ownStartDate and ownTargetEndDate (with datesFollowPlans, default true, and datesDerived) and are put back when the plans go away (deleted, archived, done, or nothing dated), when following is switched off, and the plan's dates return on Undo of a plan delete. A different date typed by hand in PUT /api/projects/:id switches following off; the same dates sent back change nothing. The sync runs on plan create, update (old and new project), step add, change and delete, dependency add and remove, plan delete and restore, and can never fail a plan change. New route PUT /api/client-projects/:id/dates-mode { follow }. The client project Brief shows \"from its plans\" with Use my own dates, or Follow its plans when off, and disables its date boxes while they come from plans. The Plans and CRM guides, the (i) text and docs/plans.md were updated.",
+   "filesImpacted": [
+    "server/services/projectPlanDates.js",
+    "server/services/plans.js",
+    "server/routes/plans.js",
+    "server/routes/projects.js",
+    "server/routes/clientProjects.js",
+    "server/services/recycleBin/adapters/plans.js",
+    "server/services/planTasks.js",
+    "server/db.js",
+    "client/src/pages/ClientProjectPage.jsx",
+    "server/services/plansTutor.js",
+    "server/services/crmTutor.js",
+    "client/src/pages/plans/plansTools.mjs",
+    "server/testing/routeManifest.json",
+    "docs/plans.md"
+   ],
+   "benefit": "Project dates in Client work and the Tasks timeline stay true to the actual plans, and the person can always get their own dates back.",
+   "concerns": "Writes to the project's own date columns, so every screen that shows them changes for any client project that has a dated plan; the generic project save (routes/projects.js) gained a hook that runs whenever a date is sent, so a mistake there could affect saving any project. The first takeover keeps the typed dates, but a project whose dates were typed AFTER plans took over (following off) has no stored copy of the plan dates. Four columns are added to projects at boot. Checked on screen only with test data (one client, one project, one plan, the two buttons), and by a real-database test; on a machine in a non-UTC timezone the Brief shows a plain date one day early (existing behaviour of its date formatting, the database value is right). The generic project form (ProjectDetail) does not say the dates come from plans; saving a different date there just turns following off. Not run on Railway."
+  },
+  {
    "commit": "b78ef146",
    "fullHash": "b78ef1465173aba3b2df10564bf3ff35ffd722fa",
    "committedAt": "2026-11-09T07:33:00+10:00",
