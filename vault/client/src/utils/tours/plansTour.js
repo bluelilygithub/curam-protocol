@@ -81,7 +81,7 @@ export function startPlansTour() {
   tour.addStep({
     id: 'plans-steps',
     title: 'Steps and lengths',
-    text: 'Inside a plan, add steps in the box under the Steps table and give each a length in working days. Choose + wait on to say which step must finish first: the step then starts the working day after it ends. A milestone has no length and shows as a diamond, and the plus button on a step puts sub-steps inside it.',
+    text: 'Inside a plan, press Add step and give each a length in working days. Press the pencil on a step to choose which step it waits on: the step then starts the working day after that one ends. A milestone has no length and shows as a diamond, and Add a sub-step in the same box puts sub-steps inside a step.',
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });

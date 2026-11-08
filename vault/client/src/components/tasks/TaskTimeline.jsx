@@ -109,8 +109,13 @@ function buildRows(tasks) {
 // onBarChange(taskId, { startDate, endDate }, 'move' | 'resize'): when given, a bar of a task that has its own startDate can be dragged to move it,
 // and its right edge dragged to change its length (a milestone can only be moved; a task with `locked: true`, such as a group, cannot be dragged).
 // Dates are whole days; the timeline only reports where the person dropped it and the caller decides what that means.
-export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PROJECT, onEdit, showBlocked = true, defaultZoom = 'month', onBarChange }) {
-  const [zoomKey, setZoomKey] = useState(defaultZoom);
+// Plans draws its own toolbar and legend and sets the look, so it passes: bare (hide this toolbar and legend), zoom (the zoom, controlled from outside),
+// scrollRef (the scrolling box, so the outside toolbar can move it), statusStyle (bar colours by status, { todo, 'in-progress', done } each { bg, border }) and
+// labelHeader (the heading of the name column). Tasks passes none of these and looks exactly as before.
+export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PROJECT, onEdit, showBlocked = true, defaultZoom = 'month', onBarChange, bare = false, zoom, scrollRef, statusStyle, labelHeader = 'Task' }) {
+  const [zoomState, setZoomKey] = useState(defaultZoom);
+  const zoomKey = zoom || zoomState;
+  const STYLES = statusStyle ? { ...STATUS_STYLE, ...statusStyle } : STATUS_STYLE;
   const [drag, setDrag] = useState(null); // { id, mode, days } while a bar is being dragged
   const dragRef = useRef(null);
   const { ppd } = ZOOM.find(z => z.key === zoomKey);
@@ -198,6 +203,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
 
       {/* ── Toolbar ── */}
+      {!bare && (<>
       <div
         className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
@@ -257,9 +263,10 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Dependency</span>
         </div>
       </div>
+      </>)}
 
       {/* ── Scrollable timeline ── */}
-      <div className="flex-1 overflow-auto">
+      <div ref={scrollRef} className="flex-1 overflow-auto">
         <div className="relative" style={{ minWidth: LABEL_W + totalW }}>
 
           {/* Date axis */}
@@ -272,7 +279,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
               className="flex-shrink-0 sticky left-0 z-30 flex items-end pb-2 px-3 border-r"
               style={{ width: LABEL_W, borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
             >
-              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Task</span>
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{labelHeader}</span>
             </div>
             {/* Tick labels */}
             <div className="relative flex-shrink-0" style={{ width: totalW }}>
@@ -304,7 +311,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
             const g      = live;
             const draggable = !!onBarChange && !task.locked && !!task.startDate;
             const status = resolveStatus(task);
-            const sty    = STATUS_STYLE[status] || STATUS_STYLE.todo;
+            const sty    = STYLES[status] || STYLES.todo;
             const rowBg  = i % 2 === 0 ? 'var(--color-bg)' : 'var(--color-surface)';
 
             return (
@@ -492,7 +499,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
           </p>
           <div className="flex flex-wrap gap-2">
             {unscheduled.map(task => {
-              const sty = STATUS_STYLE[task.status] || STATUS_STYLE.todo;
+              const sty = STYLES[task.status] || STYLES.todo;
               return (
                 <div
                   key={task.id}

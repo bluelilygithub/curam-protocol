@@ -16,7 +16,7 @@ Added 2026-11-08. A plan is a named set of **steps**, each with a length in work
 
 ## Send to Tasks (added 2026-11-08)
 
-A plan step reaches Tasks only when the person sends it. **A checklist button on every step** sends that step; **Send all to Tasks** (above the Steps table, with an inline Yes / No) sends every step not already there. `POST /api/plans/:id/send-to-tasks` with `{ all: true }` or `{ stepIds: [...] }`, in `server/services/planTasks.js`, one transaction.
+A plan step reaches Tasks only when the person sends it. **Send to Tasks in a step's Edit step box** sends that step; **Send all to Tasks** (above the Steps table, with an inline Yes / No) sends every step not already there. `POST /api/plans/:id/send-to-tasks` with `{ all: true }` or `{ stepIds: [...] }`, in `server/services/planTasks.js`, one transaction.
 
 - **What a task gets:** the step's title; `dueDate` = the step's **last day** (text, as Tasks stores it); `estimatedMinutes` = days x **480** (an eight-hour day, the same rule the Tasks timeline uses to draw a task's length; none for a milestone or a group); `isMilestone` for a milestone; the step's status (to do, in progress, done); priority medium; notes `From the plan "Name".` followed by the step's own notes. A step with no date yet (a plan with no start) is sent with **no due date** and the message says how many.
 - **Groups:** a group becomes a parent task (no estimate; its due date is when its last sub-step ends) and its sub-steps become **subtasks** (`parentTaskId`). The button on a group sends the group and everything inside it. A sub-step sent alone becomes a top-level task unless its group is already a task, in which case it goes under it.
@@ -135,3 +135,7 @@ In the Make a plan box, **Estimate lengths with AI** asks the model how many wor
 - **Recycle bin for a single step**, and a way to reorder steps by hand (they stay in the order they were added; groups keep their sub-steps under them).
 - **Not run on Railway.** Checked on a local copy: the plan list, creating a plan, adding steps, waits on, fit messages, the timeline, delete and Undo.
 - The route manifest got the 10 new routes by hand; `crossUser.test.js` still fails on 11 SERP Tracker routes that were committed without one (not from Plans).
+
+## Plan page layout (2026-11-09)
+
+An opened plan (`PlanEditor.jsx`) follows the design in `desktop.png`: a header (kind and status pill, large name, `client / project` links, **Plan settings** button), a read-only **dates row** (Starts, Finish by, Working week, Progress) and the fit banner, then **Steps** (numbered rows: name and what it waits on, start, length and end, a status select, a pencil and a delete icon; **Add step** and **Send all to Tasks** above), the **Timeline** (own Week / Month / Quarter, back / fit / forward controls and legend), **Plan notes**, and **Back to client**. Everything that used to sit inline now lives in three dialogs: **Plan settings** (name, dates, working week, status, client and project), **Add step** (stays open to add several) and **Edit step** (name, pinned start, days, milestone, waits on, sub-step, Send to Tasks). The timeline is the shared `TaskTimeline`, which gained optional props (`bare`, `zoom`, `scrollRef`, `statusStyle`, `labelHeader`) so Tasks is unchanged; Plans colours the bars from the theme.
