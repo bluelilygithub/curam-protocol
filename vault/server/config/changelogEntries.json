@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "3b0f4244",
+   "fullHash": "3b0f424422cbd1c5ed042730587ee1428ae5c4b2",
+   "committedAt": "2026-11-08T10:57:34+10:00",
+   "author": "mrb",
+   "subject": "Drawings: Draw it for me (dictate or type a scenario, the AI develops a diagram)",
+   "filesChanged": 13,
+   "insertions": 672,
+   "deletions": 7,
+   "area": "Drawings",
+   "goal": "Let a person dictate (or type) a scenario and have a diagram developed from it, instead of drawing every box and arrow by hand.",
+   "whatChanged": "New Draw it for me button above the drawing board. A panel takes a scenario said into the microphone or typed (the shared dictation text box), and Draw it adds the diagram to the open drawing as ordinary Excalidraw pieces, below anything already there (top left of the screen on an empty drawing), in the look the drawing is in; the panel closes and the board zooms to fit without zooming a small diagram in; one press of the board's Undo removes the whole diagram. A Change it box (say what to change) redraws the last diagram in the same place, replacing the pieces it made earlier (found by a run tag in their customData) and leaving anything drawn by hand around it; Start fresh forgets it; the diagram to change is kept for the visit only. New route POST /api/drawings/diagram (behind the AI rate limit and the drawings flag): one call on the workspace standard model asks for ONLY a structure (kind flow / org / mind map / timeline / relationship, direction, boxes with a short label and shape box / decision / start-end, and arrows with optional labels), never positions. The reply is untrusted and is checked and cleaned (safe unique ids, short labels, known shapes, arrows only between boxes that exist, up to 40 boxes and 80 arrows; unusable replies give a plain message, never raw model text); the person's words are fenced so they cannot pass for instructions. Only the words typed or said are sent, never any drawing; usage is logged as drawing_diagram. The layout is ours (layers by longest path, loops tolerated, boxes sized to wrapped labels, arrows bound to box edges) and goes through Excalidraw's convertToExcalidrawElements. Guide, help box, tour, tooltips, key-files and docs/drawings.md updated. No new package.",
+   "filesImpacted": [
+    "server/services/drawingDiagram.js (new: prompt, checking, ask) and drawingDiagram.test.js",
+    "server/routes/drawings.js (POST /diagram with aiLimiter)",
+    "server/testing/routeManifest.json (1 route)",
+    "client/src/pages/drawings/diagramLayout.mjs (new: layout) and diagramLayout.test.mjs",
+    "client/src/pages/drawings/DrawingEditor.jsx (button, panel, placing and replacing a diagram)",
+    "client/src/pages/drawings/drawingsTools.mjs, server/services/drawingsTutor.js and its test, client/src/utils/tours/drawingsTour.js (guide, help, tour)",
+    "docs/drawings.md, docs/key-files.md"
+   ],
+   "benefit": "A scenario said or typed becomes a tidy editable diagram in seconds, in the person's own look, and it can be adjusted by saying what to change.",
+   "concerns": "NOT TRIED WITH A REAL MODEL: there is no AI key locally, so the screen was checked with a stand-in that returns fixed diagrams (a flow with a decision, an org chart, a change that adds a box), including the Clean look, a reload and Undo. How good the boxes are from real descriptions, how long a call takes, and whether the 4,000-character and 40-box limits suit real use are unknown. Dictation by microphone was not tried (typing was). Costs one AI request per Draw it or Change it (logged in Usage as drawing_diagram), behind the existing AI rate limit. Flows, org charts, mind maps, timelines and relationship diagrams only: not drawings to scale (floor plans), illustrations, or reading or tidying a drawing the person made. A change replaces the last diagram including any hand edits to it, and cannot be made after the drawing has been closed. The keyboard Ctrl+Z sent by the browser-automation tool did not reach the board while the on-screen Undo button worked (probably the tool, not the app; not proven). Not run on Railway. No package change, so a normal fast deploy."
+  },
+  {
    "commit": "94b8cdb3",
    "fullHash": "94b8cdb324e97843590b38e3a3ce08c0255e3b83",
    "committedAt": "2026-11-08T10:42:03+10:00",
