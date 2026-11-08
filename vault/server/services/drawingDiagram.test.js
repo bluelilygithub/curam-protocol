@@ -41,6 +41,10 @@ const { DrawingError } = require('./drawings');
   assert.strictEqual(loopy.edges.length, 3);
   assert.deepStrictEqual(loopy.edges[2], { from: 'n3', to: 'n1', label: 'try again' });
   assert.match(D.SYSTEM, /Loops are fine/);
+  assert.match(D.SYSTEM, /Deposit paid\?/, 'waiting steps loop back');
+  assert.match(D.SYSTEM, /insert a step between two steps/, 'insert is described');
+  assert.match(D.SYSTEM, /add a step at the start/, 'prepend is described');
+  assert.match(D.SYSTEM, /add a step at the end/, 'append is described');
   assert.match(D.SYSTEM, /"both": true/);
 
   // limits

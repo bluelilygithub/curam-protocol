@@ -12,6 +12,7 @@ import { fileNameFor, isDarkColour, saveLabel, sceneSignature } from './sceneLog
 import { toClean, toSketch, lookDefaults, inkFromTheme, normaliseLook } from './lookConvert.mjs';
 import { saveDrawingToNotes } from './saveDrawingToNotes.mjs';
 import { layoutDiagram } from './diagramLayout.mjs';
+import { readDiagram } from './sceneDiagram.mjs';
 
 const SAVE_DELAY_MS = 1500; // a pause in drawing this long saves
 const RETRY_MS = 6000; // after a failed save (offline, server busy) it tries again this often
@@ -89,7 +90,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [aiText, setAiText] = useState('');
   const [aiChange, setAiChange] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
-  const [lastDiagram, setLastDiagram] = useState(null); // { diagram, run }
+  const [readable, setReadable] = useState(null); // the diagram on the drawing that can be changed by voice: { count, others } or null
   // Stretching: 'keep' (a stretch keeps the shape: nothing is squashed) or 'free' (wider or taller on its own). Holding Shift does the opposite for one drag.
   const [keepShape, setKeepShape] = useState(() => { try { return localStorage.getItem('vault:drawings:keepShape') === '1'; } catch { return false; } });
   const [gridOn, setGridOn] = useState(false); // the board's grid: shown, and what is drawn or moved snaps to it
@@ -334,14 +335,21 @@ export default function DrawingEditor({ id, onSavedChange }) {
   };
 
   // ---- Draw it for me ----
-  // Lays a diagram structure out and puts it on the drawing as ordinary pieces (one Undo removes it). A change REPLACES the diagram drawn
-  // last time (found by its run tag), in the same place, so what was drawn by hand around it is untouched.
+  // Lays a diagram structure out and puts it on the drawing as ordinary pieces (one Undo removes it). A change REPLACES the diagram it was
+  // read from (readDiagram: its boxes, writing and arrows), in the same place, so anything else on the drawing is untouched.
+  const refreshReadable = () => {
+    const ex = apiRef.current;
+    if (!ex) { setReadable(null); return; }
+    const r = readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds);
+    setReadable(r && !r.tooBig ? { count: r.count, others: r.others } : null);
+  };
+  useEffect(() => { if (aiOpen) refreshReadable(); }, [aiOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const placeDiagram = async (diagram, replace) => {
     const ex = apiRef.current;
     const existing = ex.getSceneElements();
     const run = Date.now().toString(36);
-    const old = replace ? existing.filter((e) => !e.isDeleted && e.customData && e.customData.vaultDiagram && e.customData.vaultDiagram.run === replace.run) : [];
-    const oldIds = new Set(old.map((e) => e.id));
+    const oldIds = replace ? replace.ids : new Set();
+    const old = existing.filter((e) => !e.isDeleted && oldIds.has(e.id));
     const others = existing.filter((e) => !e.isDeleted && !oldIds.has(e.id) && !(e.containerId && oldIds.has(e.containerId)));
     let origin;
     if (old.length) origin = { x: Math.min(...old.map((e) => e.x)), y: Math.min(...old.map((e) => e.y)) };
@@ -364,7 +372,6 @@ export default function DrawingEditor({ id, onSavedChange }) {
     }
     latestRef.current = { elements: ex.getSceneElements(), appState: ex.getAppState(), files: ex.getFiles() };
     markDirty();
-    setLastDiagram({ diagram, run });
   };
 
   const drawFromWords = async (change) => {
@@ -372,16 +379,22 @@ export default function DrawingEditor({ id, onSavedChange }) {
     if (!ex || !lib || aiBusy) return;
     const words = (change ? aiChange : aiText).trim();
     if (!words) { addToast(change ? 'Say what to change first.' : 'Say or type what you want drawn first.', 'error'); return; }
+    let cur = null;
+    if (change) {
+      cur = readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds);
+      if (!cur) { addToast('There is no diagram here to change yet: boxes with writing in them, joined by arrows.', 'error'); return; }
+      if (cur.tooBig) { addToast(`That diagram has ${cur.count} boxes, more than can be changed by voice (40).`, 'error'); return; }
+    }
     setAiBusy(true);
     startProcessing(change ? 'Changing your diagram…' : 'Drawing your diagram…', 'The AI is working out the boxes and arrows from your words. This takes a few seconds.');
     try {
-      const res = await api.post('/api/drawings/diagram', change ? { previous: lastDiagram.diagram, instruction: words } : { text: words });
+      const res = await api.post('/api/drawings/diagram', change ? { previous: cur.diagram, instruction: words } : { text: words });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.diagram) throw new Error(data.error || 'The diagram could not be drawn. Try again.');
       // the panel closes so the diagram gets the whole board; reopen it to change the diagram or draw another
       setAiOpen(false);
       await new Promise((r) => setTimeout(r, 300)); // let the board take its full size before it zooms to fit
-      await placeDiagram(data.diagram, change ? lastDiagram : null);
+      await placeDiagram(data.diagram, cur);
       if (change) setAiChange('');
       addToast('Drawn. Move, edit or Undo it like anything else.', 'success');
     } catch (err) {
@@ -648,9 +661,11 @@ export default function DrawingEditor({ id, onSavedChange }) {
               </button>
             </Tooltip>
           </div>
-          {lastDiagram && (
+          {readable && (
             <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Not quite right? Say what to change. This redraws the diagram you just made, so anything you edited in it by hand is replaced.</p>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Change the diagram on this drawing{readable.others ? ` (the one you have selected, or the biggest of ${readable.others + 1})` : ''}: {readable.count} boxes. Say what to change, for example insert a step, add one at the start or the end, or add a loop back. It is redrawn in the same place, so boxes you moved by hand in it are laid out again.
+              </p>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex-1 min-w-[14rem]" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); drawFromWords(true); } }}>
                   <Tooltip text="What to change, for example: add a step after the visit, make it left to right, or leave out the last box.">
@@ -661,9 +676,6 @@ export default function DrawingEditor({ id, onSavedChange }) {
                 </div>
                 <Tooltip text="Redraw the last diagram with this change.">
                   <button type="button" disabled={aiBusy || !aiChange.trim()} onClick={() => drawFromWords(true)} className={BTN} style={BTN_STYLE}>Change it</button>
-                </Tooltip>
-                <Tooltip text="Forget the last diagram, so the next one is drawn fresh and the last one stays as it is.">
-                  <button type="button" disabled={aiBusy} onClick={() => { setLastDiagram(null); setAiChange(''); }} className={BTN} style={BTN_STYLE}>Start fresh</button>
                 </Tooltip>
               </div>
             </div>
