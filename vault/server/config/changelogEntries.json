@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "ae108a3f",
+   "fullHash": "ae108a3f0ec62cb59f03a53128fa28e69e60cbf7",
+   "committedAt": "2026-11-09T08:11:20+10:00",
+   "author": "mrb",
+   "subject": "CRM tour: add a Plans step",
+   "filesChanged": 4,
+   "insertions": 21,
+   "deletions": 6,
+   "area": "CRM",
+   "goal": "Tell people about the Plans section on a client's page in the tour that explains the rest of that page.",
+   "whatChanged": "The client page's CRM tour (crmTour.js) gains a Plans step after Tasks, pointing at the Plans section (the section now carries data-tour crm-plans). It explains that each plan has steps with lengths and what waits on what, that New plan starts one filed under the client, that a plan can also be made from a note or diagram of the client, that tasks sent from a plan are filed under the client, and that a client project's dates follow its plans. The step is added only when the Plans section is on the page, so a person without Plans still sees the original 5 steps; the Step n of N count is now set when the tour starts (5 or 6) instead of being a constant. docs/plans.md and docs/crm-deals-schema.md mention the extra step.",
+   "filesImpacted": [
+    "client/src/utils/tours/crmTour.js",
+    "client/src/pages/ClientDetailPage.jsx",
+    "docs/plans.md",
+    "docs/crm-deals-schema.md"
+   ],
+   "benefit": "The tour covers every section a client page can show, and does not point at something a person cannot see.",
+   "concerns": "Checked on screen with Plans on (Step 1 of 6, then through to the Plans step, which highlights the section). The Plans-off path (5 steps, no Plans step) was not run, because an admin always has Plans locally; it is a single check for the section's toggle. The step counter text on steps 5 and 6 was not read on screen. No test covers this tour's step count."
+  },
+  {
    "commit": "d021fb3b",
    "fullHash": "d021fb3b18eecaa5dad2bdbc0a5bbc011004cde2",
    "committedAt": "2026-11-09T08:02:26+10:00",
