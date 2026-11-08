@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "ee464026",
+   "fullHash": "ee4640263278c5e5132001be07468ccb43f16cdb",
+   "committedAt": "2026-11-08T21:20:30+10:00",
+   "author": "mrb",
+   "subject": "Plans: send steps to Tasks",
+   "filesChanged": 11,
+   "insertions": 269,
+   "deletions": 15,
+   "area": "Plans",
+   "goal": "Let a plan step become a real task, so planned work shows up in Tasks (and its calendar and timeline views) when the person chooses, without plan steps ever leaking into Tasks by themselves.",
+   "whatChanged": "A checklist button on every plan step, and Send all to Tasks above the Steps table with an inline Yes / No, call the new POST /api/plans/:id/send-to-tasks (server/services/planTasks.js, one transaction). The task gets the step's title, the step's last day as its due date, days x 8 hours as the estimate (none for a milestone or group), the milestone flag, the step's status, and notes naming the plan. A group becomes a parent task and its sub-steps become subtasks; waits-on links between sent steps become task_dependencies (skipped if they would close a circle with dependencies already in Tasks). Each task is recorded in plan_links (kind task); a step whose task still exists is not sent twice, and if the task was deleted the stale link is replaced and the step can be sent again. GET /api/plans/:id now returns tasks: { stepId: { taskId, status } }. The button becomes a tick that opens Tasks. A plan with no start date sends tasks with no due date and says how many. The Plans guide (now 18 controls), the (i) box, tooltips and docs/plans.md were updated, and the route added to routeManifest.json.",
+   "filesImpacted": [
+    "server/services/planTasks.js",
+    "server/services/plans.js",
+    "server/routes/plans.js",
+    "client/src/pages/plans/PlanEditor.jsx",
+    "client/src/pages/plans/plansTools.mjs",
+    "server/services/plansTutor.js",
+    "server/services/plansTutor.test.js",
+    "server/routes/plans.db.test.js",
+    "server/testing/routeManifest.json",
+    "docs/plans.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "Planned work can be put into Tasks in one click, with dates, estimates, subtasks and dependencies, and stays out of Tasks, the digest and the calendar until the person decides.",
+   "concerns": "A one-way copy: later changes to a plan step are not pushed to the task, and tasks marked done in Tasks do not mark the step done; this is stated in the tooltips, (i) box, guide and docs. Sending creates real rows in tasks (which the digest, attention list and dashboard read), so a plan with many steps adds many tasks at once; the inline Yes / No is the only guard and there is no bulk undo (delete the tasks in Tasks). The route is not recycle-binned. The tick opens Tasks as a whole because Tasks has no per-task link. Checked on screen locally (send one, send all, the result in Tasks tree and timeline) and by a real-database test; not run on Railway. The 11 SERP Tracker routes missing from routeManifest.json (committed earlier) still fail crossUser.test.js and were left alone."
+  },
+  {
    "commit": "a443d9f3",
    "fullHash": "a443d9f31d40c7ff427948259ba9376d6cd8ada0",
    "committedAt": "2026-11-08T19:54:26+10:00",
