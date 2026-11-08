@@ -13,6 +13,7 @@ import { toClean, toSketch, lookDefaults, inkFromTheme, normaliseLook } from './
 import { saveDrawingToNotes } from './saveDrawingToNotes.mjs';
 import { layoutDiagram } from './diagramLayout.mjs';
 import { readDiagram, numberingInput } from './sceneDiagram.mjs';
+import PlanButton from './PlanButton';
 import { assignNumbers } from './shapeNumbers.mjs';
 
 const SAVE_DELAY_MS = 1500; // a pause in drawing this long saves
@@ -709,6 +710,11 @@ export default function DrawingEditor({ id, onSavedChange }) {
               </ul>
             )}
           </div>
+          <PlanButton
+            drawingId={id} title={title} disabled={!lib}
+            getDiagram={() => { const ex = apiRef.current; return ex ? readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds) : null; }}
+            beforeOpen={async () => { clearTimeout(timerRef.current); await save(); }}
+          />
         </div>
       </div>
       {aiOpen && (

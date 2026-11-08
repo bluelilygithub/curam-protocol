@@ -4248,6 +4248,15 @@
   },
   "POST /api/plans": {
    "class": "authed"
+  },
+  "GET /api/plans/by-source": {
+   "class": "authed"
+  },
+  "POST /api/plans/from-diagram/preview": {
+   "class": "authed"
+  },
+  "POST /api/plans/from-diagram": {
+   "class": "authed"
   }
  }
 }

@@ -37,6 +37,7 @@ export const HOW_IT_WORKS = [
   ['Sketch and Clean', 'Sketch is the hand-drawn look. Press Clean for a more conservative one: steady straight lines, square corners, straight arrows, solid fills, a plain font and Vault\'s own text colour for lines. Colours you chose yourself are kept. Every piece remembers how it was drawn, so pressing Sketch again gives you exactly what you drew, and Undo works too. New pieces you add start in the look the diagram is in. Each diagram in the list says which look it is in.'],
   ['Export and files', 'Export a PNG or SVG picture of the diagram, or save it as a file ending in .excalidraw that you can open again here (Open a file) or in other Excalidraw programs. The Pictures choice beside the buttons can show a picture in the other look without changing the diagram.'],
   ['To Notes', 'The To Notes button makes a new note named after the diagram, with the picture attached and shown inside the note (in Preview), and a link back to the diagram. You can file the note under a project or client as you save it. Once a diagram is in a note, the same button changes to In a note and opens a short list: go to the note, or Put in another note (its card in the list also has an In a note button). Later changes to the diagram are not copied into the note: choose Put in another note for a fresh picture.'],
+  ['Make a plan', 'The Make a plan button (beside To Notes, shown when Plans is switched on for you) turns the diagram into a plan. Each box becomes a step, each arrow means the next step waits for the one before, and decisions and end shapes become milestones. Decisions are taken as Yes, so the No branches are left out (a tick brings them back), and arrows that loop back to an earlier step are left out because a plan cannot go in circles. A box asks for the start date, the finish-by date and the working days each step takes, and a line says whether it fits. The plan is linked to the diagram, and the button then says In a plan.'],
   ['Private', 'Your diagrams are yours alone. Nobody else can see them, and there is no sharing link or live co-editing in Vault yet.'],
   ['Not included yet', 'Several people diagram at once, share links, diagrams to scale (such as a floor plan made from words), and sending a diagram into Graphics or Chat. Export a picture and use it there for now.'],
 ];
@@ -64,4 +65,5 @@ export const GUIDE_TOOLS = [
   { id: 'arrange', label: 'Select all, fit, stretch and grid', tool: 'editor' },
   { id: 'style', label: 'Sketch and Clean look', tool: 'editor' },
   { id: 'to-notes', label: 'To Notes', tool: 'editor' },
+  { id: 'make-plan', label: 'Make a plan', tool: 'editor' },
 ];

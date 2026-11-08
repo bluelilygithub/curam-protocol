@@ -7,7 +7,7 @@ import { useIcon } from '../providers/IconProvider';
 //
 //   <Dialog title="How this works" onClose={close} footer={<button>Got it</button>}>...body...</Dialog>
 //
-// Props: title (heading + accessible name) · icon (node beside the title) · footer (node, right-aligned) · size 'sm'|'md'|'lg'|'xl'
+// Props: title (heading + accessible name) · icon (node beside the title) · footer (node, right-aligned) · size 'sm'|'md'|'lg'|'xl'|'2xl'
 // · surface 'bg'|'surface' (panel colour) · position 'center'|'top' · role 'dialog'|'alertdialog' · closeOnBackdrop · closeOnEscape · hideClose
 // · bare (no header/footer: you draw the inside, and give it a name with `label` or `labelledBy`) · panelClassName · zIndex (Tailwind class, default z-50)
 //
@@ -17,7 +17,7 @@ import { useIcon } from '../providers/IconProvider';
 //   <Dialog raw onClose={close} overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4" overlayStyle={{ background: '...' }}
 //           panelClassName="w-full max-w-md rounded-2xl" panelStyle={{ background: 'var(--color-bg)' }}>...</Dialog>
 // Leave onClose out for a blocking prompt: the background and Escape then do nothing.
-const SIZE = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl' };
+const SIZE = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-4xl' };
 
 function StandardDialog({
   title, icon, footer, onClose, children,

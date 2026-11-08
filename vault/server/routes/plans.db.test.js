@@ -7,6 +7,8 @@
 //   - a plan with only an end date suggests the start that makes it finish on time;
 //   - one person cannot see, change or delete another's plan or steps (404), nor link a step from another person's plan;
 //   - plan steps never appear in the tasks table;
+//   - a plan can be made from a diagram: the preview saves nothing, a decision is assumed to be Yes, loops are left out, the plan is linked to the diagram,
+//     and a diagram that is not the caller's is refused;
 //   - delete goes to the recycle bin and Undo brings back the plan with its steps, groups and dependencies and the same dates.
 const assert = require('node:assert/strict');
 const express = require('express');
@@ -47,7 +49,7 @@ function serve() {
 
   try {
     // ---- a plan: make, refuse the wrong things, read, change ----
-    let r = await call(A, 'POST', '/', { title: 'Kitchen reno', startDate: '2026-12-07', targetEndDate: '2026-12-11' });
+    let r = await call(A, 'POST', '/', { title: 'Kitchen reno', startDate: '2026-12-07', targetEndDate: '2026-12-10' });
     assert.equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
     const planId = r.body.plan.id;
     assert.equal(r.body.plan.startDate, '2026-12-07');                       // a date stays a date, not a timestamp
@@ -83,9 +85,9 @@ function serve() {
     const sc = r.body.schedule;
     assert.deepEqual([sc.steps[demo.id].start, sc.steps[demo.id].end], ['2026-12-07', '2026-12-08']);
     assert.deepEqual([sc.steps[plumb.id].start, sc.steps[plumb.id].end], ['2026-12-09', '2026-12-11']);
-    assert.deepEqual([sc.steps[sign.id].start, sc.steps[sign.id].end], ['2026-12-14', '2026-12-14']);
-    assert.equal(sc.projectEnd, '2026-12-14');
-    assert.equal(sc.fit.fits, false);                                       // the plan wanted to be done by the 11th
+    assert.deepEqual([sc.steps[sign.id].start, sc.steps[sign.id].end], ['2026-12-11', '2026-12-11']);   // a milestone lands on the day the step before it ends
+    assert.equal(sc.projectEnd, '2026-12-11');
+    assert.equal(sc.fit.fits, false);                                       // the plan wanted to be done by the 10th
     assert.equal(sc.fit.overByWorkDays, 1);
     assert.equal(r.body.deps.length, 2);
 
@@ -93,7 +95,7 @@ function serve() {
     r = await call(A, 'PUT', `/${planId}`, { startDate: null, targetEndDate: '2026-12-18' });
     assert.equal(r.status, 200);
     assert.equal(r.body.schedule.scheduled, false);
-    assert.equal(r.body.schedule.suggestedStart, '2026-12-11');             // demolition 2 + plumbing 3 + sign-off 1 = six working days ending the 18th
+    assert.equal(r.body.schedule.suggestedStart, '2026-12-14');             // demolition 2 + plumbing 3 + a sign-off that takes no time = five working days ending the 18th
     r = await call(A, 'PUT', `/${planId}`, { startDate: '2026-12-07', targetEndDate: '2026-12-18' });
     assert.equal(r.body.schedule.fit.fits, true);
 
@@ -149,6 +151,64 @@ function serve() {
     r = await call(A, 'GET', `/${planId}`);
     assert.equal(r.body.steps.length, 3, 'the group and its sub-step are both gone');
 
+
+    // ---- a plan from a diagram ----
+    const mkDrawing = async (user, title) => (await pool.query(`INSERT INTO drawings ("userId", title, scene) VALUES ($1,$2,'{}') RETURNING id`, [user, title])).rows[0].id;
+    const drawA = await mkDrawing(A, 'Quote to job');
+    const drawB = await mkDrawing(B, 'B diagram');
+    const diagram = {
+      nodes: [
+        { id: 'n1', label: 'Start', shape: 'start-end' }, { id: 'n2', label: 'Send quote', shape: 'box' }, { id: 'n3', label: 'Customer accepts?', shape: 'decision' },
+        { id: 'n4', label: 'Book the job', shape: 'box' }, { id: 'n5', label: 'Close the job', shape: 'start-end' }, { id: 'n6', label: 'Do the job', shape: 'box' },
+      ],
+      edges: [{ from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n3', to: 'n4', label: 'Yes' }, { from: 'n3', to: 'n5', label: 'No' }, { from: 'n4', to: 'n6' }, { from: 'n6', to: 'n2', label: 'rework' }],
+    };
+    const dia = (extra = {}, user = A, path = '/from-diagram/preview') => call(user, 'POST', path, { diagram, ...extra });
+
+    r = await dia({ startDate: '2026-12-07', targetEndDate: '2026-12-11', durations: { n2: 2, n4: 1, n6: 3 } });
+    assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+    assert.deepEqual(r.body.steps.map((s) => s.title), ['Send quote', 'Customer accepts?', 'Book the job', 'Do the job']);   // Start dropped, the No branch left out
+    assert.deepEqual(r.body.leftOut, ['Close the job']);
+    assert.equal(r.body.droppedLoops, 1);                                                                                 // "rework" goes back to Send quote
+    assert.deepEqual(r.body.steps.map((s) => s.durationDays), [2, 0, 1, 3]);
+    assert.equal(r.body.schedule.steps.n2.start, '2026-12-07');
+    assert.equal(r.body.schedule.steps.n3.start, '2026-12-08');                                                           // the decision lands on the day the quote step ends
+    assert.equal(r.body.schedule.projectEnd, '2026-12-14');                                                               // 2 + 1 + 3 = six working days from Monday
+    assert.deepEqual([r.body.schedule.fit.fits, r.body.schedule.fit.overByWorkDays], [false, 1]);                          // one over the 11th
+    assert.equal((await dia({ includeNo: true })).body.steps.length, 5, 'with the No branch included');
+    assert.equal((await dia({ durations: { n2: 0 } })).status, 400, 'a length of 0 is refused');
+    assert.equal((await dia({ startDate: 'soon' })).status, 400);
+    assert.equal((await call(A, 'POST', '/from-diagram/preview', { diagram: { nodes: [], edges: [] } })).status, 400);
+    assert.equal((await call(A, 'POST', '/from-diagram/preview', {})).status, 400);
+    assert.equal((await call(A, 'GET', '/by-source?kind=drawing&id=' + drawA)).body.plans.length, 0, 'the preview saved nothing');
+
+    r = await dia({ title: 'Quote to job plan', drawingId: drawA, startDate: '2026-12-07', targetEndDate: '2026-12-11', durations: { n2: 2, n6: 3 } }, A, '/from-diagram');
+    assert.equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+    const made = r.body;
+    assert.equal(made.plan.title, 'Quote to job plan');
+    assert.equal(made.plan.sourceKind, 'drawing');
+    assert.equal(made.plan.sourceId, String(drawA));
+    assert.deepEqual(made.steps.map((s) => [s.title, s.durationDays, s.isMilestone]), [['Send quote', 2, false], ['Customer accepts?', 0, true], ['Book the job', 1, false], ['Do the job', 3, false]]);
+    assert.equal(made.deps.length, 3);
+    assert.equal(made.links.length, 1);
+    assert.deepEqual([made.links[0].kind, made.links[0].refId, made.links[0].label], ['drawing', String(drawA), 'Quote to job']);
+    assert.equal(made.schedule.projectEnd, '2026-12-14');
+    assert.equal(made.steps.find((s) => s.title === 'Book the job').notes, 'After "Customer accepts?": Yes');
+    r = await call(A, 'GET', '/by-source?kind=drawing&id=' + drawA);
+    assert.deepEqual(r.body.plans.map((p) => p.id), [made.plan.id]);
+    assert.equal((await call(B, 'GET', '/by-source?kind=drawing&id=' + drawA)).body.plans.length, 0, 'another person does not see plans made from this diagram');
+    assert.equal((await call(A, 'GET', '/by-source?kind=drawing')).status, 400);
+
+    // a diagram that is not the caller's, or does not exist, is refused and nothing is made
+    const beforeCount = (await call(A, 'GET', '/')).body.plans.length;
+    assert.equal((await dia({ drawingId: drawB }, A, '/from-diagram')).status, 404);
+    assert.equal((await dia({ drawingId: 999999 }, A, '/from-diagram')).status, 404);
+    assert.equal((await dia({ drawingId: 'abc' }, A, '/from-diagram')).status, 404);
+    assert.equal((await dia({ durations: { n2: -3 }, drawingId: drawA }, A, '/from-diagram')).status, 400);
+    assert.equal((await call(A, 'GET', '/')).body.plans.length, beforeCount, 'a refused request leaves no half-made plan');
+    assert.equal((await call(B, 'GET', `/${made.plan.id}`)).status, 404);
+    assert.equal((await dia({ title: 'no link' }, A, '/from-diagram')).body.links.length, 0, 'without a diagram there is no link');
+
     // ---- delete -> recycle bin -> Undo brings it back with steps, dependencies and the same dates ----
     assert.equal((await dep(sign.id, plumb.id)).status, 201);
     const before = (await call(A, 'GET', `/${planId}`)).body;
@@ -168,6 +228,7 @@ function serve() {
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await pool.query('DELETE FROM recycle_bin WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
+    await pool.query('DELETE FROM drawings WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
     await pool.query('DELETE FROM users WHERE id = ANY($1)', [[A, B]]).catch(() => {});
     await pool.end().catch(() => {});
   }

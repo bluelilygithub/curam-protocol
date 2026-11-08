@@ -4,6 +4,8 @@
 // planSchedule.js (no database). The HTTP layer is routes/plans.js. See docs/plans.md.
 
 const sched = require('./planSchedule');
+const fromDiagram = require('./planFromDiagram');
+const { PlanError } = require('./planErrors');
 
 const MAX_PLANS_PER_USER = 100;
 const MAX_STEPS_PER_PLAN = 300;
@@ -15,10 +17,6 @@ const STEP_STATUSES = ['todo', 'in-progress', 'done'];
 const PLAN_STATUSES = ['draft', 'active', 'done', 'archived'];
 const WORK_WEEKS = ['weekdays', 'all'];
 const DEFAULT_TITLE = 'Untitled plan';
-
-class PlanError extends Error {
-  constructor(message, status = 400, code = null) { super(message); this.status = status; this.code = code; }
-}
 
 const stripControl = (v) => String(v == null ? '' : v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g, ' ');
 const cleanTitle = (v, fallback = DEFAULT_TITLE) => stripControl(v).replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE) || fallback;
@@ -223,8 +221,73 @@ async function removeDependency(db, userId, planId, stepId, blockedByStepId) {
   await touch(db, userId, plan.id);
 }
 
+/** The draft for a diagram, with the person's lengths and dates applied and where everything lands. Nothing is saved. */
+function previewFromDiagram(body = {}) {
+  const startDate = cleanDate(body.startDate, 'Start date');
+  const targetEndDate = cleanDate(body.targetEndDate, 'End date');
+  if (startDate && targetEndDate && targetEndDate < startDate) throw new PlanError('The end date is before the start date.');
+  const workWeek = body.workWeek == null ? 'weekdays' : oneOf(body.workWeek, WORK_WEEKS, 'That work week');
+  const draft = fromDiagram.buildDraft(body.diagram, { includeNo: body.includeNo === true });
+  const steps = fromDiagram.applyDurations(draft.steps, body.durations);
+  let schedule;
+  try { schedule = fromDiagram.place(steps, { startDate, targetEndDate, workWeek }); } catch (err) { if (err.code === 'CYCLE') throw new PlanError(err.message); throw err; }
+  return { steps, droppedLoops: draft.droppedLoops, leftOut: draft.leftOut, schedule, startDate, targetEndDate, workWeek };
+}
+
+/** Make the plan from a diagram: the plan, its steps and their dependencies, and a link back to the diagram, all or nothing. */
+async function createFromDiagram(pool, userId, body = {}) {
+  const preview = previewFromDiagram(body);
+  const drawingId = body.drawingId == null || body.drawingId === '' ? 0 : idOf(body.drawingId);
+  if (body.drawingId != null && body.drawingId !== '' && !drawingId) throw new PlanError('That diagram was not found.', 404);
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    let drawing = null;
+    if (drawingId) {
+      const { rows } = await db.query('SELECT id, title FROM drawings WHERE id = $1 AND "userId" = $2', [drawingId, userId]);
+      if (!rows[0]) throw new PlanError('That diagram was not found.', 404); // the link is only ever written to a diagram the person owns
+      drawing = rows[0];
+    }
+    const { rows: n } = await db.query('SELECT COUNT(*) AS n FROM plans WHERE "userId" = $1', [userId]);
+    if (Number(n[0].n) >= MAX_PLANS_PER_USER) throw new PlanError(`You already have ${MAX_PLANS_PER_USER} plans. Delete one to make room.`, 409, 'LIMIT');
+    const { rows: planRows } = await db.query(
+      `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId")
+       VALUES ($1,$2,$3,'active',$4,$5,$6,$7,$8) RETURNING id`,
+      [userId, cleanTitle(body.title || (drawing && drawing.title), 'Plan from a diagram'), cleanText(body.description, MAX_DESCRIPTION),
+        preview.startDate, preview.targetEndDate, preview.workWeek, drawing ? 'drawing' : null, drawing ? String(drawing.id) : null]);
+    const planId = planRows[0].id;
+    const idOf2 = new Map();
+    let position = 0;
+    for (const s of preview.steps) {
+      const { rows } = await db.query(
+        `INSERT INTO plan_steps ("planId", "userId", title, notes, position, "durationDays", "isMilestone")
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [planId, userId, cleanTitle(s.title, 'Step'), cleanText(s.notes, MAX_NOTES), ++position, s.durationDays, s.isMilestone]);
+      idOf2.set(s.ref, rows[0].id);
+    }
+    for (const s of preview.steps) for (const b of s.waitsOn) {
+      await db.query('INSERT INTO plan_step_deps ("planId", "stepId", "blockedByStepId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [planId, idOf2.get(s.ref), idOf2.get(b)]);
+    }
+    if (drawing) await db.query('INSERT INTO plan_links ("userId", "planId", kind, "refId", label) VALUES ($1,$2,$3,$4,$5)', [userId, planId, 'drawing', String(drawing.id), cleanTitle(drawing.title, '')]);
+    await db.query('COMMIT');
+    return get(pool, userId, planId);
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally { db.release(); }
+}
+
+/** The person's plans that were made from one thing (a diagram, for now): { id, title } each, newest first. */
+async function listBySource(db, userId, kind, id) {
+  const k = cleanText(kind, 40); const ref = cleanText(id, 100);
+  if (!k || !ref) throw new PlanError('Say which diagram.');
+  const { rows } = await db.query(
+    `SELECT id, title FROM plans WHERE "userId" = $1 AND "sourceKind" = $2 AND "sourceId" = $3 ORDER BY "createdAt" DESC, id DESC LIMIT 50`, [userId, k, ref]);
+  return rows;
+}
+
 module.exports = {
-  PlanError, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
+  PlanError, previewFromDiagram, createFromDiagram, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
   cleanTitle, cleanText, cleanDate, cleanDuration, PLAN_COLS, STEP_COLS,
   list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
 };

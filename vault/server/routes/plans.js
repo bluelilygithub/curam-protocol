@@ -5,6 +5,9 @@
 //
 //   GET    /api/plans                                   list (counts, no steps)
 //   POST   /api/plans                                   { title?, description?, startDate?, targetEndDate?, workWeek? }
+//   GET    /api/plans/by-source?kind=drawing&id=7       the person's plans made from that diagram { plans: [{ id, title }] }
+//   POST   /api/plans/from-diagram/preview              { diagram, durations?, startDate?, targetEndDate?, workWeek?, includeNo? }  steps, what was left out, where they land (saves nothing)
+//   POST   /api/plans/from-diagram                      the same, plus { title?, drawingId? }: makes the plan and links it to the diagram
 //   GET    /api/plans/:id                               the plan, its steps, dependencies, links and where every step lands
 //   PUT    /api/plans/:id                               { title?, description?, status?, startDate?, targetEndDate?, workWeek? }
 //   DELETE /api/plans/:id                               into the recycle bin
@@ -30,6 +33,19 @@ function fail(res, err, where) {
 
 router.get('/', async (req, res) => {
   try { res.json({ plans: await plans.list(pool, req.user.id), max: plans.MAX_PLANS_PER_USER }); } catch (err) { fail(res, err, 'list'); }
+});
+
+// Named routes come before /:id.
+router.get('/by-source', async (req, res) => {
+  try { res.json({ plans: await plans.listBySource(pool, req.user.id, req.query.kind, req.query.id) }); } catch (err) { fail(res, err, 'bySource'); }
+});
+
+router.post('/from-diagram/preview', (req, res) => {
+  try { res.json(plans.previewFromDiagram(req.body || {})); } catch (err) { fail(res, err, 'previewFromDiagram'); }
+});
+
+router.post('/from-diagram', async (req, res) => {
+  try { res.status(201).json(await plans.createFromDiagram(pool, req.user.id, req.body || {})); } catch (err) { fail(res, err, 'createFromDiagram'); }
 });
 
 router.post('/', async (req, res) => {

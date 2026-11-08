@@ -101,7 +101,9 @@ function schedule({ steps = [], deps = [], startDate = null, targetEndDate = nul
     const id = queue.shift();
     const s = byId.get(id);
     let earliest = nextWorkDay(base, workWeek);
-    for (const b of blockers.get(id)) earliest = maxISO(earliest, nextWorkDay(plusDays(out.get(b).end, 1), workWeek));
+    // A step starts the working day after the steps it waits on end. A milestone is a point in time, not work, so it lands ON the day
+    // the last of them ends (a decision or sign-off adds no day to the plan); the step after it then starts the day after.
+    for (const b of blockers.get(id)) earliest = maxISO(earliest, s.isMilestone ? nextWorkDay(out.get(b).end, workWeek) : nextWorkDay(plusDays(out.get(b).end, 1), workWeek));
     const pin = isISO(s.startDate) ? nextWorkDay(s.startDate, workWeek) : null;
     const start = pin || earliest;
     out.set(id, { start, end: endOf(start, s.isMilestone ? 0 : s.durationDays, workWeek), conflict: !!pin && pin < earliest, isGroup: false });

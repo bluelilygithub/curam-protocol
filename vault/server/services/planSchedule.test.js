@@ -68,11 +68,16 @@ assert.equal(p.schedule({ steps: [S(1, 1)], startDate: '2026-12-12' }).steps.get
   assert.equal(r.steps.get(3).conflict, false);
 }
 
-// ---- milestones take no time; the step after one starts the next working day ----
+// ---- milestones take no time: one lands on the day the step before it ends; the step after it starts the next working day ----
 {
   const r = p.schedule({ steps: [S(1, 2), S(2, 5, { isMilestone: true }), S(3, 1)], deps: [{ stepId: 2, blockedByStepId: 1 }, { stepId: 3, blockedByStepId: 2 }], startDate: '2026-12-07' });
-  assert.deepEqual([r.steps.get(2).start, r.steps.get(2).end], ['2026-12-09', '2026-12-09']);   // the 5 days are ignored for a milestone
-  assert.equal(r.steps.get(3).start, '2026-12-10');
+  assert.deepEqual([r.steps.get(2).start, r.steps.get(2).end], ['2026-12-08', '2026-12-08']);   // A ends the 8th; the 5 days are ignored for a milestone
+  assert.equal(r.steps.get(3).start, '2026-12-09');
+  // two milestones in a row share a day, and a milestone with nothing before it sits on the plan's first day
+  const m = p.schedule({ steps: [S(1, 0, { isMilestone: true }), S(2, 0, { isMilestone: true }), S(3, 1)], deps: [{ stepId: 2, blockedByStepId: 1 }, { stepId: 3, blockedByStepId: 2 }], startDate: '2026-12-07' });
+  assert.equal(m.steps.get(1).start, '2026-12-07');
+  assert.equal(m.steps.get(2).start, '2026-12-07');
+  assert.equal(m.steps.get(3).start, '2026-12-08');
 }
 
 // ---- a group spans its children and takes no dependencies of its own ----
