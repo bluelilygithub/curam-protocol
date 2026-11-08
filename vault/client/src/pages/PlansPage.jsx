@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
@@ -9,6 +9,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import PlanList from './plans/PlanList';
 import PlanEditor from './plans/PlanEditor';
+import PlansTutorChat from './plans/PlansTutorChat';
+import { TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './plans/plansTools.mjs';
 
 /**
  * Plans: steps with dates and "waits on" links, drawn as a Gantt. /plans is the list, /plans/:id is one plan.
@@ -18,7 +20,9 @@ export default function PlansPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
   const getIcon = useIcon();
+  const navigate = useNavigate();
   const { id } = useParams();
+  const view = id ? 'editor' : 'list';
   const info = useToolInfoModal('vault_plans_info_seen');
 
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
@@ -31,6 +35,12 @@ export default function PlansPage() {
       .catch(() => {})
       .finally(() => setAccessKnown(true));
   }, []);
+
+  // The guide's "Open" buttons: switch to the view that holds the control. A plan has to be opened first, so from the list this says so.
+  const openToolById = (toolId) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === toolId);
+    if (target && target.tool === 'list' && view !== 'list') navigate('/plans');
+  };
 
   if (accessKnown && !canUse) return <Navigate to="/" replace />;
 
@@ -47,7 +57,7 @@ export default function PlansPage() {
           <Tooltip text="How Plans work, and what they do not do yet.">
             <button type="button" onClick={info.open} aria-label="How Plans work" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('info', { size: 13 })}</button>
           </Tooltip>
-          {!id && <p className="text-sm ml-2" style={{ color: 'var(--color-muted)' }}>Steps with dates, and which ones wait on which, drawn as a timeline.</p>}
+          <p className="text-sm ml-2" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[view]}</p>
         </div>
         {id ? <PlanEditor key={id} id={Number(id)} /> : <PlanList />}
       </div>
@@ -55,17 +65,16 @@ export default function PlansPage() {
       {info.show && (
         <ToolInfoModal title="How Plans Work" onClose={info.close}>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            A plan is a list of steps, each with a length in working days. Say when it starts and Plans works out when every step lands, and whether it finishes by your end date. Your plans are saved to your account and nobody else can see them.
+            A plan is a list of steps, each with a length in working days. Say when it starts and Plans works out when every step lands, and whether it finishes by your end date. Your plans are saved to your account and nobody else can see them. Not sure where to start? Press the round guide button at the bottom right and say what you want to do.
           </p>
           <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <p style={{ color: 'var(--color-text)' }}><strong>Start, end and length</strong> — give any two and Plans fills in the third. Start plus step lengths gives the finish; an end date plus step lengths suggests the start. If all three disagree it says by how many working days.</p>
-            <p style={{ color: 'var(--color-text)' }}><strong>Waits on</strong> — a step that waits on another starts the working day after it ends. Steps that wait on nothing start together.</p>
-            <p style={{ color: 'var(--color-text)' }}><strong>Pin a start</strong> — set a step's own start date to hold it there. If a step it waits on runs past that day it is marked as clashing.</p>
-            <p style={{ color: 'var(--color-text)' }}><strong>Groups and milestones</strong> — a step with sub-steps spans them. A milestone takes no time and shows as a diamond.</p>
-            <p style={{ color: 'var(--color-text)' }}><strong>Not built yet</strong> — making a plan from a diagram, sending a step to Tasks, dragging bars, a calendar layer, a tour and a guide chat.</p>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
           </div>
         </ToolInfoModal>
       )}
+      <PlansTutorChat currentTool={view} onOpenTool={openToolById} />
     </VoiceInputProvider>
   );
 }

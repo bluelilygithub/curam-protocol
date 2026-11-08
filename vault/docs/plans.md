@@ -14,6 +14,16 @@ Added 2026-11-08. A plan is a named set of **steps**, each with a length in work
 - **The timeline** is the Tasks timeline fed from the plan (`showBlocked={false}`, because waiting is normal in a plan; opens at Week zoom when the plan is four weeks or shorter). Clicking a bar jumps to the step's row. It is read-only: no dragging yet.
 - **Delete:** a plan goes to the shared recycle bin whole (steps, dependencies and links, dates as text) with an Undo button, 30 days. **A single step is deleted for good** (its sub-steps and links go with it; the page asks first). Steps are not recycle-binned yet.
 
+## Help: the (i) box, tooltips and the guide chat (added 2026-11-08)
+
+- **(i) box** ("How Plans Work") opens on the first visit (`localStorage` `vault_plans_info_seen`) and from the (i) button beside the title. Its text is `HOW_IT_WORKS` in `client/src/pages/plans/plansTools.mjs`, the same list the guide reads, so the two cannot say different things. It covers steps and lengths, start/finish/length, waits on, pinning, groups, the timeline, making a plan from a diagram, privacy and what is not included.
+- **Tooltips** (the shared `Tooltip`, readable and always inside the window) are on **every control**: the Start a plan fields and button, search, each plan card's open and delete buttons, every field in a plan's header (name, start, finish by, working week, status, notes), every column of the Steps table (name, pinned start and its unpin button, days, waits-on tags and the + wait on choice, status, milestone, sub-step and delete buttons, the Yes/No of a delete), the add-a-step row (name, days, milestone, Add), the Use-this-start button, and in Diagrams the Make a plan button and every field in its box. Each says what the control does in plain words and how to say it with the microphone where there is one.
+- **Microphone** on every text box (plan name, notes, step names, new-step names, search, the dialog's plan name). Number and date boxes are typed.
+- **Guide chat** (the round button at the bottom right of /plans): the **Plans guide** (`guideId` `plans`, `POST /api/plans-tutor`, flag `plans`, `server/services/plansTutor.js` on `guideCore.js`, `server/routes/plansTutor.js` on `guideRouter.js`, wrapper `client/src/pages/plans/PlansTutorChat.jsx` on the shared `components/tutor/TutorChat.jsx`, usage feature `plans_guide`). A person says what they want ("make step B start after A", "will it finish by Friday?") and it points at the real views and controls in order, with Open buttons that switch the page between the list and a plan, or says plainly that Plans cannot do it. It knows 17 views and controls (`CATALOG`), 9 rules and 9 things Plans does not do; it sees no plan, never changes anything, and says that Plans itself uses no AI (only the guide is AI, and nothing in a plan is sent to a model). It also knows that **Make a plan from a diagram** is a button on the Diagrams page. The page and the guide share `plansTools.mjs` (views, group and view tooltips, blurbs, the (i) text and `GUIDE_TOOLS`); **when a Plans control is added or changed, update `plansTools.mjs` and `CATALOG` in `plansTutor.js` together**. `node server/services/plansTutor.test.js` (and `npm run test:guides`) fail if they drift apart or if the catalogue stops saying something it must not get wrong (for example that the timeline is read-only, that a single deleted step cannot be undone, that decisions from a diagram are taken as Yes). Email-this-conversation, dragging, wide/narrow and the microphone come free with the shared chat.
+- **Descriptions** that appear on screen: the line under the title (`TOOL_BLURBS`), the empty-state text on the list, the fit line, the notice lists in the diagram box, and each view's hover text (`TOOL_TIPS`, `GROUP_TIPS`).
+- **Checked on screen locally:** the (i) box, the round button and the guide's opening message and four starter questions. **No question was sent to a real model** (no AI key locally); the guide's logic is covered by `plansTutor.test.js` with a stand-in model.
+- **Not built:** a guided tour (the compass button and a Settings tour entry), as Sketchbook and Diagrams have.
+
 ## Where things are
 
 | Piece | File |
@@ -25,7 +35,8 @@ Added 2026-11-08. A plan is a named set of **steps**, each with a length in work
 | recycle bin | `server/services/recycleBin/adapters/plans.js` (type `plan`) |
 | pages | `client/src/pages/PlansPage.jsx`, `plans/PlanList.jsx`, `plans/PlanEditor.jsx`, `plans/planLogic.mjs` |
 | shared timeline (now takes `startDate`, `showBlocked`, `defaultZoom`) | `client/src/components/tasks/TaskTimeline.jsx` |
-| tests | `node server/services/planSchedule.test.js`, `node client/src/pages/plans/planLogic.test.mjs`, `DATABASE_URL=... node server/routes/plans.db.test.js` |
+| the guide | `server/services/plansTutor.js`, `server/routes/plansTutor.js` (`/api/plans-tutor`), `client/src/pages/plans/PlansTutorChat.jsx`, `plansTools.mjs` (views, tooltips, blurbs, the (i) text, the guide's control list), `server/config/guides.js` |
+| tests | `node server/services/planSchedule.test.js`, `node client/src/pages/plans/planLogic.test.mjs`, `DATABASE_URL=... node server/routes/plans.db.test.js`, `node server/services/planFromDiagram.test.js`, `node server/services/plansTutor.test.js` |
 
 ## Rules worth knowing
 
@@ -58,7 +69,7 @@ The **Make a plan** button in Diagrams (beside To Notes; shown only when Plans i
 - **Estimate the lengths with AI.** Diagram to plan is built, but every step is one working day until the person types a length. An **Estimate lengths** button (a model call, with its own cost, rate limit and a fence round the diagram's words) was deliberately left until the plain version has been tried on a real diagram. **Make a plan from a note** is not built either.
 - **Diagram to plan was checked on screen with a test diagram inserted directly into the local database**, not one drawn by the AI (no model key locally); a real hand-drawn or AI-drawn diagram on Railway is untried.
 - **Send a step, or a whole plan, to Tasks**; a calendar layer; dragging bars to move or resize; a critical-path highlight.
-- **A tour, a guide chat and an entry in Settings -> tours**, as the other tools have. The (i) box, tooltips on every control and the microphone on every text box are done.
+- **A guided tour** (the compass button and an entry in Settings -> tours), as Sketchbook and Diagrams have. The (i) box, tooltips on every control, the microphone on every text box and the guide chat are done (see "Help").
 - **Recycle bin for a single step**, and a way to reorder steps by hand (they stay in the order they were added; groups keep their sub-steps under them).
 - **Not run on Railway.** Checked on a local copy: the plan list, creating a plan, adding steps, waits on, fit messages, the timeline, delete and Undo.
 - The route manifest got the 10 new routes by hand; `crossUser.test.js` still fails on 11 SERP Tracker routes that were committed without one (not from Plans).

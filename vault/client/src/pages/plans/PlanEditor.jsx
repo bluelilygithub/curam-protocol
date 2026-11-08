@@ -59,7 +59,7 @@ function AddStep({ onAdd, busy, parentStepId = null, onCancel }) {
       <Tooltip text="Add it to the plan.">
         <button type="button" onClick={submit} disabled={busy || !title.trim()} className={BTN} style={BTN_STYLE}>Add</button>
       </Tooltip>
-      {onCancel && <button type="button" onClick={onCancel} className={BTN} style={BTN_STYLE}>Cancel</button>}
+      {onCancel && <Tooltip text="Do not add a sub-step after all."><button type="button" onClick={onCancel} className={BTN} style={BTN_STYLE}>Cancel</button></Tooltip>}
     </div>
   );
 }
@@ -118,7 +118,9 @@ export default function PlanEditor({ id }) {
     return (
       <div className="p-6 space-y-3 max-w-[1700px]">
         <p className="text-sm" style={{ color: 'var(--color-text)' }} role="alert">{loadError}</p>
-        <button type="button" onClick={() => navigate('/plans')} className={BTN} style={BTN_STYLE}>{getIcon('arrow-left', { size: 13 })} Back to plans</button>
+        <Tooltip text="Go back to your list of plans.">
+          <button type="button" onClick={() => navigate('/plans')} className={BTN} style={BTN_STYLE}>{getIcon('arrow-left', { size: 13 })} Back to plans</button>
+        </Tooltip>
       </div>
     );
   }

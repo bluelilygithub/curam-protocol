@@ -1,0 +1,113 @@
+'use strict';
+
+// The Plans guide (the round button on Vault's /plans page): a person says what they want to do ("plan a kitchen reno", "make step B start
+// after step A", "will this finish by Friday?") and the guide points at the real views and controls, in order, or says plainly that Plans does
+// not do it. It only knows what is written here and never sees any plan. Built on guideCore.js; the ids are the page's own, listed in
+// client/src/pages/plans/plansTools.mjs (a test keeps the two in step). See docs/guide-chat.md and docs/plans.md.
+
+const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
+
+const CATALOG = [
+  { id: 'list', label: 'Your plans', group: 'Your plans',
+    does: 'Shows every plan you have, newest change first, each as a card with its name, how many steps are done out of how many, its start and finish-by dates when it has them, and its status if it is not active. Click a plan\'s name to open it. Each card has a Delete button.',
+    notes: 'Only your own plans appear. You can keep up to 100.' },
+  { id: 'new', label: 'Start a plan', group: 'Your plans',
+    does: 'The Start a plan box at the top of the list: type or say (with the microphone) a name, optionally pick a Start date and a Finish by date, and press Make plan. The plan is made and opened so you can add its steps.',
+    notes: 'The dates are optional and can be set or changed later on the plan. Leaving the name empty makes a plan called Untitled plan. Nothing is asked for the steps here: they are added on the plan itself.' },
+  { id: 'search', label: 'Search', group: 'Your plans',
+    does: 'The search box above your plans narrows the list to plans whose name or notes have all the words you type. The microphone beside it lets you say the words.',
+    notes: 'It searches a plan\'s name and notes, not its steps.' },
+  { id: 'delete', label: 'Delete and undo', group: 'Your plans',
+    does: 'The Delete button on a plan card asks "Delete? Yes / No". After Yes the plan leaves the list, with all its steps, and a message appears with an Undo button for a few seconds. Afterwards it stays in the recycle bin in Settings for 30 days, where it can still be put back.',
+    notes: 'After 30 days a deleted plan is gone for good. Undo brings back the plan with its steps, groups, waits-on links and the same dates.' },
+  { id: 'from-diagram', label: 'Make a plan from a diagram', group: 'Your plans',
+    does: 'This button is on the Diagrams page, beside To Notes, not on the Plans page, and it only shows when Plans is switched on for the person. It turns a diagram into a plan: each box with writing in it becomes a step, each arrow means the next step waits for the one before, and a decision (diamond) or an end oval becomes a milestone. A box opens asking for the start date, the finish-by date, the working week and the days each step takes, and a line says whether it fits. Create plan makes the plan, links it to the diagram and opens it; the button then reads In a plan and lists the plans made from that diagram.',
+    notes: 'Every decision is taken as Yes: arrows leaving a decision that say No, and steps only reachable through them, are left out unless Include the No branches is ticked. Arrows that loop back to an earlier step are left out because a plan cannot go in circles. A Start oval is dropped. Every step is one working day until a length is typed. No AI is used. Up to 40 boxes. A later change to the diagram is not copied into a plan already made.' },
+  { id: 'editor', label: 'One plan', group: 'One plan',
+    does: 'An opened plan: at the top its name, dates, working week, status and a line saying whether it fits; then its notes; then the Steps table where every step is edited and added; and under that the timeline. A Plans button at the top goes back to the list.',
+    notes: 'Changes save by themselves: a name or notes when you click away, a date or a choice as soon as you change it. There is no Save button.' },
+  { id: 'dates', label: 'Start, finish by and working week', group: 'One plan',
+    does: 'At the top of a plan: Start is the first day of work, Finish by is the date it must be done by, and Working week chooses Monday to Friday or Every day. Step lengths are counted in working days, so with Monday to Friday a step that runs over a weekend skips it. Clearing the Start date works backwards from the Finish by date.',
+    notes: 'Both dates are optional. With no Start date (and no pinned step) nothing can be dated, and the plan says so. The end date cannot be before the start date.' },
+  { id: 'fit', label: 'Does it fit?', group: 'One plan',
+    does: 'The line under the dates in a plan says how the steps compare with the Finish by date: Fits exactly, Fits with some working days to spare, or Over by some working days (with when the steps actually finish, and what to do about it). With a Finish by date but no Start date it suggests a start, and a Use button sets it. With no Finish by date it just says when the plan finishes and how many working days that is.',
+    notes: 'It never shortens a step or reorders anything by itself: if it is over, you shorten a step, run two at once (remove a waits-on), or move the end date. If some steps wait on each other in a circle it says so and nothing is dated.' },
+  { id: 'steps', label: 'Add and edit steps', group: 'One plan',
+    does: 'In the Steps table of a plan: type (or say, with the microphone) a step name in the box under the table, set its days, and press Add (Enter in the name box also adds it). Each row has the step\'s name, start, days, end, what it waits on, its status and three small buttons: milestone, add a sub-step and delete. A name saves when you click away from it.',
+    notes: 'A plan can have up to 300 steps. Steps stay in the order they were added, with sub-steps under their group; they cannot be re-ordered by hand yet. The start and end columns are worked out for you.' },
+  { id: 'length', label: 'Days a step takes', group: 'One plan',
+    does: 'The Days box on a step is how many working days it takes, a whole number from 1 up. Change it and every step after it that waits on it moves, and the fit line updates. A milestone has no days.',
+    notes: 'Whole working days only, no hours or part-days. A step left at 1 takes one working day. The most is 3,650 days.' },
+  { id: 'waits-on', label: 'Waits on', group: 'One plan',
+    does: 'The Waits on column of a step: choose + wait on and pick another step that must finish first. It shows as a small tag with the step\'s name, and the step now starts the working day after that one ends. Pick several and it waits for the last to finish. Press a tag to remove the link. Steps with nothing to wait on start together on the first day.',
+    notes: 'A step cannot wait on itself, and two steps cannot wait on each other, directly or through others: that is refused with a message. A group takes no waits-on of its own: link its sub-steps. The only kind of link is finish-then-start; there are no start-together links or gaps.' },
+  { id: 'pin', label: 'Pin a step to a day', group: 'One plan',
+    does: 'Change the date in a step\'s Starts box and the step is pinned to that day: a small pin button appears beside it, and the step stays there whatever comes before it. Press the pin to unpin it, and it starts as soon as the steps it waits on are done.',
+    notes: 'If a step it waits on runs past the pinned day, the step is marked clashes and its end date turns amber; the date is kept, not moved. A pinned start on a weekend moves to the next working day.' },
+  { id: 'groups', label: 'Groups and sub-steps', group: 'One plan',
+    does: 'The plus button on a step adds a sub-step inside it. The step becomes a group: it is shown with its sub-steps indented under it, has no days of its own, and spans from its first sub-step to its last. Sub-steps can have their own days, waits-on links and pins.',
+    notes: 'A step that waits on something, or that something waits on, cannot hold sub-steps (its plus button is greyed out): remove its links first, or link the sub-steps instead. Deleting a group deletes its sub-steps.' },
+  { id: 'milestones', label: 'Milestones', group: 'One plan',
+    does: 'The diamond button on a step makes it a milestone: a point in time with no length, such as a sign-off or a decision, shown as a diamond on the timeline. A milestone lands on the day the last step it waits on ends, and the step after it starts the next working day. You can also tick Milestone when adding a step. Press the diamond again to make it a normal one-day step.',
+    notes: 'A milestone adds no day to the plan. A group cannot be a milestone.' },
+  { id: 'status', label: 'Status', group: 'One plan',
+    does: 'Each step has a status (To do, In progress, Done) in its row, and the plan has a status at the top (Draft, Active, Done, Archived). The list shows how many steps are done on each plan\'s card.',
+    notes: 'They are labels for you. Marking a step Done does not change any date, and the plan status does not change anything either.' },
+  { id: 'timeline', label: 'The timeline', group: 'One plan',
+    does: 'Under the steps, the timeline draws every dated step as a bar from its first to its last day, a diamond for a milestone, an arrow for each waits-on link and a line for today. Week, Month and Quarter change how much fits on screen (a plan of four weeks or less opens at Week). Click a bar to jump to that step\'s row. Steps that cannot be dated yet are listed under Unscheduled.',
+    notes: 'It is read-only: you cannot drag or stretch a bar yet, so change dates and lengths in the Steps table. It also stretches to show the Finish by date when the steps run past it.' },
+  { id: 'delete-step', label: 'Delete a step', group: 'One plan',
+    does: 'The bin button on a step asks "Delete? Yes / No". After Yes the step goes, together with its sub-steps and any waits-on links to it, and the steps that waited on it move earlier.',
+    notes: 'A single deleted step cannot be undone and does not go to the recycle bin; only a whole deleted plan can be put back. The question is asked first.' },
+];
+
+const RULES = [
+  'Your plans is the list, where a new plan is started; one plan is where its dates and steps are set. The Start a plan box and the plan cards are on the list; the dates, the Steps table and the timeline are inside an opened plan. Make a plan from a diagram is a button on the Diagrams page.',
+  'Changes in a plan save by themselves. There is no Save button to press.',
+  'Plan steps are not Tasks. They do not appear in the task list, the weekly digest, the attention list or the calendar. There is no way yet to send a step to Tasks.',
+  'All lengths are whole working days. Dates are worked out for the person: they give the start and the lengths, and Plans works out when each step lands and whether it fits.',
+  'A step starts the working day after the steps it waits on end. A milestone lands on the day the step before it ends. Steps that wait on nothing start together on the first day.',
+  'Plans does not use AI to make a plan or its dates. Only this guide chat is AI. Nothing in a plan is ever sent to a model.',
+  'Delete on a plan asks first and shows an Undo button; a deleted plan also waits 30 days in the recycle bin in Settings. Deleting a single step cannot be undone.',
+  'Plans are private to the person. There is no sharing and no planning together with other people.',
+  'The Open buttons in this chat only switch to a tool (a view of the page); they never add, change or delete a step or a plan by themselves.',
+];
+
+const NOT_POSSIBLE = [
+  'Making a plan from a note, or having the AI work out how long each step will take: lengths are the numbers the person types, one working day when left empty. A plan can be made from a diagram (the Make a plan button in Diagrams).',
+  'Dragging or stretching the bars on the timeline: it is read-only. Change a step\'s start and days in the Steps table instead.',
+  'Sending a step, or a whole plan, to Tasks, or showing a plan on the calendar: not built yet.',
+  'Putting a single deleted step back: only a whole deleted plan can be undone.',
+  'Re-ordering steps by hand: they stay in the order they were added, with sub-steps under their group.',
+  'Hours or part-days, people, costs or resources, or a highlighted critical path: lengths are whole working days only.',
+  'Any kind of link except finish-then-start: there are no start-together links, overlaps or gaps between steps.',
+  'Keeping a plan up to date with the diagram it was made from: a plan made from a diagram is a copy, and later changes to the diagram are not copied into it.',
+  'Sharing a plan with other people, a link to it, or planning together.',
+];
+
+const SYSTEM = `You are the guide to Plans in Vault for one person who plans work as steps with lengths and dates. They say, in everyday words, what they want to do. You point them to the right view and controls and say plainly when Plans cannot do something.
+
+Rules:
+- Use ONLY the tools and rules given below. Never invent a button or a feature, and never promise something the notes say Plans cannot do.
+- You cannot see any plan, its name, its steps or its dates. Never state or guess what a person's plans contain, and never add, change or delete anything yourself: point at the controls.
+- Be plain and short, as to a friend who is not technical. Avoid jargon.
+- Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
+- Be clear about where each control is: the list of plans, or inside an opened plan, or the Diagrams page for Make a plan from a diagram.
+- Plans uses no AI and costs nothing to use; do not say otherwise.
+- If they ask for something in the list of things Plans does not do, say so plainly and, where the notes allow, suggest the nearest thing that does work (for example, a plan can be made from a diagram, and dates can be changed in the Steps table).
+- If you need one more fact to answer, ask ONE short question and give no steps.
+${VERDICT_HELP}
+
+${REPLY_FORMAT}`;
+
+const guide = createGuide({
+  name: 'Plans guide', feature: 'plans_guide', catalog: CATALOG, rules: RULES, notPossible: NOT_POSSIBLE, system: SYSTEM,
+  toolWord: 'tool', sectionTitle: 'PLANS VIEWS AND CONTROLS',
+  fallbackAnswer: 'Sorry, I could not work that out. Could you say again what you want to plan or do, in a sentence?',
+});
+
+module.exports = {
+  CATALOG, RULES, NOT_POSSIBLE, SYSTEM, VERDICTS: guide.VERDICTS,
+  buildTutorPrompt: guide.buildPrompt, cleanMessages: guide.cleanMessages, normalizeTutorReply: guide.normalizeReply,
+  askPlansTutor: guide.ask,
+};

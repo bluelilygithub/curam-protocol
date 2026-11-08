@@ -4257,6 +4257,9 @@
   },
   "POST /api/plans/from-diagram": {
    "class": "authed"
+  },
+  "POST /api/plans-tutor": {
+   "class": "authed"
   }
  }
 }
