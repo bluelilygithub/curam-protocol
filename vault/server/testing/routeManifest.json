@@ -4260,6 +4260,9 @@
   },
   "POST /api/plans-tutor": {
    "class": "authed"
+  },
+  "POST /api/plans/:id/send-to-tasks": {
+   "class": "authed"
   }
  }
 }

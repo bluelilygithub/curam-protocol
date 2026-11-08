@@ -8,6 +8,7 @@
 //   GET    /api/plans/by-source?kind=drawing&id=7       the person's plans made from that diagram { plans: [{ id, title }] }
 //   POST   /api/plans/from-diagram/preview              { diagram, durations?, startDate?, targetEndDate?, workWeek?, includeNo? }  steps, what was left out, where they land (saves nothing)
 //   POST   /api/plans/from-diagram                      the same, plus { title?, drawingId? }: makes the plan and links it to the diagram
+//   POST   /api/plans/:id/send-to-tasks                 { all: true } or { stepIds: [..] }  makes real tasks from steps (a one-way copy), links them back
 //   GET    /api/plans/:id                               the plan, its steps, dependencies, links and where every step lands
 //   PUT    /api/plans/:id                               { title?, description?, status?, startDate?, targetEndDate?, workWeek? }
 //   DELETE /api/plans/:id                               into the recycle bin
@@ -21,6 +22,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const plans = require('../services/plans');
+const planTasks = require('../services/planTasks');
 
 const router = express.Router();
 const BIN_TYPE = 'plan';
@@ -81,6 +83,10 @@ router.delete('/:id', async (req, res) => {
     if (err && err.code === 'TOO_LARGE') return res.status(413).json({ error: 'This plan is too big to keep in the recycle bin, so it was not deleted.' });
     fail(res, err, 'delete');
   } finally { db.release(); }
+});
+
+router.post('/:id/send-to-tasks', async (req, res) => {
+  try { res.status(201).json(await planTasks.sendToTasks(pool, req.user.id, req.params.id, req.body || {})); } catch (err) { fail(res, err, 'sendToTasks'); }
 });
 
 router.post('/:id/steps', async (req, res) => {

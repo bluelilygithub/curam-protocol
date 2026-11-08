@@ -77,7 +77,13 @@ async function get(db, userId, planId) {
   const plan = await ownedPlan(db, userId, planId);
   const { steps, deps } = await loadSteps(db, userId, plan.id);
   const { rows: links } = await db.query(`SELECT id, "stepId", kind, "refId", label, "createdAt" FROM plan_links WHERE "planId" = $1 AND "userId" = $2 ORDER BY id`, [plan.id, userId]);
-  return { plan, steps, deps, links, ...computed(plan, steps, deps) };
+  // Steps that have been sent to Tasks and whose task still exists (a deleted task drops out): stepId -> { taskId, status }.
+  const { rows: sent } = await db.query(
+    `SELECT l."stepId", t.id AS "taskId", t.status FROM plan_links l JOIN tasks t ON t.id::text = l."refId" AND t."userId" = l."userId"
+      WHERE l."planId" = $1 AND l."userId" = $2 AND l.kind = 'task' AND l."stepId" IS NOT NULL ORDER BY l.id`, [plan.id, userId]);
+  const tasks = {};
+  for (const r of sent) tasks[r.stepId] = { taskId: r.taskId, status: r.status };
+  return { plan, steps, deps, links, tasks, ...computed(plan, steps, deps) };
 }
 
 function computed(plan, steps, deps) {
@@ -289,5 +295,5 @@ async function listBySource(db, userId, kind, id) {
 module.exports = {
   PlanError, previewFromDiagram, createFromDiagram, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
   cleanTitle, cleanText, cleanDate, cleanDuration, PLAN_COLS, STEP_COLS,
-  list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
+  touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
 };

@@ -56,6 +56,9 @@ const CATALOG = [
   { id: 'timeline', label: 'The timeline', group: 'One plan',
     does: 'Under the steps, the timeline draws every dated step as a bar from its first to its last day, a diamond for a milestone, an arrow for each waits-on link and a line for today. Week, Month and Quarter change how much fits on screen (a plan of four weeks or less opens at Week). Click a bar to jump to that step\'s row. Steps that cannot be dated yet are listed under Unscheduled.',
     notes: 'It is read-only: you cannot drag or stretch a bar yet, so change dates and lengths in the Steps table. It also stretches to show the Finish by date when the steps run past it.' },
+  { id: 'tasks', label: 'Send to Tasks', group: 'One plan',
+    does: 'In the Steps table, the checklist button on a step sends it to Tasks as a real task: the step\'s last day becomes the due date, its days (at eight hours a day) become the estimate, its status carries over, a milestone stays a milestone, and the plan\'s name and the step\'s notes go in the task\'s notes. On a group it sends the group as a task and its sub-steps as subtasks. Send all to Tasks, above the table, does it for every step not already in Tasks, after asking Yes or No. Steps that wait on each other become tasks that wait on each other. Once a step is in Tasks its button becomes a tick, and pressing the tick opens Tasks. A message offers an Open Tasks link.',
+    notes: 'It is a one-way copy made at that moment: later changes to a step are not copied to the task, and changing or deleting the task does not touch the plan. A step already in Tasks is not sent twice; if its task is deleted, the step can be sent again. A step with no date yet (the plan has no start date) is sent without a due date, and the message says so. A task with a due date shows in the Tasks calendar view like any other.' },
   { id: 'delete-step', label: 'Delete a step', group: 'One plan',
     does: 'The bin button on a step asks "Delete? Yes / No". After Yes the step goes, together with its sub-steps and any waits-on links to it, and the steps that waited on it move earlier.',
     notes: 'A single deleted step cannot be undone and does not go to the recycle bin; only a whole deleted plan can be put back. The question is asked first.' },
@@ -64,7 +67,7 @@ const CATALOG = [
 const RULES = [
   'Your plans is the list, where a new plan is started; one plan is where its dates and steps are set. The Start a plan box and the plan cards are on the list; the dates, the Steps table and the timeline are inside an opened plan. Make a plan from a diagram is a button on the Diagrams page.',
   'Changes in a plan save by themselves. There is no Save button to press.',
-  'Plan steps are not Tasks. They do not appear in the task list, the weekly digest, the attention list or the calendar. There is no way yet to send a step to Tasks.',
+  'Plan steps are not Tasks until the person sends them: until then they do not appear in the task list, the weekly digest, the attention list or the calendar. Send to Tasks copies a step into Tasks once; the copy is not kept in step with the plan.',
   'All lengths are whole working days. Dates are worked out for the person: they give the start and the lengths, and Plans works out when each step lands and whether it fits.',
   'A step starts the working day after the steps it waits on end. A milestone lands on the day the step before it ends. Steps that wait on nothing start together on the first day.',
   'Plans does not use AI to make a plan or its dates. Only this guide chat is AI. Nothing in a plan is ever sent to a model.',
@@ -76,7 +79,8 @@ const RULES = [
 const NOT_POSSIBLE = [
   'Making a plan from a note, or having the AI work out how long each step will take: lengths are the numbers the person types, one working day when left empty. A plan can be made from a diagram (the Make a plan button in Diagrams).',
   'Dragging or stretching the bars on the timeline: it is read-only. Change a step\'s start and days in the Steps table instead.',
-  'Sending a step, or a whole plan, to Tasks, or showing a plan on the calendar: not built yet.',
+  'Showing a plan on the calendar as a layer of its own: not built yet (a step sent to Tasks does show in the Tasks calendar view).',
+  'Keeping a task in step with its plan step: sending is a one-way copy. Change the task in Tasks, or delete it and send the step again.',
   'Putting a single deleted step back: only a whole deleted plan can be undone.',
   'Re-ordering steps by hand: they stay in the order they were added, with sub-steps under their group.',
   'Hours or part-days, people, costs or resources, or a highlighted critical path: lengths are whole working days only.',

@@ -9,6 +9,8 @@
 //   - plan steps never appear in the tasks table;
 //   - a plan can be made from a diagram: the preview saves nothing, a decision is assumed to be Yes, loops are left out, the plan is linked to the diagram,
 //     and a diagram that is not the caller's is refused;
+//   - steps can be sent to Tasks: one step or all, a group becomes a parent task and its sub-steps subtasks, waits-on links become task
+//     dependencies, a step already in Tasks is not sent twice, a deleted task lets the step be sent again, and another person cannot send;
 //   - delete goes to the recycle bin and Undo brings back the plan with its steps, groups and dependencies and the same dates.
 const assert = require('node:assert/strict');
 const express = require('express');
@@ -208,6 +210,90 @@ function serve() {
     assert.equal((await call(A, 'GET', '/')).body.plans.length, beforeCount, 'a refused request leaves no half-made plan');
     assert.equal((await call(B, 'GET', `/${made.plan.id}`)).status, 404);
     assert.equal((await dia({ title: 'no link' }, A, '/from-diagram')).body.links.length, 0, 'without a diagram there is no link');
+
+    // ---- send to Tasks ----
+    const tplan = (await call(A, 'POST', '/', { title: 'Garden', startDate: '2026-12-07', targetEndDate: '2026-12-31' })).body.plan.id;
+    const tadd = async (body) => (await call(A, 'POST', `/${tplan}/steps`, body)).body.step;
+    const dig = await tadd({ title: 'Dig', durationDays: 2, notes: 'Mind the pipes' });
+    const grp = await tadd({ title: 'Planting' });
+    const sow = await tadd({ title: 'Sow', parentStepId: grp.id, durationDays: 3 });
+    const ready = await tadd({ title: 'Garden ready', isMilestone: true });
+    assert.equal((await call(A, 'POST', `/${tplan}/steps/${sow.id}/deps`, { blockedByStepId: dig.id })).status, 201);
+    assert.equal((await call(A, 'POST', `/${tplan}/steps/${ready.id}/deps`, { blockedByStepId: sow.id })).status, 201);
+    const send = (body, user = A, id = tplan) => call(user, 'POST', `/${id}/send-to-tasks`, body);
+    const taskRow = async (id) => (await pool.query('SELECT title, notes, status, "parentTaskId", "dueDate", "estimatedMinutes", "isMilestone", "userId" FROM tasks WHERE id = $1', [id])).rows[0];
+
+    assert.equal((await send({})).status, 400, 'nothing chosen');
+    assert.equal((await send({ stepIds: [999999] })).status, 404);
+    assert.equal((await send({ stepIds: [stepB.id] })).status, 404, 'a step from another plan is not found');
+    assert.equal((await send({ all: true }, B)).status, 404, 'another person cannot send');
+    assert.equal((await send({ stepIds: [dig.id] }, B)).status, 404);
+    assert.equal(Number((await pool.query('SELECT COUNT(*) AS n FROM tasks WHERE "userId" = $1', [A])).rows[0].n), 0, 'refused requests made nothing');
+
+    // one step
+    r = await send({ stepIds: [dig.id] });
+    assert.equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+    assert.equal(r.body.created.length, 1);
+    const digTask = r.body.created[0].taskId;
+    let row = await taskRow(digTask);
+    assert.equal(row.title, 'Dig');
+    assert.equal(row.dueDate, '2026-12-08');                          // the step's last day, as text
+    assert.equal(row.estimatedMinutes, 960);                          // 2 days x 8 hours
+    assert.equal(row.isMilestone, 0);
+    assert.equal(row.status, 'todo');
+    assert.equal(row.userId, A);
+    assert.equal(row.parentTaskId, null);
+    assert.match(row.notes, /^From the plan "Garden"\./);
+    assert.match(row.notes, /Mind the pipes/);
+    const link = (await pool.query(`SELECT kind, "refId", "stepId" FROM plan_links WHERE "planId" = $1 AND kind = 'task'`, [tplan])).rows;
+    assert.deepEqual(link, [{ kind: 'task', refId: String(digTask), stepId: dig.id }]);
+    assert.equal((await call(A, 'GET', `/${tplan}`)).body.tasks[dig.id].taskId, digTask);
+
+    // the same step again is not sent twice
+    r = await send({ stepIds: [dig.id] });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.created.length, 0);
+    assert.equal(r.body.skipped.length, 1);
+
+    // the whole plan: the rest are made, the one already there is skipped
+    r = await send({ all: true });
+    assert.equal(r.body.created.length, 3);
+    assert.equal(r.body.skipped.length, 1);
+    assert.equal(r.body.dependencies, 2);
+    const taskOfStep = Object.fromEntries([...r.body.created, { stepId: dig.id, taskId: digTask }].map((c) => [c.stepId, c.taskId]));
+    row = await taskRow(taskOfStep[grp.id]);
+    assert.equal(row.estimatedMinutes, null, 'a group has no length of its own');
+    assert.equal(row.parentTaskId, null);
+    assert.equal(row.dueDate, '2026-12-11');                          // a group ends when its last sub-step does
+    row = await taskRow(taskOfStep[sow.id]);
+    assert.equal(row.parentTaskId, taskOfStep[grp.id], 'a sub-step is a subtask of its group\'s task');
+    assert.equal(row.estimatedMinutes, 1440);
+    assert.equal(row.dueDate, '2026-12-11');
+    row = await taskRow(taskOfStep[ready.id]);
+    assert.equal(row.isMilestone, 1);
+    assert.equal(row.estimatedMinutes, null);
+    const tdeps = (await pool.query('SELECT "taskId", "blockedByTaskId" FROM task_dependencies WHERE "taskId" = ANY($1)', [Object.values(taskOfStep)])).rows;
+    assert.deepEqual(tdeps.map((d) => [d.taskId, d.blockedByTaskId]).sort(), [[taskOfStep[sow.id], digTask], [taskOfStep[ready.id], taskOfStep[sow.id]]].sort(), 'waits-on became task dependencies');
+    assert.equal(Object.keys((await call(A, 'GET', `/${tplan}`)).body.tasks).length, 4);
+
+    // another person sees none of it
+    assert.equal(Number((await pool.query(`SELECT COUNT(*) AS n FROM tasks WHERE "userId" = $1 AND notes LIKE 'From the plan%'`, [B])).rows[0].n), 0);
+
+    // a task that was deleted: the step is no longer "in Tasks" and can be sent again, with one link, not two
+    await pool.query('DELETE FROM tasks WHERE id = $1', [digTask]);
+    assert.equal((await call(A, 'GET', `/${tplan}`)).body.tasks[dig.id], undefined);
+    r = await send({ stepIds: [dig.id] });
+    assert.equal(r.body.created.length, 1);
+    assert.equal(Number((await pool.query(`SELECT COUNT(*) AS n FROM plan_links WHERE "planId" = $1 AND kind = 'task' AND "stepId" = $2`, [tplan, dig.id])).rows[0].n), 1, 'the stale link was replaced');
+
+    // a plan with no dates: the task is made without a due date, and the answer says so
+    const loose = (await call(A, 'POST', '/', { title: 'No dates yet' })).body.plan.id;
+    await call(A, 'POST', `/${loose}/steps`, { title: 'Think about it' });
+    r = await send({ all: true }, A, loose);
+    assert.equal(r.body.created.length, 1);
+    assert.equal(r.body.undated, 1);
+    assert.equal((await taskRow(r.body.created[0].taskId)).dueDate, null);
+    assert.equal((await send({ all: true }, A, (await call(A, 'POST', '/', { title: 'Empty' })).body.plan.id)).status, 400, 'a plan with no steps has nothing to send');
 
     // ---- delete -> recycle bin -> Undo brings it back with steps, dependencies and the same dates ----
     assert.equal((await dep(sign.id, plumb.id)).status, 201);

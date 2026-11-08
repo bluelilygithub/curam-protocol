@@ -75,6 +75,7 @@ export default function PlanEditor({ id }) {
   const [busy, setBusy] = useState(false);
   const [confirmId, setConfirmId] = useState(null);
   const [addingUnder, setAddingUnder] = useState(null);
+  const [confirmSendAll, setConfirmSendAll] = useState(false);
   const [description, setDescription] = useState('');
 
   const load = useCallback(async () => {
@@ -108,6 +109,20 @@ export default function PlanEditor({ id }) {
   const addDep = (stepId, blockedByStepId) => send('post', `/steps/${stepId}/deps`, { blockedByStepId });
   const removeDep = (stepId, blockedByStepId) => send('delete', `/steps/${stepId}/deps/${blockedByStepId}`);
 
+  // Send steps to Tasks: a one-way copy. The server makes the tasks and links them back; the page then shows which steps are in Tasks.
+  const sendToTasks = async (body) => {
+    setConfirmSendAll(false);
+    setBusy(true);
+    try {
+      const res = await api.post(`/api/plans/${id}/send-to-tasks`, body);
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error || 'That could not be sent to Tasks. Try again.');
+      const n = out.created.length;
+      addToast(n ? `Sent ${n} ${n === 1 ? 'step' : 'steps'} to Tasks.${out.undated ? ` ${out.undated === 1 ? 'One has' : `${out.undated} have`} no date yet.` : ''}` : 'That is already in Tasks.', 'success', undefined, n ? { label: 'Open Tasks', href: '/tasks' } : undefined);
+      await load();
+    } catch (err) { addToast(err.message, 'error'); } finally { setBusy(false); }
+  };
+
   const rows = useMemo(() => (data ? orderedRows(data.steps) : []), [data]);
   const fit = useMemo(() => (data ? fitMessage(data.plan, data.schedule) : null), [data]);
   const tlTasks = useMemo(() => (data ? timelineTasks(data.steps, data.deps, data.schedule) : []), [data]);
@@ -126,7 +141,10 @@ export default function PlanEditor({ id }) {
   }
   if (!data) return <div className="p-6 space-y-4 max-w-[1700px]"><Skeleton className="h-28" label="Loading the plan" /><Skeleton className="h-64" label="Loading the steps" /></div>;
 
-  const { plan, steps, deps, schedule } = data;
+  const { plan, steps, deps, schedule, tasks = {} } = data;
+  const unsent = steps.filter((st) => !tasks[st.id]).length;
+  // a step and everything inside it: sending a group sends its sub-steps with it
+  const subtree = (stepId) => { const out = [stepId]; for (const k of steps) if (k.parentStepId === stepId) out.push(...subtree(k.id)); return out; };
   const placed = schedule?.steps || {};
   const jumpToStep = (stepId) => { const el = document.getElementById(`plan-step-${stepId}`); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.querySelector('input')?.focus(); } };
 
@@ -203,7 +221,20 @@ export default function PlanEditor({ id }) {
 
       {/* The steps */}
       <section className="rounded-2xl border p-5 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Steps</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Steps</h2>
+          {steps.length > 0 && (confirmSendAll ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Send {unsent} {unsent === 1 ? 'step' : 'steps'} to Tasks?</span>
+              <Tooltip text="Yes, make a task for each step that is not in Tasks yet. They are copies: later changes to the plan are not copied to them."><button type="button" onClick={() => sendToTasks({ all: true })} disabled={busy} className={BTN} style={BTN_STYLE}>Yes</button></Tooltip>
+              <Tooltip text="No, send nothing."><button type="button" onClick={() => setConfirmSendAll(false)} className={BTN} style={BTN_STYLE}>No</button></Tooltip>
+            </div>
+          ) : (
+            <Tooltip text={unsent === 0 ? 'Every step is already in Tasks.' : 'Make a task for every step that is not in Tasks yet. A step\'s last day becomes the due date and its days become the estimate; groups become tasks with subtasks, and waits-on links become task dependencies. You are asked first.'}>
+              <button type="button" onClick={() => setConfirmSendAll(true)} disabled={busy || unsent === 0} className={BTN} style={BTN_STYLE}>{getIcon('list-checks', { size: 13 })} {unsent === 0 ? 'All in Tasks' : 'Send all to Tasks'}</button>
+            </Tooltip>
+          ))}
+        </div>
         <div className="overflow-x-auto">
           <div className="min-w-[980px] space-y-2">
             <div className={`${GRID} text-xs`} style={LABEL_STYLE}>
@@ -292,6 +323,10 @@ export default function PlanEditor({ id }) {
                           <Tooltip text="Add a sub-step inside this step. The step then spans its sub-steps.">
                             <button type="button" onClick={() => setAddingUnder(addingUnder === step.id ? null : step.id)} disabled={busy || myDeps.length > 0 || deps.some((d) => d.blockedByStepId === step.id)}
                               className={SMALL} style={BTN_STYLE} aria-label={`Add a sub-step to ${step.title}`}>{getIcon('plus', { size: 12 })}</button>
+                          </Tooltip>
+                          <Tooltip text={tasks[step.id] ? 'This step is a task in Tasks. Open Tasks to see it. Later changes to the step are not copied to the task.' : (isGroup ? 'Send this group, and the sub-steps inside it, to Tasks as tasks with subtasks. A later change to the plan is not copied to them.' : 'Send this step to Tasks as a task: its last day is the due date and its days are the estimate. A later change to the step is not copied to the task.')}>
+                            <button type="button" onClick={() => (tasks[step.id] ? navigate('/tasks') : sendToTasks({ stepIds: subtree(step.id) }))} disabled={busy}
+                              className={SMALL} style={{ ...BTN_STYLE, ...(tasks[step.id] ? { color: 'var(--color-primary)' } : {}) }} aria-label={tasks[step.id] ? `${step.title} is in Tasks: open Tasks` : `Send ${step.title} to Tasks`}>{getIcon(tasks[step.id] ? 'check' : 'list-checks', { size: 12 })}</button>
                           </Tooltip>
                           <Tooltip text="Delete this step. You are asked first.">
                             <button type="button" onClick={() => setConfirmId(step.id)} disabled={busy} className={SMALL} style={BTN_STYLE} aria-label={`Delete ${step.title}`}>{getIcon('trash', { size: 12 })}</button>

@@ -34,8 +34,9 @@ export const HOW_IT_WORKS = [
   ['Groups', 'Add a sub-step inside a step and that step becomes a group: it has no length of its own and spans its sub-steps. A step that waits on something, or is waited on, cannot become a group; link its sub-steps instead.'],
   ['The timeline', 'Under the steps, the timeline draws every step as a bar from its first to its last day, with an arrow for each waits-on link and a line for today. Choose Week, Month or Quarter. Click a bar to jump to its step. You cannot drag the bars yet.'],
   ['From a diagram', 'In Diagrams, the Make a plan button turns a diagram into a plan: each box a step, each arrow a waits-on, decisions taken as Yes. It asks for the dates and the days each step takes, and links the plan back to the diagram.'],
-  ['Private, and not Tasks', 'Your plans are yours alone. Plan steps are not Tasks: they do not appear in your task list, the weekly digest or the calendar. A deleted plan waits 30 days in the recycle bin in Settings, and an Undo button appears straight away.'],
-  ['Not included yet', 'Sending a step or a plan to Tasks, showing a plan on the calendar, dragging bars, making a plan from a note, the AI estimating the lengths, sharing a plan, and a recycle bin for a single deleted step.'],
+  ['Send to Tasks', 'Plan steps are not Tasks until you send them, so they stay out of your task list, the weekly digest and the calendar. The checklist button on a step sends it to Tasks as a real task: its last day is the due date and its days are the estimate. Send all to Tasks does every step that is not there yet, and a group goes with its sub-steps as subtasks. It is a copy made at that moment: later changes to the plan are not copied to the task.'],
+  ['Private', 'Your plans are yours alone. A deleted plan waits 30 days in the recycle bin in Settings, and an Undo button appears straight away. A deleted step cannot be undone.'],
+  ['Not included yet', 'Showing a plan on the calendar, keeping a task in step with its plan step, dragging bars, making a plan from a note, the AI estimating the lengths, sharing a plan, and a recycle bin for a single deleted step.'],
 ];
 
 // Everything the guide can point at: the two views plus the controls inside them.
@@ -56,5 +57,6 @@ export const GUIDE_TOOLS = [
   { id: 'milestones', label: 'Milestones', tool: 'editor' },
   { id: 'status', label: 'Status', tool: 'editor' },
   { id: 'timeline', label: 'The timeline', tool: 'editor' },
+  { id: 'tasks', label: 'Send to Tasks', tool: 'editor' },
   { id: 'delete-step', label: 'Delete a step', tool: 'editor' },
 ];
