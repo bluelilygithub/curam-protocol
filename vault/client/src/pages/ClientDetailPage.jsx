@@ -608,7 +608,7 @@ export default function ClientDetailPage() {
 
           {/* Plans: the dated plans filed under this client (docs/plans.md "Clients"); left out when Plans is off for this person */}
           {clientPlans.available && (
-            <Section title={`Plans${clientPlans.plans?.length ? ` (${clientPlans.plans.length})` : ''}`} open={sections.plans} onToggle={() => toggleSection('plans')}>
+            <Section tourId="crm-plans" title={`Plans${clientPlans.plans?.length ? ` (${clientPlans.plans.length})` : ''}`} open={sections.plans} onToggle={() => toggleSection('plans')}>
               <ClientPlansBody plans={clientPlans.plans} clientId={id} name={client.name} />
             </Section>
           )}

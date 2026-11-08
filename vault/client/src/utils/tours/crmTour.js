@@ -4,7 +4,8 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_crm_client_completed';
 
-const TOTAL_STEPS = 5;
+// 5 steps, plus one for Plans when that section is on the page (it is left out when Plans is switched off for the person), so the count is set when the tour starts.
+let totalSteps = 5;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -17,7 +18,7 @@ function injectStepCounter(stepIndex) {
       const footer = el.querySelector('.shepherd-footer');
       if (footer) footer.parentNode.insertBefore(counter, footer);
     }
-    counter.textContent = `Step ${stepIndex} of ${TOTAL_STEPS}`;
+    counter.textContent = `Step ${stepIndex} of ${totalSteps}`;
   });
 }
 
@@ -36,6 +37,8 @@ function ensureSectionOpen(tourId) {
 
 export function startCrmTour() {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
+  const hasPlans = !!document.querySelector('[data-tour-toggle="crm-plans"]'); // the Plans section exists only when Plans is on for this person
+  totalSteps = hasPlans ? 6 : 5;
 
   const tour = new Shepherd.Tour({
     useModalOverlay: true,
@@ -93,13 +96,25 @@ export function startCrmTour() {
     buttons: [btnBack(), btnNext],
   });
 
+  if (hasPlans) {
+    tour.addStep({
+      id: 'crm-plans',
+      title: 'Plans — the schedule for this client\'s work',
+      text: "Dated plans filed under this client: each has steps with a length in working days and which steps wait on which, and says whether it finishes in time. New plan starts one already filed under this client, and Open in Plans shows only theirs. A plan can also be made from a note or a diagram that belongs to this client. Tasks sent from a plan are filed under the client, and a client project's start and end dates follow its plans.",
+      attachTo: { element: '[data-tour="crm-plans"]', on: 'top' },
+      beforeShowPromise: () => ensureSectionOpen('crm-plans'),
+      when: { show() { injectStepCounter(5); } },
+      buttons: [btnBack(), btnNext],
+    });
+  }
+
   tour.addStep({
     id: 'crm-communications',
     title: 'Communications — Gmail search',
     text: "Separate from Touchpoints: this searches actual Gmail threads with this client's contacts. Touchpoints are what you log yourself; this reads what's already in your inbox.",
     attachTo: { element: '[data-tour="crm-communications"]', on: 'top' },
     beforeShowPromise: () => ensureSectionOpen('crm-communications'),
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(hasPlans ? 6 : 5); } },
     buttons: [
       btnBack(),
       {
