@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2b74fcf1",
+   "fullHash": "2b74fcf1418c20bcf7d502a52e3dd35dfa2342c5",
+   "committedAt": "2026-11-08T14:16:52+10:00",
+   "author": "mrb",
+   "subject": "Rename the Drawings tool to Diagrams (display names only)",
+   "filesChanged": 26,
+   "insertions": 214,
+   "deletions": 212,
+   "area": "Diagrams",
+   "goal": "The tool had become a flowcharting and diagramming tool (Draw it for me, loops, shape numbers, What have I missed?), so Drawings no longer described it.",
+   "whatChanged": "Renamed to Diagrams in everything a person sees: the menu and sidebar entry and page heading, the Feature Access label, the guide chat (Diagrams guide), the tour, help box and tooltips, New diagram / Your diagrams, the default title Untitled diagram, the recycle bin label, error messages, and the wording of notes made from it (From the diagram ...). Internal names are unchanged: the drawings feature flag, /drawings URL, /api/drawings routes, drawings table, customData keys, file names and the guide key. Notes still link back by their ](/drawings/N) link. The Ctrl+K aliases now include drawing, sketch, whiteboard and flowchart. docs/drawings.md and CLAUDE.md note the rename.",
+   "filesImpacted": [
+    "client/src/config/appNavigation.js",
+    "client/src/utils/featureAccess.js",
+    "client/src/pages/DrawingsPage.jsx",
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/DrawingsList.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "client/src/utils/tours/drawingsTour.js",
+    "client/src/pages/notes/notePictures.mjs",
+    "server/services/drawingsTutor.js",
+    "server/services/drawings.js",
+    "server/services/recycleBin/adapters/drawings.js",
+    "server/config/guides.js",
+    "docs/drawings.md",
+    "CLAUDE.md"
+   ],
+   "benefit": "The name says what the tool is for, and matches Excalidraw-style whiteboard users and flowchart users alike through the search aliases.",
+   "concerns": "Existing drawings keep their old default title (Untitled drawing) and existing notes keep From the drawing, since only new items use the new words. The rename was done with a script over the text people see; a first pass also changed SQL table names inside the code, which a test caught and was reverted before commit, and the remaining visible screens were checked for leftover words on the list page and editor only, not every message, guide answer or error. The board's own tooltips still say drawing (Excalidraw's text). The stored default title and the guide name change for everyone at once, including anyone who knew it as Drawings."
+  },
+  {
    "commit": "0c9c7e43",
    "fullHash": "0c9c7e43762b53bf970808dcb0e85ca7db2d765f",
    "committedAt": "2026-11-08T14:03:22+10:00",
