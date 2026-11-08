@@ -8,6 +8,7 @@
 //   GET    /api/drawings/:id           one drawing with its scene
 //   GET    /api/drawings/:id/notes     the person's notes that link back to the drawing (made by To Notes)
 //   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
+//   POST   /api/drawings/diagram       Draw it for me  { text } or { previous, instruction } -> { diagram } (AI; structure only)
 //   POST   /api/drawings/:id/duplicate a copy
 //   DELETE /api/drawings/:id           into the recycle bin
 
@@ -15,6 +16,8 @@ const express = require('express');
 const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const drawings = require('../services/drawings');
+const drawingDiagram = require('../services/drawingDiagram');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 const BIN_TYPE = 'drawing';
@@ -42,6 +45,20 @@ router.post('/', async (req, res) => {
   try {
     res.status(201).json({ drawing: await drawings.create(pool, req.user.id, req.body || {}) });
   } catch (err) { fail(res, err, 'create'); }
+});
+
+// "Draw it for me": a described scenario (or a change to the diagram made last time) in, the STRUCTURE of a diagram out (boxes, arrows,
+// labels). The page lays it out and draws it. One AI request on the workspace's standard model, behind the AI rate limit; the model sees
+// only the words sent here, never any drawing. See services/drawingDiagram.js.
+router.post('/diagram', aiLimiter, async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json(await drawingDiagram.askDiagram(req.user.id, { text: b.text, previous: b.previous, instruction: b.instruction }));
+  } catch (err) {
+    if (err instanceof drawings.DrawingError) return fail(res, err, 'diagram');
+    getLogger().error({ err }, '[drawings] diagram model');
+    return res.status(502).json({ error: 'The AI could not be reached just now. Try again in a minute.' });
+  }
 });
 
 router.post('/:id/duplicate', async (req, res) => {

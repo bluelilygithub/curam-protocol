@@ -98,7 +98,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-export',
     title: 'Look, export and Notes',
-    text: 'Use the buttons above the drawing: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the drawing inside a new note.',
+    text: 'Use the buttons above the drawing: Draw it for me turns something you say or type into boxes and arrows, Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the drawing inside a new note.',
     when: { show() { injectStepCounter(6); } },
     buttons: [
       btnBack(),

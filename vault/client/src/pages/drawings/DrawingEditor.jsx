@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
+import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
@@ -10,6 +11,7 @@ import { loadExcalidraw } from './loadExcalidraw';
 import { fileNameFor, isDarkColour, saveLabel, sceneSignature } from './sceneLogic.mjs';
 import { toClean, toSketch, lookDefaults, inkFromTheme, normaliseLook } from './lookConvert.mjs';
 import { saveDrawingToNotes } from './saveDrawingToNotes.mjs';
+import { layoutDiagram } from './diagramLayout.mjs';
 
 const SAVE_DELAY_MS = 1500; // a pause in drawing this long saves
 const RETRY_MS = 6000; // after a failed save (offline, server busy) it tries again this often
@@ -65,6 +67,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const getIcon = useIcon();
   const navigate = useNavigate();
   const addToast = useToastStore((s) => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
 
   const [lib, setLib] = useState(null);
   const [initial, setInitial] = useState(null);
@@ -81,6 +84,12 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [clients, setClients] = useState([]);
   const [projectId, setProjectId] = useState('');
   const [clientId, setClientId] = useState('');
+  // "Draw it for me": the words, a change to ask for, and the diagram drawn last time (so it can be changed; kept for this visit only)
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiText, setAiText] = useState('');
+  const [aiChange, setAiChange] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [lastDiagram, setLastDiagram] = useState(null); // { diagram, run }
   const [linkedNotes, setLinkedNotes] = useState([]); // the person's notes that link back to this drawing (made by To Notes)
   const [notesMenu, setNotesMenu] = useState(false);
 
@@ -262,6 +271,65 @@ export default function DrawingEditor({ id, onSavedChange }) {
     }
   };
 
+  // ---- Draw it for me ----
+  // Lays a diagram structure out and puts it on the drawing as ordinary pieces (one Undo removes it). A change REPLACES the diagram drawn
+  // last time (found by its run tag), in the same place, so what was drawn by hand around it is untouched.
+  const placeDiagram = async (diagram, replace) => {
+    const ex = apiRef.current;
+    const existing = ex.getSceneElements();
+    const run = Date.now().toString(36);
+    const old = replace ? existing.filter((e) => !e.isDeleted && e.customData && e.customData.vaultDiagram && e.customData.vaultDiagram.run === replace.run) : [];
+    const oldIds = new Set(old.map((e) => e.id));
+    const others = existing.filter((e) => !e.isDeleted && !oldIds.has(e.id) && !(e.containerId && oldIds.has(e.containerId)));
+    let origin;
+    if (old.length) origin = { x: Math.min(...old.map((e) => e.x)), y: Math.min(...old.map((e) => e.y)) };
+    else if (others.length) origin = { x: Math.min(...others.map((e) => e.x)), y: Math.max(...others.map((e) => e.y + (e.height || 0))) + 110 }; // below what is already there
+    else { const st = ex.getAppState(); origin = { x: -st.scrollX + 80 / st.zoom.value, y: -st.scrollY + 120 / st.zoom.value }; } // top left of what is on screen
+    const { skeleton } = layoutDiagram(diagram, { origin, runId: run });
+    let made = lib.convertToExcalidrawElements(skeleton);
+    if (lookRef.current === 'clean') made = toClean(made, { ink: themeInk() }).elements; // drawn in the drawing's own look
+    const goneNow = (e) => oldIds.has(e.id) || (e.containerId && oldIds.has(e.containerId));
+    const kept = existing.map((e) => (goneNow(e) && !e.isDeleted ? { ...e, isDeleted: true, version: (e.version || 0) + 1, versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() } : e));
+    ex.updateScene({
+      elements: [...kept, ...made],
+      appState: { selectedElementIds: Object.fromEntries(made.filter((e) => !e.containerId).map((e) => [e.id, true])) },
+      captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY,
+    });
+    ex.scrollToContent(made, { fitToContent: true, viewportZoomFactor: 0.85, animate: true }); // fits a big diagram on screen, but never zooms a small one in
+    if (lookRef.current === 'clean') { // the plain font is measured once it has loaded
+      await settleFonts();
+      ex.updateScene({ elements: lib.restoreElements(ex.getSceneElements(), null, { refreshDimensions: true }), captureUpdate: lib.CaptureUpdateAction.NEVER });
+    }
+    latestRef.current = { elements: ex.getSceneElements(), appState: ex.getAppState(), files: ex.getFiles() };
+    markDirty();
+    setLastDiagram({ diagram, run });
+  };
+
+  const drawFromWords = async (change) => {
+    const ex = apiRef.current;
+    if (!ex || !lib || aiBusy) return;
+    const words = (change ? aiChange : aiText).trim();
+    if (!words) { addToast(change ? 'Say what to change first.' : 'Say or type what you want drawn first.', 'error'); return; }
+    setAiBusy(true);
+    startProcessing(change ? 'Changing your diagram…' : 'Drawing your diagram…', 'The AI is working out the boxes and arrows from your words. This takes a few seconds.');
+    try {
+      const res = await api.post('/api/drawings/diagram', change ? { previous: lastDiagram.diagram, instruction: words } : { text: words });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.diagram) throw new Error(data.error || 'The diagram could not be drawn. Try again.');
+      // the panel closes so the diagram gets the whole board; reopen it to change the diagram or draw another
+      setAiOpen(false);
+      await new Promise((r) => setTimeout(r, 300)); // let the board take its full size before it zooms to fit
+      await placeDiagram(data.diagram, change ? lastDiagram : null);
+      if (change) setAiChange('');
+      addToast('Drawn. Move, edit or Undo it like anything else.', 'success');
+    } catch (err) {
+      addToast(err.message || 'The diagram could not be drawn. Try again.', 'error');
+    } finally {
+      stopProcessing();
+      setAiBusy(false);
+    }
+  };
+
   // ---- the look: sketch or clean ----
   const markDirty = () => {
     setStatus((st) => (st === 'saving' ? st : 'dirty'));
@@ -314,6 +382,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
   };
 
   const openNotesPanel = () => {
+    setAiOpen(false);
     setNotesOpen((v) => !v);
     if (listsLoaded.current) return;
     listsLoaded.current = true;
@@ -414,6 +483,9 @@ export default function DrawingEditor({ id, onSavedChange }) {
           <Tooltip text="Save the drawing as a file ending in .excalidraw. You can open it again with Open a file, or in other Excalidraw programs.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} onClick={() => exportScene('file')}>{getIcon('download', { size: 13 })} File</button>
           </Tooltip>
+          <Tooltip text="Say or type a scenario and have it drawn for you: the steps of a process, who reports to whom, an idea with branches, or things in time order. You can then move and change everything.">
+            <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} aria-expanded={aiOpen} onClick={() => { setNotesOpen(false); setAiOpen((v) => !v); }} data-tour="drawings-draw-it">{getIcon('sparkles', { size: 13 })} Draw it for me</button>
+          </Tooltip>
           {linkedNotes.length > 0 && (
             <div className="relative" data-tour="drawings-in-notes">
               <Tooltip text={linkedNotes.length === 1 ? `Go to the note this drawing is in: ${linkedNotes[0].title}.` : `This drawing is in ${linkedNotes.length} notes. Choose one to go to it.`}>
@@ -440,6 +512,46 @@ export default function DrawingEditor({ id, onSavedChange }) {
           </Tooltip>
         </div>
       </div>
+      {aiOpen && (
+        <div className="px-3 py-2 border-b space-y-2 shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Say or type what you want drawn: the steps of a process, who reports to whom, an idea with branches, or things in order. It is drawn as boxes and arrows you can move and change.
+            This uses one AI request. Only the words you put here are sent, never your drawings.
+          </p>
+          <Tooltip text="Describe what to draw. Press the microphone and just talk, or type. Name the steps, people or ideas and how they lead on.">
+            <div className="w-full">
+              <VoiceInput type="textarea" append rows={3} value={aiText} onChange={setAiText} label="Describe what to draw" placeholder="For example: A customer calls, the receptionist books a visit, the surveyor attends, then we send the quote. If the customer says no, we close the job." />
+            </div>
+          </Tooltip>
+          <div className="flex flex-wrap items-center gap-2">
+            <Tooltip text="Draw it now. It goes onto this drawing (below anything already there) in the look the drawing is in. One Undo removes it.">
+              <button type="button" disabled={aiBusy || !aiText.trim()} onClick={() => drawFromWords(false)} className="px-4 py-1.5 rounded-xl text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                {aiBusy ? 'Drawing…' : 'Draw it'}
+              </button>
+            </Tooltip>
+          </div>
+          {lastDiagram && (
+            <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Not quite right? Say what to change. This redraws the diagram you just made, so anything you edited in it by hand is replaced.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-[14rem]" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); drawFromWords(true); } }}>
+                  <Tooltip text="What to change, for example: add a step after the visit, make it left to right, or leave out the last box.">
+                    <div className="w-full">
+                      <VoiceInput value={aiChange} onChange={setAiChange} label="What to change" placeholder="For example: add a step after the visit" />
+                    </div>
+                  </Tooltip>
+                </div>
+                <Tooltip text="Redraw the last diagram with this change.">
+                  <button type="button" disabled={aiBusy || !aiChange.trim()} onClick={() => drawFromWords(true)} className={BTN} style={BTN_STYLE}>Change it</button>
+                </Tooltip>
+                <Tooltip text="Forget the last diagram, so the next one is drawn fresh and the last one stays as it is.">
+                  <button type="button" disabled={aiBusy} onClick={() => { setLastDiagram(null); setAiChange(''); }} className={BTN} style={BTN_STYLE}>Start fresh</button>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {notesOpen && (
         <div className="flex flex-wrap items-end gap-3 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Makes a new note named “{title || 'Drawing'}” with this drawing inside it. Optionally file it:</p>
