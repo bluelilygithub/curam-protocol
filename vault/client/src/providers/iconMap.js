@@ -32,6 +32,8 @@ export const semanticMap = {
   image: { lucide: 'Image' },
   paperclip: { lucide: 'Paperclip' },
   palette: { lucide: 'Palette' },
+  undo: { lucide: 'Undo2' },
+  redo: { lucide: 'Redo2' },
   brush: { lucide: 'Brush' },
   send: { lucide: 'Send' },
   home: { lucide: 'Home' },

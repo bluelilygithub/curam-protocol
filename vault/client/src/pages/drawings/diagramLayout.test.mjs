@@ -1,6 +1,6 @@
 // node client/src/pages/drawings/diagramLayout.test.mjs
 import assert from 'node:assert';
-import { wrapLabel, nodeSize, assignLevels, layoutDiagram, edgePoints, SHAPE_TO_TYPE } from './diagramLayout.mjs';
+import { wrapLabel, nodeSize, assignLevels, layoutDiagram, edgePoints, segmentHitsBox, SHAPE_TO_TYPE } from './diagramLayout.mjs';
 
 const N = (id, label = id, shape = 'box') => ({ id, label, shape });
 const E = (from, to, label) => (label ? { from, to, label } : { from, to });
@@ -102,6 +102,58 @@ const starNodes = [N('c', 'Centre'), ...Array.from({ length: 30 }, (_, i) => N(`
 const S = layoutDiagram({ kind: 'mindmap', direction: 'right', nodes: starNodes, edges: starNodes.slice(1).map((n) => E('c', n.id)) });
 const sb = [...S.boxes.values()];
 for (let i = 0; i < sb.length; i += 1) for (let j = i + 1; j < sb.length; j += 1) assert.ok(!overlap(sb[i], sb[j]), 'no overlap in a wide star');
+// ---- loops and skipped steps go round the outside; two-way arrows have a head at each end ----
+const loopDia = { kind: 'flow', direction: 'down', nodes: [N('a', 'Start', 'start-end'), N('b', 'Check the work'), N('c', 'Approved?', 'decision'), N('d', 'Fix it'), N('e', 'Finish', 'start-end')],
+  edges: [E('a', 'b'), E('b', 'c'), E('c', 'e', 'yes'), E('c', 'd', 'no'), E('d', 'b', 'try again')] };
+const LP = layoutDiagram(loopDia, { runId: 'lp' });
+const rightmost = Math.max(...[...LP.boxes.values()].map((b) => b.x + b.w));
+const loopArrow = LP.skeleton.find((s) => s.type === 'arrow' && s.start.id === 'vd-lp-d' && s.end.id === 'vd-lp-b');
+assert.ok(loopArrow.points.length >= 4, 'a loop is a path with corners, not a straight line');
+assert.strictEqual(loopArrow.roundness, null, 'with sharp corners');
+const abs = loopArrow.points.map(([dx, dy]) => [loopArrow.x + dx, loopArrow.y + dy]);
+const bd = LP.boxes.get('d'); const bb3 = LP.boxes.get('b');
+assert.deepStrictEqual(abs[abs.length - 1], [bb3.x + bb3.w, bb3.y + bb3.h / 2], 'it returns to the right side of the earlier box');
+assert.ok(abs.slice(1, -1).some(([x]) => x > rightmost), 'its way back runs outside every box');
+assert.strictEqual(LP.routed, 1, 'only the loop is routed round; the other arrows stay straight');
+assert.strictEqual(loopArrow.label.text, 'try again', 'a loop arrow keeps its label');
+assert.ok(LP.width >= Math.max(...abs.map(([x]) => x)), 'the reported size includes the lane');
+// in this diagram "Fix it" has "Finish" beside it, so the loop must NOT leave sideways through it: it leaves from underneath
+assert.deepStrictEqual(abs[0], [bd.x + bd.w / 2, bd.y + bd.h], 'with a box beside it, the loop leaves from the bottom');
+// and no part of any loop path runs through another box
+const pathClear = (pts, from, to, boxesMap) => pts.slice(1).every((pt, i) => [...boxesMap.entries()].every(([id, bx]) => id === from || id === to || !segmentHitsBox(pts[i][0], pts[i][1], pt[0], pt[1], bx)));
+assert.ok(pathClear(abs, 'd', 'b', LP.boxes), 'the loop path never passes through a box');
+// with nothing beside it, a loop leaves the right side
+const plain = layoutDiagram({ kind: 'flow', direction: 'down', nodes: [N('a'), N('b'), N('c')], edges: [E('a', 'b'), E('b', 'c'), E('c', 'a', 'again')] }, { runId: 'pl' });
+const pArrow = plain.skeleton.find((s) => s.type === 'arrow' && s.start.id === 'vd-pl-c');
+const pc = plain.boxes.get('c');
+assert.deepStrictEqual([pArrow.x, pArrow.y], [pc.x + pc.w, pc.y + pc.h / 2], 'a loop with nothing beside it leaves the right side');
+assert.strictEqual(pArrow.points.length, 4);
+// two loops get their own lanes
+const twoLoops = layoutDiagram({ kind: 'flow', direction: 'down', nodes: [N('a'), N('b'), N('c'), N('d')], edges: [E('a', 'b'), E('b', 'c'), E('c', 'd'), E('c', 'a', 'redo'), E('d', 'b', 'retry')] }, { runId: 't2' });
+const lanesX = twoLoops.skeleton.filter((s) => s.type === 'arrow' && s.points.length >= 4).map((s) => Math.max(...s.points.map(([dx]) => s.x + dx)));
+assert.strictEqual(new Set(lanesX).size, 2, 'two loops do not share a lane');
+// a step that skips over another is routed round only when a straight line would cross a box
+const skip = layoutDiagram({ kind: 'flow', direction: 'down', nodes: [N('a'), N('b'), N('c')], edges: [E('a', 'b'), E('b', 'c'), E('a', 'c', 'skip')] }, { runId: 'sk' });
+assert.strictEqual(skip.skeleton.find((s) => s.type === 'arrow' && s.start.id === 'vd-sk-a' && s.end.id === 'vd-sk-c').points.length, 4, 'a line from first to last would cross the middle box');
+const sideBySide = layoutDiagram({ kind: 'flow', direction: 'down', nodes: [N('a'), N('b'), N('c'), N('d')], edges: [E('a', 'b'), E('a', 'c'), E('b', 'd'), E('c', 'd')] }, { runId: 'sb' });
+assert.strictEqual(sideBySide.routed, 0, 'an ordinary diagram has no routed arrows');
+// left to right: the way back runs underneath
+const lr = layoutDiagram({ ...loopDia, direction: 'right' }, { runId: 'lr' });
+const lrArrow = lr.skeleton.find((s) => s.type === 'arrow' && s.start.id === 'vd-lr-d' && s.end.id === 'vd-lr-b');
+const lrBottom = Math.max(...[...lr.boxes.values()].map((b) => b.y + b.h));
+assert.ok(Math.max(...lrArrow.points.map(([, dy]) => lrArrow.y + dy)) > lrBottom, 'left to right: the loop goes below every box');
+const lrAbs = lrArrow.points.map(([dx, dy]) => [lrArrow.x + dx, lrArrow.y + dy]);
+assert.ok(pathClear(lrAbs, 'd', 'b', lr.boxes), 'left to right: the loop path never passes through a box either');
+// the line test
+assert.ok(segmentHitsBox(0, 50, 200, 50, { x: 80, y: 20, w: 40, h: 60 }), 'a line through a box hits it');
+assert.ok(!segmentHitsBox(0, 0, 200, 0, { x: 80, y: 20, w: 40, h: 60 }), 'a line above it does not');
+assert.ok(!segmentHitsBox(0, 50, 70, 50, { x: 80, y: 20, w: 40, h: 60 }), 'a line that stops short does not');
+// a no-loop diagram still has no loops, and a two-way arrow has a head at both ends
+const tw = layoutDiagram({ kind: 'flow', direction: 'down', nodes: [N('a'), N('b')], edges: [{ from: 'a', to: 'b', both: true }, ] }, { runId: 'tw' });
+const twArrow = tw.skeleton.find((s) => s.type === 'arrow');
+assert.deepStrictEqual([twArrow.startArrowhead, twArrow.endArrowhead], ['arrow', 'arrow'], 'a head at each end');
+assert.deepStrictEqual([L.skeleton.find((s) => s.type === 'arrow').startArrowhead], [null], 'an ordinary arrow has none at the start');
+
 assert.deepStrictEqual(SHAPE_TO_TYPE, { box: 'rectangle', decision: 'diamond', 'start-end': 'ellipse' });
 
 console.log('diagramLayout tests: all ok');

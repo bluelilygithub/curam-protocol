@@ -36,7 +36,7 @@ export function nodeSize(node) {
   const longest = Math.max(...lines.map((l) => l.length));
   let w = Math.min(MAX_W, Math.max(MIN_W, Math.round(longest * CHAR_W + 40)));
   let h = Math.max(60, lines.length * LINE_H + 34);
-  if (node.shape === 'decision') { w = Math.round(w * 1.45); h = Math.round(h * 1.7); }
+  if (node.shape === 'decision') { w = Math.round(w * 1.8); h = Math.round(h * 1.9); } // the writing has to fit inside the diamond's middle
   else if (node.shape === 'start-end') { w = Math.round(w * 1.1); h = Math.round(h * 1.15); }
   return { w, h, text: lines.join('\n') };
 }
@@ -133,6 +133,54 @@ export function layoutDiagram(diagram, { origin = { x: 0, y: 0 }, runId = 'run' 
   const width = horizontal ? main - GAP_MAIN : widest;
   const height = horizontal ? widest : main - GAP_MAIN;
 
+  // An arrow that goes BACK to an earlier layer (a loop: "no, try again") is routed round the outside of the diagram, one lane each,
+  // so it never runs through the boxes in between. A forward arrow that skips layers is routed the same way only when a straight line
+  // would cross another box.
+  const right = Math.max(...[...boxes.values()].map((b) => b.x + b.w));
+  const bottom = Math.max(...[...boxes.values()].map((b) => b.y + b.h));
+  let lanes = 0;
+  let farRight = right;
+  let farBottom = bottom;
+  const routes = new Map(); // edge -> { start: [x, y], points: [[dx, dy], ...] } for the arrows that go round
+  for (const e of edges) {
+    const a = boxes.get(e.from);
+    const b = boxes.get(e.to);
+    const loop = level.get(e.to) < level.get(e.from);
+    const [sx, sy, ex, ey] = edgePoints(a, b);
+    const blocked = !loop && [...boxes.entries()].some(([id, box]) => id !== e.from && id !== e.to && segmentHitsBox(sx, sy, ex, ey, box));
+    if (!loop && !blocked) continue;
+    const k = lanes++;
+    const others = [...boxes.entries()].filter(([id]) => id !== e.from && id !== e.to).map(([, box]) => box);
+    const clear = (x1, y1, x2, y2) => !others.some((box) => segmentHitsBox(x1, y1, x2, y2, box));
+    let path; // absolute points, first to last
+    if (!horizontal) {
+      const laneX = right + 50 + 30 * k;
+      const t = [b.x + b.w, b.y + b.h / 2];
+      const sideExit = [a.x + a.w, a.y + a.h / 2];
+      if (clear(sideExit[0], sideExit[1], laneX, sideExit[1])) {
+        path = [sideExit, [laneX, sideExit[1]], [laneX, t[1]], t]; // out of the right side, along the lane, back in
+      } else { // a box sits beside this one: leave from underneath, in the gap before the next layer
+        const rowBottom = Math.max(...layers[level.get(e.from)].map((id) => boxes.get(id).y + boxes.get(id).h));
+        const gapY = rowBottom + 24;
+        path = [[a.x + a.w / 2, a.y + a.h], [a.x + a.w / 2, gapY], [laneX, gapY], [laneX, t[1]], t];
+      }
+      farRight = Math.max(farRight, laneX);
+    } else {
+      const laneY = bottom + 50 + 30 * k;
+      const t = [b.x + b.w / 2, b.y + b.h];
+      const underExit = [a.x + a.w / 2, a.y + a.h];
+      if (clear(underExit[0], underExit[1], underExit[0], laneY)) {
+        path = [underExit, [underExit[0], laneY], [t[0], laneY], t]; // out of the bottom, along the lane, back up
+      } else { // a box sits underneath: leave from the right side, in the gap before the next layer
+        const colRight = Math.max(...layers[level.get(e.from)].map((id) => boxes.get(id).x + boxes.get(id).w));
+        const gapX = colRight + 24;
+        path = [[a.x + a.w, a.y + a.h / 2], [gapX, a.y + a.h / 2], [gapX, laneY], [t[0], laneY], t];
+      }
+      farBottom = Math.max(farBottom, laneY);
+    }
+    routes.set(e, { start: path[0], points: path.map(([px, py]) => [px - path[0][0], py - path[0][1]]) });
+  }
+
   const tag = { vaultDiagram: { run: runId } };
   const skeleton = [];
   for (const n of nodes) {
@@ -146,13 +194,29 @@ export function layoutDiagram(diagram, { origin = { x: 0, y: 0 }, runId = 'run' 
     const a = boxes.get(e.from);
     const b = boxes.get(e.to);
     const [sx, sy, ex, ey] = edgePoints(a, b);
+    const route = routes.get(e);
     skeleton.push({
-      type: 'arrow', x: sx, y: sy, points: [[0, 0], [ex - sx, ey - sy]],
-      start: { id: `vd-${runId}-${e.from}` }, end: { id: `vd-${runId}-${e.to}` }, endArrowhead: 'arrow', startArrowhead: null,
+      type: 'arrow',
+      ...(route ? { x: route.start[0], y: route.start[1], points: route.points, roundness: null } : { x: sx, y: sy, points: [[0, 0], [ex - sx, ey - sy]] }),
+      start: { id: `vd-${runId}-${e.from}` }, end: { id: `vd-${runId}-${e.to}` }, endArrowhead: 'arrow', startArrowhead: e.both ? 'arrow' : null,
       ...(e.label ? { label: { text: e.label, fontSize: 16 } } : {}), customData: tag,
     });
   }
-  return { skeleton, width, height, boxes };
+  return { skeleton, width: Math.max(width, farRight - origin.x), height: Math.max(height, farBottom - origin.y), boxes, routed: routes.size };
+}
+
+/** Does the straight line from (x1, y1) to (x2, y2) pass through the box (a few pixels in from its edge)? */
+export function segmentHitsBox(x1, y1, x2, y2, box, inset = 4) {
+  const minX = box.x + inset; const maxX = box.x + box.w - inset; const minY = box.y + inset; const maxY = box.y + box.h - inset;
+  let t0 = 0; let t1 = 1;
+  const dx = x2 - x1; const dy = y2 - y1;
+  for (const [p, q] of [[-dx, x1 - minX], [dx, maxX - x1], [-dy, y1 - minY], [dy, maxY - y1]]) {
+    if (p === 0) { if (q < 0) return false; } else {
+      const r = q / p;
+      if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+    }
+  }
+  return t0 < t1;
 }
 
 /** Where an arrow between two boxes starts and ends: the centre-to-centre line, clipped to each box's edge. */

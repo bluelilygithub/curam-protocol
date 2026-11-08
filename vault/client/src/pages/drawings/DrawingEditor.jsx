@@ -90,11 +90,19 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [aiChange, setAiChange] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [lastDiagram, setLastDiagram] = useState(null); // { diagram, run }
+  // Stretching: 'keep' (a stretch keeps the shape: nothing is squashed) or 'free' (wider or taller on its own). Holding Shift does the opposite for one drag.
+  const [keepShape, setKeepShape] = useState(() => { try { return localStorage.getItem('vault:drawings:keepShape') === '1'; } catch { return false; } });
+  const [gridOn, setGridOn] = useState(false); // the board's grid: shown, and what is drawn or moved snaps to it
+  const [arrowSel, setArrowSel] = useState({ count: 0, allTwoWay: false }); // the arrows selected on the board
+  const [canUndo, setCanUndo] = useState(false); // whether the board has something to undo or redo (read from its own buttons)
+  const [canRedo, setCanRedo] = useState(false);
   const [linkedNotes, setLinkedNotes] = useState([]); // the person's notes that link back to this drawing (made by To Notes)
   const [notesMenu, setNotesMenu] = useState(false);
 
   const apiRef = useRef(null);
   const lookRef = useRef('sketch');
+  const keepShapeRef = useRef(keepShape);
+  keepShapeRef.current = keepShape;
   const listsLoaded = useRef(false);
   // The newest { elements, appState, files } the editor reported. Saves read THIS, never the editor itself: when the page is left the
   // editor has already been torn down and would report an empty drawing, which must never be saved over the real one.
@@ -111,7 +119,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const idRef = useRef(id);
   idRef.current = id;
   // what the server has: the drawing's pieces AND its look (a look change on an empty drawing is still a change to save)
-  const fingerprint = (elements, files) => `${sceneSignature(elements, files)}|${lookRef.current}`;
+  const fingerprint = (elements, files, appState) => `${sceneSignature(elements, files)}|${lookRef.current}|${appState && appState.gridModeEnabled ? 'grid' : ''}`;
 
   // ---- load the drawing and the editor ----
   useEffect(() => {
@@ -131,7 +139,8 @@ export default function DrawingEditor({ id, onSavedChange }) {
         lookRef.current = normaliseLook(d.look);
         setLook(lookRef.current);
         setExportLook('same');
-        sigRef.current = fingerprint(restored.elements, restored.files);
+        sigRef.current = fingerprint(restored.elements, restored.files, restored.appState);
+        setGridOn(!!restored.appState.gridModeEnabled);
         baseRef.current = d.updatedAt;
         titleRef.current = d.title;
         needsPreviewRef.current = !d.thumbnail && d.elementCount > 0;
@@ -162,6 +171,51 @@ export default function DrawingEditor({ id, onSavedChange }) {
   }, []);
   useEffect(() => { setLinkedNotes([]); setNotesMenu(false); loadLinkedNotes(); }, [id, loadLinkedNotes]);
 
+  // ---- undo and redo ----
+  // The board keeps its own history (every drawing, move, stretch, look switch and diagram is a step, as many as needed). Its buttons are small
+  // and at the bottom left, so these big ones drive them; the shortcuts (Ctrl+Z, Ctrl+Shift+Z) work anywhere on the page, not only
+  // while the board has the focus. The history belongs to this visit: it starts empty each time a drawing is opened.
+  useEffect(() => {
+    const read = () => {
+      const u = document.querySelector('[data-testid="button-undo"]');
+      const r = document.querySelector('[data-testid="button-redo"]');
+      setCanUndo(!!u && !u.disabled);
+      setCanRedo(!!r && !r.disabled);
+    };
+    read();
+    const t = setInterval(read, 400);
+    return () => clearInterval(t);
+  }, [lib]);
+  const pressBoard = (testId) => { const b = document.querySelector(`[data-testid="${testId}"]`); if (b && !b.disabled) b.click(); };
+
+  // ---- stretching: keep the shape or free ----
+  // The board keeps a stretched shape's proportions only while Shift is held. To make that a choice that stays, while (and only while) a
+  // stretch is under way the board is told Shift is held when "Keep shape" is on (and not held when it is off); holding the real Shift
+  // then does the opposite for that one drag. Pictures already work the other way round on the board, so they are left alone.
+  useEffect(() => {
+    let armed = false; // the press began on a stretch handle (the board shows a resize cursor there), so even the first movement counts
+    const arm = (e) => { const c = (e.target && e.target.style && e.target.style.cursor) || ''; armed = /-resize$/.test(c); };
+    const decide = (e) => {
+      const ex = apiRef.current;
+      if (!ex) return;
+      const st = ex.getAppState();
+      if (!st.isResizing && !armed) return;
+      const picked = st.selectedElementIds || {};
+      if (ex.getSceneElements().some((el) => picked[el.id] && el.type === 'image')) return;
+      const want = keepShapeRef.current ? !e.shiftKey : e.shiftKey;
+      Object.defineProperty(e, 'shiftKey', { get: () => want, configurable: true });
+    };
+    const decideAndDisarm = (e) => { decide(e); armed = false; };
+    window.addEventListener('pointerdown', arm, true);
+    window.addEventListener('pointermove', decide, true);
+    window.addEventListener('pointerup', decideAndDisarm, true);
+    return () => { window.removeEventListener('pointerdown', arm, true); window.removeEventListener('pointermove', decide, true); window.removeEventListener('pointerup', decideAndDisarm, true); };
+  }, []);
+  const chooseKeepShape = (v) => {
+    setKeepShape(v);
+    try { localStorage.setItem('vault:drawings:keepShape', v ? '1' : '0'); } catch { /* the choice just is not remembered */ }
+  };
+
   // ---- saving ----
   const buildThumbnail = useCallback(async (elements, appState, files) => {
     if (!elements.some((e) => !e.isDeleted)) return null;
@@ -177,7 +231,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
     if (!cur || !lib || stoppedRef.current) return;
     if (savingRef.current) { againRef.current = true; return; }
     const { elements, files } = cur;
-    const sig = fingerprint(elements, files);
+    const sig = fingerprint(elements, files, cur.appState);
     if (sig === sigRef.current) { setStatus('saved'); return; }
     savingRef.current = true;
     againRef.current = false;
@@ -217,7 +271,13 @@ export default function DrawingEditor({ id, onSavedChange }) {
     if (sigRef.current === null || stoppedRef.current || leftRef.current) return;
     latestRef.current = { elements, appState, files };
     if (needsPreviewRef.current) { needsPreviewRef.current = false; sigRef.current = 'preview'; } // makes the next check see a change, so a first save (with its preview) happens
-    if (fingerprint(elements, files) === sigRef.current) return;
+    // what is selected, and the grid: for the buttons above the board
+    const picked = appState.selectedElementIds || {};
+    const arrows = elements.filter((e) => !e.isDeleted && picked[e.id] && e.type === 'arrow');
+    const all = arrows.length > 0 && arrows.every((e) => e.startArrowhead);
+    setArrowSel((p) => (p.count === arrows.length && p.allTwoWay === all ? p : { count: arrows.length, allTwoWay: all }));
+    setGridOn((g) => (g === !!appState.gridModeEnabled ? g : !!appState.gridModeEnabled));
+    if (fingerprint(elements, files, appState) === sigRef.current) return;
     setStatus((s) => (s === 'saving' ? s : 'dirty'));
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(save, SAVE_DELAY_MS);
@@ -328,6 +388,30 @@ export default function DrawingEditor({ id, onSavedChange }) {
       stopProcessing();
       setAiBusy(false);
     }
+  };
+
+  // ---- snap to grid, two-way arrows ----
+  const toggleGrid = () => {
+    const ex = apiRef.current;
+    if (!ex) return;
+    const next = !ex.getAppState().gridModeEnabled;
+    ex.updateScene({ appState: { gridModeEnabled: next }, captureUpdate: lib.CaptureUpdateAction.NEVER });
+    setGridOn(next);
+    latestRef.current = { elements: ex.getSceneElements(), appState: ex.getAppState(), files: ex.getFiles() };
+    markDirty(); // the grid choice is saved with the drawing
+  };
+  const toggleTwoWay = () => {
+    const ex = apiRef.current;
+    if (!ex || !arrowSel.count) return;
+    const picked = ex.getAppState().selectedElementIds || {};
+    const els = ex.getSceneElements();
+    const selected = els.filter((e) => !e.isDeleted && picked[e.id] && e.type === 'arrow');
+    const makeTwoWay = !selected.every((e) => e.startArrowhead); // all two-way already: put the arrows back to one-way
+    const ids = new Set(selected.map((e) => e.id));
+    ex.updateScene({
+      elements: els.map((e) => (ids.has(e.id) ? { ...e, startArrowhead: makeTwoWay ? 'arrow' : null, version: (e.version || 0) + 1, versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() } : e)),
+      captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY,
+    });
   };
 
   // ---- the look: sketch or clean ----
@@ -463,6 +547,39 @@ export default function DrawingEditor({ id, onSavedChange }) {
             </Tooltip>
           ))}
         </div>
+        <div className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} role="group" aria-label="Undo and redo" data-tour="drawings-undo">
+          <Tooltip text="Undo the last change on the drawing (Ctrl+Z). You can undo as many times as you need, back through everything you did since you opened it. Drawing, moving, stretching, switching the look and Draw it for me are each a step.">
+            <button type="button" disabled={!lib || !canUndo} onClick={() => pressBoard('button-undo')} className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>{getIcon('undo', { size: 13 }) || null} Undo</button>
+          </Tooltip>
+          <Tooltip text="Redo what you just undid (Ctrl+Shift+Z). You can redo as many steps as you undid, until you make a new change.">
+            <button type="button" disabled={!lib || !canRedo} onClick={() => pressBoard('button-redo')} className="px-3 py-1.5 text-xs border-l transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>{getIcon('redo', { size: 13 }) || null} Redo</button>
+          </Tooltip>
+        </div>
+        <div role="group" aria-label="When stretching" className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} data-tour="drawings-stretch">
+          {[
+            [true, 'Keep shape', 'When you drag a corner to stretch what is selected (one thing, or everything with Select all), it grows or shrinks evenly so nothing is squashed or bent out of shape. Text and arrows scale with it. Hold Shift while dragging to stretch freely for that one drag.'],
+            [false, 'Free', 'When you drag a corner to stretch what is selected, it can be made wider or taller on its own, so the shape can change. Hold Shift while dragging to keep the shape for that one drag.'],
+          ].map(([val, label, tip]) => (
+            <Tooltip key={label} text={tip}>
+              <button
+                type="button" aria-pressed={keepShape === val} disabled={!lib}
+                onClick={() => chooseKeepShape(val)}
+                className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                style={{ background: keepShape === val ? 'var(--color-primary)' : 'var(--color-surface)', color: keepShape === val ? '#fff' : 'var(--color-text)' }}
+              >{label}</button>
+            </Tooltip>
+          ))}
+        </div>
+        <Tooltip text={arrowSel.count ? (arrowSel.allTwoWay ? 'Make the selected arrows point one way again.' : 'Make the selected arrows two-way: a head at both ends.') : 'Select an arrow first (click it), then press this to give it a head at both ends.'}>
+          <button type="button" disabled={!lib || !arrowSel.count} aria-pressed={arrowSel.count > 0 && arrowSel.allTwoWay} onClick={toggleTwoWay} className={BTN} style={{ ...BTN_STYLE, ...(arrowSel.count && arrowSel.allTwoWay ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
+            Two-way arrow
+          </button>
+        </Tooltip>
+        <Tooltip text={gridOn ? 'The grid is on: what you draw and move snaps to it. Press to turn it off.' : 'Show a grid and snap what you draw and move to it, so boxes line up neatly. The choice is saved with the drawing.'}>
+          <button type="button" disabled={!lib} aria-pressed={gridOn} onClick={toggleGrid} className={BTN} style={{ ...BTN_STYLE, ...(gridOn ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
+            Snap to grid
+          </button>
+        </Tooltip>
         <div className="flex flex-wrap items-center gap-2 ml-auto" data-tour="drawings-export">
           <Tooltip text="The look of the PNG and SVG pictures and of the picture sent to Notes. 'Same' follows the drawing; the others change the picture only, never the drawing. The .excalidraw file is always the drawing exactly as it is.">
             <select
@@ -590,6 +707,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
             initialData={initial}
             onChange={onChange}
             langCode="en"
+            handleKeyboardGlobally
             UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: false, toggleTheme: true } }}
           >
             <Menu>

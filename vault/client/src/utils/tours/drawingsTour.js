@@ -90,7 +90,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-board',
     title: 'The drawing board',
-    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved.',
+    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo go back and forward as many steps as you need. Keep shape or Free decides whether stretching keeps proportions, Two-way arrow puts a head at both ends of a selected arrow, and Snap to grid lines boxes up.',
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
