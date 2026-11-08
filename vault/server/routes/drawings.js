@@ -9,6 +9,7 @@
 //   GET    /api/drawings/:id/notes     the person's notes that link back to the drawing (made by To Notes)
 //   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
 //   POST   /api/drawings/diagram       Draw it for me  { text } or { previous, instruction } -> { diagram } (AI; structure only)
+//   POST   /api/drawings/suggestions   What have I missed?  { diagram } -> { suggestions: [{ about, text, change }] } (AI; reads only the words in the shapes)
 //   POST   /api/drawings/:id/duplicate a copy
 //   DELETE /api/drawings/:id           into the recycle bin
 
@@ -57,6 +58,17 @@ router.post('/diagram', aiLimiter, async (req, res) => {
   } catch (err) {
     if (err instanceof drawings.DrawingError) return fail(res, err, 'diagram');
     getLogger().error({ err }, '[drawings] diagram model');
+    return res.status(502).json({ error: 'The AI could not be reached just now. Try again in a minute.' });
+  }
+});
+
+// "What have I missed?": the diagram as read from the drawing in, a short list of gaps out. One AI request, same limits as /diagram.
+router.post('/suggestions', aiLimiter, async (req, res) => {
+  try {
+    res.json(await drawingDiagram.askSuggestions(req.user.id, { diagram: (req.body || {}).diagram }));
+  } catch (err) {
+    if (err instanceof drawings.DrawingError) return fail(res, err, 'suggestions');
+    getLogger().error({ err }, '[drawings] suggestions model');
     return res.status(502).json({ error: 'The AI could not be reached just now. Try again in a minute.' });
   }
 });

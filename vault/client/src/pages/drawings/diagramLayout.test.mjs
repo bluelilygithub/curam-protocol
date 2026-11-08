@@ -156,4 +156,8 @@ assert.deepStrictEqual([L.skeleton.find((s) => s.type === 'arrow').startArrowhea
 
 assert.deepStrictEqual(SHAPE_TO_TYPE, { box: 'rectangle', decision: 'diamond', 'start-end': 'ellipse' });
 
+const numLayout = layoutDiagram({ kind: 'flow', direction: 'down', nodes: [{ id: 'a', label: 'A', shape: 'box', num: '4.1' }, { id: 'b', label: 'B', shape: 'box' }], edges: [{ from: 'a', to: 'b' }] }, { runId: 'nm' });
+const boxA = numLayout.skeleton.find((x) => x.id === 'vd-nm-a'); const boxB = numLayout.skeleton.find((x) => x.id === 'vd-nm-b');
+assert.strictEqual(boxA.customData.vaultNo, '4.1', 'a box keeps its number');
+assert.strictEqual(boxB.customData.vaultNo, undefined, 'a box with no number gets none from the layout');
 console.log('diagramLayout tests: all ok');

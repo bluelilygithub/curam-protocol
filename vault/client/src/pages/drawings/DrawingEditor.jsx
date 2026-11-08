@@ -12,7 +12,8 @@ import { fileNameFor, isDarkColour, saveLabel, sceneSignature } from './sceneLog
 import { toClean, toSketch, lookDefaults, inkFromTheme, normaliseLook } from './lookConvert.mjs';
 import { saveDrawingToNotes } from './saveDrawingToNotes.mjs';
 import { layoutDiagram } from './diagramLayout.mjs';
-import { readDiagram } from './sceneDiagram.mjs';
+import { readDiagram, numberingInput } from './sceneDiagram.mjs';
+import { assignNumbers } from './shapeNumbers.mjs';
 
 const SAVE_DELAY_MS = 1500; // a pause in drawing this long saves
 const RETRY_MS = 6000; // after a failed save (offline, server busy) it tries again this often
@@ -90,6 +91,9 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [aiText, setAiText] = useState('');
   const [aiChange, setAiChange] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [showNums, setShowNums] = useState(() => { try { return localStorage.getItem('vault:drawings:showNumbers') === '1'; } catch { return false; } }); // small numbers on the shapes (not part of the drawing)
+  const [badges, setBadges] = useState([]); // [{ id, num, x, y }] where the numbers show, in pixels on the board
+  const [suggest, setSuggest] = useState({ busy: false, list: null }); // What have I missed?
   const [readable, setReadable] = useState(null); // the diagram on the drawing that can be changed by voice: { count, others } or null
   // Stretching: 'keep' (a stretch keeps the shape: nothing is squashed) or 'free' (wider or taller on its own). Holding Shift does the opposite for one drag.
   const [keepShape, setKeepShape] = useState(() => { try { return localStorage.getItem('vault:drawings:keepShape') === '1'; } catch { return false; } });
@@ -101,6 +105,10 @@ export default function DrawingEditor({ id, onSavedChange }) {
 
   const apiRef = useRef(null);
   const lookRef = useRef('sketch');
+  const showNumsRef = useRef(showNums);
+  showNumsRef.current = showNums;
+  const numberingRef = useRef(false);
+  const numberBoxesRef = useRef(() => {});
   const keepShapeRef = useRef(keepShape);
   keepShapeRef.current = keepShape;
   const listsLoaded = useRef(false);
@@ -277,6 +285,17 @@ export default function DrawingEditor({ id, onSavedChange }) {
       setNotesOpen(false); setAiOpen(true);
     }
     if (needsPreviewRef.current) { needsPreviewRef.current = false; sigRef.current = 'preview'; } // makes the next check see a change, so a first save (with its preview) happens
+    // shape numbers: where the little numbers go, and any box that has none yet gets one
+    if (showNumsRef.current && elements.length < 800) {
+      const z = appState.zoom.value;
+      const next = elements.filter((e) => !e.isDeleted && e.customData && e.customData.vaultNo && (e.type === 'rectangle' || e.type === 'diamond' || e.type === 'ellipse'))
+        .map((e) => ({ id: e.id, num: e.customData.vaultNo, x: Math.round((e.x + appState.scrollX) * z), y: Math.round((e.y + appState.scrollY) * z) }));
+      setBadges((old) => (old.length === next.length && old.every((o, i) => o.id === next[i].id && o.num === next[i].num && o.x === next[i].x && o.y === next[i].y) ? old : next));
+      if (!numberingRef.current) {
+        const inp = numberingInput(elements);
+        if (inp.boxes.some((b) => !b.num)) { numberingRef.current = true; setTimeout(() => { numberBoxesRef.current(); numberingRef.current = false; }, 0); }
+      }
+    }
     // what is selected, and the grid: for the buttons above the board
     const picked = appState.selectedElementIds || {};
     setGridOn((g) => (g === !!appState.gridModeEnabled ? g : !!appState.gridModeEnabled));
@@ -334,6 +353,34 @@ export default function DrawingEditor({ id, onSavedChange }) {
     }
   };
 
+  // ---- shape numbers ----
+  // Each box (with writing in it) carries a number in its customData.vaultNo, given once and kept: a step put in between two others gets a
+  // sub-number (4.1), anything else the next whole number. The little numbers on screen are separate (an overlay), so they never print or export.
+  const numberBoxes = () => {
+    const ex = apiRef.current;
+    if (!ex || !lib) return;
+    const els = ex.getSceneElements();
+    const inp = numberingInput(els);
+    const given = assignNumbers(inp.boxes, inp.edges, inp.taken);
+    if (!given.size) return;
+    ex.updateScene({
+      elements: els.map((e) => (given.has(e.id) ? { ...e, customData: { ...(e.customData || {}), vaultNo: given.get(e.id) }, version: (e.version || 0) + 1, versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() } : e)),
+      captureUpdate: lib.CaptureUpdateAction.NEVER,
+    });
+    latestRef.current = { elements: ex.getSceneElements(), appState: ex.getAppState(), files: ex.getFiles() };
+    markDirty();
+  };
+  numberBoxesRef.current = numberBoxes;
+  const toggleNumbers = () => {
+    const next = !showNums;
+    setShowNums(next);
+    showNumsRef.current = next;
+    try { localStorage.setItem('vault:drawings:showNumbers', next ? '1' : '0'); } catch { /* not remembered */ }
+    if (next) numberBoxes(); else setBadges([]);
+    const ex = apiRef.current;
+    if (ex && next) ex.updateScene({ appState: { selectedElementIds: ex.getAppState().selectedElementIds }, captureUpdate: lib.CaptureUpdateAction.NEVER }); // makes the board report once, so the numbers appear
+  };
+
   // ---- Draw it for me ----
   // Lays a diagram structure out and puts it on the drawing as ordinary pieces (one Undo removes it). A change REPLACES the diagram it was
   // read from (readDiagram: its boxes, writing and arrows), in the same place, so anything else on the drawing is untouched.
@@ -355,6 +402,10 @@ export default function DrawingEditor({ id, onSavedChange }) {
     if (old.length) origin = { x: Math.min(...old.map((e) => e.x)), y: Math.min(...old.map((e) => e.y)) };
     else if (others.length) origin = { x: Math.min(...others.map((e) => e.x)), y: Math.max(...others.map((e) => e.y + (e.height || 0))) + 110 }; // below what is already there
     else { const st = ex.getAppState(); origin = { x: -st.scrollX + 80 / st.zoom.value, y: -st.scrollY + 120 / st.zoom.value }; } // top left of what is on screen
+    // shape numbers: boxes the AI kept keep theirs; new ones get one (a sub-number when put in between two others)
+    const taken = numberingInput(existing).taken;
+    const given = assignNumbers(diagram.nodes, diagram.edges, taken);
+    diagram = { ...diagram, nodes: diagram.nodes.map((n) => (given.has(n.id) ? { ...n, num: given.get(n.id) } : n)) };
     const { skeleton } = layoutDiagram(diagram, { origin, runId: run });
     let made = lib.convertToExcalidrawElements(skeleton);
     if (lookRef.current === 'clean') made = toClean(made, { ink: themeInk() }).elements; // drawn in the drawing's own look
@@ -374,13 +425,14 @@ export default function DrawingEditor({ id, onSavedChange }) {
     markDirty();
   };
 
-  const drawFromWords = async (change) => {
+  const drawFromWords = async (change, wordsOverride) => {
     const ex = apiRef.current;
     if (!ex || !lib || aiBusy) return;
-    const words = (change ? aiChange : aiText).trim();
+    const words = (wordsOverride != null ? wordsOverride : (change ? aiChange : aiText)).trim();
     if (!words) { addToast(change ? 'Say what to change first.' : 'Say or type what you want drawn first.', 'error'); return; }
     let cur = null;
     if (change) {
+      numberBoxes(); // every box has a number before the AI sees the diagram
       cur = readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds);
       if (!cur) { addToast('There is no diagram here to change yet: boxes with writing in them, joined by arrows.', 'error'); return; }
       if (cur.tooBig) { addToast(`That diagram has ${cur.count} boxes, more than can be changed by voice (40).`, 'error'); return; }
@@ -395,13 +447,35 @@ export default function DrawingEditor({ id, onSavedChange }) {
       setAiOpen(false);
       await new Promise((r) => setTimeout(r, 300)); // let the board take its full size before it zooms to fit
       await placeDiagram(data.diagram, cur);
-      if (change) setAiChange('');
+      if (change) { setAiChange(''); setSuggest({ busy: false, list: null }); }
       addToast('Drawn. Move, edit or Undo it like anything else.', 'success');
     } catch (err) {
       addToast(err.message || 'The diagram could not be drawn. Try again.', 'error');
     } finally {
       stopProcessing();
       setAiBusy(false);
+    }
+  };
+
+  // ---- What have I missed? ----
+  const askSuggestions = async () => {
+    const ex = apiRef.current;
+    if (!ex || !lib || suggest.busy) return;
+    numberBoxes();
+    const cur = readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds);
+    if (!cur || cur.tooBig) { addToast(cur && cur.tooBig ? 'That diagram is too big to look over (40 boxes at most).' : 'There is no diagram here to look over yet.', 'error'); return; }
+    setSuggest({ busy: true, list: null });
+    startProcessing('Looking over your diagram…', 'The AI is reading the boxes and arrows for anything missed. This takes a few seconds.');
+    try {
+      const res = await api.post('/api/drawings/suggestions', { diagram: cur.diagram });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data.suggestions)) throw new Error(data.error || 'The suggestions could not be made. Try again.');
+      setSuggest({ busy: false, list: data.suggestions });
+    } catch (err) {
+      setSuggest({ busy: false, list: null });
+      addToast(err.message || 'The suggestions could not be made. Try again.', 'error');
+    } finally {
+      stopProcessing();
     }
   };
 
@@ -596,6 +670,11 @@ export default function DrawingEditor({ id, onSavedChange }) {
             Snap to grid
           </button>
         </Tooltip>
+        <Tooltip text={showNums ? 'Numbers are showing on the shapes so you can refer to them (for example: add a step after 7). They are not part of the drawing and do not print or export. Press to hide them.' : 'Show a small number on each shape so you can refer to it when asking for changes (for example: add a step after 7). The numbers never print or export.'}>
+          <button type="button" disabled={!lib} aria-pressed={showNums} onClick={toggleNumbers} className={BTN} style={{ ...BTN_STYLE, ...(showNums ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
+            Numbers
+          </button>
+        </Tooltip>
         <div className="flex flex-wrap items-center gap-2 ml-auto" data-tour="drawings-export">
           <Tooltip text="The look of the PNG and SVG pictures and of the picture sent to Notes. 'Same' follows the drawing; the others change the picture only, never the drawing. The .excalidraw file is always the drawing exactly as it is.">
             <select
@@ -664,20 +743,44 @@ export default function DrawingEditor({ id, onSavedChange }) {
           {readable && (
             <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Change the diagram on this drawing{readable.others ? ` (the one you have selected, or the biggest of ${readable.others + 1})` : ''}: {readable.count} boxes. Say what to change, for example insert a step, add one at the start or the end, or add a loop back. It is redrawn in the same place, so boxes you moved by hand in it are laid out again.
+                Change the diagram on this drawing{readable.others ? ` (the one you have selected, or the biggest of ${readable.others + 1})` : ''}: {readable.count} boxes. Say what to change, for example insert a step, add one at the start or the end, or add a loop back. Turn on Numbers to refer to a box by its number, like after 7. It is redrawn in the same place, so boxes you moved by hand in it are laid out again.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex-1 min-w-[14rem]" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); drawFromWords(true); } }}>
                   <Tooltip text="What to change, for example: add a step after the visit, make it left to right, or leave out the last box.">
                     <div className="w-full">
-                      <VoiceInput value={aiChange} onChange={setAiChange} label="What to change" placeholder="For example: add a step after the visit" />
+                      <VoiceInput value={aiChange} onChange={setAiChange} label="What to change" placeholder="For example: add a step after 7, or after the visit" />
                     </div>
                   </Tooltip>
                 </div>
-                <Tooltip text="Redraw the last diagram with this change.">
+                <Tooltip text="Redraw the diagram with this change.">
                   <button type="button" disabled={aiBusy || !aiChange.trim()} onClick={() => drawFromWords(true)} className={BTN} style={BTN_STYLE}>Change it</button>
                 </Tooltip>
+                <Tooltip text="Have the AI look over the diagram and list what you may not have considered: a Yes or No with nowhere to go, a step that could wait forever, no clear end, and so on. It changes nothing until you press Add this on one of its suggestions.">
+                  <button type="button" disabled={aiBusy || suggest.busy} onClick={askSuggestions} className={BTN} style={BTN_STYLE} data-tour="drawings-missed">{getIcon('sparkles', { size: 13 })} {suggest.busy ? 'Looking…' : 'What have I missed?'}</button>
+                </Tooltip>
               </div>
+              {suggest.list && (
+                <div className="space-y-1.5 pt-1" aria-live="polite">
+                  {suggest.list.length === 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing important stands out. The AI only sees what is drawn, so it may still be missing something only you know.</p>}
+                  {suggest.list.map((s, i) => (
+                    <div key={`${i}-${s.text}`} className="flex flex-wrap items-start gap-2 rounded-xl border px-2.5 py-1.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                      <div className="flex-1 min-w-[14rem] text-xs" style={{ color: 'var(--color-text)' }}>
+                        {s.about.length > 0 && <span className="mr-1.5 font-medium" style={{ color: 'var(--color-primary)' }}>{s.about.join(', ')}</span>}
+                        {s.text}
+                      </div>
+                      {s.change && (
+                        <Tooltip text={`Make this change to the diagram: ${s.change}`}>
+                          <button type="button" disabled={aiBusy} onClick={() => drawFromWords(true, s.change)} className={BTN} style={BTN_STYLE}>Add this</button>
+                        </Tooltip>
+                      )}
+                      <Tooltip text="Hide this suggestion.">
+                        <button type="button" onClick={() => setSuggest((p) => ({ ...p, list: p.list.filter((_, j) => j !== i) }))} className={BTN} style={BTN_STYLE} aria-label="Dismiss this suggestion">Dismiss</button>
+                      </Tooltip>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -710,7 +813,14 @@ export default function DrawingEditor({ id, onSavedChange }) {
           </Tooltip>
         </div>
       )}
-      <div className="flex-1 min-h-0" data-tour="drawings-board">
+      <div className="flex-1 min-h-0 relative" data-tour="drawings-board">
+        {showNums && badges.length > 0 && (
+          <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 2 }}>
+            {badges.map((b) => (
+              <span key={b.id} className="absolute rounded-full px-1.5 text-[10px] leading-4 font-medium" style={{ left: b.x, top: b.y, transform: 'translate(-35%, -60%)', background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>{b.num}</span>
+            ))}
+          </div>
+        )}
         {!Excalidraw && (
           <div className="p-6 max-w-sm"><Skeleton lines={3} label="Loading the drawing board" /></div>
         )}

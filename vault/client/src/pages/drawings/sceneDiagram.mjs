@@ -5,20 +5,15 @@
 const SHAPE_OF = { rectangle: 'box', diamond: 'decision', ellipse: 'start-end' };
 const MAX_NODES = 40;
 
-const tidy = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+import { isNumber } from './shapeNumbers.mjs';
 
-/**
- * @param {Array} elements  the drawing's elements
- * @param {Set|Object} [selectedIds]  ids selected on the board: when there are some, the diagram that contains them is the one read
- * @returns {null | { diagram: object, ids: Set<string>, count: number, others: number }}
- *   diagram: { kind, direction, nodes, edges } ; ids: every piece that belongs to it (boxes, their writing, arrows, their labels);
- *   others: how many separate diagrams were found besides this one
- */
-export function readDiagram(elements, selectedIds) {
-  const live = (elements || []).filter((e) => e && !e.isDeleted);
+const tidy = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+const numOfEl = (e) => (e && e.customData && isNumber(e.customData.vaultNo) ? e.customData.vaultNo : undefined); // the number shown on a box
+
+/** Every box with writing in it, and every arrow joined to two of them, on a drawing. */
+function collect(live) {
   const textOf = new Map(); // container id -> writing inside it
   for (const e of live) if (e.type === 'text' && e.containerId) textOf.set(e.containerId, e);
-
   const nodes = [];
   const byId = new Map();
   for (const e of live) {
@@ -29,8 +24,6 @@ export function readDiagram(elements, selectedIds) {
     nodes.push(node);
     byId.set(e.id, node);
   }
-  if (nodes.length < 2) return null;
-
   const edges = [];
   for (const e of live) {
     if (e.type !== 'arrow') continue;
@@ -40,6 +33,42 @@ export function readDiagram(elements, selectedIds) {
     const lab = textOf.get(e.id);
     edges.push({ el: e, from: a, to: b, label: lab ? tidy(lab.text) : '', labelEl: lab || null, both: !!e.startArrowhead && !!e.endArrowhead });
   }
+  return { nodes, edges };
+}
+
+/**
+ * What numbering needs: every box in reading order (with the number it already has), the arrows between them, and every number ever
+ * used on this drawing in this visit (deleted boxes keep theirs in the scene, so their numbers are not handed out again).
+ */
+export function numberingInput(elements) {
+  const all = (elements || []).filter(Boolean);
+  const { nodes, edges } = collect(all.filter((e) => !e.isDeleted));
+  const ordered = nodes.slice().sort((p, q) => (p.el.y - q.el.y) || (p.el.x - q.el.x));
+  const seen = new Set();
+  const boxes = ordered.map((n) => { // a copy of a box carries its number: the later one counts as having none, so it gets its own
+    let num = numOfEl(n.el);
+    if (num && seen.has(num)) num = undefined;
+    if (num) seen.add(num);
+    return { id: n.el.id, num, el: n.el };
+  });
+  return {
+    boxes,
+    edges: edges.map((e) => ({ from: e.from.el.id, to: e.to.el.id })),
+    taken: all.map(numOfEl).filter(Boolean),
+  };
+}
+
+/**
+ * @param {Array} elements  the drawing's elements
+ * @param {Set|Object} [selectedIds]  ids selected on the board: when there are some, the diagram that contains them is the one read
+ * @returns {null | { diagram: object, ids: Set<string>, count: number, others: number }}
+ *   diagram: { kind, direction, nodes, edges } ; ids: every piece that belongs to it (boxes, their writing, arrows, their labels);
+ *   others: how many separate diagrams were found besides this one
+ */
+export function readDiagram(elements, selectedIds) {
+  const live = (elements || []).filter((e) => e && !e.isDeleted);
+  const { nodes, edges } = collect(live);
+  if (nodes.length < 2) return null;
   if (!edges.length) return null;
 
   // separate diagrams on one drawing: groups of boxes joined by arrows
@@ -84,7 +113,7 @@ export function readDiagram(elements, selectedIds) {
   for (const e of gEdges) { ids.add(e.el.id); if (e.labelEl) ids.add(e.labelEl.id); }
 
   return {
-    diagram: { kind: 'flow', direction, nodes: ordered.map((n) => ({ id: idOf.get(n), label: n.label, shape: n.shape })), edges: outEdges },
+    diagram: { kind: 'flow', direction, nodes: ordered.map((n) => ({ id: idOf.get(n), label: n.label, shape: n.shape, ...(numOfEl(n.el) ? { num: numOfEl(n.el) } : {}) })), edges: outEdges },
     ids,
     count: ordered.length,
     others: lists.length - 1,

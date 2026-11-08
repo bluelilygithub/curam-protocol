@@ -187,7 +187,7 @@ export function layoutDiagram(diagram, { origin = { x: 0, y: 0 }, runId = 'run' 
     const b = boxes.get(n.id);
     skeleton.push({
       type: SHAPE_TO_TYPE[n.shape] || 'rectangle', id: `vd-${runId}-${n.id}`, x: b.x, y: b.y, width: b.w, height: b.h,
-      label: { text: size.get(n.id).text, fontSize: FONT }, customData: tag,
+      label: { text: size.get(n.id).text, fontSize: FONT }, customData: n.num ? { ...tag, vaultNo: n.num } : tag, // the shape's number stays with it
     });
   }
   for (const e of edges) {

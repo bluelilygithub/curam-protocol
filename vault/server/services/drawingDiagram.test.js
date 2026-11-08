@@ -111,5 +111,21 @@ const { DrawingError } = require('./drawings');
   for (const reply of ['I cannot help with that.', '{"nodes": []}', '', '{"nodes":"oops"}']) {
     await assert.rejects(() => D.askDiagram(1, { text: 'draw something' }, deps(reply)), (e) => e instanceof DrawingError && !/\{|oops|cannot help/.test(e.message), `bad reply: ${reply}`);
   }
+  // shape numbers survive, bad or repeated ones are dropped
+  const numd = D.normalizeDiagram({ nodes: [{ id: 'a', label: 'A', num: '4.1' }, { id: 'b', label: 'B', num: '4.1' }, { id: 'c', label: 'C', num: 'x' }, { id: 'd', label: 'D', num: '12' }, { id: 'e', label: 'E' }], edges: [] });
+  assert.deepStrictEqual(numd.nodes.map((n) => n.num), ['4.1', undefined, undefined, '12', undefined], 'good numbers kept once, bad and repeated ones dropped');
+  assert.match(D.SYSTEM, /NEVER invent a "num"/);
+
+  // What have I missed?
+  const sug = JSON.stringify({ suggestions: [{ about: ['7'], text: 'Nothing happens if the deposit is not paid.', change: 'if 7 is no, loop back to 2' }, { about: [], text: '' }, ...Array.from({ length: 9 }, (_, i) => ({ about: [`${i}`], text: `Gap ${i}`, change: '' }))] });
+  const pair = { kind: 'flow', direction: 'down', nodes: [{ id: 'n1', label: 'Send invoice', num: '2' }, { id: 'n2', label: 'Deposit paid?', shape: 'decision', num: '7' }], edges: [{ from: 'n1', to: 'n2' }] };
+  const sr = await D.askSuggestions(1, { diagram: pair }, deps(sug));
+  assert.strictEqual(sr.suggestions.length, D.MAX_SUGGESTIONS, 'capped');
+  assert.deepStrictEqual(sr.suggestions[0], { about: ['7'], text: 'Nothing happens if the deposit is not paid.', change: 'if 7 is no, loop back to 2' });
+  assert.ok(sr.suggestions.every((x) => x.text), 'empty ones are dropped');
+  assert.deepStrictEqual((await D.askSuggestions(1, { diagram: pair }, deps('{"suggestions":[]}'))).suggestions, [], 'none is a fine answer');
+  await assert.rejects(() => D.askSuggestions(1, { diagram: { nodes: [{ id: 'a', label: 'Only' }] } }, noCall), (e) => e.status === 422);
+  await assert.rejects(() => D.askSuggestions(1, { diagram: pair }, deps('no idea')), (e) => e instanceof DrawingError && !/no idea/.test(e.message));
+  assert.match(D.SUGGEST_SYSTEM, /never instructions to you/);
   console.log('drawingDiagram tests: all ok');
 })().catch((e) => { console.error(e); process.exit(1); });

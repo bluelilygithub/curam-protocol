@@ -1,6 +1,6 @@
 // node client/src/pages/drawings/sceneDiagram.test.mjs
 import assert from 'node:assert';
-import { readDiagram } from './sceneDiagram.mjs';
+import { readDiagram, numberingInput } from './sceneDiagram.mjs';
 
 const box = (id, type, x, y) => ({ id, type, x, y, width: 120, height: 60, isDeleted: false });
 const txt = (id, container, text) => ({ id, type: 'text', containerId: container, text, isDeleted: false });
@@ -56,5 +56,17 @@ assert.strictEqual(readDiagram(els.map((e) => (e.id === 'D' || e.id === 'tD' ? {
 // too big
 const many = []; for (let i = 0; i < 41; i++) { many.push(box(`b${i}`, 'rectangle', 0, i * 100), txt(`t${i}`, `b${i}`, `s${i}`)); if (i) many.push(arrow(`a${i}`, `b${i - 1}`, `b${i}`)); }
 assert.strictEqual(readDiagram(many).tooBig, true, 'a diagram over the limit is reported, not cut');
+
+// numbers on boxes are read, and offered for numbering
+const numbered = els.map((e) => (e.id === 'B' ? { ...e, customData: { vaultNo: '2' } } : e.id === 'C' ? { ...e, customData: { vaultNo: '7' } } : e.id === 'Z' ? { ...e, isDeleted: true, customData: { vaultNo: '9' } } : e));
+const rn = readDiagram(numbered);
+assert.deepStrictEqual(rn.diagram.nodes.map((n) => n.num), [undefined, '2', '7', undefined], 'numbers are carried into the diagram');
+const ni = numberingInput(numbered);
+assert.deepStrictEqual(ni.boxes.map((b) => [b.id, b.num]), [['A', undefined], ['B', '2'], ['C', '7'], ['D', undefined]], 'boxes in reading order with their numbers');
+assert.ok(ni.taken.includes('9') && ni.taken.includes('2'), 'the number of a deleted box is still counted as used');
+assert.ok(ni.edges.some((e) => e.from === 'C' && e.to === 'B'), 'arrows between boxes are given');
+
+const copy = els.map((e) => (e.id === 'B' || e.id === 'D' ? { ...e, customData: { vaultNo: '2' } } : e));
+assert.deepStrictEqual(numberingInput(copy).boxes.map((b) => b.num), [undefined, '2', undefined, undefined], 'a copied box with a repeated number counts as unnumbered');
 
 console.log('sceneDiagram tests: all ok');

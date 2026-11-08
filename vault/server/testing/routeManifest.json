@@ -685,6 +685,9 @@
   "POST /api/drawings/diagram": {
    "class": "authed"
   },
+  "POST /api/drawings/suggestions": {
+   "class": "authed"
+  },
   "POST /api/drawings/:id/duplicate": {
    "class": "authed"
   },
