@@ -7,6 +7,7 @@ import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import TaskTimeline from '../../components/tasks/TaskTimeline';
+import PlanClientPicker from './PlanClientPicker';
 import { fmtDay, fitMessage, orderedRows, timelineTasks, timelineRange, waitOptions, dragToStepChange } from './planLogic.mjs';
 
 const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-60 disabled:opacity-40';
@@ -201,6 +202,8 @@ export default function PlanEditor({ id }) {
               </select>
             </Tooltip>
           </label>
+          <PlanClientPicker clientId={plan.clientId} clientProjectId={plan.clientProjectId} clientName={plan.clientName} clientProjectName={plan.clientProjectName}
+            onChange={(fields) => savePlan(fields)} disabled={busy} />
         </div>
 
         {fit && (

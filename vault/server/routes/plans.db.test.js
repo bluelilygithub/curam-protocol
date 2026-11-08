@@ -13,6 +13,9 @@
 //     dependencies, a step already in Tasks is not sent twice, a deleted task lets the step be sent again, and another person cannot send;
 //   - a plan can be made from a note: headings become groups, list items steps, a ticked check-box a done step, a length written on a line is used,
 //     the order choice decides what waits on what, the preview saves nothing, and a note that is not the caller's is refused;
+//   - a plan can belong to a client and to one of that client's projects: both must be the caller's, a project must belong to the client,
+//     choosing a project fills in its client, changing the client drops a project of the old one, a plan made from a note starts with the note's
+//     client and project, tasks sent from the plan carry them, the list can be filtered, and deleting the client only empties the link;
 //   - delete goes to the recycle bin and Undo brings back the plan with its steps, groups and dependencies and the same dates.
 const assert = require('node:assert/strict');
 const express = require('express');
@@ -283,6 +286,106 @@ function serve() {
     assert.equal(r.body.created.length, 2);
     await pool.query('DELETE FROM tasks WHERE "userId" = $1', [A]); // leave none behind for the next section's count
 
+    // ---- clients and client projects ----
+    const mkClient = async (user, name) => (await pool.query('INSERT INTO clients ("userId", name) VALUES ($1,$2) RETURNING id', [user, name])).rows[0].id;
+    const mkProject = async (user, name, clientId, type = 'client') => (await pool.query('INSERT INTO projects (name, model, "userId", "projectType", "clientId") VALUES ($1,$2,$3,$4,$5) RETURNING id', [name, 'x', user, type, clientId])).rows[0].id;
+    const acme = await mkClient(A, 'Acme Pty Ltd');
+    const bolt = await mkClient(A, 'Bolt Co');
+    const acmeSite = await mkProject(A, 'Acme site build', acme);
+    const boltFit = await mkProject(A, 'Bolt fit-out', bolt);
+    const plainWorkspace = await mkProject(A, 'A chat workspace', null, null);
+    const clientB = await mkClient(B, 'B client');
+    const projectB = await mkProject(B, 'B client project', clientB);
+
+    r = await call(A, 'POST', '/', { title: 'Acme plan', clientId: acme });
+    assert.equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+    assert.equal(r.body.plan.clientId, acme);
+    assert.equal(r.body.plan.clientName, 'Acme Pty Ltd');
+    assert.equal(r.body.plan.clientProjectId, null);
+    const cplan = r.body.plan.id;
+    assert.equal((await call(A, 'POST', '/', { title: 'x' })).body.plan.clientId, null, 'a plan needs no client');
+
+    // choosing a project fills in its client; a project of another client is refused
+    r = await call(A, 'POST', '/', { title: 'Site plan', clientProjectId: acmeSite });
+    assert.equal(r.status, 201);
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId, r.body.plan.clientProjectName, r.body.plan.clientName], [acme, acmeSite, 'Acme site build', 'Acme Pty Ltd']);
+    const siteplan = r.body.plan.id;
+    assert.equal((await call(A, 'POST', '/', { title: 'x', clientId: acme, clientProjectId: boltFit })).status, 400, 'a project of another client');
+    assert.equal((await call(A, 'POST', '/', { title: 'x', clientProjectId: plainWorkspace })).status, 404, 'an ordinary workspace is not a client project');
+
+    // only the caller's own clients and projects
+    assert.equal((await call(A, 'POST', '/', { title: 'x', clientId: clientB })).status, 404, 'another person\'s client');
+    assert.equal((await call(A, 'POST', '/', { title: 'x', clientProjectId: projectB })).status, 404, 'another person\'s client project');
+    assert.equal((await call(A, 'POST', '/', { title: 'x', clientId: 999999 })).status, 404);
+    assert.equal((await call(A, 'POST', '/', { title: 'x', clientId: 'abc' })).status, 404);
+    assert.equal((await call(B, 'PUT', `/${cplan}`, { clientId: clientB })).status, 404, 'B cannot change A\'s plan');
+    assert.equal((await call(A, 'PUT', `/${cplan}`, { clientId: clientB })).status, 404, 'nor point A\'s plan at B\'s client');
+    assert.equal((await call(A, 'GET', `/${cplan}`)).body.plan.clientId, acme, 'a refused change leaves it as it was');
+
+    // changing the client drops a project of the old one; clearing the client clears the project; a project alone sets both
+    r = await call(A, 'PUT', `/${siteplan}`, { clientId: bolt });
+    assert.equal(r.status, 200);
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [bolt, null], 'the Acme project no longer fits');
+    r = await call(A, 'PUT', `/${siteplan}`, { clientProjectId: acmeSite });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [acme, acmeSite]);
+    r = await call(A, 'PUT', `/${siteplan}`, { clientId: acme, clientProjectId: acmeSite });
+    assert.equal(r.status, 200);
+    assert.equal((await call(A, 'PUT', `/${siteplan}`, { clientId: bolt, clientProjectId: acmeSite })).status, 400);
+    r = await call(A, 'PUT', `/${siteplan}`, { clientId: null });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId, r.body.plan.clientName], [null, null, null], 'clearing the client clears the project');
+    r = await call(A, 'PUT', `/${siteplan}`, { title: 'Site plan renamed' });
+    assert.equal(r.body.plan.clientId, null, 'an edit that does not mention the client leaves it alone');
+    await call(A, 'PUT', `/${siteplan}`, { clientProjectId: acmeSite });
+    r = await call(A, 'PUT', `/${siteplan}`, { description: 'still linked' });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [acme, acmeSite]);
+
+    // the list: names, and a filter by client or project
+    r = await call(A, 'GET', '/');
+    const listedById = Object.fromEntries(r.body.plans.map((p) => [p.id, p]));
+    assert.deepEqual([listedById[cplan].clientName, listedById[cplan].clientProjectName], ['Acme Pty Ltd', null]);
+    assert.deepEqual([listedById[siteplan].clientName, listedById[siteplan].clientProjectName], ['Acme Pty Ltd', 'Acme site build']);
+    assert.deepEqual((await call(A, 'GET', `/?clientId=${acme}`)).body.plans.map((p) => p.id).sort(), [cplan, siteplan].sort());
+    assert.deepEqual((await call(A, 'GET', `/?clientProjectId=${acmeSite}`)).body.plans.map((p) => p.id), [siteplan]);
+    assert.equal((await call(A, 'GET', `/?clientId=${bolt}`)).body.plans.length, 0);
+    assert.equal((await call(A, 'GET', '/?clientId=abc')).body.plans.length, 0, 'not an id: nothing matches');
+    assert.equal((await call(B, 'GET', `/?clientId=${acme}`)).body.plans.length, 0, 'another person sees none of A\'s client plans');
+    assert.equal((await call(B, 'GET', `/${cplan}`)).status, 404);
+
+    // from a diagram or a note: chosen, or the note's own client and project
+    r = await dia({ title: 'D', drawingId: drawA, clientId: bolt, durations: {} }, A, '/from-diagram');
+    assert.equal(r.status, 201, JSON.stringify(r.body).slice(0, 200));
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [bolt, null]);
+    const filedNote = (await pool.query('INSERT INTO notes (user_id, title, body, client_id, project_id) VALUES ($1,$2,$3,$4,$5) RETURNING id', [A, 'Filed note', '- one\n- two', acme, acmeSite])).rows[0].id;
+    const wsNote = (await pool.query('INSERT INTO notes (user_id, title, body, project_id) VALUES ($1,$2,$3,$4) RETURNING id', [A, 'Workspace note', '- one\n- two', plainWorkspace])).rows[0].id;
+    r = await call(A, 'POST', '/from-note/preview', { noteId: filedNote });
+    assert.deepEqual([r.body.note.clientId, r.body.note.clientProjectId], [acme, acmeSite], 'the preview says what the note is filed under');
+    r = await call(A, 'POST', '/from-note', { noteId: filedNote });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [acme, acmeSite], 'a plan from a filed note starts with its client and project');
+    r = await call(A, 'POST', '/from-note', { noteId: filedNote, clientId: null, clientProjectId: null });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [null, null], 'choosing none overrides the note');
+    r = await call(A, 'POST', '/from-note', { noteId: filedNote, clientId: bolt });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [bolt, null], 'choosing another client drops the note\'s project');
+    assert.equal((await call(A, 'POST', '/from-note', { noteId: filedNote, clientProjectId: projectB })).status, 404);
+    r = await call(A, 'POST', '/from-note', { noteId: wsNote });
+    assert.deepEqual([r.body.plan.clientId, r.body.plan.clientProjectId], [null, null], 'an ordinary workspace is not a client');
+
+    // tasks sent from the plan carry the client and the client project
+    const cs = (await call(A, 'POST', `/${siteplan}/steps`, { title: 'Pour footings', durationDays: 2 })).body.step;
+    await call(A, 'PUT', `/${siteplan}`, { startDate: '2026-12-07' });
+    r = await call(A, 'POST', `/${siteplan}/send-to-tasks`, { stepIds: [cs.id] });
+    assert.equal(r.status, 201);
+    const ctask = (await pool.query('SELECT "clientId", "projectId" FROM tasks WHERE id = $1', [r.body.created[0].taskId])).rows[0];
+    assert.deepEqual([ctask.clientId, ctask.projectId], [acme, acmeSite], 'the task is filed under the plan\'s client and project');
+    await pool.query('DELETE FROM tasks WHERE "userId" = $1', [A]);
+
+    // deleting the client or the project only empties the link
+    await pool.query('DELETE FROM projects WHERE id = $1', [acmeSite]);
+    assert.deepEqual([(await call(A, 'GET', `/${siteplan}`)).body.plan.clientProjectId, (await call(A, 'GET', `/${siteplan}`)).body.plan.clientId], [null, acme]);
+    await pool.query('DELETE FROM clients WHERE id = $1', [acme]);
+    assert.equal((await call(A, 'GET', `/${cplan}`)).body.plan.clientId, null, 'the plan stays, without its client');
+    assert.equal((await call(A, 'GET', `/${cplan}`)).body.plan.clientName, null);
+
+
     // ---- send to Tasks ----
     const tplan = (await call(A, 'POST', '/', { title: 'Garden', startDate: '2026-12-07', targetEndDate: '2026-12-31' })).body.plan.id;
     const tadd = async (body) => (await call(A, 'POST', `/${tplan}/steps`, body)).body.step;
@@ -429,6 +532,8 @@ function serve() {
     await pool.query('DELETE FROM recycle_bin WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
     await pool.query('DELETE FROM drawings WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
     await pool.query('DELETE FROM notes WHERE user_id = ANY($1)', [[A, B]]).catch(() => {});
+    await pool.query('DELETE FROM projects WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
+    await pool.query('DELETE FROM clients WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
     await pool.query('DELETE FROM users WHERE id = ANY($1)', [[A, B]]).catch(() => {});
     await pool.end().catch(() => {});
   }

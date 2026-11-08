@@ -59,9 +59,9 @@ async function sendToTasks(pool, userId, planId, body = {}) {
       const parent = s.parentStepId != null ? (taskOf.get(s.parentStepId) || null) : null;
       const notes = `From the plan "${plan.title}".${s.notes ? `\n${s.notes}` : ''}`;
       const { rows } = await db.query(
-        `INSERT INTO tasks (title, notes, status, priority, "parentTaskId", "dueDate", "estimatedMinutes", "isMilestone", "userId", "updatedAt")
-         VALUES ($1,$2,$3,'medium',$4,$5,$6,$7,$8,NOW()) RETURNING id`,
-        [s.title, notes, s.status, parent, dueDate, s.isMilestone || isGroup ? null : s.durationDays * DAY_MINS, s.isMilestone ? 1 : 0, userId]);
+        `INSERT INTO tasks (title, notes, status, priority, "parentTaskId", "dueDate", "estimatedMinutes", "isMilestone", "userId", "clientId", "projectId", "updatedAt")
+         VALUES ($1,$2,$3,'medium',$4,$5,$6,$7,$8,$9,$10,NOW()) RETURNING id`,
+        [s.title, notes, s.status, parent, dueDate, s.isMilestone || isGroup ? null : s.durationDays * DAY_MINS, s.isMilestone ? 1 : 0, userId, plan.clientId || null, plan.clientProjectId || null]);
       taskOf.set(s.id, rows[0].id);
       created.push({ stepId: s.id, taskId: rows[0].id });
       await db.query('INSERT INTO plan_links ("userId", "planId", "stepId", kind, "refId", label) VALUES ($1,$2,$3,$4,$5,$6)', [userId, plan.id, s.id, 'task', String(rows[0].id), s.title.slice(0, 200)]);

@@ -40,7 +40,7 @@ function oneOf(v, list, label) {
 const idOf = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : 0; };
 
 // DATE columns come back as JS Dates; ask for text so they stay 'YYYY-MM-DD'.
-const PLAN_COLS = `id, title, description, status, "startDate"::text AS "startDate", "targetEndDate"::text AS "targetEndDate", "workWeek", "sourceKind", "sourceId", "createdAt", "updatedAt"`;
+const PLAN_COLS = `id, title, description, status, "startDate"::text AS "startDate", "targetEndDate"::text AS "targetEndDate", "workWeek", "sourceKind", "sourceId", "clientId", "clientProjectId", "createdAt", "updatedAt"`;
 const STEP_COLS = `id, "planId", title, notes, "parentStepId", position, "startDate"::text AS "startDate", "durationDays", "isMilestone", status, "createdAt", "updatedAt"`;
 
 async function ownedPlan(db, userId, planId, { lock = false } = {}) {
@@ -56,12 +56,54 @@ async function ownedStep(db, userId, planId, stepId) {
   return rows[0];
 }
 
-async function list(db, userId) {
+/**
+ * The client and client project a plan belongs to, checked. A client project is a `projects` row with projectType 'client'; it belongs to one
+ * client, so choosing a project also chooses its client, and a project of another client is refused. Both must be the caller's own.
+ * `body` may carry clientId and/or clientProjectId (null clears); a key that is absent keeps what `current` has. Naming only a project chooses
+ * that project's client. Changing the client without naming a project drops a project that belongs to the old client. Returns { clientId, clientProjectId }.
+ */
+async function resolveClientLink(db, userId, body = {}, current = { clientId: null, clientProjectId: null }) {
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const blank = (v) => v == null || v === '';
+  let clientId = has('clientId') ? (blank(body.clientId) ? null : idOf(body.clientId)) : current.clientId;
+  let projectId = has('clientProjectId') ? (blank(body.clientProjectId) ? null : idOf(body.clientProjectId)) : current.clientProjectId;
+  if (has('clientId') && !blank(body.clientId) && !clientId) throw new PlanError('That client was not found.', 404);
+  if (has('clientProjectId') && !blank(body.clientProjectId) && !projectId) throw new PlanError('That client project was not found.', 404);
+  // changing or clearing the client without naming a project: the old project no longer fits
+  if (has('clientId') && !has('clientProjectId') && (clientId || null) !== (current.clientId || null)) projectId = null;
+  if (projectId) {
+    const { rows } = await db.query('SELECT id, "clientId" FROM projects WHERE id = $1 AND "userId" = $2 AND "projectType" = \'client\'', [projectId, userId]);
+    if (!rows[0]) throw new PlanError('That client project was not found.', 404);
+    // a project knows its client: naming only a project chooses that project's client; naming both must agree
+    if (clientId == null || (has('clientProjectId') && !has('clientId'))) clientId = rows[0].clientId;
+    else if (rows[0].clientId !== clientId) throw new PlanError('That project belongs to a different client.', 400);
+  }
+  if (clientId) {
+    const { rows } = await db.query('SELECT 1 FROM clients WHERE id = $1 AND "userId" = $2', [clientId, userId]);
+    if (!rows[0]) throw new PlanError('That client was not found.', 404);
+  }
+  return { clientId: clientId || null, clientProjectId: projectId || null };
+}
+
+/** The person's plans, newest change first. `filter` may carry clientId and/or clientProjectId to keep to one client or client project. */
+async function list(db, userId, filter = {}) {
+  const where = ['p."userId" = $1']; const params = [userId];
+  for (const [key, col] of [['clientId', 'clientId'], ['clientProjectId', 'clientProjectId']]) {
+    const raw = filter[key];
+    if (raw == null || raw === '') continue;
+    const id = idOf(raw);
+    if (!id) return []; // not a real id: nothing matches
+    params.push(id); where.push(`p."${col}" = $${params.length}`);
+  }
   const { rows } = await db.query(
     `SELECT p.id, p.title, p.description, p.status, p."startDate"::text AS "startDate", p."targetEndDate"::text AS "targetEndDate", p."workWeek", p."updatedAt",
+            p."clientId", p."clientProjectId", c.name AS "clientName", cp.name AS "clientProjectName",
             COUNT(s.id) AS "stepCount", COUNT(s.id) FILTER (WHERE s.status = 'done') AS "doneCount"
-       FROM plans p LEFT JOIN plan_steps s ON s."planId" = p.id AND s."userId" = p."userId"
-      WHERE p."userId" = $1 GROUP BY p.id ORDER BY p."updatedAt" DESC, p.id DESC`, [userId]);
+       FROM plans p
+       LEFT JOIN plan_steps s ON s."planId" = p.id AND s."userId" = p."userId"
+       LEFT JOIN clients c ON c.id = p."clientId" AND c."userId" = p."userId"
+       LEFT JOIN projects cp ON cp.id = p."clientProjectId" AND cp."userId" = p."userId"
+      WHERE ${where.join(' AND ')} GROUP BY p.id, c.name, cp.name ORDER BY p."updatedAt" DESC, p.id DESC`, params);
   return rows.map((r) => ({ ...r, stepCount: Number(r.stepCount), doneCount: Number(r.doneCount) }));
 }
 
@@ -76,6 +118,11 @@ async function loadSteps(db, userId, planId) {
 /** The plan with its steps, dependencies, links and where every step lands. */
 async function get(db, userId, planId) {
   const plan = await ownedPlan(db, userId, planId);
+  const { rows: names } = await db.query(
+    `SELECT (SELECT name FROM clients WHERE id = $1 AND "userId" = $3) AS "clientName", (SELECT name FROM projects WHERE id = $2 AND "userId" = $3) AS "clientProjectName"`,
+    [plan.clientId, plan.clientProjectId, userId]);
+  plan.clientName = names[0].clientName || null;
+  plan.clientProjectName = names[0].clientProjectName || null;
   const { steps, deps } = await loadSteps(db, userId, plan.id);
   const { rows: links } = await db.query(`SELECT id, "stepId", kind, "refId", label, "createdAt" FROM plan_links WHERE "planId" = $1 AND "userId" = $2 ORDER BY id`, [plan.id, userId]);
   // Steps that have been sent to Tasks and whose task still exists (a deleted task drops out): stepId -> { taskId, status }.
@@ -110,13 +157,15 @@ async function create(db, userId, body = {}) {
   const startDate = cleanDate(body.startDate, 'Start date');
   const targetEndDate = cleanDate(body.targetEndDate, 'End date');
   if (startDate && targetEndDate && targetEndDate < startDate) throw new PlanError('The end date is before the start date.');
+  const link = await resolveClientLink(db, userId, body);
   const { rows } = await db.query(
-    `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId", "clientId", "clientProjectId")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
     [userId, cleanTitle(body.title), cleanText(body.description, MAX_DESCRIPTION),
       body.status == null ? 'active' : oneOf(body.status, PLAN_STATUSES, 'That status'), startDate, targetEndDate,
       body.workWeek == null ? 'weekdays' : oneOf(body.workWeek, WORK_WEEKS, 'That work week'),
-      body.sourceKind ? cleanText(body.sourceKind, 40) : null, body.sourceId != null && body.sourceId !== '' ? cleanText(body.sourceId, 100) : null]);
+      body.sourceKind ? cleanText(body.sourceKind, 40) : null, body.sourceId != null && body.sourceId !== '' ? cleanText(body.sourceId, 100) : null,
+      link.clientId, link.clientProjectId]);
   return get(db, userId, rows[0].id);
 }
 
@@ -131,9 +180,10 @@ async function update(db, userId, planId, body = {}) {
     workWeek: 'workWeek' in body ? oneOf(body.workWeek, WORK_WEEKS, 'That work week') : plan.workWeek,
   };
   if (next.startDate && next.targetEndDate && next.targetEndDate < next.startDate) throw new PlanError('The end date is before the start date.');
+  const link = await resolveClientLink(db, userId, body, { clientId: plan.clientId, clientProjectId: plan.clientProjectId });
   await db.query(
-    `UPDATE plans SET title=$3, description=$4, status=$5, "startDate"=$6, "targetEndDate"=$7, "workWeek"=$8, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
-    [plan.id, userId, next.title, next.description, next.status, next.startDate, next.targetEndDate, next.workWeek]);
+    `UPDATE plans SET title=$3, description=$4, status=$5, "startDate"=$6, "targetEndDate"=$7, "workWeek"=$8, "clientId"=$9, "clientProjectId"=$10, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
+    [plan.id, userId, next.title, next.description, next.status, next.startDate, next.targetEndDate, next.workWeek, link.clientId, link.clientProjectId]);
   return get(db, userId, plan.id);
 }
 
@@ -279,16 +329,33 @@ function previewFromDiagram(body = {}) {
 /** A note of the caller's, or "not found". */
 async function ownedNote(db, userId, noteId) {
   const id = idOf(noteId);
-  const { rows } = id ? await db.query('SELECT id, title, body FROM notes WHERE id = $1 AND user_id = $2', [id, userId]) : { rows: [] };
+  const { rows } = id ? await db.query('SELECT id, title, body, client_id, project_id FROM notes WHERE id = $1 AND user_id = $2', [id, userId]) : { rows: [] };
   if (!rows[0]) throw new PlanError('That note was not found.', 404);
   return rows[0];
+}
+
+/**
+ * The client and client project a plan made from this note starts with: the note's client, and its project when that is one of the client's
+ * projects (a note can also be filed under an ordinary workspace, which is not a client project and is ignored).
+ */
+async function noteClientDefaults(db, userId, note) {
+  let clientId = note.client_id || null; let clientProjectId = null;
+  if (note.project_id) {
+    const { rows } = await db.query('SELECT id, "clientId" FROM projects WHERE id = $1 AND "userId" = $2 AND "projectType" = \'client\'', [note.project_id, userId]);
+    if (rows[0]) { clientProjectId = rows[0].id; clientId = rows[0].clientId || clientId; }
+  }
+  if (clientId) {
+    const { rows } = await db.query('SELECT 1 FROM clients WHERE id = $1 AND "userId" = $2', [clientId, userId]);
+    if (!rows[0]) { clientId = null; clientProjectId = null; }
+  }
+  return { clientId, clientProjectId };
 }
 
 /** The same preview, from a note's lists (planFromNote.js). `order` is 'lists' | 'sequence' | 'parallel'. Nothing is saved. */
 async function previewFromNote(db, userId, body = {}) {
   const note = await ownedNote(db, userId, body.noteId);
   const draft = fromNote.buildDraft(note.body, { order: body.order == null ? 'lists' : body.order });
-  return { ...previewFromDraft(draft, body), note: { id: note.id, title: note.title } };
+  return { ...previewFromDraft(draft, body), note: { id: note.id, title: note.title, ...(await noteClientDefaults(db, userId, note)) } };
 }
 
 /**
@@ -315,11 +382,17 @@ async function createFromPreview(pool, userId, body, preview, source) {
     }
     const { rows: n } = await db.query('SELECT COUNT(*) AS n FROM plans WHERE "userId" = $1', [userId]);
     if (Number(n[0].n) >= MAX_PLANS_PER_USER) throw new PlanError(`You already have ${MAX_PLANS_PER_USER} plans. Delete one to make room.`, 409, 'LIMIT');
+    // the client and client project: what the person chose (null clears), otherwise a note's own client and project
+    const chose = Object.prototype.hasOwnProperty.call(body, 'clientId') || Object.prototype.hasOwnProperty.call(body, 'clientProjectId');
+    let wanted = {};
+    if (chose) wanted = { ...(Object.prototype.hasOwnProperty.call(body, 'clientId') ? { clientId: body.clientId } : {}), ...(Object.prototype.hasOwnProperty.call(body, 'clientProjectId') ? { clientProjectId: body.clientProjectId } : {}) };
+    else if (kind === 'note' && drawing) wanted = await noteClientDefaults(db, userId, await db.query('SELECT client_id, project_id FROM notes WHERE id = $1 AND user_id = $2', [drawing.id, userId]).then((r) => r.rows[0] || {}));
+    const link = await resolveClientLink(db, userId, wanted);
     const { rows: planRows } = await db.query(
-      `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId")
-       VALUES ($1,$2,$3,'active',$4,$5,$6,$7,$8) RETURNING id`,
+      `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId", "clientId", "clientProjectId")
+       VALUES ($1,$2,$3,'active',$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
       [userId, cleanTitle(body.title || (drawing && drawing.title), kind === 'note' ? 'Plan from a note' : 'Plan from a diagram'), cleanText(body.description, MAX_DESCRIPTION),
-        preview.startDate, preview.targetEndDate, preview.workWeek, drawing ? (kind === 'note' ? 'note' : 'drawing') : null, drawing ? String(drawing.id) : null]);
+        preview.startDate, preview.targetEndDate, preview.workWeek, drawing ? (kind === 'note' ? 'note' : 'drawing') : null, drawing ? String(drawing.id) : null, link.clientId, link.clientProjectId]);
     const planId = planRows[0].id;
     const idOf2 = new Map();
     let position = 0;
@@ -363,7 +436,7 @@ async function listBySource(db, userId, kind, id) {
 }
 
 module.exports = {
-  PlanError, previewFromDiagram, previewFromNote, createFromDiagram, createFromNote, ownedNote, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
+  PlanError, resolveClientLink, previewFromDiagram, previewFromNote, createFromDiagram, createFromNote, ownedNote, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
   cleanTitle, cleanText, cleanDate, cleanDuration, PLAN_COLS, STEP_COLS,
   calendarSteps, touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
 };

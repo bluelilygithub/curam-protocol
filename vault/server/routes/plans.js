@@ -3,8 +3,8 @@
 // Plans: a named set of steps with dates and "waits on" links, drawn as a Gantt. Mounted at /api/plans behind the `plans` flag. Every query is
 // by the signed-in person; a plan that is not theirs is "not found". Delete goes into the shared recycle bin (30 days). See docs/plans.md.
 //
-//   GET    /api/plans                                   list (counts, no steps)
-//   POST   /api/plans                                   { title?, description?, startDate?, targetEndDate?, workWeek? }
+//   GET    /api/plans?clientId=&clientProjectId=        list (counts, no steps), optionally for one client or client project
+//   POST   /api/plans                                   { title?, description?, startDate?, targetEndDate?, workWeek?, clientId?, clientProjectId? }
 //   GET    /api/plans/calendar?from=&to=               unfinished steps not yet in Tasks, on their last day, for the Tasks calendar { steps: [...] }
 //   GET    /api/plans/by-source?kind=drawing&id=7       the person's plans made from that diagram { plans: [{ id, title }] }
 //   POST   /api/plans/from-diagram/preview              { diagram, durations?, startDate?, targetEndDate?, workWeek?, includeNo? }  steps, what was left out, where they land (saves nothing)
@@ -15,7 +15,7 @@
 //   POST   /api/plans/from-diagram                      the same, plus { title?, drawingId? }: makes the plan and links it to the diagram
 //   POST   /api/plans/:id/send-to-tasks                 { all: true } or { stepIds: [..] }  makes real tasks from steps (a one-way copy), links them back
 //   GET    /api/plans/:id                               the plan, its steps, dependencies, links and where every step lands
-//   PUT    /api/plans/:id                               { title?, description?, status?, startDate?, targetEndDate?, workWeek? }
+//   PUT    /api/plans/:id                               { title?, description?, status?, startDate?, targetEndDate?, workWeek?, clientId?, clientProjectId? }
 //   DELETE /api/plans/:id                               into the recycle bin
 //   POST   /api/plans/:id/steps                         { title, parentStepId?, durationDays?, startDate?, isMilestone?, notes?, status? }
 //   PUT    /api/plans/:id/steps/:stepId                 any of the above
@@ -41,7 +41,7 @@ function fail(res, err, where) {
 }
 
 router.get('/', async (req, res) => {
-  try { res.json({ plans: await plans.list(pool, req.user.id), max: plans.MAX_PLANS_PER_USER }); } catch (err) { fail(res, err, 'list'); }
+  try { res.json({ plans: await plans.list(pool, req.user.id, { clientId: req.query.clientId, clientProjectId: req.query.clientProjectId }), max: plans.MAX_PLANS_PER_USER }); } catch (err) { fail(res, err, 'list'); }
 });
 
 // Named routes come before /:id.

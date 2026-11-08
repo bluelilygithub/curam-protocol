@@ -13,6 +13,7 @@ export const GUIDE_TOOLS = [
   { id: 'contacts', label: 'Contacts', where: 'detail', section: 'contacts' },
   { id: 'projects', label: 'Projects', where: 'detail', section: 'projects' },
   { id: 'tasks', label: 'Tasks', where: 'detail', section: 'tasks' },
+  { id: 'plans', label: 'Plans', where: 'detail', section: 'plans' },
   { id: 'pipeline', label: 'Pipeline', where: 'pipeline' },
 ];
 

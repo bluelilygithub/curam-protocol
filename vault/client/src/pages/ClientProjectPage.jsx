@@ -4,6 +4,7 @@ import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import AttachmentChip from '../components/AttachmentChip';
 import { StatusSelect } from './ClientProjectsPage';
+import { useClientPlans, ClientPlansBody } from '../components/ClientPlans';
 
 // Everything for one piece of client work, in one place: brief, activity log, notes, files and
 // links, tasks, chats, and (read-only) the client's quotes and invoices.
@@ -520,13 +521,25 @@ function Finance({ project }) {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-const NAV = [['brief', 'Brief'], ['activity', 'Activity'], ['notes', 'Notes'], ['files', 'Files'], ['tasks', 'Tasks'], ['chats', 'Chats'], ['finance', 'Quotes & invoices']];
+const NAV = [['brief', 'Brief'], ['activity', 'Activity'], ['notes', 'Notes'], ['files', 'Files'], ['tasks', 'Tasks'], ['plans', 'Plans'], ['chats', 'Chats'], ['finance', 'Quotes & invoices']];
+
+// ── Plans ──────────────────────────────────────────────────
+// The dated plans filed under this client project (docs/plans.md "Clients"). Left out when Plans is off for this person.
+function PlansSection({ cp, project }) {
+  if (!cp.available) return null;
+  return (
+    <Section id="plans" title={`Plans${cp.plans?.length ? ` (${cp.plans.length})` : ''}`} hint="Dated plans for this project, with steps, lengths and what waits on what. Tasks sent from a plan are filed under this project.">
+      <ClientPlansBody plans={cp.plans} clientId={project.clientId} clientProjectId={project.id} name={project.name} />
+    </Section>
+  );
+}
 
 export default function ClientProjectPage() {
   const { id } = useParams();
   const addToast = useToastStore(s => s.addToast);
   const [overview, setOverview] = useState(null);
   const [missing, setMissing] = useState(false);
+  const cp = useClientPlans({ clientProjectId: id });
 
   const load = useCallback(() => {
     api.get(`/api/client-projects/${id}`)
@@ -573,7 +586,7 @@ export default function ClientProjectPage() {
             </div>
           </div>
           <nav className="flex gap-1.5 flex-wrap mt-3" aria-label="Sections">
-            {NAV.map(([k, l]) => (
+            {NAV.filter(([k]) => k !== 'plans' || cp.available).map(([k, l]) => (
               <button key={k} onClick={() => document.getElementById(`cp-${k}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="text-xs px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={GHOST}>{l}</button>
             ))}
           </nav>
@@ -584,6 +597,7 @@ export default function ClientProjectPage() {
         <Notes project={project} />
         <FilesAndLinks project={project} />
         <Tasks project={project} onChanged={load} />
+        <PlansSection cp={cp} project={project} />
         <Chats project={project} />
         <Finance project={project} />
       </div>

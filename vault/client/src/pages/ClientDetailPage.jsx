@@ -12,6 +12,7 @@ import AttachmentChip from '../components/AttachmentChip';
 import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
 import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
 import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
+import { useClientPlans, ClientPlansBody } from '../components/ClientPlans';
 import { useLinkedEmailFollowUp, EmailFollowUpList } from '../components/LinkedEmailFollowUp';
 import CrmTutorChat from './crm/CrmTutorChat';
 import Dialog from '../components/Dialog';
@@ -339,12 +340,14 @@ export default function ClientDetailPage() {
     deals:       true,
     contacts:    true,
     projects:    false,
+    plans:       true,
     research:    true,
     emailFollowUp: true,
     tasks:       true,
   });
 
   const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
+  const clientPlans = useClientPlans({ clientId: Number(id) }); // available is false when Plans is off for this person: no section
   const clientResearch = useLinkedResearch({ clientId: Number(id) }); // null when Topic Research is off for this person: no section
   const clientEmailCases = useLinkedEmailFollowUp(Number(id)); // null when Email Follow-Up is off for this person: no section
 
@@ -602,6 +605,13 @@ export default function ClientDetailPage() {
               onRefresh={load}
             />
           </Section>
+
+          {/* Plans: the dated plans filed under this client (docs/plans.md "Clients"); left out when Plans is off for this person */}
+          {clientPlans.available && (
+            <Section title={`Plans${clientPlans.plans?.length ? ` (${clientPlans.plans.length})` : ''}`} open={sections.plans} onToggle={() => toggleSection('plans')}>
+              <ClientPlansBody plans={clientPlans.plans} clientId={id} name={client.name} />
+            </Section>
+          )}
 
           {/* Research: the Topic Research topics, briefs and drafts made for this client or any of its projects (quiet when the tool is off) */}
           {clientResearch !== null && (

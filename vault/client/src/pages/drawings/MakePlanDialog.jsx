@@ -4,6 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Dialog from '../../components/Dialog';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
+import PlanClientPicker from '../plans/PlanClientPicker';
 import { fmtDay, fitMessage } from '../plans/planLogic.mjs';
 
 const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-60 disabled:opacity-40';
@@ -35,6 +36,7 @@ export default function MakePlanDialog({ kind = 'diagram', diagram, drawingId, n
   const [workWeek, setWorkWeek] = useState('weekdays');
   const [includeNo, setIncludeNo] = useState(false);
   const [order, setOrder] = useState('lists');
+  const [link, setLink] = useState(undefined); // { clientId, clientProjectId } once chosen (or taken from the note); undefined: the server decides
   const [days, setDays] = useState({}); // ref -> what the person typed
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
@@ -48,9 +50,14 @@ export default function MakePlanDialog({ kind = 'diagram', diagram, drawingId, n
   const body = useMemo(() => {
     const durations = {};
     for (const [ref, v] of Object.entries(days)) if (String(v).trim() !== '') durations[ref] = Number(v);
-    const common = { startDate: startDate || null, targetEndDate: targetEndDate || null, workWeek, durations };
+    const common = { startDate: startDate || null, targetEndDate: targetEndDate || null, workWeek, durations, ...(link ? { clientId: link.clientId, clientProjectId: link.clientProjectId } : {}) };
     return isNote ? { noteId, order, ...common } : { diagram, includeNo, ...common };
-  }, [isNote, noteId, order, diagram, includeNo, startDate, targetEndDate, workWeek, days]);
+  }, [isNote, noteId, order, diagram, includeNo, startDate, targetEndDate, workWeek, days, link]);
+
+  // A note filed under a client (and one of its projects) starts the plan with them: shown here so it can be changed before the plan is made.
+  useEffect(() => {
+    if (link === undefined && preview && preview.note) setLink({ clientId: preview.note.clientId || null, clientProjectId: preview.note.clientProjectId || null });
+  }, [preview, link]);
 
   // The preview follows every change after a short pause; an answer to an older request is ignored.
   useEffect(() => {
@@ -155,6 +162,7 @@ export default function MakePlanDialog({ kind = 'diagram', diagram, drawingId, n
               </select>
             </Tooltip>
           </label>
+          <PlanClientPicker clientId={link ? link.clientId : null} clientProjectId={link ? link.clientProjectId : null} onChange={(fields) => setLink((l) => ({ clientId: null, clientProjectId: null, ...(l || {}), ...fields }))} disabled={creating} />
         </div>
 
         {isNote && (

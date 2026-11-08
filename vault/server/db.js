@@ -2438,6 +2438,13 @@ async function initSchema() {
       )
     `);
 
+    // Plans can belong to a CRM client and to one of that client's projects (a `projects` row with projectType 'client'). Added here, after
+    // `clients` exists. The service checks both are the person's own and that the project belongs to the client (docs/plans.md "Clients").
+    await client.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+    await client.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS "clientProjectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_client ON plans ("userId", "clientId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_client_project ON plans ("userId", "clientProjectId")`);
+
     // Password Vault: zero-knowledge. The browser derives the key from a master password and encrypts every entry (AES-256-GCM); the server
     // keeps only the key settings (salt, iteration count, a check blob) and ciphertext. "clientId" is the one plain field: it is how an entry
     // is linked to a CRM client. See docs/password-vault.md.

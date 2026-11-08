@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
@@ -7,6 +7,7 @@ import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
+import PlanClientPicker, { useClientOptions } from './PlanClientPicker';
 import { fmtDay, filterPlans, progressText } from './planLogic.mjs';
 
 const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-60 disabled:opacity-40';
@@ -30,10 +31,19 @@ export default function PlanList() {
   const [startDate, setStartDate] = useState('');
   const [targetEndDate, setTargetEndDate] = useState('');
   const [creating, setCreating] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const clientFilter = params.get('client') || '';
+  const projectFilter = params.get('clientProject') || '';
+  const [link, setLink] = useState({ clientId: clientFilter ? Number(clientFilter) : null, clientProjectId: projectFilter ? Number(projectFilter) : null }); // for the plan about to be made: starts as the client or project being looked at
+  useEffect(() => { setLink({ clientId: clientFilter ? Number(clientFilter) : null, clientProjectId: projectFilter ? Number(projectFilter) : null }); }, [clientFilter, projectFilter]);
+  const options = useClientOptions();
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/api/plans');
+      const q = new URLSearchParams();
+      if (clientFilter) q.set('clientId', clientFilter);
+      if (projectFilter) q.set('clientProjectId', projectFilter);
+      const res = await api.get(`/api/plans${q.toString() ? `?${q}` : ''}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not load your plans.');
       setItems(data.plans || []);
@@ -43,14 +53,15 @@ export default function PlanList() {
       setError(err.message || 'Could not load your plans.');
       setItems((prev) => prev || []);
     }
-  }, []);
+  }, [clientFilter, projectFilter]);
   useEffect(() => { load(); }, [load]);
 
   const create = async () => {
     if (creating) return;
     setCreating(true);
     try {
-      const res = await api.post('/api/plans', { title: title.trim() || undefined, startDate: startDate || null, targetEndDate: targetEndDate || null });
+      const filed = link; // what the pickers show
+      const res = await api.post('/api/plans', { title: title.trim() || undefined, startDate: startDate || null, targetEndDate: targetEndDate || null, ...(filed.clientId || filed.clientProjectId ? { clientId: filed.clientId, clientProjectId: filed.clientProjectId } : {}) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'The plan could not be made. Try again.');
       navigate(`/plans/${data.plan.id}`);
@@ -106,6 +117,7 @@ export default function PlanList() {
               <input type="date" value={targetEndDate} onChange={(e) => setTargetEndDate(e.target.value)} className={FIELD} style={FIELD_STYLE} disabled={creating} />
             </Tooltip>
           </label>
+          <PlanClientPicker clientId={link.clientId} clientProjectId={link.clientProjectId} onChange={(fields) => setLink((l) => ({ ...l, ...fields }))} disabled={creating} />
           <Tooltip text={full ? `You have ${max} plans, the most you can keep. Delete one first.` : 'Make the plan, then add its steps.'}>
             <button type="button" onClick={create} disabled={creating || full} className={BTN} style={{ ...BTN_STYLE, background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)', borderColor: 'var(--color-primary)' }}>
               {getIcon('plus', { size: 13 })} {creating ? 'Making…' : 'Make plan'}
@@ -122,6 +134,22 @@ export default function PlanList() {
               <VoiceInput value={query} onChange={setQuery} placeholder="Search your plans…" label="Search your plans" />
             </div>
           </Tooltip>
+          {options.available && (
+            <Tooltip text="Show only the plans of one client. Plans made from a note or on a client's page are filed under that client.">
+              <select value={clientFilter} onChange={(e) => { const next = new URLSearchParams(params); next.delete('clientProject'); if (e.target.value) next.set('client', e.target.value); else next.delete('client'); setParams(next); }}
+                aria-label="Show the plans of one client" className="px-2 py-1.5 rounded-lg border text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                <option value="">All clients</option>
+                {options.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Tooltip>
+          )}
+          {projectFilter && (
+            <Tooltip text="You are looking at the plans of one client project. Clear it to see every plan.">
+              <button type="button" onClick={() => { const next = new URLSearchParams(params); next.delete('clientProject'); setParams(next); }} className={BTN} style={BTN_STYLE}>
+                {(options.projects.find((p) => String(p.id) === projectFilter) || {}).name || 'One client project'} {getIcon('x', { size: 11 })}
+              </button>
+            </Tooltip>
+          )}
         </div>
         {error && <p className="text-sm" style={{ color: '#ef4444' }} role="alert">{error}</p>}
         {items === null ? (
@@ -141,6 +169,9 @@ export default function PlanList() {
                     <span className="block text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{p.title}</span>
                   </button>
                 </Tooltip>
+                {(p.clientName || p.clientProjectName) && (
+                  <p className="text-xs truncate" style={{ color: 'var(--color-primary)' }}>{[p.clientName, p.clientProjectName].filter(Boolean).join(' · ')}</p>
+                )}
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                   {progressText(p)}
                   {p.startDate || p.targetEndDate ? ` · ${p.startDate ? fmtDay(p.startDate) : '…'} to ${p.targetEndDate ? fmtDay(p.targetEndDate) : '…'}` : ''}
