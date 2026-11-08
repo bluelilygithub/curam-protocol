@@ -135,7 +135,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
       try {
         const [res, mod] = await Promise.all([api.get(`/api/drawings/${id}`), loadExcalidraw()]);
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Could not open that drawing.');
+        if (!res.ok) throw new Error(data.error || 'Could not open that diagram.');
         if (!alive) return;
         const d = data.drawing;
         let scene = null;
@@ -161,7 +161,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
         });
         setLib(mod);
       } catch (err) {
-        if (alive) setLoadError(err.message || 'Could not open that drawing.');
+        if (alive) setLoadError(err.message || 'Could not open that diagram.');
       }
     })();
     return () => { alive = false; };
@@ -523,7 +523,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const exportScene = async (kind) => {
     const ex = apiRef.current;
     if (!ex || !lib) return;
-    if (!ex.getSceneElements().some((e) => !e.isDeleted)) { addToast('The drawing is empty, so there is nothing to export.', 'error'); return; }
+    if (!ex.getSceneElements().some((e) => !e.isDeleted)) { addToast('The diagram is empty, so there is nothing to export.', 'error'); return; }
     try {
       if (kind === 'png') {
         download(fileNameFor(title, 'png'), await lib.exportToBlob({ ...(await sceneForPicture()), mimeType: 'image/png' }));
@@ -551,7 +551,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const saveToNotes = async () => {
     const ex = apiRef.current;
     if (!ex || !lib) return;
-    if (!ex.getSceneElements().some((e) => !e.isDeleted)) { addToast('The drawing is empty, so there is nothing to put in a note.', 'error'); return; }
+    if (!ex.getSceneElements().some((e) => !e.isDeleted)) { addToast('The diagram is empty, so there is nothing to put in a note.', 'error'); return; }
     setSavingNote(true);
     const open = (noteId) => ({ label: 'Open', onClick: () => window.open(`/notes?note=${noteId}`, '_blank', 'noopener') });
     try {
@@ -608,7 +608,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
               </Tooltip>
             ))}
           </div>
-          <Tooltip text="Select everything on the drawing (boxes, arrows and text), ready to stretch or move together. Ctrl+A does the same.">
+          <Tooltip text="Select everything on the diagram (boxes, arrows and text), ready to stretch or move together. Ctrl+A does the same.">
             <button type="button" disabled={!lib} onClick={selectAll} className={BTN} style={BTN_STYLE}>Select all</button>
           </Tooltip>
     </div>
@@ -618,17 +618,17 @@ export default function DrawingEditor({ id, onSavedChange }) {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        <Tooltip text="Go back to your list of drawings. Anything still waiting is saved first.">
-          <button type="button" className={BTN} style={BTN_STYLE} onClick={goBack}>{getIcon('arrow-left', { size: 14 })} Your drawings</button>
+        <Tooltip text="Go back to your list of diagrams. Anything still waiting is saved first.">
+          <button type="button" className={BTN} style={BTN_STYLE} onClick={goBack}>{getIcon('arrow-left', { size: 14 })} Your diagrams</button>
         </Tooltip>
         <div className="w-56 sm:w-72">
-          <Tooltip text="The name of this drawing. Type or say a new one and press Enter.">
+          <Tooltip text="The name of this diagram. Type or say a new one and press Enter.">
             <div className="w-full" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.querySelector('input')?.blur(); } }}>
-              <VoiceInput value={title} onChange={setTitle} onBlur={saveTitle} placeholder="Name this drawing" label="Drawing name" />
+              <VoiceInput value={title} onChange={setTitle} onBlur={saveTitle} placeholder="Name this diagram" label="Diagram name" />
             </div>
           </Tooltip>
         </div>
-        <Tooltip text={status === 'changed' ? 'This drawing was saved from another tab. Reload this page to see the newer version.' : 'Your drawing saves by itself a moment after you stop drawing.'}>
+        <Tooltip text={status === 'changed' ? 'This diagram was saved from another tab. Reload this page to see the newer version.' : 'Your diagram saves by itself a moment after you stop diagram.'}>
           <span className="text-xs" role="status" aria-live="polite" style={{ color: bad ? '#b45309' : 'var(--color-muted)' }}>
             {saveLabel(status, savedAt, statusDetail)}
           </span>
@@ -636,7 +636,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
         {status === 'changed' && (
           <button type="button" className={BTN} style={BTN_STYLE} onClick={() => window.location.reload()}>Reload</button>
         )}
-        <div role="group" aria-label="Look of the drawing" className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} data-tour="drawings-look">
+        <div role="group" aria-label="Look of the diagram" className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} data-tour="drawings-look">
           {[
             ['sketch', 'Sketch', 'The hand-drawn look. Switching is reversible: every piece remembers how it was drawn, so going back to Sketch gives you exactly what you drew.'],
             ['clean', 'Clean', "A conservative look: steady straight lines, square corners, straight arrows, solid fills, a plain font and Vault's own text colour for lines. Pieces you drew in your own colours keep them. Use Undo or switch back to Sketch to return."],
@@ -651,21 +651,21 @@ export default function DrawingEditor({ id, onSavedChange }) {
             </Tooltip>
           ))}
         </div>
-        <Tooltip text="Zoom so the whole drawing fills the screen, bigger or smaller as needed.">
+        <Tooltip text="Zoom so the whole diagram fills the screen, bigger or smaller as needed.">
           <button type="button" disabled={!lib} onClick={fitToScreen} className={BTN} style={BTN_STYLE}>Fit to screen</button>
         </Tooltip>
-        <Tooltip text={gridOn ? 'The grid is on: what you draw and move snaps to it. Press to turn it off.' : 'Show a grid and snap what you draw and move to it, so boxes line up neatly. The choice is saved with the drawing.'}>
+        <Tooltip text={gridOn ? 'The grid is on: what you draw and move snaps to it. Press to turn it off.' : 'Show a grid and snap what you draw and move to it, so boxes line up neatly. The choice is saved with the diagram.'}>
           <button type="button" disabled={!lib} aria-pressed={gridOn} onClick={toggleGrid} className={BTN} style={{ ...BTN_STYLE, ...(gridOn ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
             Snap to grid
           </button>
         </Tooltip>
-        <Tooltip text={showNums ? 'Numbers are showing on the shapes so you can refer to them (for example: add a step after 7). They are not part of the drawing and do not print or export. Press to hide them.' : 'Show a small number on each shape so you can refer to it when asking for changes (for example: add a step after 7). The numbers never print or export.'}>
+        <Tooltip text={showNums ? 'Numbers are showing on the shapes so you can refer to them (for example: add a step after 7). They are not part of the diagram and do not print or export. Press to hide them.' : 'Show a small number on each shape so you can refer to it when asking for changes (for example: add a step after 7). The numbers never print or export.'}>
           <button type="button" disabled={!lib} aria-pressed={showNums} onClick={toggleNumbers} className={BTN} style={{ ...BTN_STYLE, ...(showNums ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
             Numbers
           </button>
         </Tooltip>
         <div className="flex flex-wrap items-center gap-2 ml-auto" data-tour="drawings-export">
-          <Tooltip text="The look of the PNG and SVG pictures and of the picture sent to Notes. 'Same' follows the drawing; the others change the picture only, never the drawing. The .excalidraw file is always the drawing exactly as it is.">
+          <Tooltip text="The look of the PNG and SVG pictures and of the picture sent to Notes. 'Same' follows the diagram; the others change the picture only, never the diagram. The .excalidraw file is always the diagram exactly as it is.">
             <select
               value={exportLook} onChange={(e) => setExportLook(e.target.value)} aria-label="Look of pictures"
               className="px-2 py-1.5 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
@@ -675,17 +675,17 @@ export default function DrawingEditor({ id, onSavedChange }) {
               <option value="sketch">Pictures: sketch</option>
             </select>
           </Tooltip>
-          <Tooltip text="Save a PNG picture of the whole drawing to your computer.">
+          <Tooltip text="Save a PNG picture of the whole diagram to your computer.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} onClick={() => exportScene('png')}>{getIcon('image', { size: 13 })} PNG</button>
           </Tooltip>
-          <Tooltip text="Save an SVG picture (sharp at any size) of the whole drawing to your computer.">
+          <Tooltip text="Save an SVG picture (sharp at any size) of the whole diagram to your computer.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} onClick={() => exportScene('svg')}>{getIcon('image', { size: 13 })} SVG</button>
           </Tooltip>
-          <Tooltip text="Save the drawing as a file ending in .excalidraw. You can open it again with Open a file, or in other Excalidraw programs.">
+          <Tooltip text="Save the diagram as a file ending in .excalidraw. You can open it again with Open a file, or in other Excalidraw programs.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} onClick={() => exportScene('file')}>{getIcon('download', { size: 13 })} File</button>
           </Tooltip>
           <div className="relative" data-tour="drawings-notes">
-            <Tooltip text={linkedNotes.length === 0 ? 'Put this drawing in a new note: the picture is attached and shown inside the note, with a link back to the drawing.' : (linkedNotes.length === 1 ? `This drawing is in a note (${linkedNotes[0].title}). Go to it, or put it in another note.` : `This drawing is in ${linkedNotes.length} notes. Choose one to go to it, or put it in another note.`)}>
+            <Tooltip text={linkedNotes.length === 0 ? 'Put this diagram in a new note: the picture is attached and shown inside the note, with a link back to the diagram.' : (linkedNotes.length === 1 ? `This diagram is in a note (${linkedNotes[0].title}). Go to it, or put it in another note.` : `This diagram is in ${linkedNotes.length} notes. Choose one to go to it, or put it in another note.`)}>
               <button
                 type="button" className={BTN} style={BTN_STYLE} disabled={!lib}
                 aria-haspopup={linkedNotes.length ? 'menu' : undefined} aria-expanded={linkedNotes.length ? notesMenu : notesOpen}
@@ -715,7 +715,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
         <div className="px-3 py-2 border-b space-y-2 shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
             Say or type what you want drawn: the steps of a process, who reports to whom, an idea with branches, or things in order. It is drawn as boxes and arrows you can move and change.
-            This uses one AI request. Only the words you put here are sent, never your drawings.
+            This uses one AI request. Only the words you put here are sent, never your diagrams.
           </p>
           <Tooltip text="Describe what to draw. Press the microphone and just talk, or type. Name the steps, people or ideas and how they lead on.">
             <div className="w-full">
@@ -723,7 +723,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
             </div>
           </Tooltip>
           <div className="flex flex-wrap items-center gap-2">
-            <Tooltip text="Draw it now. It goes onto this drawing (below anything already there) in the look the drawing is in. One Undo removes it.">
+            <Tooltip text="Draw it now. It goes onto this diagram (below anything already there) in the look the diagram is in. One Undo removes it.">
               <button type="button" disabled={aiBusy || !aiText.trim()} onClick={() => drawFromWords(false)} className="px-4 py-1.5 rounded-xl text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
                 {aiBusy ? 'Drawing…' : 'Draw it'}
               </button>
@@ -732,7 +732,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
           {readable && (
             <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Change the diagram on this drawing{readable.others ? ` (the one you have selected, or the biggest of ${readable.others + 1})` : ''}: {readable.count} boxes. Say what to change, for example insert a step, add one at the start or the end, or add a loop back. Turn on Numbers to refer to a box by its number, like after 7. It is redrawn in the same place, so boxes you moved by hand in it are laid out again.
+                Change this diagram{readable.others ? ` (the one you have selected, or the biggest of ${readable.others + 1})` : ''}: {readable.count} boxes. Say what to change, for example insert a step, add one at the start or the end, or add a loop back. Turn on Numbers to refer to a box by its number, like after 7. It is redrawn in the same place, so boxes you moved by hand in it are laid out again.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex-1 min-w-[14rem]" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); drawFromWords(true); } }}>
@@ -776,7 +776,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
       )}
       {notesOpen && (
         <div className="flex flex-wrap items-end gap-3 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Makes a new note named “{title || 'Drawing'}” with this drawing inside it. Optionally file it:</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Makes a new note named “{title || 'Diagram'}” with this diagram inside it. Optionally file it:</p>
           <label className="block space-y-0.5">
             <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Project</span>
             <Tooltip text="File the new note under one of your projects. Leave it empty to file it later.">
@@ -795,7 +795,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
               </select>
             </Tooltip>
           </label>
-          <Tooltip text="Save the note now. The drawing is saved first, then a picture of it (in the look chosen at the top) is attached to the new note.">
+          <Tooltip text="Save the note now. The diagram is saved first, then a picture of it (in the look chosen at the top) is attached to the new note.">
             <button type="button" disabled={savingNote} onClick={saveToNotes} className="px-4 py-1.5 rounded-xl text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               {savingNote ? 'Saving…' : 'Save to Notes'}
             </button>
@@ -811,7 +811,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
           </div>
         )}
         {!Excalidraw && (
-          <div className="p-6 max-w-sm"><Skeleton lines={3} label="Loading the drawing board" /></div>
+          <div className="p-6 max-w-sm"><Skeleton lines={3} label="Loading the board" /></div>
         )}
         {Excalidraw && initial && (
           <Excalidraw

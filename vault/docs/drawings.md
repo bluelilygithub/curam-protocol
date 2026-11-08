@@ -1,4 +1,6 @@
-# Drawings (Excalidraw in Vault)
+# Diagrams (Excalidraw in Vault; file and code names still say "drawings")
+
+**Renamed 2026-11-08: the tool is called Diagrams on screen** (it started as Drawings). It is a flowcharting and diagramming tool on an Excalidraw board: Draw it for me, loops, shape numbers, What have I missed?. Only the words people see changed: the menu name, page, guide ("Diagrams guide"), tour, help, tooltips, Feature Access label, recycle bin label, default title ("Untitled diagram") and the wording of notes made from it ("From the diagram ..."). The internal names are unchanged: the `drawings` feature flag, `/drawings` URL, `/api/drawings` routes, the `drawings` table, `customData` keys, file names and the `drawings` guide key, so nothing saved or bookmarked breaks, and a note's link back to the tool still matches by the `](/drawings/N)` link. Older notes still say "From the drawing". Searching "drawing", "sketch", "whiteboard" or "flowchart" in Ctrl+K still finds it (nav `aliases`). Below, "drawing" in this document means one saved diagram.
 
 Added 2026-11-08. A person's own saved drawings, drawn on the real **Excalidraw** editor (MIT licence, `@excalidraw/excalidraw` 0.18, a React component). Route `/drawings` (the list) and `/drawings/:id` (one drawing). Content Creation in the navigation. Flag **`drawings`**, lifecycle **`preview`**, **off by default** (admins can always open it; switch it on for members in Settings → Feature Access once it has been seen working on Railway).
 

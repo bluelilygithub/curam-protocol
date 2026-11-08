@@ -40,6 +40,6 @@ const made = drawingNoteBody({ attachmentId: 41, title: 'Kitchen [v2]\nplan', dr
 assert.strictEqual(made.split('\n')[0], '{picture:41}');
 assert.ok(made.includes('[Kitchen v2 plan](/drawings/12)'), 'brackets and line breaks in a title cannot break the link');
 assert.deepStrictEqual(pictureIds(made), [41]);
-assert.ok(drawingNoteBody({ attachmentId: 1, title: '', drawingPath: '/drawings/1' }).includes('[Drawing](/drawings/1)'));
+assert.ok(drawingNoteBody({ attachmentId: 1, title: '', drawingPath: '/drawings/1' }).includes('[Diagram](/drawings/1)'));
 
 console.log('notePictures tests: all ok');

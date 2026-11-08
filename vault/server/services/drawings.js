@@ -10,7 +10,7 @@ const MAX_THUMB_BYTES = 150 * 1024;
 const MAX_ELEMENTS = 20000;
 const MAX_DRAWINGS_PER_USER = 300;
 const MAX_TITLE = 120;
-const DEFAULT_TITLE = 'Untitled drawing';
+const DEFAULT_TITLE = 'Untitled diagram';
 const LOOKS = ['sketch', 'clean'];
 const EMPTY_SCENE = JSON.stringify({ type: 'excalidraw', version: 2, source: 'vault', elements: [], appState: {}, files: {} });
 
@@ -32,14 +32,14 @@ function checkScene(input) {
   } else if (input && typeof input === 'object') {
     text = JSON.stringify(input);
   } else {
-    throw new DrawingError('There is no drawing to save.');
+    throw new DrawingError('There is no diagram to save.');
   }
   if (Buffer.byteLength(text) > MAX_SCENE_BYTES) {
-    throw new DrawingError(`This drawing is too big to save (the limit is ${Math.round(MAX_SCENE_BYTES / 1048576)} MB, usually because of large pictures pasted into it). Remove or shrink a picture and try again.`, 413, 'TOO_BIG');
+    throw new DrawingError(`This diagram is too big to save (the limit is ${Math.round(MAX_SCENE_BYTES / 1048576)} MB, usually because of large pictures pasted into it). Remove or shrink a picture and try again.`, 413, 'TOO_BIG');
   }
-  try { obj = typeof input === 'object' ? input : JSON.parse(text); } catch { throw new DrawingError('That is not a drawing file.'); }
-  if (!obj || obj.type !== 'excalidraw' || !Array.isArray(obj.elements)) throw new DrawingError('That is not a drawing file.');
-  if (obj.elements.length > MAX_ELEMENTS) throw new DrawingError(`This drawing has too many pieces (more than ${MAX_ELEMENTS}). Split it into two drawings.`, 413, 'TOO_MANY');
+  try { obj = typeof input === 'object' ? input : JSON.parse(text); } catch { throw new DrawingError('That is not a diagram file.'); }
+  if (!obj || obj.type !== 'excalidraw' || !Array.isArray(obj.elements)) throw new DrawingError('That is not a diagram file.');
+  if (obj.elements.length > MAX_ELEMENTS) throw new DrawingError(`This diagram has too many pieces (more than ${MAX_ELEMENTS}). Split it into two diagrams.`, 413, 'TOO_MANY');
   return { text, elementCount: obj.elements.filter((e) => e && !e.isDeleted).length, bytes: Buffer.byteLength(text) };
 }
 
@@ -82,13 +82,13 @@ async function list(db, userId) {
 
 async function get(db, userId, id) {
   const { rows } = await db.query(`SELECT ${LIST_COLS}, scene FROM drawings WHERE id = $1 AND "userId" = $2`, [id, userId]);
-  if (!rows[0]) throw new DrawingError('That drawing was not found.', 404);
+  if (!rows[0]) throw new DrawingError('That diagram was not found.', 404);
   return rows[0];
 }
 
 async function assertRoom(db, userId) {
   const { rows } = await db.query('SELECT COUNT(*) AS n FROM drawings WHERE "userId" = $1', [userId]);
-  if (Number(rows[0]?.n ?? 0) >= MAX_DRAWINGS_PER_USER) throw new DrawingError(`You already have ${MAX_DRAWINGS_PER_USER} drawings. Delete some to make a new one.`, 409, 'FULL');
+  if (Number(rows[0]?.n ?? 0) >= MAX_DRAWINGS_PER_USER) throw new DrawingError(`You already have ${MAX_DRAWINGS_PER_USER} diagrams. Delete some to make a new one.`, 409, 'FULL');
 }
 
 async function create(db, userId, { title, scene, thumbnail, look } = {}) {
@@ -127,8 +127,8 @@ async function update(db, userId, id, patch = {}) {
     [id, userId, base ? base.toISOString() : null, ...vals]);
   if (rows[0]) return rows[0];
   const { rows: exists } = await db.query('SELECT 1 FROM drawings WHERE id = $1 AND "userId" = $2', [id, userId]);
-  if (!exists[0]) throw new DrawingError('That drawing was not found.', 404);
-  throw new DrawingError('This drawing was changed somewhere else (another tab?) since you opened it. Reload to see the newer version.', 409, 'CHANGED');
+  if (!exists[0]) throw new DrawingError('That diagram was not found.', 404);
+  throw new DrawingError('This diagram was changed somewhere else (another tab?) since you opened it. Reload to see the newer version.', 409, 'CHANGED');
 }
 
 async function duplicate(db, userId, id) {

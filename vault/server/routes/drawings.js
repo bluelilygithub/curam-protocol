@@ -28,7 +28,7 @@ const BIN_MAX_BYTES = 8 * 1024 * 1024;
 function fail(res, err, where) {
   if (err instanceof drawings.DrawingError) return res.status(err.status).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
   getLogger().error({ err }, `[drawings] ${where}`);
-  return res.status(500).json({ error: 'Something went wrong with your drawings. Try again.' });
+  return res.status(500).json({ error: 'Something went wrong with your diagrams. Try again.' });
 }
 
 const idOf = (req) => {
@@ -104,7 +104,7 @@ router.delete('/:id', async (req, res) => {
   try {
     await db.query('BEGIN');
     const { rows } = await db.query('SELECT * FROM drawings WHERE id = $1 AND "userId" = $2 FOR UPDATE', [idOf(req), req.user.id]);
-    if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That drawing was not found.' }); }
+    if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That diagram was not found.' }); }
     const d = rows[0];
     const binId = await bin.moveToBin(db, {
       userId: req.user.id, type: BIN_TYPE, id: d.id, title: d.title,
@@ -116,7 +116,7 @@ router.delete('/:id', async (req, res) => {
     return res.json({ ok: true, binId });
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});
-    if (err && err.code === 'TOO_LARGE') return res.status(413).json({ error: 'This drawing is too big to keep in the recycle bin, so it was not deleted. Remove large pictures from it first, or export it as a file.' });
+    if (err && err.code === 'TOO_LARGE') return res.status(413).json({ error: 'This diagram is too big to keep in the recycle bin, so it was not deleted. Remove large pictures from it first, or export it as a file.' });
     return fail(res, err, 'delete');
   } finally { db.release(); }
 });

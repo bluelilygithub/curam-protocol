@@ -19,7 +19,7 @@ const GUIDES = {
   'web-extractor': { name: 'Web Extractor guide', endpoint: '/api/web-extractor-tutor' },
   fonts: { name: 'Font Customizer guide', endpoint: '/api/fonts-tutor' },
   measurements: { name: 'Measurements guide', endpoint: '/api/measurements-tutor' },
-  drawings: { name: 'Drawings guide', endpoint: '/api/drawings-tutor' },
+  drawings: { name: 'Diagrams guide', endpoint: '/api/drawings-tutor' },
   css: { name: 'Style editor guide', endpoint: '/api/restyle-tutor' },
   youtube: { name: 'YouTube guide', endpoint: '/api/youtube-tutor' },
   'device-preview': { name: 'Device preview guide', endpoint: '/api/device-preview-tutor' },

@@ -84,7 +84,7 @@ if (!url) {
     const blank = await D.create(pool, 1, {});
     assert.strictEqual(blank.title, D.DEFAULT_TITLE);
     assert.strictEqual(blank.elementCount, 0);
-    await assert.rejects(() => D.create(pool, 1, { scene: 'nope' }), /not a drawing file/);
+    await assert.rejects(() => D.create(pool, 1, { scene: 'nope' }), /not a diagram file/);
     await assert.rejects(() => D.create(pool, 1, { scene: scene(1), thumbnail: 'http://evil/x.png' }), /preview picture/);
     assert.strictEqual((await rowsOf(1)).length, 2, 'a refused create left nothing behind');
 

@@ -97,7 +97,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'youtube', label: 'YouTube' },
       { key: 'graphics', label: 'Graphics' },
       { key: 'videos', label: 'Video Tools' },
-      { key: 'drawings', label: 'Drawings' },
+      { key: 'drawings', label: 'Diagrams' },
       { key: 'music', label: 'Music' },
       { key: 'recipes', label: 'Recipes' },
       { key: 'pdf', label: 'PDF Tools' },

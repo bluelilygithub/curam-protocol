@@ -35,8 +35,8 @@ const png = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })
 {
   const api = fakeApi();
   await saveDrawingToNotes({ api, title: '   ', drawingId: 3, png });
-  assert.strictEqual(api.calls[0][2].title, 'Drawing');
-  assert.strictEqual(api.calls[1][2], 'Drawing.png');
+  assert.strictEqual(api.calls[0][2].title, 'Diagram');
+  assert.strictEqual(api.calls[1][2], 'Diagram.png');
 }
 
 // the note cannot be made: nothing else is tried

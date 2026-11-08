@@ -72,7 +72,7 @@ Core files:
 - Settings tabs: add to `SETTINGS_GROUPS` in `client/src/utils/settingsGroups.mjs`, then a block in `SettingsPage.jsx`
 - Needs-attention list: add a query in `server/routes/attention.js` and a line in `buildAttentionItems`, not a new banner
 - Guide chats: one component (`components/tutor/TutorChat.jsx`) and one registry (`server/config/guides.js`); `npm run test:guides`. Update a guide's `CATALOG` together with its tool list; tests fail on drift (`docs/guide-chat.md`)
-- Display names renamed 2026-11 (Style editor, Google Ads, Page speed, Search Console); internal keys and routes unchanged. Names live in `appNavigation.js`, `utils/featureAccess.js`, `utils/mobileConfig.js`
+- Display names renamed 2026-11 (Style editor, Google Ads, Page speed, Search Console, Drawings to Diagrams); internal keys and routes unchanged. Names live in `appNavigation.js`, `utils/featureAccess.js`, `utils/mobileConfig.js`
 
 ---
 

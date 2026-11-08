@@ -170,7 +170,7 @@ function normalizeSuggestions(raw) {
  */
 async function askSuggestions(userId, input = {}, deps = {}) {
   const diagram = normalizeDiagram(input.diagram);
-  if (diagram.nodes.length < 2) throw new DrawingError('There is not enough on the drawing to look at yet.', 422);
+  if (diagram.nodes.length < 2) throw new DrawingError('There is not enough on the diagram to look at yet.', 422);
   const resolve = deps.getModels || require('./modelResolver').getModelsForUser;
   const call = deps.callModel || require('./callModel').callModel;
   const tiers = await resolve(userId);

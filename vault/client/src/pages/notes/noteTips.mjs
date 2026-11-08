@@ -137,7 +137,7 @@ export const NOTE_TIPS = {
   },
   typeButton: 'Open the keyboard and type into this note.',
   todoBox: 'Tick or untick this to-do. The change is saved into the note.',
-  picture: 'A picture saved with this note, for example from Drawings. Click it to see it full size in a new tab.',
+  picture: 'A picture saved with this note, for example from Diagrams. Click it to see it full size in a new tab.',
   attach: 'Attach files to this note: PDF, images, text, CSV or Office documents, up to 50 MB each. You can also drop files onto the note or paste an image into the text.',
   attachFull: 'This note already has the most files it can hold (20). Remove one to attach another.',
   attachOpen: (name, size, view, askReads) => `${name}${size ? `, ${size}` : ''}. Click to ${view ? 'open it in a new tab' : 'save it to your computer'}. ${askReads ? 'Ask your notes can read the text inside it.' : 'Ask your notes cannot read inside this file, only its name.'}`,

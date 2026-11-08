@@ -5,4 +5,4 @@
 const { makeGuideRouter } = require('./guideRouter');
 const { askDrawingsTutor } = require('../services/drawingsTutor');
 
-module.exports = makeGuideRouter({ ask: askDrawingsTutor, source: 'drawingsTutor', productName: 'Drawings', logTag: '[drawings/tutor]' });
+module.exports = makeGuideRouter({ ask: askDrawingsTutor, source: 'drawingsTutor', productName: 'Diagrams', logTag: '[drawings/tutor]' });

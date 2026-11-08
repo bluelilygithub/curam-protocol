@@ -39,6 +39,6 @@ export function pictureIds(body) {
 
 /** The text of a note made from a drawing: the picture, then where it came from. `drawingPath` is a path inside Vault such as /drawings/12. */
 export function drawingNoteBody({ attachmentId, title, drawingPath }) {
-  const name = String(title || 'Drawing').replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Drawing';
-  return `${pictureToken(attachmentId)}\n\nFrom the drawing [${name}](${drawingPath}).\n`;
+  const name = String(title || 'Diagram').replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Diagram';
+  return `${pictureToken(attachmentId)}\n\nFrom the diagram [${name}](${drawingPath}).\n`;
 }

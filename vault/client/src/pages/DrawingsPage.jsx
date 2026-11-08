@@ -73,12 +73,12 @@ export default function DrawingsPage() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
             {getIcon('pen-tool', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Drawings</h1>
-          <Tooltip text="How Drawings works, and what it does not do yet.">
-            <button type="button" onClick={info.open} aria-label="How Drawings works" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('info', { size: 13 })}</button>
+          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Diagrams</h1>
+          <Tooltip text="How Diagrams works, and what it does not do yet.">
+            <button type="button" onClick={info.open} aria-label="How Diagrams works" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('info', { size: 13 })}</button>
           </Tooltip>
-          <Tooltip text="Take the guided tour of Drawings.">
-            <button type="button" onClick={startTour} aria-label="Take the Drawings tour" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('compass', { size: 13 })}</button>
+          <Tooltip text="Take the guided tour of Diagrams.">
+            <button type="button" onClick={startTour} aria-label="Take the Diagrams tour" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('compass', { size: 13 })}</button>
           </Tooltip>
           {view === 'list' && <p className="text-sm ml-2" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS.list}</p>}
         </div>
@@ -86,9 +86,9 @@ export default function DrawingsPage() {
       </div>
 
       {info.show && (
-        <ToolInfoModal title="How Drawings Works" onClose={info.close}>
+        <ToolInfoModal title="How Diagrams Works" onClose={info.close}>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            Sketch ideas, diagrams and plans on an endless page. Drawings are saved to your account by themselves and nobody else can see them. Not sure where to start? Press the round guide button at the bottom right and say what you want to do.
+            Sketch ideas, diagrams and plans on an endless page. Diagrams are saved to your account by themselves and nobody else can see them. Not sure where to start? Press the round guide button at the bottom right and say what you want to do.
           </p>
           <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             {HOW_IT_WORKS.map(([heading, text]) => (

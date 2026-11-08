@@ -51,16 +51,16 @@ export function startDrawingsTour() {
 
   tour.addStep({
     id: 'drawings-welcome',
-    title: 'Drawings — Quick Tour',
-    text: 'Sketch ideas, diagrams and plans on an endless page. Your drawings are saved to your account by themselves, and nobody else can see them.',
+    title: 'Diagrams — Quick Tour',
+    text: 'Sketch ideas, diagrams and plans on an endless page. Your diagrams are saved to your account by themselves, and nobody else can see them.',
     when: { show() { injectStepCounter(1); } },
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
 
   tour.addStep({
     id: 'drawings-new',
-    title: 'Start a drawing',
-    text: 'New drawing opens an empty page straight away. It is called "Untitled drawing" until you rename it, and it saves as soon as you start drawing.',
+    title: 'Start a diagram',
+    text: 'New diagram opens an empty page straight away. It is called "Untitled diagram" until you rename it, and it saves as soon as you start diagram.',
     attachTo: { element: '[data-tour="drawings-new"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('drawings-new', '[data-tour="drawings-new"]')()),
     when: { show() { injectStepCounter(2); } },
@@ -69,8 +69,8 @@ export function startDrawingsTour() {
 
   tour.addStep({
     id: 'drawings-open-file',
-    title: 'Bring a drawing in',
-    text: 'Open a file takes a drawing file ending in .excalidraw, from Excalidraw itself or an earlier export, and saves it as a new drawing in your list.',
+    title: 'Bring a diagram in',
+    text: 'Open a file takes a diagram file ending in .excalidraw, from Excalidraw itself or an earlier export, and saves it as a new diagram in your list.',
     attachTo: { element: '[data-tour="drawings-open-file"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('drawings-open-file', '[data-tour="drawings-open-file"]')()),
     when: { show() { injectStepCounter(3); } },
@@ -79,8 +79,8 @@ export function startDrawingsTour() {
 
   tour.addStep({
     id: 'drawings-list',
-    title: 'Your drawings',
-    text: 'Each drawing shows a small preview. Click it to open it. Under each one you can rename it, make a copy, or delete it. A deleted drawing shows an Undo button and waits 30 days in the recycle bin in Settings.',
+    title: 'Your diagrams',
+    text: 'Each diagram shows a small preview. Click it to open it. Under each one you can rename it, make a copy, or delete it. A deleted diagram shows an Undo button and waits 30 days in the recycle bin in Settings.',
     attachTo: { element: '[data-tour="drawings-list"]', on: 'top' },
     beforeShowPromise: () => Promise.resolve(before('drawings-list', '[data-tour="drawings-list"]')()),
     when: { show() { injectStepCounter(4); } },
@@ -89,8 +89,8 @@ export function startDrawingsTour() {
 
   tour.addStep({
     id: 'drawings-board',
-    title: 'The drawing board',
-    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo (the arrows at the bottom left of the board) go back and forward as many steps as you need. Numbers puts a small number on each shape so you can say add a step after 7, Select all (top right of the board) and Fit to screen help with resizing, Keep shape or Free (also top right) decides whether stretching keeps proportions, Snap to grid lines boxes up, and a selected arrow can take an arrowhead at both ends under Arrowheads in the left panel.',
+    title: 'The board',
+    text: 'Inside a diagram, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo (the arrows at the bottom left of the board) go back and forward as many steps as you need. Numbers puts a small number on each shape so you can say add a step after 7, Select all (top right of the board) and Fit to screen help with resizing, Keep shape or Free (also top right) decides whether stretching keeps proportions, Snap to grid lines boxes up, and a selected arrow can take an arrowhead at both ends under Arrowheads in the left panel.',
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
@@ -98,7 +98,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-export',
     title: 'Look, export and Notes',
-    text: 'Use the buttons above the drawing: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the drawing inside a new note (once it is in a note, the same button takes you back to it). Draw it for me, which turns something you say or type into boxes and arrows, is in the More tools menu, the last icon in the row of tools along the top of the board; its box also has What have I missed?, which lists what you may not have considered.',
+    text: 'Use the buttons above the diagram: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the diagram inside a new note (once it is in a note, the same button takes you back to it). Draw it for me, which turns something you say or type into boxes and arrows, is in the More tools menu, the last icon in the row of tools along the top of the board; its box also has What have I missed?, which lists what you may not have considered.',
     when: { show() { injectStepCounter(6); } },
     buttons: [
       btnBack(),

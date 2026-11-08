@@ -19,13 +19,13 @@ const say = async (res, fallback) => {
  * with a link back to the drawing, so nothing is lost; the page offers to open it).
  */
 export async function saveDrawingToNotes({ api, title, drawingId, png, projectId = null, clientId = null }) {
-  const name = String(title || '').trim() || 'Drawing';
+  const name = String(title || '').trim() || 'Diagram';
   const path = `/drawings/${drawingId}`;
 
   // 1. the note, with its text for now being just the link back (the picture is added once it exists)
   const made = await say(await api.post('/api/notes', {
     title: name,
-    body: `From the drawing [${name.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()}](${path}).\n`,
+    body: `From the diagram [${name.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()}](${path}).\n`,
     project_id: projectId || null,
     client_id: clientId || null,
   }), 'The note could not be saved. Try again.');
@@ -34,7 +34,7 @@ export async function saveDrawingToNotes({ api, title, drawingId, png, projectId
 
   // 2. the picture, attached to the note
   const form = new FormData();
-  form.append('file', png, `${name.replace(/[^\w .-]+/g, '').trim().slice(0, 80) || 'drawing'}.png`);
+  form.append('file', png, `${name.replace(/[^\w .-]+/g, '').trim().slice(0, 80) || 'diagram'}.png`);
   const attached = await say(await api.postForm(`/api/notes/${noteId}/attachments`, form), 'The picture could not be attached.');
   if (!attached.ok || !attached.data || !attached.data.id) {
     throw fail(`The note was saved, but the picture could not be added to it: ${attached.message}`, { noteId });

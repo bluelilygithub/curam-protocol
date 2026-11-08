@@ -8,7 +8,7 @@ const { insertRow } = require('../rowRestore');
 const { MAX_DRAWINGS_PER_USER, checkScene } = require('../../drawings');
 
 register('drawing', {
-  label: 'Drawing',
+  label: 'Diagram',
   async restore(db, userId, payload) {
     const d = payload?.drawing;
     if (!d || typeof d.scene !== 'string') throw new Error('This deleted drawing has nothing to restore.');
