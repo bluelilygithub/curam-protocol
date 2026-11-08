@@ -228,9 +228,29 @@ const pic = async (rgb) => `data:image/png;base64,${(await sharp({ create: { wid
     r = await call(A, 'POST', '/draw', { description: 'a dog' });
     assert.equal(r.status, 502);
     assert.doesNotMatch(JSON.stringify(r.body), /sk-secret|FAL exploded/, 'the provider\'s own message is not shown');
+    assert.match(r.body.error, /No spend was recorded/);
     r = await call(A, 'POST', `/${s1.id}/change`, { instruction: 'add a hat' });
     assert.equal(r.status, 502);
+    failWith = new Error('FAL_API_KEY is not configured');
+    r = await call(A, 'POST', '/draw', { description: 'a dog' });
+    assert.equal(r.status, 502);
+    assert.match(r.body.error, /no FAL key/);
+    failWith = new Error('Graphics provider request failed (404)');
+    r = await call(A, 'POST', '/draw', { description: 'a dog' });
+    assert.match(r.body.error, /does not recognise the graphics model set in Settings/);
+    failWith = new Error('Exhausted balance. User is locked.');
+    r = await call(A, 'POST', '/draw', { description: 'a dog' });
+    assert.match(r.body.error, /out of credit or locked/);
     failWith = null;
+    // the picture came back (and was paid for) but could not be saved: the person is told they may have been charged
+    const realNormalise = engine.normalise;
+    engine.normalise = async () => { throw new Error('sharp exploded'); };
+    r = await call(A, 'POST', '/draw', { description: 'a dog' });
+    assert.equal(r.status, 500);
+    assert.equal(r.body.code, 'NOT_SAVED');
+    assert.match(r.body.error, /may have been charged/);
+    assert.doesNotMatch(r.body.error, /No spend was recorded/);
+    engine.normalise = realNormalise;
     assert.equal((await call(A, 'GET', '/')).body.sketches.length, count);
     assert.equal((await call(A, 'GET', `/${s1.id}`)).body.sketch.changeCount, restored.changeCount);
 

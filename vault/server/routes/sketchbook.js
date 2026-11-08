@@ -28,14 +28,30 @@ const BIN_TYPE = 'sketch';
 const BIN_MAX_BYTES = 16 * 1024 * 1024; // a picture plus its kept earlier pictures; the bin's default limit is 5 MB
 const paidGuard = makePaidGuard({ pool });
 
-const MSG_DRAW_FAILED = 'The image service could not draw that just now. Nothing was charged to you. Try again in a minute.';
+// Two different failures, told apart so the person is never misled about money: the image service failing (nothing is logged as spent,
+// because spend is only recorded after a picture comes back) and a failure AFTER a picture came back (it may have been charged).
+function serviceFailure(err, where) {
+  getLogger().error({ err }, `[sketchbook] ${where}: the image service failed`);
+  const m = String((err && err.message) || '');
+  let reason = 'The image service could not draw that just now.';
+  if (/FAL_API_KEY/i.test(m)) reason = 'The image service is not set up on this server (no FAL key).';
+  else if (/(404)/.test(m)) reason = 'The image service does not recognise the graphics model set in Settings (it must be a FAL model name such as fal-ai/flux/dev).';
+  else if (/not supported yet/i.test(m)) reason = 'The graphics model chosen in Settings is not one Sketchbook can use (it needs a FAL or local ComfyUI model).';
+  else if (/balance|exhausted|locked|quota|billing/i.test(m)) reason = 'The image service refused the request because its account is out of credit or locked.';
+  else if (/timed? ?out|ETIMEDOUT|ECONNRESET|fetch failed|abort/i.test(m)) reason = 'The image service did not answer in time.';
+  else if (/did not return|safety|nsfw|blocked/i.test(m)) reason = 'The image service did not return a picture (it may have blocked the request).';
+  return new sketches.SketchError(`${reason} No spend was recorded for this attempt. Try again in a minute.`, 502, 'IMAGE_SERVICE');
+}
+function notSavedFailure(err, where) {
+  getLogger().error({ err }, `[sketchbook] ${where}: the picture came back but could not be saved`);
+  return new sketches.SketchError('The picture was drawn but could not be saved, so you may have been charged for it. Check Usage (feature graphics_sketchbook) and try again.', 500, 'NOT_SAVED');
+}
 
 function fail(res, err, where) {
   if (err instanceof sketches.SketchError) return res.status(err.status).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
   // a restricted idea (Settings -> content restrictions): same answer shape as Graphics Generate
   if (err && err.code === 'CONTENT_RESTRICTED') return res.status(err.status || 422).json({ error: err.message, code: err.code, matches: err.matches });
   getLogger().error({ err }, `[sketchbook] ${where}`);
-  if (where === 'draw' || where === 'change') return res.status(502).json({ error: MSG_DRAW_FAILED });
   return res.status(500).json({ error: 'Something went wrong with your sketches. Try again.' });
 }
 
@@ -81,13 +97,20 @@ router.post('/draw', aiLimiter, paidGuard, async (req, res) => {
     const aspect = sketches.ASPECTS[sketches.checkAspect(b.aspect)];
     await sketches.checkRoom(pool, req.user.id); // before paying for a picture there is no room to keep
     const prompt = sketches.buildDrawPrompt({ description, style, penColor });
-    const made = await engine.draw({ userId: req.user.id, prompt, width: aspect.width, height: aspect.height });
-    const pic = await engine.normalise(made.imageDataUrl);
-    const sketch = await sketches.create(pool, req.user.id, {
-      title: b.title ? b.title : sketches.titleFromDescription(description), description, style, penColor,
-      image: pic.imageDataUrl, thumbnail: await engine.thumbnail(pic.imageDataUrl), width: pic.width, height: pic.height, seed: made.seed, model: made.model,
-    });
-    res.status(201).json({ sketch: await sketches.get(pool, req.user.id, sketch.id), costUsd: made.costUsd });
+    let made;
+    try { made = await engine.draw({ userId: req.user.id, prompt, width: aspect.width, height: aspect.height }); }
+    catch (err) { if (err && err.code === 'CONTENT_RESTRICTED') throw err; throw serviceFailure(err, 'draw'); }
+    try {
+      const pic = await engine.normalise(made.imageDataUrl);
+      const sketch = await sketches.create(pool, req.user.id, {
+        title: b.title ? b.title : sketches.titleFromDescription(description), description, style, penColor,
+        image: pic.imageDataUrl, thumbnail: await engine.thumbnail(pic.imageDataUrl), width: pic.width, height: pic.height, seed: made.seed, model: made.model,
+      });
+      return res.status(201).json({ sketch: await sketches.get(pool, req.user.id, sketch.id), costUsd: made.costUsd });
+    } catch (err) {
+      if (err instanceof sketches.SketchError) throw err;
+      throw notSavedFailure(err, 'draw');
+    }
   } catch (err) { fail(res, err, 'draw'); }
 });
 
@@ -102,13 +125,20 @@ router.post('/:id/change', aiLimiter, paidGuard, async (req, res) => {
     if (!hasInstruction && !changeStyle) throw new sketches.SketchError('Say what you want changed first.');
     const instruction = hasInstruction ? sketches.cleanInstruction(b.instruction) : sketches.restyleInstruction(style);
     const prompt = sketches.buildChangePrompt({ instruction, style, penColor, changeStyle });
-    const made = await engine.change({ userId: req.user.id, prompt, imageDataUrl: cur.image });
-    const pic = await engine.normalise(made.imageDataUrl);
-    const sketch = await sketches.applyChange(pool, req.user.id, cur.id, {
-      image: pic.imageDataUrl, thumbnail: await engine.thumbnail(pic.imageDataUrl), note: hasInstruction ? instruction : `the look changed to ${sketches.STYLES[style].label.toLowerCase()}`,
-      style, penColor, seed: made.seed, model: made.model, baseUpdatedAt: b.baseUpdatedAt,
-    });
-    res.json({ sketch: await sketches.get(pool, req.user.id, sketch.id), costUsd: made.costUsd });
+    let made;
+    try { made = await engine.change({ userId: req.user.id, prompt, imageDataUrl: cur.image }); }
+    catch (err) { if (err && err.code === 'CONTENT_RESTRICTED') throw err; throw serviceFailure(err, 'change'); }
+    try {
+      const pic = await engine.normalise(made.imageDataUrl);
+      const sketch = await sketches.applyChange(pool, req.user.id, cur.id, {
+        image: pic.imageDataUrl, thumbnail: await engine.thumbnail(pic.imageDataUrl), note: hasInstruction ? instruction : `the look changed to ${sketches.STYLES[style].label.toLowerCase()}`,
+        style, penColor, seed: made.seed, model: made.model, baseUpdatedAt: b.baseUpdatedAt,
+      });
+      return res.json({ sketch: await sketches.get(pool, req.user.id, sketch.id), costUsd: made.costUsd });
+    } catch (err) {
+      if (err instanceof sketches.SketchError) throw err; // e.g. 409: changed in another tab (the picture was paid for; the message says to reload)
+      throw notSavedFailure(err, 'change');
+    }
   } catch (err) { fail(res, err, 'change'); }
 });
 
