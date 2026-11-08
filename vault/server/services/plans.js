@@ -227,6 +227,38 @@ async function removeDependency(db, userId, planId, stepId, blockedByStepId) {
   await touch(db, userId, plan.id);
 }
 
+/**
+ * Plan steps for the Tasks calendar: every step of the person's draft and active plans that is not finished, not a group and not already a task
+ * in Tasks (a sent step shows as the task itself), placed on its last day. Optional `from` / `to` ('YYYY-MM-DD') keep it to a range. Read-only.
+ */
+async function calendarSteps(db, userId, { from = null, to = null } = {}) {
+  const f = from ? cleanDate(from, 'From') : null;
+  const t = to ? cleanDate(to, 'To') : null;
+  const { rows: planRows } = await db.query(`SELECT ${PLAN_COLS} FROM plans WHERE "userId" = $1 AND status IN ('draft','active') ORDER BY id`, [userId]);
+  if (!planRows.length) return [];
+  const ids = planRows.map((p) => p.id);
+  const { rows: stepRows } = await db.query(`SELECT ${STEP_COLS} FROM plan_steps WHERE "userId" = $1 AND "planId" = ANY($2) ORDER BY position, id`, [userId, ids]);
+  const { rows: depRows } = await db.query(
+    `SELECT d."planId", d."stepId", d."blockedByStepId" FROM plan_step_deps d JOIN plan_steps s ON s.id = d."stepId" WHERE d."planId" = ANY($1) AND s."userId" = $2`, [ids, userId]);
+  const { rows: sentRows } = await db.query(
+    `SELECT l."stepId" FROM plan_links l JOIN tasks tk ON tk.id::text = l."refId" AND tk."userId" = l."userId"
+      WHERE l."planId" = ANY($1) AND l."userId" = $2 AND l.kind = 'task' AND l."stepId" IS NOT NULL`, [ids, userId]);
+  const sent = new Set(sentRows.map((r) => r.stepId));
+  const events = [];
+  for (const plan of planRows) {
+    const steps = stepRows.filter((s) => s.planId === plan.id);
+    const deps = depRows.filter((d) => d.planId === plan.id);
+    const placed = (computed(plan, steps, deps).schedule || {}).steps || {};
+    for (const s of steps) {
+      const at = placed[s.id];
+      if (!at || at.isGroup || !at.end || s.status === 'done' || sent.has(s.id)) continue;
+      if ((f && at.end < f) || (t && at.end > t)) continue;
+      events.push({ planId: plan.id, planTitle: plan.title, stepId: s.id, title: s.title, startDate: at.start, endDate: at.end, isMilestone: !!s.isMilestone, status: s.status });
+    }
+  }
+  return events;
+}
+
 /** The draft for a diagram, with the person's lengths and dates applied and where everything lands. Nothing is saved. */
 function previewFromDiagram(body = {}) {
   const startDate = cleanDate(body.startDate, 'Start date');
@@ -295,5 +327,5 @@ async function listBySource(db, userId, kind, id) {
 module.exports = {
   PlanError, previewFromDiagram, createFromDiagram, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
   cleanTitle, cleanText, cleanDate, cleanDuration, PLAN_COLS, STEP_COLS,
-  touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
+  calendarSteps, touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
 };

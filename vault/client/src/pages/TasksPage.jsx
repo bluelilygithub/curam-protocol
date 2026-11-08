@@ -548,6 +548,20 @@ export default function TasksPage() {
 
   // View mode: 'list', 'board', 'calendar', or 'matrix'
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('tasksViewMode') || 'list');
+  // Plan steps on the calendar (docs/plans.md "On the calendar"): unfinished steps not yet in Tasks, read-only, on the day each one ends.
+  const [showPlanSteps, setShowPlanSteps] = useState(() => { try { return localStorage.getItem('tasksShowPlanSteps') === '1'; } catch { return false; } });
+  const [planSteps, setPlanSteps] = useState(null); // null: Plans is not available to this person (or not loaded yet)
+  useEffect(() => {
+    if (viewMode !== 'calendar') return;
+    let cancelled = false;
+    api.get('/api/plans/calendar').then(async (r) => (r.ok ? r.json() : null)).then((d) => { if (!cancelled) setPlanSteps(d && Array.isArray(d.steps) ? d.steps : null); }).catch(() => { if (!cancelled) setPlanSteps(null); });
+    return () => { cancelled = true; };
+  }, [viewMode]);
+  const planStepTasks = (planSteps || []).map((e) => ({
+    id: `plan-${e.stepId}`, planId: e.planId, isPlanStep: true,
+    title: `${e.isMilestone ? '◆ ' : ''}${e.title} (${e.planTitle})`, dueDate: e.endDate, status: e.status === 'in-progress' ? 'in-progress' : 'todo',
+    priority: 'low', estimatedMinutes: null, notes: `A step in the plan "${e.planTitle}", not in Tasks yet. Open the plan to change it.`,
+  }));
   const [showMatrixCompleted, setShowMatrixCompleted] = useState(false);
 
   // Filters
@@ -2295,10 +2309,11 @@ export default function TasksPage() {
             </div>
           ) : viewMode === 'calendar' ? (
             <TasksCalendar
-              tasks={tasks}
+              tasks={showPlanSteps ? [...tasks, ...planStepTasks] : tasks}
               projects={projects}
-              onEdit={openEdit}
-              onToggleStatus={handleToggleStatus}
+              planLayer={planSteps ? { count: planSteps.length, shown: showPlanSteps, onToggle: () => setShowPlanSteps((v) => { try { localStorage.setItem('tasksShowPlanSteps', v ? '0' : '1'); } catch (_) { /* ignore */ } return !v; }) } : null}
+              onEdit={(t) => (t && t.isPlanStep ? navigate(`/plans/${t.planId}`) : openEdit(t))}
+              onToggleStatus={(t) => (t && t.isPlanStep ? navigate(`/plans/${t.planId}`) : handleToggleStatus(t))}
               onNew={(dateKey) => openNew('todo', dateKey)}
               onReschedule={handleReschedule}
               onUpdateEffort={handleUpdateEffort}

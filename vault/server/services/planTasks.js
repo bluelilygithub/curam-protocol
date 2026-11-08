@@ -2,8 +2,10 @@
 
 // Plans: send steps to Tasks. A plan's steps are their own rows (docs/plans.md), so a step only becomes a real task when the person sends it.
 // This makes the tasks, links each one back in plan_links (kind 'task'), and carries the waits-on links across as task dependencies. It is a
-// ONE-WAY COPY made at the moment of sending: later changes to the plan are not pushed to the task, and the task is the person's to change or
-// delete. A step already in Tasks (its task still exists) is not sent twice; if the task was deleted the step can be sent again.
+// COPY made at the moment of sending: later changes to the plan are not pushed to the task, and the task is the person's to change or
+// delete. The ONE thing that flows back is its STATUS: when a task sent from a plan is ticked, started or reopened in Tasks, its plan step takes
+// the same status (syncStepFromTask, called from the same three places in routes/tasks.js that already carry a task's status to Contract Review
+// obligations and Fitness sessions). A step already in Tasks (its task still exists) is not sent twice; if the task was deleted the step can be sent again.
 
 const { PlanError } = require('./planErrors');
 const plans = require('./plans');
@@ -87,4 +89,20 @@ async function sendToTasks(pool, userId, planId, body = {}) {
   } finally { db.release(); }
 }
 
-module.exports = { DAY_MINS, sendToTasks };
+/**
+ * A task's status changed in Tasks: give the same status to the plan step it was sent from (if any). Both use todo / in-progress / done.
+ * Only the status moves: a date or a title changed in Tasks is not copied back. Returns how many steps changed (0 when the task did not come
+ * from a plan or the step already has that status).
+ */
+async function syncStepFromTask(taskId, status) {
+  if (!['todo', 'in-progress', 'done'].includes(status)) return 0;
+  const { pool } = require('../db');
+  const { rowCount } = await pool.query(
+    `UPDATE plan_steps s SET status = $2, "updatedAt" = NOW()
+       FROM plan_links l
+      WHERE l.kind = 'task' AND l."refId" = $1::text AND l."stepId" = s.id AND l."userId" = s."userId" AND s.status <> $2`,
+    [String(taskId), status]);
+  return rowCount;
+}
+
+module.exports = { DAY_MINS, sendToTasks, syncStepFromTask };

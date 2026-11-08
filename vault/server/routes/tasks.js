@@ -149,6 +149,8 @@ async function changeTaskStatus(userId, taskId, newStatus) {
     try { await require('../services/contractReview/contractService').syncObligationStateFromTask(Number(taskId), isNowDone); } catch (err) { console.error('[tasks] obligation state sync failed:', err.message); }
     try { await require('../services/fitness/fitnessTasks').syncSessionFromTask(Number(taskId), isNowDone); } catch (err) { console.error('[tasks] fitness sync failed:', err.message); }
   }
+  // a task sent from a Plan: its plan step takes the same status (docs/plans.md "Send to Tasks")
+  try { await require('../services/planTasks').syncStepFromTask(Number(taskId), newStatus); } catch (err) { console.error('[tasks] plan step sync failed:', err.message); }
   return updated;
 }
 
@@ -261,6 +263,9 @@ router.put('/bulk', async (req, res) => {
     if ('status' in updates) {
       const { syncSessionFromTask } = require('../services/fitness/fitnessTasks');
       for (const id of mine) await syncSessionFromTask(Number(id), updates.status === 'done');
+      // tasks sent from a Plan: their plan steps take the same status
+      const { syncStepFromTask } = require('../services/planTasks');
+      for (const id of mine) await syncStepFromTask(Number(id), updates.status).catch((err) => { console.error('[tasks] plan step sync failed:', err.message); });
     }
     res.json({ ok: true, updated: mine.length });
   } catch (err) {
@@ -841,6 +846,8 @@ router.put('/:id', async (req, res) => {
     if ('status' in req.body && req.body.status !== task.status) {
       const labels = { todo: 'To Do', 'in-progress': 'In Progress', done: 'Done' };
       await logActivity(`Status changed from ${labels[task.status] || task.status} to ${labels[req.body.status] || req.body.status}`);
+      // a task sent from a Plan: its plan step takes the same status (docs/plans.md "Send to Tasks")
+      try { await require('../services/planTasks').syncStepFromTask(Number(id), req.body.status); } catch (err) { console.error('[tasks] plan step sync failed:', err.message); }
     }
     if ('priority' in req.body && req.body.priority !== task.priority) {
       await logActivity(`Priority changed from ${task.priority} to ${req.body.priority}`);

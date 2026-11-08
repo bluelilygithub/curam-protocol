@@ -286,6 +286,47 @@ function serve() {
     assert.equal(r.body.created.length, 1);
     assert.equal(Number((await pool.query(`SELECT COUNT(*) AS n FROM plan_links WHERE "planId" = $1 AND kind = 'task' AND "stepId" = $2`, [tplan, dig.id])).rows[0].n), 1, 'the stale link was replaced');
 
+    // a task's status flows back to its plan step (and nothing else does)
+    const planTasksSvc = require('../services/planTasks');
+    const stepStatus = async (id) => (await pool.query('SELECT status FROM plan_steps WHERE id = $1', [id])).rows[0].status;
+    const sowTask = taskOfStep[sow.id];
+    assert.equal(await stepStatus(sow.id), 'todo');
+    assert.equal(await planTasksSvc.syncStepFromTask(sowTask, 'done'), 1);
+    assert.equal(await stepStatus(sow.id), 'done');
+    assert.equal(await planTasksSvc.syncStepFromTask(sowTask, 'done'), 0, 'already that status: nothing to change');
+    assert.equal(await planTasksSvc.syncStepFromTask(sowTask, 'in-progress'), 1);
+    assert.equal(await stepStatus(sow.id), 'in-progress');
+    assert.equal(await planTasksSvc.syncStepFromTask(sowTask, 'finished'), 0, 'an unknown status is ignored');
+    assert.equal(await stepStatus(sow.id), 'in-progress');
+    assert.equal(await planTasksSvc.syncStepFromTask(999999999, 'done'), 0, 'a task that did not come from a plan changes nothing');
+    assert.equal(await stepStatus(ready.id), 'todo', 'other steps are untouched');
+    const sowAfter = (await call(A, 'GET', `/${tplan}`)).body.steps.find((st) => st.id === sow.id);
+    assert.equal(sowAfter.durationDays, 3, 'only the status came back, not any other field');
+    assert.equal((await call(A, 'GET', `/${tplan}`)).body.tasks[sow.id].status, 'todo', 'and the task itself is as it was');
+
+    // the Tasks calendar layer: unfinished steps not in Tasks, on their last day; sent, finished and group steps are left out
+    const calPlan = (await call(A, 'POST', '/', { title: 'Calendar plan', startDate: '2026-12-07' })).body.plan.id;
+    const cadd = async (body) => (await call(A, 'POST', `/${calPlan}/steps`, body)).body.step;
+    const cg = await cadd({ title: 'Phase' });
+    const c1 = await cadd({ title: 'First', durationDays: 2, parentStepId: cg.id });
+    const c2 = await cadd({ title: 'Second', durationDays: 1 });
+    const c3 = await cadd({ title: 'Third', durationDays: 1 });
+    await call(A, 'POST', `/${calPlan}/steps/${c2.id}/deps`, { blockedByStepId: c1.id });
+    await call(A, 'PUT', `/${calPlan}/steps/${c3.id}`, { status: 'done' });
+    r = await call(A, 'GET', '/calendar?from=2026-12-01&to=2026-12-31');
+    assert.equal(r.status, 200);
+    const mine = r.body.steps.filter((e) => e.planId === calPlan);
+    assert.deepEqual(mine.map((e) => [e.title, e.endDate]).sort(), [['First', '2026-12-08'], ['Second', '2026-12-09']], 'the group and the finished step are left out');
+    assert.equal(mine.find((e) => e.title === 'Second').planTitle, 'Calendar plan');
+    assert.equal((await call(A, 'GET', '/calendar?from=2026-12-09&to=2026-12-31')).body.steps.filter((e) => e.planId === calPlan).length, 1, 'a range keeps only steps ending inside it');
+    assert.equal((await call(A, 'GET', '/calendar?from=soon')).status, 400);
+    assert.equal((await call(B, 'GET', '/calendar')).body.steps.length, 0, 'another person sees none of it');
+    assert.equal((await call(A, 'GET', '/calendar')).body.steps.some((e) => e.planId === tplan), false, 'every step of the Garden plan is already in Tasks, so none is shown twice');
+    await call(A, 'POST', `/${calPlan}/send-to-tasks`, { stepIds: [c2.id] });
+    assert.equal((await call(A, 'GET', '/calendar')).body.steps.filter((e) => e.planId === calPlan).length, 1, 'a step sent to Tasks shows as the task, not twice');
+    await call(A, 'PUT', `/${calPlan}`, { status: 'archived' });
+    assert.equal((await call(A, 'GET', '/calendar')).body.steps.filter((e) => e.planId === calPlan).length, 0, 'an archived plan is not on the calendar');
+
     // a plan with no dates: the task is made without a due date, and the answer says so
     const loose = (await call(A, 'POST', '/', { title: 'No dates yet' })).body.plan.id;
     await call(A, 'POST', `/${loose}/steps`, { title: 'Think about it' });

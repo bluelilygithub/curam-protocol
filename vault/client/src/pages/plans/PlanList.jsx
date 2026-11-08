@@ -83,7 +83,7 @@ export default function PlanList() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1700px]">
-      <section className="rounded-2xl border p-5 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <section className="rounded-2xl border p-5 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-tour="plans-start">
         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Start a plan</h2>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex-1 min-w-[220px] space-y-1 block">
@@ -114,7 +114,7 @@ export default function PlanList() {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3" data-tour="plans-list">
         <div className="flex items-center gap-3">
           <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Your plans</h2>
           <Tooltip text="Narrow the list to plans whose name or description has all the words you type. The microphone lets you say them.">

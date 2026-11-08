@@ -67,7 +67,7 @@ function SearchPalette() {
   // What can be reached without asking the server: only what this person may open (same rule as the Apps menu and Settings).
   const localItems = useMemo(() => {
     const canUse = (key) => isAdmin || flags[key] !== false;
-    const workspace = { label: 'Workspace', items: SIDEBAR_WORKSPACE_LINKS.filter((l) => !l.featureKey || canUse(l.featureKey)) };
+    const workspace = { label: 'Everyday', items: SIDEBAR_WORKSPACE_LINKS.filter((l) => !l.featureKey || canUse(l.featureKey)) };
     const apps = appItems([workspace, { label: 'Chat', items: [{ id: 'chat', label: 'Chat', path: '/chat', icon: 'chat' }] }, ...getAppsNavGroups({ canUseFeature: canUse, isAdmin })]);
     return [...actionItems(), ...apps, ...settingItems(visibleGroups(isAdmin, SETTINGS_GROUPS, flags))];
   }, [isAdmin, flags]);

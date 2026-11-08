@@ -1,6 +1,6 @@
 // node client/src/pages/plans/planLogic.test.mjs
 import assert from 'node:assert/strict';
-import { fmtDay, fitMessage, orderedRows, timelineTasks, timelineRange, filterPlans, progressText, waitOptions } from './planLogic.mjs';
+import { fmtDay, fitMessage, orderedRows, timelineTasks, timelineRange, filterPlans, progressText, waitOptions, workDaysInclusive, dragToStepChange } from './planLogic.mjs';
 
 assert.equal(fmtDay('2026-12-07'), 'Mon 7 Dec');
 assert.equal(fmtDay('2026-01-01'), 'Thu 1 Jan');
@@ -59,5 +59,25 @@ assert.equal(progressText({ stepCount: 0, doneCount: 0 }), 'No steps yet');
 assert.equal(progressText({ stepCount: 8, doneCount: 3 }), '3 of 8 done');
 
 assert.deepEqual(waitOptions(steps[2], steps, deps).map((s) => s.id), [5]);              // not itself, not group A (it has sub-steps), not B or D (already chosen)
+
+// ---- dragging a bar (2026-12-07 is a Monday) ----
+assert.equal(workDaysInclusive('2026-12-07', '2026-12-11'), 5);
+assert.equal(workDaysInclusive('2026-12-07', '2026-12-14'), 6);                          // the weekend is not counted
+assert.equal(workDaysInclusive('2026-12-07', '2026-12-14', 'all'), 8);
+assert.equal(workDaysInclusive('2026-12-12', '2026-12-13'), 0);                          // a weekend alone is no working days
+assert.equal(workDaysInclusive('2026-12-14', '2026-12-07'), 0);
+assert.equal(workDaysInclusive('soon', '2026-12-07'), 0);
+{
+  const step = { id: 2, startDate: null, durationDays: 3 };
+  assert.deepEqual(dragToStepChange(step, { startDate: '2026-12-09', endDate: '2026-12-11' }, 'move'), { startDate: '2026-12-09' });   // a move pins the start
+  assert.equal(dragToStepChange({ ...step, startDate: '2026-12-09' }, { startDate: '2026-12-09', endDate: '2026-12-11' }, 'move'), null);   // dropped where it already was
+  assert.deepEqual(dragToStepChange(step, { startDate: '2026-12-09', endDate: '2026-12-15' }, 'resize'), { durationDays: 5 });          // Wed to Tue: Wed Thu Fri Mon Tue
+  assert.deepEqual(dragToStepChange(step, { startDate: '2026-12-09', endDate: '2026-12-08' }, 'resize'), { durationDays: 1 });          // never below one day
+  assert.equal(dragToStepChange(step, { startDate: '2026-12-09', endDate: '2026-12-11' }, 'resize'), null);                            // same length: nothing to save
+  assert.deepEqual(dragToStepChange(step, { startDate: '2026-12-11', endDate: '2026-12-14' }, 'resize', 'all'), { durationDays: 4 });
+  assert.equal(dragToStepChange(null, {}, 'move'), null);
+  assert.equal(timelineTasks(steps, deps, schedule).find((t) => t.id === 1).locked, true);                                          // step 1 holds sub-steps
+  assert.equal(timelineTasks(steps, deps, schedule).find((t) => t.id === 3).locked, false);
+}
 
 console.log('planLogic: all passed');

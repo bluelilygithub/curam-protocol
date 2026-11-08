@@ -5,8 +5,10 @@
 //
 //   GET    /api/plans                                   list (counts, no steps)
 //   POST   /api/plans                                   { title?, description?, startDate?, targetEndDate?, workWeek? }
+//   GET    /api/plans/calendar?from=&to=               unfinished steps not yet in Tasks, on their last day, for the Tasks calendar { steps: [...] }
 //   GET    /api/plans/by-source?kind=drawing&id=7       the person's plans made from that diagram { plans: [{ id, title }] }
 //   POST   /api/plans/from-diagram/preview              { diagram, durations?, startDate?, targetEndDate?, workWeek?, includeNo? }  steps, what was left out, where they land (saves nothing)
+//   POST   /api/plans/from-diagram/estimate             { diagram, includeNo?, title? }  AI: how many working days each step may take { estimates: { ref: { days, why } } } (saves nothing)
 //   POST   /api/plans/from-diagram                      the same, plus { title?, drawingId? }: makes the plan and links it to the diagram
 //   POST   /api/plans/:id/send-to-tasks                 { all: true } or { stepIds: [..] }  makes real tasks from steps (a one-way copy), links them back
 //   GET    /api/plans/:id                               the plan, its steps, dependencies, links and where every step lands
@@ -23,6 +25,8 @@ const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const plans = require('../services/plans');
 const planTasks = require('../services/planTasks');
+const planEstimate = require('../services/planEstimate');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 const BIN_TYPE = 'plan';
@@ -38,12 +42,28 @@ router.get('/', async (req, res) => {
 });
 
 // Named routes come before /:id.
+router.get('/calendar', async (req, res) => {
+  try { res.json({ steps: await plans.calendarSteps(pool, req.user.id, { from: req.query.from, to: req.query.to }) }); } catch (err) { fail(res, err, 'calendar'); }
+});
+
 router.get('/by-source', async (req, res) => {
   try { res.json({ plans: await plans.listBySource(pool, req.user.id, req.query.kind, req.query.id) }); } catch (err) { fail(res, err, 'bySource'); }
 });
 
 router.post('/from-diagram/preview', (req, res) => {
   try { res.json(plans.previewFromDiagram(req.body || {})); } catch (err) { fail(res, err, 'previewFromDiagram'); }
+});
+
+// "Estimate lengths with AI": one request on the standard model; it sees only the step names and the plan name (services/planEstimate.js).
+router.post('/from-diagram/estimate', aiLimiter, async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json(await planEstimate.askEstimate(req.user.id, { diagram: b.diagram, includeNo: b.includeNo === true, title: b.title }));
+  } catch (err) {
+    if (err instanceof plans.PlanError) return fail(res, err, 'estimate');
+    getLogger().error({ err }, '[plans] estimate model');
+    return res.status(502).json({ error: 'The AI could not be reached just now. Try again in a minute, or type the lengths yourself.' });
+  }
 });
 
 router.post('/from-diagram', async (req, res) => {

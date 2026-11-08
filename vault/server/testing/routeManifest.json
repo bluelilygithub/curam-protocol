@@ -4263,6 +4263,45 @@
   },
   "POST /api/plans/:id/send-to-tasks": {
    "class": "authed"
+  },
+  "GET /api/serp-tracker/location-check": {
+   "class": "authed"
+  },
+  "POST /api/serp-tracker/location-from-point": {
+   "class": "authed"
+  },
+  "POST /api/serp-tracker/sites/:id/gsc/sync": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/sites/:id/gsc": {
+   "class": "authed"
+  },
+  "PUT /api/serp-tracker/sites/:id/gsc": {
+   "class": "authed"
+  },
+  "POST /api/serp-tracker/sites/:id/keywords/history": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/sites/:id/keywords": {
+   "class": "authed"
+  },
+  "POST /api/serp-tracker/sites/:id/rankings/history": {
+   "class": "authed"
+  },
+  "GET /api/serp-tracker/sites/:id/rankings": {
+   "class": "authed"
+  },
+  "GET /api/usage/insights": {
+   "class": "authed"
+  },
+  "GET /api/videos/vision-info": {
+   "class": "authed"
+  },
+  "GET /api/plans/calendar": {
+   "class": "authed"
+  },
+  "POST /api/plans/from-diagram/estimate": {
+   "class": "authed"
   }
  }
 }

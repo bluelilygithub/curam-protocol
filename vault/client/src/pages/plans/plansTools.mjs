@@ -32,11 +32,12 @@ export const HOW_IT_WORKS = [
   ['Waits on', 'A step that waits on another starts the working day after it ends. Steps that wait on nothing start together on the first day. A milestone lands on the day the step before it ends, so it adds no day. Steps cannot wait on each other in a circle.'],
   ['Pin a step to a day', 'Change a step\'s own start date to hold it on that day. If a step it waits on runs past that day, the step is marked as clashing; the date is kept, not moved. Press the pin to let it start as soon as it can again.'],
   ['Groups', 'Add a sub-step inside a step and that step becomes a group: it has no length of its own and spans its sub-steps. A step that waits on something, or is waited on, cannot become a group; link its sub-steps instead.'],
-  ['The timeline', 'Under the steps, the timeline draws every step as a bar from its first to its last day, with an arrow for each waits-on link and a line for today. Choose Week, Month or Quarter. Click a bar to jump to its step. You cannot drag the bars yet.'],
-  ['From a diagram', 'In Diagrams, the Make a plan button turns a diagram into a plan: each box a step, each arrow a waits-on, decisions taken as Yes. It asks for the dates and the days each step takes, and links the plan back to the diagram.'],
-  ['Send to Tasks', 'Plan steps are not Tasks until you send them, so they stay out of your task list, the weekly digest and the calendar. The checklist button on a step sends it to Tasks as a real task: its last day is the due date and its days are the estimate. Send all to Tasks does every step that is not there yet, and a group goes with its sub-steps as subtasks. It is a copy made at that moment: later changes to the plan are not copied to the task.'],
+  ['The timeline', 'Under the steps, the timeline draws every step as a bar from its first to its last day, with an arrow for each waits-on link and a line for today. Choose Week, Month or Quarter. Click a bar to jump to its step. Drag a bar to move that step to another day (it is then pinned there), or drag its right edge to change its length. A group cannot be dragged: its dates come from its sub-steps.'],
+  ['From a diagram', 'In Diagrams, the Make a plan button turns a diagram into a plan: each box a step, each arrow a waits-on, decisions taken as Yes. It asks for the dates and the days each step takes, and links the plan back to the diagram. An Estimate lengths with AI button can suggest the days for each step: it is one AI request that sees only the step names, and every number can be changed.'],
+  ['Send to Tasks', 'Plan steps are not Tasks until you send them, so they stay out of your task list, the weekly digest and the calendar. The checklist button on a step sends it to Tasks as a real task: its last day is the due date and its days are the estimate. Send all to Tasks does every step that is not there yet, and a group goes with its sub-steps as subtasks. It is a copy made at that moment: later changes to the plan are not copied to the task. The one thing that comes back is the status: when you tick, start or reopen the task in Tasks, its plan step gets the same status.'],
+  ['On the calendar', 'In the Tasks calendar, the Plan steps button in its top bar shows the steps of your plans that are not in Tasks yet, each on the day it ends. They are read-only: click one to open its plan. A step you have sent to Tasks shows as the task itself, so nothing appears twice.'],
   ['Private', 'Your plans are yours alone. A deleted plan waits 30 days in the recycle bin in Settings, and an Undo button appears straight away. A deleted step cannot be undone.'],
-  ['Not included yet', 'Showing a plan on the calendar, keeping a task in step with its plan step, dragging bars, making a plan from a note, the AI estimating the lengths, sharing a plan, and a recycle bin for a single deleted step.'],
+  ['Not included yet', 'Making a plan from a note, a task in Tasks keeping its dates or name in step with its plan step (only the status comes back), sharing a plan, and a recycle bin for a single deleted step.'],
 ];
 
 // Everything the guide can point at: the two views plus the controls inside them.
@@ -58,5 +59,6 @@ export const GUIDE_TOOLS = [
   { id: 'status', label: 'Status', tool: 'editor' },
   { id: 'timeline', label: 'The timeline', tool: 'editor' },
   { id: 'tasks', label: 'Send to Tasks', tool: 'editor' },
+  { id: 'calendar', label: 'Plan steps on the calendar', tool: 'editor' },
   { id: 'delete-step', label: 'Delete a step', tool: 'editor' },
 ];

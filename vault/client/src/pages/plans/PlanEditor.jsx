@@ -7,7 +7,7 @@ import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import TaskTimeline from '../../components/tasks/TaskTimeline';
-import { fmtDay, fitMessage, orderedRows, timelineTasks, timelineRange, waitOptions } from './planLogic.mjs';
+import { fmtDay, fitMessage, orderedRows, timelineTasks, timelineRange, waitOptions, dragToStepChange } from './planLogic.mjs';
 
 const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-60 disabled:opacity-40';
 const BTN_STYLE = { borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' };
@@ -123,6 +123,13 @@ export default function PlanEditor({ id }) {
     } catch (err) { addToast(err.message, 'error'); } finally { setBusy(false); }
   };
 
+  // A bar dropped on the timeline: a move pins the step's start, dragging its right edge sets its length (the server works out every date).
+  const onBarChange = (stepId, change, mode) => {
+    const step = data?.steps.find((st) => st.id === stepId);
+    const fields = dragToStepChange(step, change, mode, data?.plan.workWeek);
+    if (fields) saveStep(stepId, fields);
+  };
+
   const rows = useMemo(() => (data ? orderedRows(data.steps) : []), [data]);
   const fit = useMemo(() => (data ? fitMessage(data.plan, data.schedule) : null), [data]);
   const tlTasks = useMemo(() => (data ? timelineTasks(data.steps, data.deps, data.schedule) : []), [data]);
@@ -226,7 +233,7 @@ export default function PlanEditor({ id }) {
           {steps.length > 0 && (confirmSendAll ? (
             <div className="flex items-center gap-2">
               <span className="text-xs" style={{ color: 'var(--color-text)' }}>Send {unsent} {unsent === 1 ? 'step' : 'steps'} to Tasks?</span>
-              <Tooltip text="Yes, make a task for each step that is not in Tasks yet. They are copies: later changes to the plan are not copied to them."><button type="button" onClick={() => sendToTasks({ all: true })} disabled={busy} className={BTN} style={BTN_STYLE}>Yes</button></Tooltip>
+              <Tooltip text="Yes, make a task for each step that is not in Tasks yet. They are copies: later changes to the plan are not copied to them, but ticking one in Tasks gives its step the same status."><button type="button" onClick={() => sendToTasks({ all: true })} disabled={busy} className={BTN} style={BTN_STYLE}>Yes</button></Tooltip>
               <Tooltip text="No, send nothing."><button type="button" onClick={() => setConfirmSendAll(false)} className={BTN} style={BTN_STYLE}>No</button></Tooltip>
             </div>
           ) : (
@@ -324,7 +331,7 @@ export default function PlanEditor({ id }) {
                             <button type="button" onClick={() => setAddingUnder(addingUnder === step.id ? null : step.id)} disabled={busy || myDeps.length > 0 || deps.some((d) => d.blockedByStepId === step.id)}
                               className={SMALL} style={BTN_STYLE} aria-label={`Add a sub-step to ${step.title}`}>{getIcon('plus', { size: 12 })}</button>
                           </Tooltip>
-                          <Tooltip text={tasks[step.id] ? 'This step is a task in Tasks. Open Tasks to see it. Later changes to the step are not copied to the task.' : (isGroup ? 'Send this group, and the sub-steps inside it, to Tasks as tasks with subtasks. A later change to the plan is not copied to them.' : 'Send this step to Tasks as a task: its last day is the due date and its days are the estimate. A later change to the step is not copied to the task.')}>
+                          <Tooltip text={tasks[step.id] ? 'This step is a task in Tasks. Open Tasks to see it. Ticking or reopening the task there gives this step the same status; other changes to the step are not copied to the task.' : (isGroup ? 'Send this group, and the sub-steps inside it, to Tasks as tasks with subtasks. A later change to the plan is not copied to them.' : 'Send this step to Tasks as a task: its last day is the due date and its days are the estimate. A later change to the step is not copied to the task.')}>
                             <button type="button" onClick={() => (tasks[step.id] ? navigate('/tasks') : sendToTasks({ stepIds: subtree(step.id) }))} disabled={busy}
                               className={SMALL} style={{ ...BTN_STYLE, ...(tasks[step.id] ? { color: 'var(--color-primary)' } : {}) }} aria-label={tasks[step.id] ? `${step.title} is in Tasks: open Tasks` : `Send ${step.title} to Tasks`}>{getIcon(tasks[step.id] ? 'check' : 'list-checks', { size: 12 })}</button>
                           </Tooltip>
@@ -353,7 +360,7 @@ export default function PlanEditor({ id }) {
       {/* The timeline (the same one Tasks uses) */}
       <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
         <div style={{ height: Math.min(560, 150 + tlTasks.length * 40) }}>
-          <TaskTimeline tasks={tlTasks} project={tlRange} onEdit={jumpToStep} showBlocked={false} defaultZoom={tlRange && tlRange.targetEndDate && (new Date(tlRange.targetEndDate) - new Date(tlRange.startDate)) / 86400000 <= 28 ? 'week' : 'month'} />
+          <TaskTimeline tasks={tlTasks} project={tlRange} onEdit={jumpToStep} onBarChange={onBarChange} showBlocked={false} defaultZoom={tlRange && tlRange.targetEndDate && (new Date(tlRange.targetEndDate) - new Date(tlRange.startDate)) / 86400000 <= 28 ? 'week' : 'month'} />
         </div>
       </section>
     </div>

@@ -828,7 +828,9 @@ function AgendaView({ tasks, onEdit, onToggleStatus }) {
 
 // ─── TasksCalendar (root export) ──────────────────────────────────────────────
 
-export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus, onNew, onReschedule, onUpdateEffort }) {
+// planLayer: { count, shown, onToggle } when Plans is available. The plan steps themselves arrive mixed into `tasks` (marked isPlanStep) and the caller
+// decides what editing or ticking one does, so this only draws the switch.
+export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus, onNew, onReschedule, onUpdateEffort, planLayer }) {
   const [subView,     setSubView]     = useState(() => { try { return localStorage.getItem(CAL_VIEW_KEY) || 'week'; } catch { return 'week'; } });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -904,6 +906,15 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
             <button onClick={() => navigate(1)} style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--color-text)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>›</button>
             <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>{getNavLabel()}</span>
           </>
+        )}
+
+        {planLayer && (
+          <button
+            onClick={planLayer.onToggle}
+            aria-pressed={planLayer.shown}
+            title="Show the steps of your plans that are not in Tasks yet, on the day each one ends. They are read-only: click one to open its plan. A step sent to Tasks shows as the task itself."
+            style={{ padding: '0.3rem 0.65rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, background: planLayer.shown ? 'var(--color-primary)' : 'transparent', color: planLayer.shown ? 'var(--color-on-primary, #fff)' : 'var(--color-text)' }}
+          >Plan steps{planLayer.count ? ` (${planLayer.count})` : ''}</button>
         )}
 
         {/* Sidebar toggle */}

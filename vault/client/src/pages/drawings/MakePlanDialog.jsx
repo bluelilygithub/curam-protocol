@@ -28,6 +28,9 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [estimating, setEstimating] = useState(false);
+  const [whys, setWhys] = useState({}); // ref -> what the AI said it assumed, for steps whose length is an AI estimate the person has not changed
+  const [estimateError, setEstimateError] = useState('');
   const ticket = useRef(0);
 
   // What goes to the server: only lengths the person actually typed, so an empty box means "one day".
@@ -52,6 +55,20 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
     }, 250);
     return () => clearTimeout(t);
   }, [body]);
+
+  // Ask the AI for a length for every step the person has not typed one for. The numbers land in the boxes, marked as estimates, and every one can be changed.
+  const estimate = async () => {
+    if (estimating || creating) return;
+    setEstimating(true); setEstimateError('');
+    try {
+      const res = await api.post('/api/plans/from-diagram/estimate', { diagram, includeNo, title: title.trim() || undefined });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'The AI could not estimate just now. Try again, or type the lengths yourself.');
+      const got = data.estimates || {};
+      setDays((d) => { const next = { ...d }; for (const [ref, e] of Object.entries(got)) if (String(d[ref] ?? '').trim() === '') next[ref] = String(e.days); return next; });
+      setWhys((w) => { const next = { ...w }; for (const [ref, e] of Object.entries(got)) if (String(days[ref] ?? '').trim() === '') next[ref] = e.why || 'AI estimate'; return next; });
+    } catch (err) { setEstimateError(err.message); } finally { setEstimating(false); }
+  };
 
   const create = async () => {
     if (creating || !preview || error) return;
@@ -135,6 +152,15 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
 
         {!preview && !error && <p className="text-sm" style={LABEL_STYLE}>Reading the diagram…</p>}
         {preview && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Tooltip text="Ask the AI to suggest how many working days each step may take. It uses one AI request and sees only the step names and the plan name, never your diagram. Lengths you have already typed are kept, and every number can be changed.">
+              <button type="button" onClick={estimate} disabled={estimating || creating} className={BTN} style={BTN_STYLE}>{getIcon('sparkles', { size: 13 })} {estimating ? 'Estimating…' : 'Estimate lengths with AI'}</button>
+            </Tooltip>
+            {Object.keys(whys).length > 0 && <span className="text-xs" style={LABEL_STYLE}>Lengths marked ✦ are AI estimates. They are a starting point: check them.</span>}
+            {estimateError && <span className="text-xs" style={{ color: '#ef4444' }} role="alert">{estimateError}</span>}
+          </div>
+        )}
+        {preview && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[620px]">
               <thead>
@@ -151,10 +177,13 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
                       <td className="py-1 pr-2 text-xs" style={LABEL_STYLE}>{s.waitsOn.length ? s.waitsOn.map((r) => nameOf[r]).join(', ') : '—'}</td>
                       <td className="py-1 pr-2">
                         {s.isMilestone ? <span className="text-xs" style={LABEL_STYLE}>Milestone</span> : (
+                          <>
                           <Tooltip text="How many working days this step takes. Empty means one.">
-                            <input type="number" min="1" max="3650" value={days[s.ref] ?? ''} placeholder="1" onChange={(e) => setDays((d) => ({ ...d, [s.ref]: e.target.value }))}
+                            <input type="number" min="1" max="3650" value={days[s.ref] ?? ''} placeholder="1" onChange={(e) => { setDays((d) => ({ ...d, [s.ref]: e.target.value })); setWhys((w) => { if (!(s.ref in w)) return w; const n = { ...w }; delete n[s.ref]; return n; }); }}
                               aria-label={`Days for ${s.title}`} className={`${FIELD} w-20`} style={FIELD_STYLE} disabled={creating} />
                           </Tooltip>
+                          {whys[s.ref] && <Tooltip text={`AI estimate: ${whys[s.ref]}. Change the number to make it your own.`}><span className="ml-1 text-xs cursor-help" style={{ color: 'var(--color-primary)' }} aria-label="AI estimate">✦</span></Tooltip>}
+                          </>
                         )}
                       </td>
                       <td className="py-1 pr-2 text-xs" style={{ color: 'var(--color-text)' }}>{at.start ? fmtDay(at.start) : '—'}</td>

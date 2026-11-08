@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -106,8 +106,13 @@ function buildRows(tasks) {
 
 // showBlocked: paint a task that waits on an unfinished one as Blocked (Tasks does; Plans does not, since waiting is normal in a plan).
 // defaultZoom: the zoom the timeline opens at.
-export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PROJECT, onEdit, showBlocked = true, defaultZoom = 'month' }) {
+// onBarChange(taskId, { startDate, endDate }, 'move' | 'resize'): when given, a bar of a task that has its own startDate can be dragged to move it,
+// and its right edge dragged to change its length (a milestone can only be moved; a task with `locked: true`, such as a group, cannot be dragged).
+// Dates are whole days; the timeline only reports where the person dropped it and the caller decides what that means.
+export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PROJECT, onEdit, showBlocked = true, defaultZoom = 'month', onBarChange }) {
   const [zoomKey, setZoomKey] = useState(defaultZoom);
+  const [drag, setDrag] = useState(null); // { id, mode, days } while a bar is being dragged
+  const dragRef = useRef(null);
   const { ppd } = ZOOM.find(z => z.key === zoomKey);
 
   const taskMap     = Object.fromEntries(tasks.map(t => [t.id, t]));
@@ -160,6 +165,34 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
   }
 
   const barTop = (ROW_H - BAR_H) / 2;
+
+  const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const beginDrag = (e, task, mode) => {
+    if (e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* a browser without pointer capture still drags */ }
+    dragRef.current = { id: task.id, mode, x0: e.clientX, moved: false };
+    setDrag({ id: task.id, mode, days: 0 });
+  };
+  const moveDrag = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.x0;
+    if (Math.abs(dx) > 3) d.moved = true;
+    setDrag({ id: d.id, mode: d.mode, days: Math.round(dx / ppd) });
+  };
+  const endDrag = (e, task) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDrag(null);
+    if (!d) return;
+    if (!d.moved) { onEdit?.(task.id); return; } // a press with no drag is a click
+    const days = Math.round((e.clientX - d.x0) / ppd);
+    const start = parseDate(task.startDate); const end = parseDate(task.dueDate);
+    if (!days || !start || !end) return;
+    if (d.mode === 'move') onBarChange(task.id, { startDate: toISO(addDays(start, days)), endDate: toISO(addDays(end, days)) }, 'move');
+    else onBarChange(task.id, { startDate: task.startDate, endDate: toISO(addDays(end, days)) }, 'resize');
+  };
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
@@ -262,7 +295,14 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
 
           {/* Task rows */}
           {rows.map(({ task, depth }, i) => {
-            const g      = geo(task);
+            const g0     = geo(task);
+            const live   = drag && drag.id === task.id && g0
+              ? (drag.mode === 'move'
+                ? { x: g0.x + drag.days * ppd, w: g0.w, endX: g0.endX + drag.days * ppd }
+                : { x: g0.x, w: Math.max(ppd, g0.w + drag.days * ppd), endX: g0.endX + drag.days * ppd })
+              : g0;
+            const g      = live;
+            const draggable = !!onBarChange && !task.locked && !!task.startDate;
             const status = resolveStatus(task);
             const sty    = STATUS_STYLE[status] || STATUS_STYLE.todo;
             const rowBg  = i % 2 === 0 ? 'var(--color-bg)' : 'var(--color-surface)';
@@ -307,8 +347,12 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
                   {g && !task.isMilestone && (
                     <div
                       className="absolute rounded"
-                      title={`${task.title} — ${status}`}
-                      onClick={() => onEdit?.(task.id)}
+                      title={draggable ? `${task.title} — ${status}. Drag to move it; drag its right edge to change its length.` : `${task.title} — ${status}`}
+                      onClick={draggable ? undefined : () => onEdit?.(task.id)}
+                      onPointerDown={draggable ? (e) => beginDrag(e, task, 'move') : undefined}
+                      onPointerMove={draggable ? moveDrag : undefined}
+                      onPointerUp={draggable ? (e) => endDrag(e, task) : undefined}
+                      onPointerCancel={draggable ? () => { dragRef.current = null; setDrag(null); } : undefined}
                       style={{
                         left: g.x,
                         width: g.w,
@@ -316,16 +360,35 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
                         height: BAR_H,
                         background: sty.bg,
                         border: `1.5px solid ${sty.border}`,
-                        cursor: onEdit ? 'pointer' : 'default',
+                        cursor: draggable ? 'grab' : (onEdit ? 'pointer' : 'default'),
+                        touchAction: draggable ? 'none' : undefined,
+                        boxShadow: drag && drag.id === task.id ? '0 2px 8px rgba(0,0,0,0.25)' : undefined,
                       }}
-                    />
+                    >
+                      {draggable && (
+                        <div
+                          aria-hidden="true"
+                          title="Drag to change the length"
+                          onPointerDown={(e) => beginDrag(e, task, 'resize')}
+                          onPointerMove={moveDrag}
+                          onPointerUp={(e) => endDrag(e, task)}
+                          onPointerCancel={() => { dragRef.current = null; setDrag(null); }}
+                          style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 8, cursor: 'ew-resize', touchAction: 'none', background: sty.border, opacity: 0.35, borderRadius: '0 3px 3px 0' }}
+                        />
+                      )}
+                    </div>
                   )}
                   {g && task.isMilestone && (
                     <div
                       className="absolute"
-                      title={`${task.title} — Milestone`}
-                      onClick={() => onEdit?.(task.id)}
+                      title={draggable ? `${task.title} — Milestone. Drag to move it.` : `${task.title} — Milestone`}
+                      onClick={draggable ? undefined : () => onEdit?.(task.id)}
+                      onPointerDown={draggable ? (e) => beginDrag(e, task, 'move') : undefined}
+                      onPointerMove={draggable ? moveDrag : undefined}
+                      onPointerUp={draggable ? (e) => endDrag(e, task) : undefined}
+                      onPointerCancel={draggable ? () => { dragRef.current = null; setDrag(null); } : undefined}
                       style={{
+                        touchAction: draggable ? 'none' : undefined,
                         left: g.endX - MS_SIZE / 2,
                         top: (ROW_H - MS_SIZE) / 2,
                         width: MS_SIZE,
@@ -333,7 +396,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
                         transform: 'rotate(45deg)',
                         background: sty.border,
                         borderRadius: 2,
-                        cursor: onEdit ? 'pointer' : 'default',
+                        cursor: draggable ? 'grab' : (onEdit ? 'pointer' : 'default'),
                       }}
                     />
                   )}

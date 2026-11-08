@@ -4,7 +4,7 @@ import { isPathActive, trailFor } from '../utils/navTrail.mjs';
 export const APP_NAV_GROUPS = [
   {
     id: 'workspace',
-    label: 'Workspace',
+    label: 'Everyday',
     items: [
       // Notes leads the workspace: where things are written down first, then filed, searched, and worked on in Chat.
       { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line', featureKey: null },
@@ -263,9 +263,9 @@ export const TOP_BAR_LINKS = [
 
 // Pages that are in the top bar or sidebar but not in an Apps group still get a trail.
 const EXTRA_TRAIL_ENTRIES = [
-  { id: 'chat', path: '/chat', label: 'Chat', group: 'Workspace' },
-  { id: 'history', path: '/history', label: 'Chat History', group: 'Workspace' },
-  { id: 'tasks', path: '/tasks', label: 'Tasks', group: 'Workspace' },
+  { id: 'chat', path: '/chat', label: 'Chat', group: 'Everyday' },
+  { id: 'history', path: '/history', label: 'Chat History', group: 'Everyday' },
+  { id: 'tasks', path: '/tasks', label: 'Tasks', group: 'Everyday' },
   { id: 'settings', path: '/settings', label: 'Settings', group: '' },
 ];
 
@@ -277,7 +277,7 @@ export function getTrailEntries() {
       if (!it.external && it.path) entries.push({ id: it.id, path: it.path, label: it.label, group: g.label, activeUnder: it.activeUnder });
     }
   }
-  for (const l of SIDEBAR_WORKSPACE_LINKS) entries.push({ id: l.id, path: l.path, label: l.label, group: 'Workspace' });
+  for (const l of SIDEBAR_WORKSPACE_LINKS) entries.push({ id: l.id, path: l.path, label: l.label, group: 'Everyday' });
   return [...entries, ...EXTRA_TRAIL_ENTRIES];
 }
 

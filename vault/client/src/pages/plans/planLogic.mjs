@@ -47,10 +47,35 @@ export function orderedRows(steps) {
   return rows;
 }
 
-/** What the Timeline (shared with Tasks) expects, one row per step. */
+/** How many working days from a to b, both counted ('every day' counts them all). 0 when b is before a. Used when a bar's edge is dragged. */
+export function workDaysInclusive(a, b, workWeek = 'weekdays') {
+  const parse = (iso) => { const [y, m, d] = String(iso).split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(b))) return 0;
+  let n = 0;
+  for (let t = parse(a); t <= parse(b); t += 86400000) {
+    const dow = new Date(t).getUTCDay();
+    if (workWeek === 'all' || (dow !== 0 && dow !== 6)) n++;
+  }
+  return n;
+}
+
+/**
+ * What a bar dropped on the Timeline means for a step: a move pins the step's start to the day it was dropped on; dragging the right edge sets
+ * its length to the working days from its start to where the edge was left (never less than one). null when nothing changed.
+ */
+export function dragToStepChange(step, change, mode, workWeek = 'weekdays') {
+  if (!step || !change) return null;
+  if (mode === 'move') return change.startDate && change.startDate !== step.startDate ? { startDate: change.startDate } : null;
+  const days = Math.max(1, workDaysInclusive(change.startDate, change.endDate, workWeek));
+  return days !== step.durationDays ? { durationDays: days } : null;
+}
+
+/** What the Timeline (shared with Tasks) expects, one row per step. A group's dates come from its sub-steps, so it is locked (cannot be dragged). */
 export function timelineTasks(steps, deps, schedule) {
   const placed = schedule?.steps || {};
+  const parents = new Set(steps.filter((s) => s.parentStepId != null).map((s) => s.parentStepId));
   return steps.map((s) => ({
+    locked: parents.has(s.id),
     id: s.id, title: s.title, status: s.status,
     startDate: placed[s.id]?.start || null,
     dueDate: placed[s.id]?.end || null,

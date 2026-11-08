@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
@@ -10,6 +10,7 @@ import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import PlanList from './plans/PlanList';
 import PlanEditor from './plans/PlanEditor';
 import PlansTutorChat from './plans/PlansTutorChat';
+import { startPlansTour, TOUR_KEY as PLANS_TOUR_KEY } from '../utils/tours/plansTour';
 import { TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './plans/plansTools.mjs';
 
 /**
@@ -22,6 +23,7 @@ export default function PlansPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
   const { id } = useParams();
+  const [params, setParams] = useSearchParams();
   const view = id ? 'editor' : 'list';
   const info = useToolInfoModal('vault_plans_info_seen');
 
@@ -35,6 +37,21 @@ export default function PlansPage() {
       .catch(() => {})
       .finally(() => setAccessKnown(true));
   }, []);
+
+  // Settings -> Plans Tour opens /plans?tour=1 (also used by the tour button while a plan is open: it goes to the list first).
+  useEffect(() => {
+    if (params.get('tour') && view === 'list') {
+      const next = new URLSearchParams(params); next.delete('tour');
+      setParams(next, { replace: true });
+      setTimeout(() => startPlansTour(), 300);
+    }
+  }, [params, view]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startTour = () => {
+    try { localStorage.removeItem(PLANS_TOUR_KEY); } catch (_) { /* ignore */ }
+    if (view !== 'list') { navigate('/plans?tour=1'); return; }
+    startPlansTour();
+  };
 
   // The guide's "Open" buttons: switch to the view that holds the control. A plan has to be opened first, so from the list this says so.
   const openToolById = (toolId) => {
@@ -56,6 +73,9 @@ export default function PlansPage() {
           <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Plans</h1>
           <Tooltip text="How Plans work, and what they do not do yet.">
             <button type="button" onClick={info.open} aria-label="How Plans work" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('info', { size: 13 })}</button>
+          </Tooltip>
+          <Tooltip text="Take the guided tour of Plans.">
+            <button type="button" onClick={startTour} aria-label="Take the Plans tour" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('compass', { size: 13 })}</button>
           </Tooltip>
           <p className="text-sm ml-2" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[view]}</p>
         </div>
