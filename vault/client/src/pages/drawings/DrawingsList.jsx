@@ -35,6 +35,7 @@ export default function DrawingsList() {
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(null); // { id, title }
   const [confirmId, setConfirmId] = useState(null); // the drawing whose "Delete? Yes / No" is showing
+  const [notesMenu, setNotesMenu] = useState(null); // { id, notes } while a card's list of notes is open
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -53,6 +54,19 @@ export default function DrawingsList() {
   useEffect(() => { load(); }, [load]);
 
   const open = (id) => navigate(`/drawings/${id}`);
+
+  // The notes a drawing was sent to: one goes straight there, several show a short list under the card's buttons.
+  const showNotes = async (d) => {
+    if (notesMenu && notesMenu.id === d.id) { setNotesMenu(null); return; }
+    try {
+      const res = await api.get(`/api/drawings/${d.id}/notes`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not find the notes.');
+      if (data.notes.length === 1) navigate(`/notes?note=${data.notes[0].id}`);
+      else if (data.notes.length === 0) addToast('No note links to this drawing any more.', 'info');
+      else setNotesMenu({ id: d.id, notes: data.notes });
+    } catch (err) { addToast(err.message, 'error'); }
+  };
   const warm = () => { loadExcalidraw().catch(() => {}); }; // start fetching the editor while the person is still choosing
 
   const create = async (body = {}) => {
@@ -211,6 +225,13 @@ export default function DrawingsList() {
                         <Tooltip text="Change the name of this drawing.">
                           <button type="button" className={BTN} style={BTN_STYLE} onClick={() => setRenaming({ id: d.id, title: d.title })}>{getIcon('edit', { size: 13 })} Rename</button>
                         </Tooltip>
+                        {d.noteCount > 0 && (
+                          <Tooltip text={d.noteCount === 1 ? 'Go to the note this drawing is in.' : `This drawing is in ${d.noteCount} notes. Choose one to go to it.`}>
+                            <button type="button" className={BTN} style={BTN_STYLE} aria-expanded={d.noteCount > 1 ? !!(notesMenu && notesMenu.id === d.id) : undefined} onClick={() => showNotes(d)}>
+                              {getIcon('file-text', { size: 13 })} {d.noteCount === 1 ? 'In a note' : `In ${d.noteCount} notes`}
+                            </button>
+                          </Tooltip>
+                        )}
                         <Tooltip text="Make another drawing with the same pieces. The two are separate afterwards.">
                           <button type="button" className={BTN} style={BTN_STYLE} onClick={() => copy(d)}>{getIcon('copy', { size: 13 })} Copy</button>
                         </Tooltip>
@@ -220,6 +241,15 @@ export default function DrawingsList() {
                       </>
                     )}
                   </div>
+                  {notesMenu && notesMenu.id === d.id && (
+                    <ul role="menu" className="rounded-xl border p-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      {notesMenu.notes.map((n) => (
+                        <li key={n.id} role="none">
+                          <button type="button" role="menuitem" onClick={() => navigate(`/notes?note=${n.id}`)} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)' }}>{n.title || 'Untitled'}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </li>
             ))}

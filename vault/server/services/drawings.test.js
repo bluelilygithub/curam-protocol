@@ -147,6 +147,13 @@ if (!url) {
     await addNote(1, 'Prefix only', `[x](/drawings/${a.id}`);                     // no closing bracket: not a link to it
     await addNote(1, 'Plain mention', `see /drawings/${a.id} in the app`);       // not a Markdown link
     await addNote(2, 'Someone else', `[x](/drawings/${a.id})`);                   // another person's note never counts
+    const withCounts = await D.list(pool, 1);
+    assert.strictEqual(withCounts.find((r) => r.id === a.id).noteCount, 2, 'the list counts the notes that link to a drawing');
+    assert.strictEqual(withCounts.find((r) => r.id === blank.id).noteCount, 0, 'and zero for one nothing links to');
+    assert.ok((await D.list(pool, 2)).every((r) => r.noteCount === 0), "another person's notes never count");
+    const twice = await addNote(1, 'Two links', `[a](/drawings/${a.id}) and again [b](/drawings/${a.id})`);
+    assert.strictEqual((await D.list(pool, 1)).find((r) => r.id === a.id).noteCount, 3, 'a note that links twice is still one note');
+    await client.query('DELETE FROM notes WHERE id = $1', [twice]);
     const linked = await D.linkedNotes(pool, 1, a.id);
     assert.deepStrictEqual(linked.map((r) => r.id), [n2, n1], 'only this person\'s notes that link to exactly this drawing, newest first');
     assert.strictEqual(linked[0].title, 'Newer note');

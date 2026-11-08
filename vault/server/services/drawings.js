@@ -61,9 +61,23 @@ function checkThumbnail(v) {
 
 const LIST_COLS = 'id, title, thumbnail, look, "elementCount", "sceneBytes", "createdAt", "updatedAt"';
 
+/**
+ * How many of the person's notes link back to each drawing, as { [drawingId]: count }. One pass over the notes that mention "/drawings/"
+ * at all, taking the numbers out of every "](/drawings/N)" link (see linkedNotes for why the note's own text is the record).
+ */
+async function noteCounts(db, userId) {
+  const { rows } = await db.query(
+    `SELECT (m.hit)[1]::int AS id, COUNT(DISTINCT n.id)::int AS n
+       FROM notes n, LATERAL regexp_matches(n.body, '\\]\\(/drawings/([0-9]+)\\)', 'g') AS m(hit)
+      WHERE n.user_id = $1 AND n.body LIKE '%](/drawings/%'
+      GROUP BY 1`, [userId]);
+  return Object.fromEntries(rows.map((r) => [r.id, r.n]));
+}
+
 async function list(db, userId) {
   const { rows } = await db.query(`SELECT ${LIST_COLS} FROM drawings WHERE "userId" = $1 ORDER BY "updatedAt" DESC, id DESC LIMIT 500`, [userId]);
-  return rows;
+  const counts = await noteCounts(db, userId);
+  return rows.map((r) => ({ ...r, noteCount: counts[r.id] || 0 }));
 }
 
 async function get(db, userId, id) {
