@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2c4b81f6",
+   "fullHash": "2c4b81f6f8301508ae7c7525a020edb5c5ea4a39",
+   "committedAt": "2026-11-09T08:43:37+10:00",
+   "author": "mrb",
+   "subject": "CRM client page: tabs, side panel, compact header and timeline",
+   "filesChanged": 4,
+   "insertions": 360,
+   "deletions": 264,
+   "area": "CRM",
+   "goal": "Stop the client page being a long scroll past folded sections: show one thing at a time, keep the facts you keep looking up in view, and make Delete harder to hit by accident.",
+   "whatChanged": "ClientDetailPage.jsx is laid out as a header, a numbers row, tabs and a side panel. Header: Summarize is the main button, Edit secondary, Delete a small red trash icon (still confirms); \"Last contact\" (latest logged call, email or note) sits by the badges. The five number cards are one joined row. Tabs (Activity opens first, then Deals, Projects, Plans, Tasks, Research, Email follow-up) show a count when above zero; Plans, Research and Email follow-up are still left out when that tool is off for the person. Activity: the log box is one card with mic, attach and date icons, and All / Notes / Calls / Emails / Tasks filter buttons sit over a timeline of cards. The side panel (sticky from xl, under the tab below that) holds Info, Contacts, Outstanding (still collapsible) and an Open deal card with a stage bar. The page now uses up to 1700px of width. The CRM tour switches tabs (tab buttons carry data-tour-toggle, the open panel data-tour) and its touchpoint and follow-up steps point at Activity instead of sections that no longer existed. crmTutor.js and docs/crm-deals-schema.md (section 14) describe the layout.",
+   "filesImpacted": [
+    "client/src/pages/ClientDetailPage.jsx",
+    "client/src/utils/tours/crmTour.js",
+    "server/services/crmTutor.js",
+    "docs/crm-deals-schema.md"
+   ],
+   "benefit": "Less scrolling, Activity first, key facts always visible, and a safer Delete.",
+   "concerns": "The \"Show: Everyone\" person filter on the activity feed is gone from the page (the API still accepts it), so you can no longer see one contact's entries. A Tasks tab was added though the mockup listed none. The Info card still shows custom fields and files only, since clients have no email, phone or website fields. Checked on screen at desktop width with one test client (tabs, Plans tab, filters look, tour opening the Tasks and Plans tabs); not checked at phone width, in dark themes, with dictation, or the attach and date icons beyond how they look. A whole-page rewrite of the layout, so a missed state (a client with many contacts or custom fields in the side panel) is possible. No automated test covers the page."
+  },
+  {
    "commit": "ae108a3f",
    "fullHash": "ae108a3f0ec62cb59f03a53128fa28e69e60cbf7",
    "committedAt": "2026-11-09T08:11:20+10:00",
