@@ -199,7 +199,7 @@ function Section({ title, open, onToggle, children, action, sectionRef, flash, t
     <div
       ref={sectionRef}
       className="rounded-xl border transition-colors"
-      style={{ borderColor: flash ? 'var(--color-primary)' : 'var(--color-border)', boxShadow: flash ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent)' : 'none' }}
+      style={{ background: 'var(--color-surface)', borderColor: flash ? 'var(--color-primary)' : 'var(--color-border)', boxShadow: flash ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent)' : 'none' }}
     >
       <button
         onClick={onToggle}
@@ -333,8 +333,10 @@ export default function ClientDetailPage() {
     try { localStorage.setItem(CRM_INFO_SEEN_KEY, '1'); } catch { /* private window — just won't remember */ }
   };
 
+  // The main column is tabs (Activity first); Info, Contacts and Outstanding sit in the side panel.
+  const [tab, setTab] = useState('activity');
   const [sections, setSections] = useState({
-    info:        false,
+    info:        true,
     outstanding: true,
     activity:    true,
     deals:       true,
@@ -351,16 +353,19 @@ export default function ClientDetailPage() {
   const clientResearch = useLinkedResearch({ clientId: Number(id) }); // null when Topic Research is off for this person: no section
   const clientEmailCases = useLinkedEmailFollowUp(Number(id)); // null when Email Follow-Up is off for this person: no section
 
-  const dealsRef    = useRef(null);
-  const projectsRef = useRef(null);
-  const sectionRefs = { deals: dealsRef, projects: projectsRef };
+  const panelRef = useRef(null);
   const [flashSection, setFlashSection] = useState(null);
 
-  const goToSection = (key) => {
-    setSections(s => ({ ...s, [key]: true }));
-    setTimeout(() => sectionRefs[key]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-    setFlashSection(key);
-    setTimeout(() => setFlashSection(null), 1200);
+  // Opens a tab (and scrolls to it) when the key is one of the tabs, otherwise opens that side-panel card.
+  const goToSection = (key, tabKeys = []) => {
+    if (tabKeys.includes(key)) {
+      setTab(key);
+      setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      setFlashSection(key);
+      setTimeout(() => setFlashSection(null), 1200);
+    } else {
+      setSections(s => ({ ...s, [key]: true }));
+    }
   };
 
   // Bumped on every load() so ActivityFeed (which fetches its own endpoint,
@@ -435,22 +440,42 @@ export default function ClientDetailPage() {
     return { color: '#22c55e', label: 'On track' };
   };
 
+  const openDealCount = (deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length;
+  // latest logged contact (calls, emails, notes), not deal-stage or contact-added entries
+  const lastContact = (touchpoints || [])
+    .filter(t => t.type !== 'deal_stage' && t.type !== 'contact' && t.date)
+    .map(t => String(t.date))
+    .sort()
+    .pop();
+
+  const tabs = [
+    { key: 'activity', label: 'Activity' },
+    { key: 'deals', label: 'Deals', count: deals?.length },
+    { key: 'projects', label: 'Projects', count: projects?.length },
+    ...(clientPlans.available ? [{ key: 'plans', label: 'Plans', count: clientPlans.plans?.length }] : []),
+    { key: 'tasks', label: 'Tasks', count: tasks?.length },
+    ...(clientResearch !== null ? [{ key: 'research', label: 'Research', count: clientResearch.length }] : []),
+    ...(clientEmailCases !== null ? [{ key: 'emailFollowUp', label: 'Email follow-up', count: clientEmailCases.length }] : []),
+  ];
+  const tabKeys = tabs.map(t => t.key);
+  const activeTab = tabKeys.includes(tab) ? tab : 'activity';
+
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-4 sm:p-6">
+      <div className="max-w-[1700px] mx-auto p-4 sm:p-6">
 
         {/* Back nav */}
         <Link
           to="/clients"
-          className="inline-flex items-center gap-1 text-sm mb-5 hover:opacity-70 transition-opacity"
+          className="inline-flex items-center gap-1 text-sm mb-5 hover:opacity-70 transition-opacity duration-200"
           style={{ color: 'var(--color-muted)' }}
         >
           ← CRM
         </Link>
 
-        {/* Header */}
+        {/* Header: name and badges on the left; Summarize is the main button, Delete a small red icon */}
         <div data-tour="crm-header" className="flex items-start justify-between gap-3 mb-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span style={{ color: 'var(--color-muted)' }}>
                 {getIcon(client.clientType === 'individual' ? 'user' : 'briefcase', { size: 18 })}
@@ -459,6 +484,7 @@ export default function ClientDetailPage() {
               <button
                 onClick={() => { localStorage.removeItem(CRM_TOUR_KEY); startCrmTour(); }}
                 title="Take the CRM tour"
+                aria-label="Take the CRM tour"
                 style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
@@ -468,6 +494,7 @@ export default function ClientDetailPage() {
               <button
                 onClick={() => setShowCrmInfo(true)}
                 title="How touchpoints, follow-ups, and tasks work here"
+                aria-label="How touchpoints, follow-ups, and tasks work here"
                 style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
@@ -488,19 +515,26 @@ export default function ClientDetailPage() {
               {tags.map(t => (
                 <span key={t} className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>{t}</span>
               ))}
+              {lastContact && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Last contact {fmtDate(lastContact)}</span>
+              )}
             </div>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Btn variant="secondary" size="sm" onClick={generateSummary}>
-              {getIcon('sparkles', { size: 14, style: { marginRight: 4 } })}Summarize
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Btn variant="primary" size="sm" onClick={generateSummary}>
+              <span className="inline-flex items-center gap-1.5">{getIcon('sparkles', { size: 14 })}Summarize</span>
             </Btn>
-            <Btn variant="secondary" size="sm" onClick={() => setEditModal(true)}>Edit</Btn>
+            <Btn variant="secondary" size="sm" onClick={() => setEditModal(true)}>
+              <span className="inline-flex items-center gap-1.5">{getIcon('edit', { size: 14 })}Edit</span>
+            </Btn>
             <button
               onClick={() => setConfirmDel(true)}
-              className="px-2.5 py-1 text-sm rounded-lg border hover:opacity-70 transition-opacity"
+              title="Delete this client"
+              aria-label="Delete this client"
+              className="w-8 h-8 flex items-center justify-center rounded-lg border hover:opacity-70 transition-opacity duration-200"
               style={{ color: '#ef4444', borderColor: '#fca5a5' }}
             >
-              Delete
+              {getIcon('trash', { size: 14 })}
             </button>
           </div>
         </div>
@@ -514,140 +548,124 @@ export default function ClientDetailPage() {
               <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
                 {getIcon('sparkles', { size: 12 })} AI summary
               </p>
-              <button onClick={() => setSummary(null)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
+              <button onClick={() => setSummary(null)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }} aria-label="Close the summary">✕</button>
             </div>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>{summary.summary}</p>
           </div>
         )}
 
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+        {/* Numbers: one compact row */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px rounded-xl border overflow-hidden mb-5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-border)' }}>
           <StatCard label="Open pipeline" value={fmt(openPipelineValue)}
-                    sub={`${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length} open deal${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length !== 1 ? 's' : ''}`}
-                    onClick={() => goToSection('deals')} />
-          <StatCard label="Projects"      value={projects?.length ?? 0}
-                    onClick={() => goToSection('projects')} />
+                    sub={`${openDealCount} open deal${openDealCount !== 1 ? 's' : ''}`}
+                    onClick={() => goToSection('deals', tabKeys)} />
           <StatCard label="Invoiced YTD"  value={fmt(finance?.invoicedYTD)}
                     sub={`${finance?.invoiceCount || 0} invoices`}
                     onClick={() => navigate(`/finance?tab=Invoices&clientId=${id}`)} />
           <StatCard label="Outstanding"   value={fmt(finance?.outstanding)}
+                    sub={parseFloat(finance?.outstanding) > 0 ? 'Unpaid' : 'All paid'}
                     warn={parseFloat(finance?.outstanding) > 0}
                     onClick={() => navigate(`/finance?tab=Invoices&clientId=${id}`)} />
+          <StatCard label="Projects"      value={projects?.length ?? 0}
+                    onClick={() => goToSection('projects', tabKeys)} />
           <StatCard label="Contracts"     value={contractsCount ?? 0}
+                    sub={contractsCount ? 'Signed' : 'None signed'}
+                    className="col-span-2 sm:col-span-1"
                     onClick={() => navigate(`/contract-review?crmClientId=${id}`)} />
         </div>
 
-        {/* Sections */}
-        <div className="flex flex-col gap-3">
+        {/* Tabs: Activity opens first; counts show when there is something in the tab */}
+        <div role="tablist" aria-label="Client sections" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b mb-5" style={{ borderColor: 'var(--color-border)' }}>
+          {tabs.map(t => {
+            const on = t.key === activeTab;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={on}
+                data-tour-toggle={`crm-${t.key}`}
+                onClick={() => setTab(t.key)}
+                className="flex items-center gap-1.5 px-3 py-2.5 text-sm whitespace-nowrap hover:opacity-70 transition-opacity duration-200"
+                style={{
+                  color: on ? 'var(--color-text)' : 'var(--color-muted)',
+                  fontWeight: on ? 600 : 400,
+                  borderBottom: `2px solid ${on ? 'var(--color-primary)' : 'transparent'}`,
+                  marginBottom: -1,
+                }}
+              >
+                {t.label}
+                {t.count > 0 && (
+                  <span className="text-xs px-1.5 rounded-full" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>{t.count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Info — durable facts about the client (ABN, an AdWords login,
-               a reference number), distinct from Activity/Tasks which are
-               timestamped events. Edited in place, not logged. Folds in
-               the client's Notes/How-they-work (previously a standalone
-               always-visible block above the sections — moved here so
-               there's one place for "reference info about this client",
-               not two). See docs/crm-activity-model.md Addendum 3. */}
-          <Section tourId="crm-info" title="Info" open={sections.info} onToggle={() => toggleSection('info')}>
-            <InfoSection
-              client={client}
-              clientId={id}
-              customFields={customFields || []}
-              attachments={clientAttachments || []}
-              onRefresh={load}
-            />
-          </Section>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
 
-          {/* Outstanding — activities flagged needsFollowUp, one-click clear.
-               Per docs/crm-activity-model.md scope-down addendum: replaces
-               Cases' Open/Waiting/Closed state machine with a flag instead
-               of a workflow. */}
-          <Section tourId="crm-outstanding" title="Outstanding" open={sections.outstanding} onToggle={() => toggleSection('outstanding')}>
-            <OutstandingSection clientId={id} unpaidInvoices={finance?.unpaidInvoices || []} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
-          </Section>
+          {/* The open tab */}
+          <div ref={panelRef} data-tour={`crm-${activeTab}`} role="tabpanel" className="min-w-0">
+            {activeTab === 'activity' ? (
+              <>
+                {/* Activity: one log, one input box (LogActivity), one chronological timeline (ActivityFeed).
+                     Replaces Touchpoints/Communications/Cases-History as separate sections (docs/crm-activity-model.md
+                     scope-down addendum). GET/POST /api/clients/:id/touchpoints and GET /api/clients/:id/activity. */}
+                <LogActivity clientId={id} contacts={contacts || []} tasks={tasks || []} onLogged={() => setActivityRefresh(n => n + 1)} />
+                <ActivityFeed clientId={id} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
+              </>
+            ) : (
+              <div
+                className="rounded-xl border px-4 pb-4 transition-colors"
+                style={{
+                  background: 'var(--color-surface)',
+                  borderColor: flashSection === activeTab ? 'var(--color-primary)' : 'var(--color-border)',
+                  boxShadow: flashSection === activeTab ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent)' : 'none',
+                }}
+              >
+                {activeTab === 'deals' && <DealsSection clientId={id} deals={deals || []} onRefresh={load} />}
+                {activeTab === 'projects' && (
+                  <ProjectsSection clientId={id} projects={projects || []} tasks={tasks || []} projectStatus={projectStatus} onRefresh={load} />
+                )}
+                {/* Plans: the dated plans filed under this client (docs/plans.md "Clients"); the tab is left out when Plans is off */}
+                {activeTab === 'plans' && <ClientPlansBody plans={clientPlans.plans} clientId={id} name={client.name} />}
+                {/* Tasks: every open task linked to this client, via a project or directly (tasks.clientId, e.g. a follow-up) */}
+                {activeTab === 'tasks' && <ClientTasksSection clientId={id} tasks={tasks || []} onRefresh={load} />}
+                {/* Research and Email follow-up are quiet (no tab) when the tool is off */}
+                {activeTab === 'research' && <ResearchList topics={clientResearch || []} noun="client" />}
+                {activeTab === 'emailFollowUp' && <EmailFollowUpList cases={clientEmailCases || []} clientId={Number(id)} />}
+              </div>
+            )}
+          </div>
 
-          {/* Activity — one log, one input box (LogActivity), one
-               chronological list (ActivityFeed). Per the scope-down
-               addendum this replaces Touchpoints/Communications/Cases-
-               History as separate sections entirely — logging something
-               here is logging it, full stop, no type/section to pick.
-               See GET/POST /api/clients/:id/touchpoints and
-               GET /api/clients/:id/activity in server/routes/clients.js. */}
-          <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
-            <LogActivity clientId={id} contacts={contacts || []} tasks={tasks || []} onLogged={() => setActivityRefresh(n => n + 1)} />
-            <ActivityFeed clientId={id} contacts={contacts || []} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
-          </Section>
-
-          {/* 0. Deals */}
-          <Section sectionRef={dealsRef} flash={flashSection === 'deals'} title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
-            <DealsSection
-              clientId={id}
-              deals={deals || []}
-              onRefresh={load}
-            />
-          </Section>
-
-          {/* 1. Contacts */}
-          <Section title={`Contacts${contacts?.length ? ` (${contacts.length})` : ''}`} open={sections.contacts} onToggle={() => toggleSection('contacts')}>
-            <ContactsSection
-              clientId={id}
-              contacts={contacts || []}
-              onRefresh={load}
-            />
-          </Section>
-
-          {/* 2. Projects */}
-          <Section sectionRef={projectsRef} flash={flashSection === 'projects'} title={`Projects${projects?.length ? ` (${projects.length})` : ''}`} open={sections.projects} onToggle={() => toggleSection('projects')}>
-            <ProjectsSection
-              clientId={id}
-              projects={projects || []}
-              tasks={tasks || []}
-              projectStatus={projectStatus}
-              onRefresh={load}
-            />
-          </Section>
-
-          {/* Plans: the dated plans filed under this client (docs/plans.md "Clients"); left out when Plans is off for this person */}
-          {clientPlans.available && (
-            <Section tourId="crm-plans" title={`Plans${clientPlans.plans?.length ? ` (${clientPlans.plans.length})` : ''}`} open={sections.plans} onToggle={() => toggleSection('plans')}>
-              <ClientPlansBody plans={clientPlans.plans} clientId={id} name={client.name} />
+          {/* Side panel: stays in view while the tab scrolls (from xl) */}
+          <aside className="flex flex-col gap-3 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto">
+            {/* Info: durable facts (ABN, a login name, a reference number); edited in place, not logged (docs/crm-activity-model.md Addendum 3) */}
+            <Section tourId="crm-info" title="Info" open={sections.info} onToggle={() => toggleSection('info')}>
+              <InfoSection
+                client={client}
+                clientId={id}
+                customFields={customFields || []}
+                attachments={clientAttachments || []}
+                onRefresh={load}
+              />
             </Section>
-          )}
 
-          {/* Research: the Topic Research topics, briefs and drafts made for this client or any of its projects (quiet when the tool is off) */}
-          {clientResearch !== null && (
-            <Section title={`Research${clientResearch.length ? ` (${clientResearch.length})` : ''}`} open={sections.research} onToggle={() => toggleSection('research')}>
-              <ResearchList topics={clientResearch} noun="client" />
+            <Section title={`Contacts${contacts?.length ? ` (${contacts.length})` : ''}`} open={sections.contacts} onToggle={() => toggleSection('contacts')}>
+              <ContactsSection clientId={id} contacts={contacts || []} onRefresh={load} />
             </Section>
-          )}
 
-          {/* Email follow-up: the Email Follow-Up cases linked to this client, and a way to start one (quiet when the tool is off) */}
-          {clientEmailCases !== null && (
-            <Section title={`Email follow-up${clientEmailCases.length ? ` (${clientEmailCases.length})` : ''}`} open={sections.emailFollowUp} onToggle={() => toggleSection('emailFollowUp')}>
-              <EmailFollowUpList cases={clientEmailCases} clientId={Number(id)} />
+            {/* Outstanding: follow-ups flagged on activity plus unpaid invoices, one-click clear */}
+            <Section tourId="crm-outstanding" title="Outstanding" open={sections.outstanding} onToggle={() => toggleSection('outstanding')}>
+              <OutstandingSection clientId={id} unpaidInvoices={finance?.unpaidInvoices || []} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
             </Section>
-          )}
 
-          {/* 2b. Tasks — every open task linked to this client, whether via a
-               project or directly (tasks.clientId, e.g. a touchpoint
-               follow-up). ProjectsSection's own task counts only match
-               task.projectId, so a directly-linked task (no project) was
-               otherwise invisible on this page even though the server has
-               always returned it in data.tasks. */}
-          <Section tourId="crm-tasks" title={`Tasks${tasks?.length ? ` (${tasks.length})` : ''}`} open={sections.tasks} onToggle={() => toggleSection('tasks')}>
-            <ClientTasksSection clientId={id} tasks={tasks || []} onRefresh={load} />
-          </Section>
-
-          {/* Touchpoints and Communications sections retired per the
-               scope-down addendum — folded into Activity above (same
-               client_interactions table, one input box, one feed). Their
-               component code (TouchpointsSection, CommunicationsSection)
-               is left defined below, unused, rather than deleted — same
-               convention as the Font Customizer's retired panels. */}
-
+            <OpenDealCard deals={deals || []} onOpen={() => goToSection('deals', tabKeys)} />
+          </aside>
         </div>
       </div>
 
-      <CrmTutorChat where="detail" onSection={(key) => (sectionRefs[key] ? goToSection(key) : setSections((s) => ({ ...s, [key]: true })))} />
+      <CrmTutorChat where="detail" onSection={(key) => goToSection(key, tabKeys)} />
 
       {/* Edit modal */}
       {editModal && (
@@ -767,119 +785,126 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
     }
   };
 
+  const busyVoice = isListening || isTranscribing;
+  const canVoice = isSTTAvailable || isLocalSTTAvailable;
+  const iconBtn = 'w-8 h-8 flex items-center justify-center rounded-lg transition-opacity duration-200 hover:opacity-70 relative flex-shrink-0';
+  const selectStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
   return (
-    <div className="pt-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+    <div className="rounded-xl border p-3 mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
       {promptedTaskId && (
-        <p className="text-xs mb-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+        <p className="text-xs mb-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
           Logging outcome for: <strong style={{ color: 'var(--color-text)' }}>{promptedTaskTitle || '…'}</strong>
           {' '}<button onClick={() => { searchParams.delete('logTask'); setSearchParams(searchParams, { replace: true }); }} className="hover:opacity-60 underline">cancel</button>
         </p>
       )}
-      <Input rows={2} value={note} onChange={setNote} placeholder="Log a call, email, or note…" />
-      {(isSTTAvailable || isLocalSTTAvailable) && (
-        <div className="flex items-center gap-2 mt-1.5 min-h-[1.5rem]">
-          <button
-            type="button"
-            onClick={startListening}
-            disabled={isListening || isTranscribing}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-opacity hover:opacity-70 relative flex-shrink-0"
-            style={{ color: isListening || isTranscribing ? '#ef4444' : 'var(--color-muted)' }}
-            title="Dictate the note"
-          >
-            {getIcon('mic', { size: 14 })}
-            {(isListening || isTranscribing) && (
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
-            )}
-          </button>
-          {(isListening || isTranscribing) && (
-            <>
-              <span className="text-xs truncate" style={{ color: '#ef4444' }}>
-                {interimText || (isTranscribing ? 'Transcribing…' : 'Listening…')}
-              </span>
-              {isListening && (
-                <button
-                  type="button"
-                  onClick={stopListening}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium hover:opacity-70 transition-opacity"
-                  style={{ background: '#ef4444', color: '#fff' }}
-                  title="Stop recording"
-                >
-                  {getIcon('square', { size: 10 })} Stop
-                </button>
-              )}
-            </>
-          )}
-          {!isListening && !isTranscribing && voiceError && (
-            <span className="text-xs truncate" style={{ color: '#ef4444' }} title={voiceError}>{voiceError}</span>
+      <textarea
+        rows={2}
+        value={note}
+        onChange={e => setNote(e.target.value)}
+        placeholder="Log a call, email, or note…"
+        aria-label="Log a call, email, or note"
+        className="w-full text-sm resize-none bg-transparent pb-2 mb-2 border-b"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+      />
+      {busyVoice && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs truncate" style={{ color: '#ef4444' }}>{interimText || (isTranscribing ? 'Transcribing…' : 'Listening…')}</span>
+          {isListening && (
+            <button
+              type="button"
+              onClick={stopListening}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium hover:opacity-70 transition-opacity duration-200"
+              style={{ background: '#ef4444', color: '#fff' }}
+              title="Stop recording"
+            >
+              {getIcon('square', { size: 10 })} Stop
+            </button>
           )}
         </div>
       )}
-      <div className="flex items-center gap-3 mt-2 flex-wrap">
-        <select
-          value={contactId}
-          onChange={e => setContactId(e.target.value)}
-          className="text-xs px-2 py-1.5 rounded-lg border"
-          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        >
+      {!busyVoice && voiceError && (
+        <p className="text-xs mb-2 truncate" style={{ color: '#ef4444' }} title={voiceError}>{voiceError}</p>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select value={contactId} onChange={e => setContactId(e.target.value)} className="text-xs px-2 py-1.5 rounded-lg border" style={selectStyle} aria-label="Who this was with">
           <option value="">Whole client</option>
           {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         {!promptedTaskId && tasks.length > 0 && (
-          <select
-            value={taskId}
-            onChange={e => setTaskId(e.target.value)}
-            className="text-xs px-2 py-1.5 rounded-lg border"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
+          <select value={taskId} onChange={e => setTaskId(e.target.value)} className="text-xs px-2 py-1.5 rounded-lg border max-w-[12rem]" style={selectStyle} aria-label="Link to a task">
             <option value="">No task</option>
             {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
           </select>
         )}
-        <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-          <input type="checkbox" checked={needsFollowUp} onChange={e => setNeedsFollowUp(e.target.checked)} />
-          Needs follow-up
-        </label>
-        {showDate ? (
-          <span className="flex items-center gap-1.5">
-            <input
-              type="datetime-local"
-              value={when}
-              max={toLocalInput()}
-              onChange={e => setWhen(e.target.value)}
-              className="text-xs px-2 py-1 rounded-lg border"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              title="When this actually happened"
-            />
-            <button type="button" onClick={() => { setShowDate(false); setWhen(toLocalInput()); }} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Use now</button>
-          </span>
-        ) : (
-          <button type="button" onClick={() => { setWhen(toLocalInput()); setShowDate(true); }} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }} title="Log this as having happened at a different time">
-            Change date
+        {canVoice && (
+          <button
+            type="button"
+            onClick={startListening}
+            disabled={busyVoice}
+            className={iconBtn}
+            style={{ color: busyVoice ? '#ef4444' : 'var(--color-muted)' }}
+            title="Dictate the note"
+            aria-label="Dictate the note"
+          >
+            {getIcon('mic', { size: 16 })}
+            {busyVoice && <span className="absolute top-1 right-1 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />}
           </button>
         )}
         <input ref={fileInputRef} type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity flex-shrink-0"
-          style={file
-            ? { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }
-            : { color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
+          className={iconBtn}
+          style={{ color: file ? 'var(--color-primary)' : 'var(--color-muted)' }}
           title={file ? file.name : 'Attach a file'}
+          aria-label={file ? `Attached: ${file.name}` : 'Attach a file'}
         >
-          📎 {file ? (file.name.length > 16 ? file.name.slice(0, 14) + '…' : file.name) : 'Attach file'}
+          {getIcon('paperclip', { size: 16 })}
         </button>
         {file && (
-          <button onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
+          <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+            {file.name.length > 18 ? file.name.slice(0, 16) + '…' : file.name}
+            <button type="button" onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="hover:opacity-60" aria-label="Remove the attached file">✕</button>
+          </span>
         )}
+        <button
+          type="button"
+          onClick={() => { if (showDate) { setShowDate(false); setWhen(toLocalInput()); } else { setWhen(toLocalInput()); setShowDate(true); } }}
+          className={iconBtn}
+          style={{ color: showDate ? 'var(--color-primary)' : 'var(--color-muted)' }}
+          title={showDate ? 'Use now instead' : 'Log this as having happened at another time'}
+          aria-label={showDate ? 'Use now instead' : 'Change the date and time'}
+        >
+          {getIcon('calendar', { size: 16 })}
+        </button>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+          <input type="checkbox" checked={needsFollowUp} onChange={e => setNeedsFollowUp(e.target.checked)} />
+          Needs follow-up
+        </label>
         <button
           onClick={log}
           disabled={saving || !note.trim()}
-          className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40"
+          className="ml-auto text-xs px-4 py-1.5 rounded-lg font-medium disabled:opacity-40 transition-opacity duration-200"
           style={{ background: 'var(--color-primary)', color: '#fff' }}
         >
           {saving ? 'Logging…' : 'Log'}
         </button>
       </div>
+      {showDate && (
+        <div className="flex items-center gap-2 mt-2">
+          <input
+            type="datetime-local"
+            value={when}
+            max={toLocalInput()}
+            onChange={e => setWhen(e.target.value)}
+            className="text-xs px-2 py-1 rounded-lg border"
+            style={selectStyle}
+            title="When this actually happened"
+            aria-label="When this actually happened"
+          />
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Logged as this time instead of now.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -970,25 +995,37 @@ function OutstandingSection({ clientId, unpaidInvoices = [], refreshKey, onChang
 
 // ── Activity feed ──────────────────────────────────────────────────────────────
 
-const ACTIVITY_ICON = { touchpoint: '💬', deal: '🤝', contact: '👤', task: '✓' };
+const FEED_FILTERS = [
+  { key: 'all',   label: 'All',    test: () => true },
+  { key: 'note',  label: 'Notes',  test: it => it.kind === 'touchpoint' && it.meta?.touchpointType === 'note' },
+  { key: 'call',  label: 'Calls',  test: it => it.kind === 'touchpoint' && it.meta?.touchpointType === 'call' },
+  { key: 'email', label: 'Emails', test: it => it.kind === 'touchpoint' && it.meta?.touchpointType === 'email' },
+  { key: 'task',  label: 'Tasks',  test: it => it.kind === 'task' },
+];
 
-function ActivityFeed({ clientId, contacts = [], refreshKey, onChanged }) {
-  const [items, setItems]     = useState(null); // null = loading
-  const [error, setError]     = useState('');
-  // '' = everyone, 'none' = entries logged against the whole client, otherwise a contact id.
-  const [person, setPerson]   = useState('');
+function feedIcon(it) {
+  if (it.kind === 'task') return 'check';
+  if (it.kind === 'deal') return 'briefcase';
+  if (it.kind === 'contact') return 'user';
+  return it.meta?.touchpointType === 'email' ? 'mail' : 'message-circle';
+}
+
+function ActivityFeed({ clientId, refreshKey, onChanged }) {
+  const getIcon = useIcon();
+  const [items, setItems]   = useState(null); // null = loading
+  const [error, setError]   = useState('');
+  const [filter, setFilter] = useState('all');
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
     let cancelled = false;
-    setItems(null);
     setError('');
-    api.get(`/api/clients/${clientId}/activity${person ? `?contactId=${encodeURIComponent(person)}` : ''}`)
+    api.get(`/api/clients/${clientId}/activity`)
       .then(r => r.json())
       .then(json => { if (!cancelled) setItems(Array.isArray(json) ? json : []); })
       .catch(() => { if (!cancelled) setError('Failed to load activity'); });
     return () => { cancelled = true; };
-  }, [clientId, refreshKey, person]);
+  }, [clientId, refreshKey]);
 
   const deleteAttachment = async (attachment) => {
     try {
@@ -999,63 +1036,82 @@ function ActivityFeed({ clientId, contacts = [], refreshKey, onChanged }) {
     }
   };
 
-  const personFilter = contacts.length > 0 ? (
-    <div className="flex items-center gap-2 pt-3">
-      <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Show</label>
-      <select
-        value={person}
-        onChange={e => setPerson(e.target.value)}
-        className="text-xs px-2 py-1.5 rounded-lg border"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        title="Filter the activity to one person"
-      >
-        <option value="">Everyone</option>
-        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        <option value="none">Whole client (no person)</option>
-      </select>
+  const chips = (
+    <div className="flex items-center gap-2 flex-wrap mb-4" role="group" aria-label="Filter the activity">
+      {FEED_FILTERS.map(f => {
+        const on = filter === f.key;
+        return (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            aria-pressed={on}
+            className="text-xs px-3 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200"
+            style={on
+              ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' }
+              : { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {f.label}
+          </button>
+        );
+      })}
     </div>
-  ) : null;
+  );
 
   if (error) return <p className="text-sm pt-3" style={{ color: '#ef4444' }}>{error}</p>;
-  if (items === null) return <>{personFilter}<p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p></>;
-  if (!items.length) return (
+  if (items === null) return <>{chips}<p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p></>;
+
+  const test = (FEED_FILTERS.find(f => f.key === filter) || FEED_FILTERS[0]).test;
+  const shown = items.filter(test);
+  if (!shown.length) return (
     <>
-      {personFilter}
-      <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>
-        {person ? 'No activity logged for this selection.' : 'No activity yet — log a touchpoint or create a deal to see it here.'}
+      {chips}
+      <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+        {filter === 'all' ? 'No activity yet — log a touchpoint or create a deal to see it here.' : 'Nothing logged under this filter.'}
       </p>
     </>
   );
 
   return (
     <div>
-      {personFilter}
-      <div className="pt-3">
-      {items.map(it => (
-        <div key={it.id} className="flex items-start gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
-          <span className="text-base flex-shrink-0 mt-0.5">{ACTIVITY_ICON[it.kind] || '•'}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm" style={{ color: 'var(--color-text)' }}>{it.title}</span>
-              {it.meta?.dealTitle && (
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>🤝 {it.meta.dealTitle}</span>
-              )}
-              {it.meta?.taskTitle && (
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>✓ {it.meta.taskTitle}</span>
+      {chips}
+      <div className="relative pl-10">
+        <div className="absolute left-[13px] top-4 bottom-4 w-px" style={{ background: 'var(--color-border)' }} aria-hidden="true" />
+        {shown.map(it => (
+          <div key={it.id} className="relative mb-3 last:mb-0">
+            <span
+              className="absolute -left-10 top-3 w-7 h-7 rounded-full border flex items-center justify-center"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              aria-hidden="true"
+            >
+              {getIcon(feedIcon(it), { size: 13 })}
+            </span>
+            <div className="rounded-xl border px-4 py-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{it.title}</span>
+                  {it.meta?.dealTitle && (
+                    <span className="text-xs inline-flex items-center gap-1" style={{ color: 'var(--color-muted)' }}>{getIcon('briefcase', { size: 11 })}{it.meta.dealTitle}</span>
+                  )}
+                  {it.meta?.taskTitle && (
+                    <span className="text-xs inline-flex items-center gap-1" style={{ color: 'var(--color-muted)' }}>{getIcon('check', { size: 11 })}{it.meta.taskTitle}</span>
+                  )}
+                  {it.needsFollowUp && (
+                    <span className="text-xs px-1.5 rounded-full" style={{ background: '#fef3c7', color: '#92400e' }}>Follow-up</span>
+                  )}
+                </div>
+                <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
+              </div>
+              {it.detail && <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
+              {it.attachments?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {it.attachments.map(a => (
+                    <AttachmentChip key={a.id} attachment={a} onDelete={deleteAttachment} />
+                  ))}
+                </div>
               )}
             </div>
-            {it.detail && <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
-            {it.attachments?.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {it.attachments.map(a => (
-                  <AttachmentChip key={a.id} attachment={a} onDelete={deleteAttachment} />
-                ))}
-              </div>
-            )}
           </div>
-          <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
-        </div>
-      ))}
+        ))}
       </div>
     </div>
   );
@@ -1497,18 +1553,45 @@ function CaseDetail({ caseId, onChanged, onDeleted }) {
 
 // ── Stat card ──────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, warn, onClick }) {
+function StatCard({ label, value, sub, warn, onClick, className = '' }) {
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag
       onClick={onClick}
-      className={`p-4 rounded-xl border text-left w-full transition-opacity ${onClick ? 'hover:opacity-70 cursor-pointer' : ''}`}
-      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      className={`px-4 py-3 text-left w-full transition-opacity duration-200 ${onClick ? 'hover:opacity-70 cursor-pointer' : ''} ${className}`}
+      style={{ background: 'var(--color-surface)' }}
     >
       <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>{label}</div>
       <div className="text-lg font-bold" style={{ color: warn ? '#f59e0b' : 'var(--color-text)' }}>{value}</div>
       {sub && <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{sub}</div>}
     </Tag>
+  );
+}
+
+// The side panel's open deal: title, value and how far along the stages it is.
+const OPEN_STAGES = ['lead', 'qualified', 'proposal', 'negotiation'];
+function OpenDealCard({ deals, onOpen }) {
+  const open = (deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost');
+  if (!open.length) return null;
+  const d = open[0];
+  const idx = Math.max(0, OPEN_STAGES.indexOf(d.stage));
+  const pct = ((idx + 1) / OPEN_STAGES.length) * 100;
+  return (
+    <div className="rounded-xl border px-4 py-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Open deal</div>
+      <button onClick={onOpen} className="w-full text-left hover:opacity-70 transition-opacity duration-200" title="Open the Deals tab">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{d.title}</span>
+          {d.value != null && d.value !== '' && <span className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--color-text)' }}>{fmt(d.value)}</span>}
+        </div>
+        <div className="h-1.5 rounded-full mt-2" style={{ background: 'var(--color-border)' }}>
+          <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: 'var(--color-primary)' }} />
+        </div>
+        <div className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>
+          {(DEAL_STAGE_MAP[d.stage] || DEAL_STAGE_MAP.lead).label}{open.length > 1 ? ` · +${open.length - 1} more open` : ''}
+        </div>
+      </button>
+    </div>
   );
 }
 

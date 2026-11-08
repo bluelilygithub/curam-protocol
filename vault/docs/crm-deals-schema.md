@@ -167,3 +167,14 @@ Mirrors the Font Customizer's tour (`fontsTour.js`) and tutorial-modal (`FontTut
 
 - `client/src/utils/tours/crmTour.js` — Shepherd tour (compass icon, header), 5 steps (6 when the Plans section is on the page, an extra Plans step after Tasks; the count is set when the tour starts): welcome → Touchpoints (channel filter) → the "+ Follow up" bridge → Tasks section → Communications (Gmail search, explicitly distinguished from Touchpoints). Steps targeting a collapsed section (`Section`'s new `tourId` prop → `data-tour-toggle`/`data-tour` attributes) auto-open it first (`ensureSectionOpen()`) rather than skipping the step.
 - `client/src/components/CrmInfoModal.jsx` — info icon (not sparkles — reserved for the existing AI Summarize button on this page), "How This Works", auto-shows once per browser (`vault_crm_client_info_seen` in `localStorage`), always reachable via the header (i) button. Explains the touchpoint/follow-up/task relationship in one place, matching the model settled on in chat history (touchpoint = past log, "+ Follow up" = the one bridge, task = the scheduled thing, one direction only).
+
+## 14. Client page layout (2026-11-09)
+
+`ClientDetailPage.jsx` was a stack of collapsible sections; it is now **tabs and a side panel**.
+
+- **Header:** name, status badges and "Last contact" (latest logged call/email/note) on the left; **Summarize** is the primary button, **Edit** secondary, **Delete** a small red trash icon (still confirms in `ConfirmModal`).
+- **Numbers:** one joined row (Open pipeline, Invoiced YTD, Outstanding, Projects, Contracts).
+- **Tabs:** Activity (opens first), Deals, Projects, Plans (only when Plans is on), Tasks, Research and Email follow-up (the last two only when their tool is on), each with a count when it is above zero. State is `tab`; `goToSection(key, tabKeys)` opens a tab, or a side-panel card for `info`/`contacts`/`outstanding` (the CRM guide's Open buttons use it).
+- **Activity tab:** `LogActivity` is one card (note box, then who/task selects, mic, attach and date icons, Needs follow-up, Log); `ActivityFeed` has **All / Notes / Calls / Emails / Tasks** filter chips and a timeline. The old "Show: Everyone" person dropdown is gone (the API still accepts `?contactId=`).
+- **Side panel (right, sticky from `xl`):** Info, Contacts, Outstanding cards (still collapsible) and an **Open deal** card with a stage bar.
+- **Tour:** each tab button carries `data-tour-toggle="crm-<tab>"` and the open tab's panel `data-tour="crm-<tab>"`, so `ensureSectionOpen` in `crmTour.js` switches tabs; the touchpoints and follow-up steps now point at `crm-activity`.

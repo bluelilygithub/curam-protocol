@@ -50,6 +50,7 @@ const RULES = [
   'A task linked to a client shows in the client\'s Tasks section whether it came through a project or was linked directly.',
   'Deals belong to a client and move through the stages lead, qualified, proposal, negotiation, won and lost.',
   'Files can be attached to a touchpoint or a task; there is a size limit per file and a storage limit per person.',
+  'A client page lays its work out as tabs (Activity first, then Deals, Projects, Plans, Tasks, Research and Email follow-up, each with a count when it has something in it), with Info, Contacts, Outstanding and the open deal in a side panel that stays in view. The Activity tab filters by All, Notes, Calls, Emails or Tasks.',
   'A client page has a tour (compass icon) and an information box (info icon) that explains touchpoints, follow-ups and tasks.',
   'Deleting a client asks for confirmation first; it is not a casual action, so check before doing it.',
   'The Open buttons in this chat only take you to a page or section; they never add, change or delete anything.',

@@ -71,8 +71,8 @@ export function startCrmTour() {
     id: 'crm-touchpoints',
     title: 'Touchpoints — the past-tense log',
     text: "Log a call, email, or meeting after it happens. Filter by channel using the chips above the list (reuses the same type you picked when logging — no separate field). Hover a row to attach a file.",
-    attachTo: { element: '[data-tour="crm-touchpoints"]', on: 'top' },
-    beforeShowPromise: () => ensureSectionOpen('crm-touchpoints'),
+    attachTo: { element: '[data-tour="crm-activity"]', on: 'top' },
+    beforeShowPromise: () => ensureSectionOpen('crm-activity'),
     when: { show() { injectStepCounter(2); } },
     buttons: [btnBack(), btnNext],
   });
@@ -81,7 +81,8 @@ export function startCrmTour() {
     id: 'crm-followup',
     title: '"+ Follow up" — the one bridge',
     text: "Hover a touchpoint row and click \"+ Follow up\" to turn it into a Task with a due date. This is the only way a touchpoint becomes something scheduled — touchpoints themselves never carry a due date, and a Task never turns back into a touchpoint.",
-    attachTo: { element: '[data-tour="crm-touchpoints"]', on: 'top' },
+    attachTo: { element: '[data-tour="crm-activity"]', on: 'top' },
+    beforeShowPromise: () => ensureSectionOpen('crm-activity'),
     when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
