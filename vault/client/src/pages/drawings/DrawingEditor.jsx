@@ -600,6 +600,44 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const Menu = lib && lib.MainMenu;
   const bad = status === 'error' || status === 'changed';
 
+  // Undo / Redo, Keep shape / Free and Select all sit in the drawing area (the board's top right), not in the bar above it.
+  const renderBoardTools = () => {
+    // the board defines its own --color-primary and friends inside itself, so Vault's values are read from the page and put back for these controls
+    const root = getComputedStyle(document.documentElement);
+    const vars = {};
+    ['--color-bg', '--color-surface', '--color-border', '--color-primary', '--color-text', '--color-muted', '--color-on-primary'].forEach((k) => { const v = root.getPropertyValue(k).trim(); if (v) vars[k] = v; });
+    return (
+    <div className="flex flex-wrap items-center justify-end gap-2" style={{ maxWidth: '38rem', ...vars }}>
+          <div className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} role="group" aria-label="Undo and redo" data-tour="drawings-undo">
+            <Tooltip text="Undo the last change on the drawing (Ctrl+Z). You can undo as many times as you need, back through everything you did since you opened it. Drawing, moving, stretching, switching the look and Draw it for me are each a step.">
+              <button type="button" disabled={!lib || !canUndo} onClick={() => pressBoard('button-undo')} className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>{getIcon('undo', { size: 13 }) || null} Undo</button>
+            </Tooltip>
+            <Tooltip text="Redo what you just undid (Ctrl+Shift+Z). You can redo as many steps as you undid, until you make a new change.">
+              <button type="button" disabled={!lib || !canRedo} onClick={() => pressBoard('button-redo')} className="px-3 py-1.5 text-xs border-l transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>{getIcon('redo', { size: 13 }) || null} Redo</button>
+            </Tooltip>
+          </div>
+          <div role="group" aria-label="When stretching" className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} data-tour="drawings-stretch">
+            {[
+              [true, 'Keep shape', 'When you drag a corner to stretch what is selected (one thing, or everything with Select all), it grows or shrinks evenly so nothing is squashed or bent out of shape. Text and arrows scale with it. Hold Shift while dragging to stretch freely for that one drag.'],
+              [false, 'Free', 'When you drag a corner to stretch what is selected, it can be made wider or taller on its own, so the shape can change. Hold Shift while dragging to keep the shape for that one drag.'],
+            ].map(([val, label, tip]) => (
+              <Tooltip key={label} text={tip}>
+                <button
+                  type="button" aria-pressed={keepShape === val} disabled={!lib}
+                  onClick={() => chooseKeepShape(val)}
+                  className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                  style={{ background: keepShape === val ? 'var(--color-primary)' : 'var(--color-surface)', color: keepShape === val ? '#fff' : 'var(--color-text)' }}
+                >{label}</button>
+              </Tooltip>
+            ))}
+          </div>
+          <Tooltip text="Select everything on the drawing (boxes, arrows and text), ready to stretch or move together. Ctrl+A does the same.">
+            <button type="button" disabled={!lib} onClick={selectAll} className={BTN} style={BTN_STYLE}>Select all</button>
+          </Tooltip>
+    </div>
+    );
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -636,32 +674,6 @@ export default function DrawingEditor({ id, onSavedChange }) {
             </Tooltip>
           ))}
         </div>
-        <div className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} role="group" aria-label="Undo and redo" data-tour="drawings-undo">
-          <Tooltip text="Undo the last change on the drawing (Ctrl+Z). You can undo as many times as you need, back through everything you did since you opened it. Drawing, moving, stretching, switching the look and Draw it for me are each a step.">
-            <button type="button" disabled={!lib || !canUndo} onClick={() => pressBoard('button-undo')} className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>{getIcon('undo', { size: 13 }) || null} Undo</button>
-          </Tooltip>
-          <Tooltip text="Redo what you just undid (Ctrl+Shift+Z). You can redo as many steps as you undid, until you make a new change.">
-            <button type="button" disabled={!lib || !canRedo} onClick={() => pressBoard('button-redo')} className="px-3 py-1.5 text-xs border-l transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>{getIcon('redo', { size: 13 }) || null} Redo</button>
-          </Tooltip>
-        </div>
-        <div role="group" aria-label="When stretching" className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} data-tour="drawings-stretch">
-          {[
-            [true, 'Keep shape', 'When you drag a corner to stretch what is selected (one thing, or everything with Select all), it grows or shrinks evenly so nothing is squashed or bent out of shape. Text and arrows scale with it. Hold Shift while dragging to stretch freely for that one drag.'],
-            [false, 'Free', 'When you drag a corner to stretch what is selected, it can be made wider or taller on its own, so the shape can change. Hold Shift while dragging to keep the shape for that one drag.'],
-          ].map(([val, label, tip]) => (
-            <Tooltip key={label} text={tip}>
-              <button
-                type="button" aria-pressed={keepShape === val} disabled={!lib}
-                onClick={() => chooseKeepShape(val)}
-                className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
-                style={{ background: keepShape === val ? 'var(--color-primary)' : 'var(--color-surface)', color: keepShape === val ? '#fff' : 'var(--color-text)' }}
-              >{label}</button>
-            </Tooltip>
-          ))}
-        </div>
-        <Tooltip text="Select everything on the drawing (boxes, arrows and text), ready to stretch or move together. Ctrl+A does the same.">
-          <button type="button" disabled={!lib} onClick={selectAll} className={BTN} style={BTN_STYLE}>Select all</button>
-        </Tooltip>
         <Tooltip text="Zoom so the whole drawing fills the screen, bigger or smaller as needed.">
           <button type="button" disabled={!lib} onClick={fitToScreen} className={BTN} style={BTN_STYLE}>Fit to screen</button>
         </Tooltip>
@@ -831,6 +843,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
             onChange={onChange}
             langCode="en"
             handleKeyboardGlobally
+            renderTopRightUI={renderBoardTools}
             UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: false, toggleTheme: true } }}
           >
             {lib.TTDDialogTrigger && <lib.TTDDialogTrigger icon={getIcon('sparkles', { size: 16 })}>Draw it for me</lib.TTDDialogTrigger>}

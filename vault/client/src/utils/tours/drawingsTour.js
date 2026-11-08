@@ -90,7 +90,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-board',
     title: 'The drawing board',
-    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo go back and forward as many steps as you need. Numbers puts a small number on each shape so you can say add a step after 7, Select all and Fit to screen help with resizing, Keep shape or Free decides whether stretching keeps proportions, Snap to grid lines boxes up, and a selected arrow can take an arrowhead at both ends under Arrowheads in the left panel.',
+    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo (top right of the board) go back and forward as many steps as you need. Numbers puts a small number on each shape so you can say add a step after 7, Select all (top right of the board) and Fit to screen help with resizing, Keep shape or Free (also top right) decides whether stretching keeps proportions, Snap to grid lines boxes up, and a selected arrow can take an arrowhead at both ends under Arrowheads in the left panel.',
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
