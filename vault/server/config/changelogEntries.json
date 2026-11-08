@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "94b8cdb3",
+   "fullHash": "94b8cdb324e97843590b38e3a3ce08c0255e3b83",
+   "committedAt": "2026-11-08T10:42:03+10:00",
+   "author": "mrb",
+   "subject": "Drawings: In a note button on each card in the list",
+   "filesChanged": 6,
+   "insertions": 55,
+   "deletions": 4,
+   "area": "Drawings",
+   "goal": "Show on the list of drawings which drawings are in notes, as the drawing editor already does, so the way back to a note does not need the drawing to be opened first.",
+   "whatChanged": "Each card in Your drawings now shows an In a note button (In N notes when there are several) when notes link back to that drawing; a drawing in no note shows nothing. One note goes straight to it; several open a short list of titles under the card's buttons (fetched when clicked). GET /api/drawings now adds noteCount to every row, worked out in ONE query over the person's notes that mention \"/drawings/\" (regexp_matches on the \"](/drawings/N)\" links), not one search per drawing; a note that links twice counts once, and another person's notes never count. Guide wording, help text and docs updated; tests cover the counts (including 7 versus 70 and another person).",
+   "filesImpacted": [
+    "server/services/drawings.js (noteCounts, list adds noteCount)",
+    "client/src/pages/drawings/DrawingsList.jsx (the button and list on each card)",
+    "server/services/drawings.test.js (counts)",
+    "client/src/pages/drawings/drawingsTools.mjs, server/services/drawingsTutor.js (wording)",
+    "docs/drawings.md"
+   ],
+   "benefit": "From the list you can see at a glance which drawings are in notes and jump to the note with one click.",
+   "concerns": "The note count is found from the link text in each note, so a note whose link was edited out, or that was deleted, stops counting; a note that merely holds the same Markdown link counts. One pattern-match query runs over the person's notes every time the list opens: fine at normal note counts, not measured on a very large notes table. Tried on screen locally with drawings in no note, one note and two notes (the one-note and two-note paths both opened the right note); not tried on Railway. No package change, so a normal fast deploy."
+  },
+  {
    "commit": "cfb7bbd4",
    "fullHash": "cfb7bbd41231b5e9628614ace8bf4ebba9961844",
    "committedAt": "2026-11-08T10:26:56+10:00",
