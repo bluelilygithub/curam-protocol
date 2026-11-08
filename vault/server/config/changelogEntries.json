@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d8478abe",
+   "fullHash": "d8478abe78e9360873add3763c803d7d4bd7cb06",
+   "committedAt": "2026-11-09T09:39:32+10:00",
+   "author": "mrb",
+   "subject": "Plans: new plan page layout (header, dates row, steps table, dialogs)",
+   "filesChanged": 5,
+   "insertions": 381,
+   "deletions": 200,
+   "area": "Plans",
+   "goal": "Bring an opened plan in line with the new design: a calm page you read first and edit through dialogs, instead of a wall of inline fields.",
+   "whatChanged": "PlanEditor.jsx is laid out as a header (Client plan label, status pill, large name, client and project links, Plan settings button), a read-only row (Starts, Finish by, Working week, Progress) with the green or amber fit banner, a Steps table (numbered rows: name and what it waits on, start with the numeric date, length and end, a status select, a pencil and a red trash icon; Add step and Send all to Tasks above), the Timeline with its own Week / Month / Quarter buttons, back, fit and forward arrows, a legend and bar colours drawn from the theme, then Plan notes and Back to client. The inline fields moved into three dialogs: Plan settings (name, start, finish by, working week, status, client and project), Add step (stays open to add several) and Edit step (name, pinned start, days, milestone, waits on, Add a sub-step, Send to Tasks). Every save, dependency, milestone, sub-step, send and delete call is the same as before. The shared TaskTimeline.jsx gained optional props (bare, zoom, scrollRef, statusStyle, labelHeader); Tasks passes none and is unchanged. The Plans tour step, plansTutor.js guide text and docs/plans.md describe the new layout.",
+   "filesImpacted": [
+    "client/src/pages/plans/PlanEditor.jsx",
+    "client/src/components/tasks/TaskTimeline.jsx",
+    "client/src/utils/tours/plansTour.js",
+    "server/services/plansTutor.js",
+    "docs/plans.md"
+   ],
+   "benefit": "A plan reads at a glance (dates, progress, does it fit) and the editing controls stay out of the way until needed.",
+   "concerns": "Per-step milestone, sub-step and Send to Tasks buttons moved from the row into the Edit step box, so they take one more click. Checked on screen with one 3-step test plan (page, Edit step and Plan settings dialogs, banner, legend); not checked: dragging bars, the timeline fit and arrow buttons, adding a step through the new dialog, a group with sub-steps, phone width, dark themes. Tasks was not re-checked after the TaskTimeline edit beyond the build (the new props default to the old behaviour). The design mockup's milestone date differs from the app's scheduling rule (a milestone lands on the day its blockers end); the rule was not changed. No automated test covers the page."
+  },
+  {
    "commit": "2c4b81f6",
    "fullHash": "2c4b81f6f8301508ae7c7525a020edb5c5ea4a39",
    "committedAt": "2026-11-09T08:43:37+10:00",
