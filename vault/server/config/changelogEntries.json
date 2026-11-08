@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "deee2dca",
+   "fullHash": "deee2dcae468118a56abd879dab0c22ae1fd2c56",
+   "committedAt": "2026-11-08T13:57:05+10:00",
+   "author": "mrb",
+   "subject": "Drawings: move Undo/Redo, Keep shape/Free and Select all into the board",
+   "filesChanged": 4,
+   "insertions": 43,
+   "deletions": 29,
+   "area": "Drawings",
+   "goal": "Declutter the bar above the drawing board by putting the board's own controls inside the drawing area.",
+   "whatChanged": "Undo / Redo, Keep shape / Free and Select all moved from the bar above the board into the board's top right, beside the Library button, using Excalidraw's renderTopRightUI (renderBoardTools in DrawingEditor.jsx). The bar above keeps Fit to screen, Snap to grid and Numbers. The board defines its own --color-primary and related variables inside itself, so Vault's values are read from the page root and set on the wrapper to keep the buttons in Vault's colours. Guide chat, tour and docs/drawings.md say where the controls now are.",
+   "filesImpacted": [
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/services/drawingsTutor.js",
+    "docs/drawings.md"
+   ],
+   "benefit": "A shorter top bar, with the editing controls next to the tools they act on.",
+   "concerns": "Checked on screen at one screen width only. The wrapper has a maximum width and wraps, but on a narrow window the controls could crowd the board's own tool row. A stretch drag was not re-tested after the move (Keep shape state and Undo/Redo/Select all were). The Vault colours are read when the controls render, so a theme change shows after the next board redraw."
+  },
+  {
    "commit": "1f5fefe8",
    "fullHash": "1f5fefe87cdb6f1f6dea9510180b49f19bef6b36",
    "committedAt": "2026-11-08T13:43:10+10:00",
