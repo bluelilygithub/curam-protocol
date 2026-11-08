@@ -54,7 +54,7 @@ export default function ProjectClientControl({ project, onChanged }) {
         </>
       ) : (
         <>
-          <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Client for this project" className="px-3 py-2 rounded-xl border text-sm outline-none" style={field}>
+          <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Client for this workspace" className="px-3 py-2 rounded-xl border text-sm outline-none" style={field}>
             <option value="">No client</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` — ${c.company}` : ''}</option>)}
           </select>

@@ -4,7 +4,7 @@ import { APP_NAV_GROUPS } from '../config/appNavigation.js';
 
 export const DEFAULT_TILES = [
   { id: 'tasks',    label: 'Tasks',        enabled: true },
-  { id: 'projects', label: 'Projects',     enabled: true },
+  { id: 'projects', label: 'Workspaces',     enabled: true },
   { id: 'finance',  label: 'Finance',      enabled: true },
   { id: 'shares',   label: 'Shares',       enabled: true },
   { id: 'history',  label: 'Chat History', enabled: true },
@@ -153,7 +153,7 @@ export const FEATURE_BY_TILE_ID = {
 };
 
 export const DEFAULT_NAV_ITEMS = [
-  { id: 'projects',  label: 'Projects',        path: '/',            enabled: true },
+  { id: 'projects',  label: 'Workspaces',        path: '/',            enabled: true },
   { id: 'tasks',     label: 'Tasks',           path: '/tasks',       enabled: true },
   { id: 'notes',     label: 'Notes',           path: '/notes',       enabled: true },
   { id: 'goals',     label: 'Goals',           path: '/goals',       enabled: true },

@@ -60,7 +60,7 @@ export default function TaskFilters({
       </select>
 
       <select value={filterProject} onChange={e => onSetFilterProject(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-        <option value="">All projects</option>
+        <option value="">All workspaces</option>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
 

@@ -67,7 +67,7 @@ export default function NewChatModal({
             <div>
               <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Quick chat</div>
               <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                No project files or brief — global memory and persona still apply.
+                No workspace files — global memory and persona still apply.
               </div>
             </div>
           </label>
@@ -88,9 +88,9 @@ export default function NewChatModal({
               className="mt-1"
             />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>In a project</div>
+              <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>In a workspace</div>
               <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                Uses brief, pinned files, and project context.
+                Uses pinned files and workspace context.
               </div>
               {mode === 'project' && projects.length > 0 && (
                 <select
@@ -105,7 +105,7 @@ export default function NewChatModal({
                 </select>
               )}
               {projects.length === 0 && (
-                <p className="text-xs mt-1 italic" style={{ color: 'var(--color-muted)' }}>Create a project first.</p>
+                <p className="text-xs mt-1 italic" style={{ color: 'var(--color-muted)' }}>Create a workspace first.</p>
               )}
             </div>
           </label>

@@ -75,7 +75,7 @@ export default function LinkedResearch({ clientId = null, projectId = null, show
         <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Research</h3>
         <button type="button" onClick={() => navigate('/topic-research')} className="text-xs hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>Open Topic Research</button>
       </div>
-      <ResearchList topics={topics} noun={clientId ? 'client' : 'project'} />
+      <ResearchList topics={topics} noun={clientId ? 'client' : 'workspace'} />
     </section>
   );
 }

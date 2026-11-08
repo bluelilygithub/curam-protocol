@@ -13,7 +13,7 @@ export const DATE_PRESETS = [
 
 export const GROUP_MODES = [
   { id: 'date', label: 'Date' },
-  { id: 'project', label: 'Project' },
+  { id: 'project', label: 'Workspace' },
   { id: 'client', label: 'Client' },
   { id: 'tag', label: 'Tag' },
 ];
@@ -75,7 +75,7 @@ export function dateBucket(value, now = new Date()) {
  *   Notes whose reminder is due come first, in one "Reminders due" section; then pinned notes (pinned_at set) in one "Pinned" section;
  *   both whatever the mode, and a note shows in only one section there.
  *   mode 'date'    -> by `field` (updated_at / created_at) as Today, Yesterday, ... then months
- *   mode 'project' -> by project name, busiest-recent first, "No project" last
+ *   mode 'project' -> by project name, busiest-recent first, "No workspace" last
  *   mode 'client'  -> by client name, same, "No client" last
  *   mode 'tag'     -> by tag; a note with several tags is listed under each of them, one with none under "Untagged" (last)
  * Returns [{ key, label, notes }].
@@ -103,7 +103,7 @@ export function groupNotes(notes, { mode = 'date', field = 'updated', now = new 
       const name = mode === 'project' ? note.project_name : note.client_name;
       const id = mode === 'project' ? note.project_id : note.client_id;
       if (name && id != null) put(`${mode}:${id}`, name, note);
-      else put(`${mode}:none`, mode === 'project' ? 'No project' : 'No client', note, { last: true });
+      else put(`${mode}:none`, mode === 'project' ? 'No workspace' : 'No client', note, { last: true });
     } else {
       const b = dateBucket(note[dateKey], now);
       put(b.key, b.label, note, { order: b.order });

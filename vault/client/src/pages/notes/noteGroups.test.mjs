@@ -60,7 +60,7 @@ const owned = [
   { id: 4, project_id: 3, project_name: 'Launch', client_id: null, client_name: null },
 ];
 assert.deepStrictEqual(groupNotes(owned, { mode: 'project' }).map((g) => [g.label, g.notes.map((n) => n.id)]), [
-  ['Launch', [2, 4]], ['Admin', [3]], ['No project', [1]],
+  ['Launch', [2, 4]], ['Admin', [3]], ['No workspace', [1]],
 ]);
 assert.deepStrictEqual(groupNotes(owned, { mode: 'client' }).map((g) => [g.label, g.notes.map((n) => n.id)]), [
   ['Acme', [1, 3]], ['No client', [2, 4]],

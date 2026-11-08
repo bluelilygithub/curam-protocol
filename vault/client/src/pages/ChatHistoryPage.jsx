@@ -273,7 +273,7 @@ export default function ChatHistoryPage() {
           style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
         >
           <span>
-            Showing chats for <strong>{projectFilterName || `project #${projectFilterId}`}</strong>
+            Showing chats for <strong>{projectFilterName || `workspace #${projectFilterId}`}</strong>
           </span>
           <button
             type="button"
@@ -469,7 +469,7 @@ export default function ChatHistoryPage() {
                         onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
                         className="px-2 py-1 rounded-md border text-xs hover:opacity-70 transition-opacity"
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-                        title="Move quick chat to a project"
+                        title="Move quick chat to a workspace"
                       >
                         Move
                       </button>
@@ -495,7 +495,7 @@ export default function ChatHistoryPage() {
         <>
           <div className="rounded-2xl border px-4 py-3 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
             Chats you delete now stay in the recycle bin for 30 days, then are removed for good. They are listed first, below; you will find them in Settings, Recycle bin too.
-            Deleted chats are hidden from projects, folders, search, and chat context.
+            Deleted chats are hidden from workspaces, folders, search, and chat context.
           </div>
 
           <RecycleBinPanel
@@ -724,7 +724,7 @@ export default function ChatHistoryPage() {
         panelClassName="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6"
         panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
-            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to workspace</h3>
             <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
               Move "{formatSessionLabel(moveSessionTarget)}" into a project.
             </p>

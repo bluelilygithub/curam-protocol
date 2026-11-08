@@ -707,7 +707,7 @@ function ProjectList() {
           onClick={(e) => { e.stopPropagation(); setArchiveTarget(project); }}
           className="w-6 h-6 flex items-center justify-center rounded-lg"
           style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-          title="Archive project"
+          title="Archive workspace"
         >
           {getIcon('archive', { size: 12 })}
         </button>
@@ -716,7 +716,7 @@ function ProjectList() {
           onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
           className="w-6 h-6 flex items-center justify-center rounded-lg"
           style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-          title="Delete project"
+          title="Delete workspace"
         >
           {getIcon('trash', { size: 12 })}
         </button>
@@ -742,15 +742,15 @@ function ProjectList() {
               style={{ color: 'var(--color-muted)' }}
             >
               {getIcon('chevron-left', { size: 14 })}
-              Back to projects
+              Back to workspaces
             </button>
           </div>
 
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Archived Projects</h1>
+              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Archived Workspaces</h1>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                Archived projects are hidden from your workspace. All data is preserved.
+                Archived workspaces are hidden from the list. All data is preserved.
               </p>
             </div>
           </div>
@@ -759,7 +759,7 @@ function ProjectList() {
             <p className="text-sm text-center py-12" style={{ color: 'var(--color-muted)' }}>Loading…</p>
           ) : archivedProjects.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No archived projects.</p>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No archived workspaces.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -846,7 +846,7 @@ function ProjectList() {
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         >
           <p className="text-sm mb-1" style={{ color: 'var(--color-text)' }}>No conversations yet</p>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Start a quick chat or open a project to begin.</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Start a quick chat or open a workspace to begin.</p>
         </div>
       ) : (
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
@@ -920,13 +920,13 @@ function ProjectList() {
       >
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
-              This will permanently delete the project
+              This will permanently delete the workspace
               {deleteTarget.chatCount > 0 && `, all ${deleteTarget.chatCount} chat session${deleteTarget.chatCount === 1 ? '' : 's'}`}
               , all uploaded files, and all messages. This cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
-              <button onClick={handleConfirmDelete} className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity">Delete project</button>
+              <button onClick={handleConfirmDelete} className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity">Delete workspace</button>
             </div>
           </Dialog>
       )}
@@ -945,7 +945,7 @@ function ProjectList() {
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setArchiveTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
-              <button onClick={handleConfirmArchive} className="px-4 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Archive project</button>
+              <button onClick={handleConfirmArchive} className="px-4 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Archive workspace</button>
             </div>
           </Dialog>
       )}
@@ -979,7 +979,7 @@ function ProjectList() {
                 Welcome to Vault
               </h1>
               <p className="text-sm mb-8 text-center max-w-sm" style={{ color: 'var(--color-muted)' }}>
-                Start with a quick chat, or create a project when you want files and a brief to follow every conversation.
+                Start with a quick chat, or create a workspace when you want files to follow every conversation.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
@@ -998,7 +998,7 @@ function ProjectList() {
                   style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
                   {getIcon('plus', { size: 14 })}
-                  New project
+                  New workspace
                 </button>
               </div>
             </div>
@@ -1031,7 +1031,7 @@ function ProjectList() {
             <TasksWidget />
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Projects</h2>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Workspaces</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                   Optional context — brief, files, and pinned URLs for focused work.
                 </p>
@@ -1073,7 +1073,7 @@ function ProjectList() {
                   className="text-xs hover:opacity-70 transition-opacity"
                   style={{ color: 'var(--color-muted)' }}
                 >
-                  View archived projects ({archivedProjects.length})
+                  View archived workspaces ({archivedProjects.length})
                 </button>
               </div>
             )}

@@ -14,7 +14,7 @@ export const ACTIONS = [
 export const SECTION_ORDER = ['recent', 'action', 'app', 'setting', 'note', 'client', 'invoice', 'project', 'task', 'message', 'file'];
 export const SECTION_LABEL = {
   recent: 'Recent', action: 'Actions', app: 'Go to', setting: 'Settings', note: 'Notes', client: 'Clients (CRM)',
-  invoice: 'Invoices and quotes', project: 'Projects', task: 'Tasks', message: 'Chats', file: 'Files',
+  invoice: 'Invoices and quotes', project: 'Workspaces', task: 'Tasks', message: 'Chats', file: 'Files',
 };
 
 export function actionItems() {

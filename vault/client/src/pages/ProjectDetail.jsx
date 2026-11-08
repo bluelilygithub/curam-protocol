@@ -22,14 +22,8 @@ const EMOTION_COLOURS = {
 };
 
 const FIELDS = [
-  { key: 'name', label: 'Project Name', placeholder: 'My Project', required: true },
-  { key: 'goal', label: 'Goal', placeholder: 'What are you trying to achieve?', multiline: true },
-  { key: 'problem', label: 'Problem', placeholder: 'What problem does this solve?', multiline: true },
-  { key: 'audience', label: 'Target Audience', placeholder: 'Who is this for?' },
+  { key: 'name', label: 'Workspace Name', placeholder: 'My Workspace', required: true },
   { key: 'techStack', label: 'Tech Stack', placeholder: 'React, Node.js, PostgreSQL…' },
-  { key: 'constraints', label: 'Constraints', placeholder: 'Budget, time, technical limits…', multiline: true },
-  { key: 'successCriteria', label: 'Success Criteria', placeholder: 'How will you know this succeeded?', multiline: true },
-  { key: 'tone', label: 'Tone', placeholder: 'Professional, casual, technical…' },
   { key: 'notes', label: 'Notes', placeholder: 'Any other context…', multiline: true },
   { key: 'startDate', label: 'Start date', type: 'date' },
   { key: 'targetEndDate', label: 'Target end date', type: 'date' },
@@ -276,7 +270,7 @@ function ProjectDetail() {
             onClick={() => downloadProjectMd(project)}
             className="w-8 h-8 flex items-center justify-center rounded-lg border hover:opacity-60 transition-opacity"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            title="Export project as Markdown"
+            title="Export workspace as Markdown"
           >
             {getIcon('file-down', { size: 14 })}
           </button>
@@ -395,7 +389,7 @@ function ProjectDetail() {
 
                 {hubStats.chats === 0 && hubStats.tasks === 0 && hubStats.notes === 0 && hubStats.files === 0 && (
                   <p className="text-sm text-center py-8 rounded-xl border" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}>
-                    Nothing linked to this project yet. Start a chat, add a task, or upload a file from the Brief tab.
+                    Nothing linked to this workspace yet. Start a chat, add a task, or upload a file from the Brief & settings tab.
                   </p>
                 )}
               </>
@@ -407,7 +401,7 @@ function ProjectDetail() {
           <div className="mb-6 p-4 rounded-xl border" style={{ borderColor: '#fca5a5', background: '#fff1f2' }}>
             <p className="text-sm font-semibold text-red-700 mb-1">Delete "{project.name}"?</p>
             <p className="text-xs text-red-600 mb-3">
-              This will permanently delete the project, all associated chat sessions, all uploaded files, and all messages. This cannot be undone.
+              This will permanently delete the workspace, all associated chat sessions, all uploaded files, and all messages. This cannot be undone.
             </p>
             <div className="flex gap-2">
               <button onClick={handleDelete} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500">

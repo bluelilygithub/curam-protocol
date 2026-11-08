@@ -24,7 +24,7 @@ export default function ProjectsTile() {
       >
         <div className="flex items-center gap-2">
           {getIcon('folder', { size: 16, style: { color: 'var(--color-text)' } })}
-          <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Projects</span>
+          <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Workspaces</span>
           {projects.length > 0 && (
             <span
               className="text-xs px-1.5 py-0.5 rounded-full"
@@ -41,7 +41,7 @@ export default function ProjectsTile() {
           <div className="text-sm px-1 py-1" style={{ color: 'var(--color-muted)' }}>Loading...</div>
         )}
         {!loading && projects.length === 0 && (
-          <div className="text-sm px-1 py-1" style={{ color: 'var(--color-muted)' }}>No projects yet</div>
+          <div className="text-sm px-1 py-1" style={{ color: 'var(--color-muted)' }}>No workspaces yet</div>
         )}
         <div className="grid grid-cols-2 gap-2">
           {projects.map(p => (

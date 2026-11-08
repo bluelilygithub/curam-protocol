@@ -1143,7 +1143,7 @@ export default function NotesPage() {
                             <input
                               autoFocus value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter') handleCreateProjectAndChat(); if (e.key === 'Escape') setCreatingProject(false); }}
-                              placeholder="Project name…" className="flex-1 min-w-0 px-2 py-1 rounded border outline-none"
+                              placeholder="Workspace name…" className="flex-1 min-w-0 px-2 py-1 rounded border outline-none"
                               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)', fontSize: 16 }}
                             />
                             <button onClick={handleCreateProjectAndChat} disabled={!newProjectName.trim()} className="text-xs px-2 py-1.5 rounded hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>Go</button>
@@ -1195,8 +1195,8 @@ export default function NotesPage() {
           <div className="px-4 pb-2 border-b flex-shrink-0 space-y-2" style={border} data-tour="notes-filing">
             <div className="flex items-center gap-2 flex-wrap">
             <Tooltip text={NOTE_TIPS.projectPick}>
-              <select value={selected.project_id || ''} onChange={handleProjectChange} aria-label="Project" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
-                <option value="">No project</option>
+              <select value={selected.project_id || ''} onChange={handleProjectChange} aria-label="Workspace" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
+                <option value="">No workspace</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </Tooltip>

@@ -90,7 +90,7 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
             disabled={uploading}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity"
             style={{ color: 'var(--color-primary)' }}
-            title="Upload file to project"
+            title="Upload file to workspace"
           >
             {uploading ? getIcon('loader', { size: 14 }) : getIcon('upload', { size: 14 })}
           </button>

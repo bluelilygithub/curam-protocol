@@ -189,7 +189,7 @@ export default function ChatListPanel({ open, onClose, onNavigate }) {
           </div>
           <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
             {segBtn('date', 'Date', groupMode === 'date')}
-            {segBtn('project', 'Project', groupMode === 'project')}
+            {segBtn('project', 'Workspace', groupMode === 'project')}
           </div>
         </div>
 

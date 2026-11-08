@@ -126,7 +126,7 @@ function ChatFilePicker({ projectId, onUpload, onAttachExisting, onClose, attach
 
       {projectFiles.length === 0 && (
         <p className="px-3 py-3 text-xs text-center" style={{ color: 'var(--color-muted)' }}>
-          No files in this project yet
+          No files in this workspace yet
         </p>
       )}
     </div>

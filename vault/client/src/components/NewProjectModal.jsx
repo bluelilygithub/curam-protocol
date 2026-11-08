@@ -4,7 +4,6 @@ import Dialog from './Dialog';
 
 function NewProjectModal({ onClose, onCreate }) {
   const [name, setName] = useState('');
-  const [goal, setGoal] = useState('');
   const [clientId, setClientId] = useState('');
   const [clients, setClients] = useState([]);
   const [creating, setCreating] = useState(false);
@@ -22,7 +21,6 @@ function NewProjectModal({ onClose, onCreate }) {
     try {
       await onCreate({
         name: name.trim(),
-        ...(goal.trim() ? { goal: goal.trim() } : {}),
         clientId: clientId ? Number(clientId) : null,
       });
     } finally {
@@ -39,40 +37,27 @@ function NewProjectModal({ onClose, onCreate }) {
         overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
         role="dialog"
         aria-modal="true"
-        aria-label="New project"
+        aria-label="New workspace"
         panelClassName="w-full max-w-md rounded-2xl shadow-2xl"
         panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '90vh', overflowY: 'auto' }}
       >
         <div className="px-6 pt-6 pb-4">
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>New Project</h2>
+          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>New Workspace</h2>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Add files, a brief and pinned links afterwards from the project page.
+            Add files and pinned links afterwards from the workspace page.
           </p>
         </div>
 
         <form onSubmit={handleCreate}>
           <div className="px-6 space-y-5 pb-5">
             <div>
-              <label className={labelClass} style={{ color: 'var(--color-muted)' }}>Project Name</label>
+              <label className={labelClass} style={{ color: 'var(--color-muted)' }}>Workspace Name</label>
               <input
                 ref={nameRef}
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="My Project"
+                placeholder="My Workspace"
                 required
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={fieldStyle}
-              />
-            </div>
-
-            <div>
-              <label className={labelClass} style={{ color: 'var(--color-muted)' }}>
-                Goal <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
-              </label>
-              <input
-                value={goal}
-                onChange={e => setGoal(e.target.value)}
-                placeholder="What are you trying to get done?"
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                 style={fieldStyle}
               />
@@ -114,7 +99,7 @@ function NewProjectModal({ onClose, onCreate }) {
               className="px-5 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}
             >
-              {creating ? 'Creating…' : 'Create Project'}
+              {creating ? 'Creating…' : 'Create Workspace'}
             </button>
           </div>
         </form>

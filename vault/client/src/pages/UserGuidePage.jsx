@@ -6,7 +6,7 @@ const SECTIONS = [
   { id: 'overview',        label: 'Overview' },
   { id: 'navigation',      label: 'Navigation' },
   { id: 'getting-started', label: 'Getting Started' },
-  { id: 'projects',        label: 'Projects' },
+  { id: 'projects',        label: 'Workspaces' },
   { id: 'chat',            label: 'Chat' },
   { id: 'general-chat',    label: 'Quick chat' },
   { id: 'history',         label: 'Chat History' },

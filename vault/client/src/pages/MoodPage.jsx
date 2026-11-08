@@ -18,7 +18,7 @@ const PERIODS = [
 ];
 
 const ENTITY_TYPE_FILTERS = [
-  { id: 'project', label: 'Projects', types: ['project'] },
+  { id: 'project', label: 'Workspaces', types: ['project'] },
   { id: 'task',    label: 'Tasks',    types: ['task'] },
   { id: 'goal',    label: 'Goals',    types: ['goal', 'key_result'] },
   { id: 'note',    label: 'Notes',    types: ['note'] },
@@ -367,14 +367,14 @@ export default function MoodPage() {
             <div className="space-y-3">
               {projects.length > 0 && (
                 <div>
-                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Project</label>
+                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Workspace</label>
                   <select
                     value={filterProject}
                     onChange={e => setFilterProject(e.target.value)}
                     className="w-full text-sm px-3 py-1.5 rounded-lg border outline-none"
                     style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
-                    <option value="">All projects</option>
+                    <option value="">All workspaces</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
@@ -422,7 +422,7 @@ export default function MoodPage() {
               <div className="rounded-2xl border p-8 text-center" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                 <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
                   {filterProject
-                    ? 'No feelings logged for this project yet. Use the dot buttons on tasks and notes within this project, or the feeling button in the project header.'
+                    ? 'No feelings logged for this workspace yet. Use the dot buttons on tasks and notes within this project, or the feeling button in the project header.'
                     : 'No check-ins in this period. Use the dot buttons on tasks, notes, and goals to log feelings, or click "Quick check-in" above.'}
                 </p>
               </div>
@@ -436,7 +436,7 @@ export default function MoodPage() {
                   {summary.emotions.length === 0 ? (
                     <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>
                       {filterProject
-                        ? 'No feelings logged for this project yet.'
+                        ? 'No feelings logged for this workspace yet.'
                         : 'No check-ins in this period.'}
                     </p>
                   ) : (
@@ -590,7 +590,7 @@ export default function MoodPage() {
                 {/* Project breakdown */}
                 {!filterProject && summary.projectBreakdown && summary.projectBreakdown.length > 0 && (
                   <div className="rounded-2xl border p-5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                    <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Most active projects</h2>
+                    <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Most active workspaces</h2>
                     <div className="space-y-3">
                       {summary.projectBreakdown.map(p => (
                         <div key={p.projectId} className="flex items-center gap-3">

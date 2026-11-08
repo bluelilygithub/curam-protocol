@@ -284,14 +284,14 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
       {/* Projects header */}
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
-          Projects
+          Workspaces
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowFolderInput(v => !v)}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-muted)' }}
-            data-tip="New collection (groups projects only)"
+            data-tip="New collection (groups workspaces only)"
           >
             {getIcon('folder-plus', { size: 13 })}
           </button>
@@ -299,7 +299,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
             onClick={() => setShowModal(true)}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-primary)' }}
-            data-tip="New project"
+            data-tip="New workspace"
           >
             {getIcon('plus', { size: 14 })}
           </button>
@@ -330,7 +330,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
       >
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Archive "{archiveTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
-              The project will be hidden from the sidebar. You can restore it from Archived Projects on the home page.
+              The workspace will be hidden from the sidebar. You can restore it from Archived Workspaces on the home page.
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setArchiveTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
@@ -343,7 +343,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                 className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity"
                 style={{ background: 'var(--color-primary)' }}
               >
-                Archive project
+                Archive workspace
               </button>
             </div>
           </Dialog>
@@ -410,7 +410,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
       >
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
-              This will permanently delete the project
+              This will permanently delete the workspace
               {deleteTarget.chatCount > 0 && `, all ${deleteTarget.chatCount} chat session${Number(deleteTarget.chatCount) === 1 ? '' : 's'}`}
               , all uploaded files, and all messages. This cannot be undone.
             </p>
@@ -424,7 +424,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                 }}
                 className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity"
               >
-                Delete project
+                Delete workspace
               </button>
             </div>
           </Dialog>
@@ -439,7 +439,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
       >
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete collection "{deleteFolderTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
-              Projects inside stay in your workspace — they just leave this collection. The collection itself is removed.
+              Workspaces inside stay available — they just leave this collection. The collection itself is removed.
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDeleteFolderTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
@@ -535,10 +535,10 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                       <div className="flex-shrink-0">
                         <OverflowMenu
                           variant="icon"
-                          title="Project actions"
+                          title="Workspace actions"
                           actions={[
                             ...(isEmpty ? [{
-                              label: 'Delete empty project',
+                              label: 'Delete empty workspace',
                               icon: 'trash',
                               danger: true,
                               onClick: () => setDeleteTarget(project),
@@ -618,7 +618,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                               className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70 transition-opacity"
                               style={{ color: '#ef4444' }}
                             >
-                              Delete project
+                              Delete workspace
                             </button>
                           </div>
                         )}
@@ -753,7 +753,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                       ? unfoldered.map(p => renderProject(p, true))
                       : (
                         <p className="text-xs py-2" style={{ color: 'var(--color-muted)', paddingLeft: '1rem' }}>
-                          No unassigned projects — drag a project here to remove it from a collection.
+                          No unassigned workspaces — drag a workspace here to remove it from a collection.
                         </p>
                       )
                   )}
@@ -762,7 +762,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
 
               {projects.length === 0 && folders.length === 0 && (
                 <p className="px-3 py-6 text-xs text-center" style={{ color: 'var(--color-muted)' }}>
-                  No projects yet
+                  No workspaces yet
                 </p>
               )}
             </>
@@ -869,7 +869,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
           style={{ color: 'var(--color-muted)' }}
         >
           {getIcon('archive', { size: 14 })}
-          Archived Projects
+          Archived Workspaces
         </button>
       </div>
     </div>

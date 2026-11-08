@@ -1223,7 +1223,7 @@ function ChatPage({ general = false }) {
               color: showFilesPanel ? 'var(--color-primary)' : 'var(--color-muted)',
               background: showFilesPanel ? 'var(--color-primary)15' : 'var(--color-surface)',
             }}
-            title="Project files"
+            title="Workspace files"
           >
             {getIcon('files', { size: 13 })}
             <span className="hidden sm:inline">Files</span>
@@ -1378,7 +1378,7 @@ function ChatPage({ general = false }) {
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
                   >
                     {getIcon('smile', { size: 12 })}
-                    {projectDominant ? `Feeling: ${projectDominant.coreEmotion}` : 'Log project feeling'}
+                    {projectDominant ? `Feeling: ${projectDominant.coreEmotion}` : 'Log workspace feeling'}
                   </button>
                 )}
 
@@ -1394,7 +1394,7 @@ function ChatPage({ general = false }) {
           <CheckinModal
             entityType="project"
             entityId={projectId}
-            entityTitle={project?.name || 'Project'}
+            entityTitle={project?.name || 'Workspace'}
             onClose={() => setShowFeelingModal(false)}
             onSave={() => {
               setShowFeelingModal(false);
@@ -1542,7 +1542,7 @@ function ChatPage({ general = false }) {
                         key={`pin-${f.id}`}
                         className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                        title="Pinned — available in all chats in this project"
+                        title="Pinned — available in all chats in this workspace"
                       >
                         <span aria-hidden="true">📌</span><span className="sr-only">Pinned file: </span>{f.name}
                       </span>
@@ -1599,7 +1599,7 @@ function ChatPage({ general = false }) {
                   {project ? `Chat with ${project.name}` : 'Quick chat'}
                 </p>
                 <p className="text-sm max-w-xs" style={{ color: 'var(--color-muted)' }}>
-                  {project ? 'Uses your project brief, files, and pinned URLs.' : 'Ask anything — no project files or brief. Global memory still applies.'}
+                  {project ? 'Uses your workspace files and pinned URLs.' : 'Ask anything — no workspace files. Global memory still applies.'}
                 </p>
                 {!sessionId && (
                   <div className="mt-4 flex flex-col items-center gap-1.5">
@@ -2206,7 +2206,7 @@ function ChatPage({ general = false }) {
       >
             <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Branch latest response</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
-              This creates a project chat with a collapsed summary of this thread, followed by the latest response.
+              This creates a workspace chat with a collapsed summary of this thread, followed by the latest response.
             </p>
             <div className="space-y-4">
               <label className="block">
@@ -2220,7 +2220,7 @@ function ChatPage({ general = false }) {
                 />
               </label>
               <label className="block">
-                <span className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Project</span>
+                <span className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Workspace</span>
                 <select
                   value={branchResponseProjectId}
                   onChange={e => setBranchResponseProjectId(e.target.value)}
@@ -2281,7 +2281,7 @@ function ChatPage({ general = false }) {
             />
             <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Creating new chat…</p>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Generating a focused opening based on your project context and this conversation.
+              Generating a focused opening based on your workspace context and this conversation.
             </p>
           </Dialog>
       )}

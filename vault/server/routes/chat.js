@@ -213,13 +213,7 @@ async function buildSystemPrompt(project, sid = null, webSearch = false, userMes
   // ── Block 2: Project brief (cache_control) ───────────────────────────────────
   if (project) {
     const parts = [];
-    if (project.goal) parts.push(`Goal: ${project.goal}`);
-    if (project.problem) parts.push(`Problem: ${project.problem}`);
-    if (project.audience) parts.push(`Audience: ${project.audience}`);
     if (project.techStack) parts.push(`Tech stack: ${project.techStack}`);
-    if (project.constraints) parts.push(`Constraints: ${project.constraints}`);
-    if (project.successCriteria) parts.push(`Success: ${project.successCriteria}`);
-    if (project.tone) parts.push(`Tone: ${project.tone}`);
     if (project.notes) parts.push(`Notes: ${project.notes}`);
     const typeExtra = buildTypeConfigPrompt(project.projectType, project.typeConfig);
     if (typeExtra) parts.push(typeExtra);
@@ -1093,11 +1087,7 @@ router.post('/sessions/branch-from-followup', async (req, res) => {
 
     // Project brief
     const briefParts = [];
-    if (project.goal) briefParts.push(`Goal: ${project.goal}`);
-    if (project.problem) briefParts.push(`Problem: ${project.problem}`);
-    if (project.audience) briefParts.push(`Audience: ${project.audience}`);
     if (project.techStack) briefParts.push(`Tech stack: ${project.techStack}`);
-    if (project.constraints) briefParts.push(`Constraints: ${project.constraints}`);
     if (project.notes) briefParts.push(`Notes: ${project.notes}`);
     const brief = briefParts.join('\n');
 
