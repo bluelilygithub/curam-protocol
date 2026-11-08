@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "62bcd551",
+   "fullHash": "62bcd5512d270611ef28ead535f0f1d31ae615c4",
+   "committedAt": "2026-11-08T12:55:07+10:00",
+   "author": "mrb",
+   "subject": "Drawings: tidy top row (Draw it for me to More tools, one Notes button, Select all, Fit to screen)",
+   "filesChanged": 6,
+   "insertions": 69,
+   "deletions": 63,
+   "area": "Drawings",
+   "goal": "Declutter the Drawings top row, and add the Select all and Fit to screen controls the owner asked for.",
+   "whatChanged": "Draw it for me left the top row and is now an item in the board's own More tools menu (Generate section, AI tag), added with Excalidraw's TTDDialogTrigger child component; when the board opens its built-in text-to-diagram dialog for that item, onChange closes it at once and opens the existing Draw it for me panel. To Notes and In a note are merged into one button: To Notes when the drawing is in no note; otherwise In a note / In N notes opening a list of Go to each note plus Put in another note. The Two-way arrow button was removed (the board's Arrowheads panel sets both ends). New Select all (selects every live element) and Fit to screen (scrollToContent fitToViewport, zooms in or out) buttons. Guide chat catalog, help text, tour and docs/drawings.md updated.",
+   "filesImpacted": [
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/services/drawingsTutor.js",
+    "server/services/drawingsTutor.test.js",
+    "docs/drawings.md"
+   ],
+   "benefit": "A shorter, less congested top row, one notes button instead of two, and easier resizing of whole drawings.",
+   "concerns": "The More tools entry relies on Excalidraw's TTDDialogTrigger and on its dialog state names (openDialog ttd, tab text-to-diagram); an Excalidraw upgrade could break it, in which case the board's own dialog would show instead. Checked on screen that the item appears, opens our panel and the board dialog does not show. The To Notes to In a note swap after saving a note was not re-run on screen after the merge. Select all and Fit to screen were seen working; the final fit margin (85%) was set after the check and not looked at."
+  },
+  {
    "commit": "c2a81f99",
    "fullHash": "c2a81f996f256e4992ce2499df16405c1669ba9e",
    "committedAt": "2026-11-08T12:05:02+10:00",
