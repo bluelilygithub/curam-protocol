@@ -703,6 +703,39 @@
   "DELETE /api/drawings/:id": {
    "class": "authed"
   },
+  "GET /api/sketchbook": {
+   "class": "authed"
+  },
+  "GET /api/sketchbook/options": {
+   "class": "authed"
+  },
+  "GET /api/sketchbook/cost": {
+   "class": "authed"
+  },
+  "POST /api/sketchbook/draw": {
+   "class": "authed"
+  },
+  "POST /api/sketchbook/:id/change": {
+   "class": "authed"
+  },
+  "POST /api/sketchbook/:id/duplicate": {
+   "class": "authed"
+  },
+  "GET /api/sketchbook/:id/versions/:vid": {
+   "class": "authed"
+  },
+  "POST /api/sketchbook/:id/versions/:vid/restore": {
+   "class": "authed"
+  },
+  "GET /api/sketchbook/:id": {
+   "class": "authed"
+  },
+  "PUT /api/sketchbook/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/sketchbook/:id": {
+   "class": "authed"
+  },
   "POST /api/email-follow-up-tutor": {
    "class": "authed"
   },

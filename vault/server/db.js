@@ -1179,6 +1179,31 @@ async function initSchema() {
     // Added later (2026-11-08): the look the drawing is in now. The pieces remember how they were drawn (customData in the scene), so the
     // person can flip between the two looks and get back exactly what they drew. Only the page changes the pieces; this says which look it is.
     await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS look TEXT NOT NULL DEFAULT 'sketch'`);
+    // ── Sketchbook (docs/sketchbook.md): cartoon pictures described in words and drawn by the image model, one picture per row, owned by
+    // one person. `image` is the CURRENT picture as a data URL; `versions` is JSON text holding the last few earlier pictures (each with
+    // the words that changed it) so a change can be taken back. Both stay out of the list query. Deleting goes through the shared
+    // recycle bin (adapters/sketchbook.js).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sketches (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title         TEXT NOT NULL,
+        description   TEXT NOT NULL DEFAULT '',
+        style         TEXT NOT NULL DEFAULT 'pencil',
+        "penColor"    TEXT NOT NULL DEFAULT 'black',
+        image         TEXT NOT NULL,
+        thumbnail     TEXT,
+        width         INTEGER NOT NULL DEFAULT 0,
+        height        INTEGER NOT NULL DEFAULT 0,
+        seed          BIGINT,
+        model         TEXT,
+        versions      TEXT NOT NULL DEFAULT '[]',
+        "changeCount" INTEGER NOT NULL DEFAULT 0,
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_sketches_user ON sketches ("userId", "updatedAt" DESC)`);
     // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
     // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
     await client.query(`

@@ -205,6 +205,7 @@ export const semanticMap = {
   news: { lucide: 'Newspaper' },
   play: { lucide: 'Play' },
   'pen-tool': { lucide: 'PenTool' },
+  'pencil-line': { lucide: 'PencilLine' },
   'highlighter': { lucide: 'Highlighter' },
   'lock': { lucide: 'Lock' },
   'unlock': { lucide: 'Unlock' },

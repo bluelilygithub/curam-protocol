@@ -66,6 +66,7 @@ export const APP_NAV_GROUPS = [
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
       { id: 'drawings', label: 'Diagrams', path: '/drawings', icon: 'pen-tool', featureKey: 'drawings', aliases: 'drawing drawings sketch whiteboard flowchart flow chart excalidraw' },
+      { id: 'sketchbook', label: 'Sketchbook', path: '/sketchbook', icon: 'pencil-line', featureKey: 'sketchbook', aliases: 'cartoon cartoons illustrate illustration sketch pencil scene storyboard draw picture' },
       { id: 'music', label: 'Music', path: '/music', icon: 'music', featureKey: 'music' },
       { id: 'roomPlanner', label: 'Room Planner', path: '/room-planner', icon: 'armchair', featureKey: 'roomPlanner' },
       { id: 'gardenPlanner', label: 'Garden Planner', path: '/garden-planner', icon: 'sprout', featureKey: 'gardenPlanner' },
