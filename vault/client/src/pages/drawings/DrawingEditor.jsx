@@ -98,8 +98,6 @@ export default function DrawingEditor({ id, onSavedChange }) {
   // Stretching: 'keep' (a stretch keeps the shape: nothing is squashed) or 'free' (wider or taller on its own). Holding Shift does the opposite for one drag.
   const [keepShape, setKeepShape] = useState(() => { try { return localStorage.getItem('vault:drawings:keepShape') === '1'; } catch { return false; } });
   const [gridOn, setGridOn] = useState(false); // the board's grid: shown, and what is drawn or moved snaps to it
-  const [canUndo, setCanUndo] = useState(false); // whether the board has something to undo or redo (read from its own buttons)
-  const [canRedo, setCanRedo] = useState(false);
   const [linkedNotes, setLinkedNotes] = useState([]); // the person's notes that link back to this drawing (made by To Notes)
   const [notesMenu, setNotesMenu] = useState(false);
 
@@ -180,21 +178,8 @@ export default function DrawingEditor({ id, onSavedChange }) {
   useEffect(() => { setLinkedNotes([]); setNotesMenu(false); loadLinkedNotes(); }, [id, loadLinkedNotes]);
 
   // ---- undo and redo ----
-  // The board keeps its own history (every drawing, move, stretch, look switch and diagram is a step, as many as needed). Its buttons are small
-  // and at the bottom left, so these big ones drive them; the shortcuts (Ctrl+Z, Ctrl+Shift+Z) work anywhere on the page, not only
-  // while the board has the focus. The history belongs to this visit: it starts empty each time a drawing is opened.
-  useEffect(() => {
-    const read = () => {
-      const u = document.querySelector('[data-testid="button-undo"]');
-      const r = document.querySelector('[data-testid="button-redo"]');
-      setCanUndo(!!u && !u.disabled);
-      setCanRedo(!!r && !r.disabled);
-    };
-    read();
-    const t = setInterval(read, 400);
-    return () => clearInterval(t);
-  }, [lib]);
-  const pressBoard = (testId) => { const b = document.querySelector(`[data-testid="${testId}"]`); if (b && !b.disabled) b.click(); };
+  // The board keeps its own history (every drawing, move, stretch, look switch and diagram is a step) and has Undo / Redo arrows at its
+  // bottom left. The shortcuts (Ctrl+Z, Ctrl+Shift+Z) work anywhere on the page (handleKeyboardGlobally). The history belongs to this visit.
 
   // ---- stretching: keep the shape or free ----
   // The board keeps a stretched shape's proportions only while Shift is held. To make that a choice that stays, while (and only while) a
@@ -608,14 +593,6 @@ export default function DrawingEditor({ id, onSavedChange }) {
     ['--color-bg', '--color-surface', '--color-border', '--color-primary', '--color-text', '--color-muted', '--color-on-primary'].forEach((k) => { const v = root.getPropertyValue(k).trim(); if (v) vars[k] = v; });
     return (
     <div className="flex flex-wrap items-center justify-end gap-2" style={{ maxWidth: '38rem', ...vars }}>
-          <div className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} role="group" aria-label="Undo and redo" data-tour="drawings-undo">
-            <Tooltip text="Undo the last change on the drawing (Ctrl+Z). You can undo as many times as you need, back through everything you did since you opened it. Drawing, moving, stretching, switching the look and Draw it for me are each a step.">
-              <button type="button" disabled={!lib || !canUndo} onClick={() => pressBoard('button-undo')} className="px-3 py-1.5 text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>{getIcon('undo', { size: 13 }) || null} Undo</button>
-            </Tooltip>
-            <Tooltip text="Redo what you just undid (Ctrl+Shift+Z). You can redo as many steps as you undid, until you make a new change.">
-              <button type="button" disabled={!lib || !canRedo} onClick={() => pressBoard('button-redo')} className="px-3 py-1.5 text-xs border-l transition-opacity duration-200 hover:opacity-70 disabled:opacity-40" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>{getIcon('redo', { size: 13 }) || null} Redo</button>
-            </Tooltip>
-          </div>
           <div role="group" aria-label="When stretching" className="inline-flex rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }} data-tour="drawings-stretch">
             {[
               [true, 'Keep shape', 'When you drag a corner to stretch what is selected (one thing, or everything with Select all), it grows or shrinks evenly so nothing is squashed or bent out of shape. Text and arrows scale with it. Hold Shift while dragging to stretch freely for that one drag.'],
