@@ -4302,6 +4302,15 @@
   },
   "POST /api/plans/from-diagram/estimate": {
    "class": "authed"
+  },
+  "POST /api/plans/from-note/preview": {
+   "class": "authed"
+  },
+  "POST /api/plans/from-note/estimate": {
+   "class": "authed"
+  },
+  "POST /api/plans/from-note": {
+   "class": "authed"
   }
  }
 }

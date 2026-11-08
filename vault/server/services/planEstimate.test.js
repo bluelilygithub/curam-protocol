@@ -58,6 +58,23 @@ const diagram = {
   await E.askEstimate(7, { diagram: withNo, includeNo: true }, deps('{"estimates":[{"ref":"n2","days":1}]}'));
   assert.match(calls[0].prompt, /n6: Tell the customer/, 'with the No branches included, that step is sent too');
 
+  // ---- a note: only steps with no length written in the note are sent; groups and milestones are not ----
+  {
+    const note = { title: 'Reno', body: '# Bathroom\n- Strip the room (2 days)\n- Order tiles\n- Plumbing\n  - Run the pipes\n- Milestone: Signed off\n' };
+    calls.length = 0;
+    const out = await E.askEstimateForNote(7, { note }, deps('{"estimates":[{"ref":"n3","days":3,"why":"supplier lead time"},{"ref":"n2","days":9},{"ref":"n5","days":2}]}'));
+    assert.deepEqual(Object.keys(out.estimates).sort(), ['n3', 'n5'].sort().filter((r) => ['n3', 'n5'].includes(r)), 'only refs that were sent come back');
+    assert.match(calls[0].prompt, /n3: Order tiles/);
+    assert.match(calls[0].prompt, /n5: Run the pipes/);
+    assert.doesNotMatch(calls[0].prompt, /Strip the room/, 'a line that already says (2 days) is not sent');
+    assert.doesNotMatch(calls[0].prompt, /Bathroom\n|n1:/, 'a heading is a group and is not sent');
+    assert.doesNotMatch(calls[0].prompt, /Plumbing\n|n4:/, 'a step with sub-steps is a group and is not sent');
+    assert.doesNotMatch(calls[0].prompt, /Signed off/, 'a milestone is not sent');
+    assert.match(calls[0].prompt, /Name: Reno/, 'the note\'s title is the plan name given to the model');
+    await assert.rejects(E.askEstimateForNote(7, { note: { title: 'x', body: '- Alpha job (1 day)\n- Bravo job (2 days)' } }, deps('{}')), (e) => e.status === 422 && /nothing left to estimate/.test(e.message), 'every length already written');
+    await assert.rejects(E.askEstimateForNote(7, { note: { title: 'x', body: 'no list here' } }, deps('{}')), (e) => e.status === 422);
+  }
+
   // ---- refusals and bad answers ----
   await assert.rejects(E.askEstimate(7, { diagram }, deps('I cannot help with that.')), (e) => e.status === 502 && /did not return any estimates/.test(e.message));
   await assert.rejects(E.askEstimate(7, { diagram }, deps('{"estimates":[]}')), (e) => e.status === 502);
@@ -65,7 +82,7 @@ const diagram = {
   await assert.rejects(E.askEstimate(7, { diagram: { nodes: [], edges: [] } }, deps('{}')), (e) => e.status === 400);
   await assert.rejects(E.askEstimate(7, {}, deps('{}')), (e) => e.status === 400);
   const onlyMilestones = { nodes: [N('a', 'Check?', 'decision'), N('b', 'Done', 'start-end')], edges: [{ from: 'a', to: 'b' }] };
-  await assert.rejects(E.askEstimate(7, { diagram: onlyMilestones }, deps('{}')), (e) => e.status === 422);
+  await assert.rejects(E.askEstimate(7, { diagram: onlyMilestones }, deps('{}')), (e) => e.status === 422 && /nothing left to estimate/.test(e.message));
   // a model that throws is not swallowed here (the route turns it into a plain 502)
   await assert.rejects(E.askEstimate(7, { diagram }, { getModels: async () => ({ standard: 'm' }), callModel: async () => { throw new Error('timeout'); }, logUsage() {} }), /timeout/);
 

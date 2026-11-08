@@ -13,17 +13,28 @@ const FIELD_STYLE = { borderColor: 'var(--color-border)', background: 'var(--col
 const LABEL_STYLE = { color: 'var(--color-muted)' };
 const TONE = { ok: '#22c55e', warn: '#f59e0b', info: 'var(--color-muted)' };
 
+// How the steps of a NOTE follow each other (server/services/planFromNote.js): the three orders and what each says.
+const ORDERS = [
+  ['lists', 'As the note\'s lists say', 'Numbered lists run in order, one after another; bullets and check-boxes run together. This is the usual choice.'],
+  ['sequence', 'One after another', 'Every step waits for the one written before it, in the same list, and each section waits for the section before.'],
+  ['parallel', 'All together', 'Nothing waits for anything: every step can start on the first day.'],
+];
+
 /**
- * Make a plan from a diagram. The steps come from the diagram (docs/plans.md), the person gives the start, the finish-by date and the days each
- * step takes, and a line under the dates says whether it fits. Nothing is saved until Create plan; the server works out every date.
+ * Make a plan from a diagram (kind 'diagram') or a note (kind 'note'). The steps come from the source (docs/plans.md), the person gives the
+ * start, the finish-by date and the days each step takes (a length written in a note is already filled in), and a line under the dates says
+ * whether it fits. Nothing is saved until Create plan; the server works out every date.
  */
-export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClose, onCreated }) {
+export default function MakePlanDialog({ kind = 'diagram', diagram, drawingId, noteId, sourceTitle, onClose, onCreated }) {
   const getIcon = useIcon();
-  const [title, setTitle] = useState(drawingTitle || '');
+  const isNote = kind === 'note';
+  const base = isNote ? '/api/plans/from-note' : '/api/plans/from-diagram';
+  const [title, setTitle] = useState(sourceTitle || '');
   const [startDate, setStartDate] = useState('');
   const [targetEndDate, setTargetEndDate] = useState('');
   const [workWeek, setWorkWeek] = useState('weekdays');
   const [includeNo, setIncludeNo] = useState(false);
+  const [order, setOrder] = useState('lists');
   const [days, setDays] = useState({}); // ref -> what the person typed
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
@@ -33,19 +44,20 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
   const [estimateError, setEstimateError] = useState('');
   const ticket = useRef(0);
 
-  // What goes to the server: only lengths the person actually typed, so an empty box means "one day".
+  // What goes to the server: only lengths the person actually typed, so an empty box means the length the source gives (or one day).
   const body = useMemo(() => {
     const durations = {};
     for (const [ref, v] of Object.entries(days)) if (String(v).trim() !== '') durations[ref] = Number(v);
-    return { diagram, startDate: startDate || null, targetEndDate: targetEndDate || null, workWeek, includeNo, durations };
-  }, [diagram, startDate, targetEndDate, workWeek, includeNo, days]);
+    const common = { startDate: startDate || null, targetEndDate: targetEndDate || null, workWeek, durations };
+    return isNote ? { noteId, order, ...common } : { diagram, includeNo, ...common };
+  }, [isNote, noteId, order, diagram, includeNo, startDate, targetEndDate, workWeek, days]);
 
   // The preview follows every change after a short pause; an answer to an older request is ignored.
   useEffect(() => {
     const mine = ++ticket.current;
     const t = setTimeout(async () => {
       try {
-        const res = await api.post('/api/plans/from-diagram/preview', body);
+        const res = await api.post(`${base}/preview`, body);
         const data = await res.json().catch(() => ({}));
         if (mine !== ticket.current) return;
         if (!res.ok) { setError(data.error || 'That could not be worked out.'); return; }
@@ -54,14 +66,15 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
       } catch (err) { if (mine === ticket.current) setError(err.message || 'That could not be worked out.'); }
     }, 250);
     return () => clearTimeout(t);
-  }, [body]);
+  }, [body, base]);
 
-  // Ask the AI for a length for every step the person has not typed one for. The numbers land in the boxes, marked as estimates, and every one can be changed.
+  // Ask the AI for a length for every step the person has not typed one for (and the source did not give one). The numbers land in the boxes,
+  // marked as estimates, and every one can be changed.
   const estimate = async () => {
     if (estimating || creating) return;
     setEstimating(true); setEstimateError('');
     try {
-      const res = await api.post('/api/plans/from-diagram/estimate', { diagram, includeNo, title: title.trim() || undefined });
+      const res = await api.post(`${base}/estimate`, isNote ? { noteId, order, title: title.trim() || undefined } : { diagram, includeNo, title: title.trim() || undefined });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'The AI could not estimate just now. Try again, or type the lengths yourself.');
       const got = data.estimates || {};
@@ -74,7 +87,7 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
     if (creating || !preview || error) return;
     setCreating(true);
     try {
-      const res = await api.post('/api/plans/from-diagram', { ...body, title: title.trim() || undefined, drawingId });
+      const res = await api.post(base, { ...body, title: title.trim() || undefined, ...(isNote ? {} : { drawingId }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'The plan could not be made. Try again.');
       onCreated(data.plan.id);
@@ -82,19 +95,24 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
   };
 
   const nameOf = useMemo(() => Object.fromEntries((preview?.steps || []).map((s) => [s.ref, s.title])), [preview]);
+  const depthOf = useMemo(() => {
+    const byRef = Object.fromEntries((preview?.steps || []).map((s) => [s.ref, s]));
+    const depth = (s, n = 0) => (s.parentRef && byRef[s.parentRef] && n < 20 ? 1 + depth(byRef[s.parentRef], n + 1) : 0);
+    return Object.fromEntries((preview?.steps || []).map((s) => [s.ref, depth(s)]));
+  }, [preview]);
   const fit = preview ? fitMessage({ targetEndDate }, preview.schedule) : null;
-  const hasDecisionLeftOut = !!preview && (preview.leftOut.length > 0 || includeNo);
+  const hasDecisionLeftOut = !isNote && !!preview && (preview.leftOut.length > 0 || includeNo);
 
   return (
     <Dialog
-      title="Make a plan from this diagram"
+      title={isNote ? 'Make a plan from this note' : 'Make a plan from this diagram'}
       icon={getIcon('gantt-chart', { size: 16 })}
       size="2xl"
       onClose={creating ? undefined : onClose}
       footer={(
         <div className="flex items-center gap-2">
           <Tooltip text="Close this box without making a plan. Nothing has been saved."><button type="button" onClick={onClose} disabled={creating} className={BTN} style={BTN_STYLE}>Cancel</button></Tooltip>
-          <Tooltip text="Make the plan with these steps, lengths and dates, and link it to this diagram. You can change anything afterwards on the plan page.">
+          <Tooltip text={`Make the plan with these steps, lengths and dates, and link it to this ${isNote ? 'note' : 'diagram'}. You can change anything afterwards on the plan page.`}>
             <button type="button" onClick={create} disabled={creating || !preview || !!error} className={BTN} style={{ ...BTN_STYLE, background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)', borderColor: 'var(--color-primary)' }}>
               {creating ? 'Making…' : 'Create plan'}
             </button>
@@ -104,13 +122,15 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
     >
       <div className="space-y-4">
         <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-          Each box becomes a step, and each arrow means the next step waits for the one before it. Say when it starts, when it must finish, and how many working days each step takes.
+          {isNote
+            ? 'Headings become sections and each line of a list becomes a step. A length written at the end of a line, such as "(3 days)", is used. Say when it starts, when it must finish, and how long the other steps take.'
+            : 'Each box becomes a step, and each arrow means the next step waits for the one before it. Say when it starts, when it must finish, and how many working days each step takes.'}
         </p>
 
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex-1 min-w-[200px] space-y-1 block">
             <span className="text-xs block" style={LABEL_STYLE}>Plan name</span>
-            <Tooltip text="What to call the plan. It starts as the diagram's name. The microphone lets you say it.">
+            <Tooltip text={`What to call the plan. It starts as the ${isNote ? 'note' : 'diagram'}'s name. The microphone lets you say it.`}>
               <div className="w-full"><VoiceInput value={title} onChange={setTitle} label="Plan name" placeholder="Plan name" disabled={creating} /></div>
             </Tooltip>
           </label>
@@ -137,6 +157,19 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
           </label>
         </div>
 
+        {isNote && (
+          <div role="radiogroup" aria-label="How the steps follow each other" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-xs" style={LABEL_STYLE}>Order</span>
+            {ORDERS.map(([value, label, tip]) => (
+              <Tooltip key={value} text={tip}>
+                <label className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text)' }}>
+                  <input type="radio" name="plan-order" checked={order === value} onChange={() => { setOrder(value); setWhys({}); }} disabled={creating} /> {label}
+                </label>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+
         {fit && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${TONE[fit.tone]}`, color: 'var(--color-text)' }} role="status">
             <span style={{ color: TONE[fit.tone] }}>{getIcon(fit.tone === 'ok' ? 'check' : 'info', { size: 14 })}</span>
@@ -150,10 +183,10 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
         )}
         {error && <p className="text-sm" style={{ color: '#ef4444' }} role="alert">{error}</p>}
 
-        {!preview && !error && <p className="text-sm" style={LABEL_STYLE}>Reading the diagram…</p>}
+        {!preview && !error && <p className="text-sm" style={LABEL_STYLE}>{isNote ? 'Reading the note…' : 'Reading the diagram…'}</p>}
         {preview && (
           <div className="flex flex-wrap items-center gap-3">
-            <Tooltip text="Ask the AI to suggest how many working days each step may take. It uses one AI request and sees only the step names and the plan name, never your diagram. Lengths you have already typed are kept, and every number can be changed.">
+            <Tooltip text={`Ask the AI to suggest how many working days each step may take. It uses one AI request and sees only the step names and the plan name, never your ${isNote ? 'note' : 'diagram'}. Lengths you have typed${isNote ? ' or written in the note' : ''} are kept, and every number can be changed.`}>
               <button type="button" onClick={estimate} disabled={estimating || creating} className={BTN} style={BTN_STYLE}>{getIcon('sparkles', { size: 13 })} {estimating ? 'Estimating…' : 'Estimate lengths with AI'}</button>
             </Tooltip>
             {Object.keys(whys).length > 0 && <span className="text-xs" style={LABEL_STYLE}>Lengths marked ✦ are AI estimates. They are a starting point: check them.</span>}
@@ -173,16 +206,18 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
                   const at = preview.schedule.steps[s.ref] || {};
                   return (
                     <tr key={s.ref} className="align-middle">
-                      <td className="py-1 pr-2" style={{ color: 'var(--color-text)' }}>{s.isMilestone ? '◆ ' : ''}{s.title}</td>
+                      <td className="py-1 pr-2" style={{ color: 'var(--color-text)', paddingLeft: (depthOf[s.ref] || 0) * 16 }}>
+                        <span style={{ fontWeight: s.isGroup ? 600 : 400, textDecoration: s.status === 'done' ? 'line-through' : 'none', opacity: s.status === 'done' ? 0.6 : 1 }}>{s.isMilestone ? '◆ ' : ''}{s.title}</span>
+                      </td>
                       <td className="py-1 pr-2 text-xs" style={LABEL_STYLE}>{s.waitsOn.length ? s.waitsOn.map((r) => nameOf[r]).join(', ') : '—'}</td>
                       <td className="py-1 pr-2">
-                        {s.isMilestone ? <span className="text-xs" style={LABEL_STYLE}>Milestone</span> : (
+                        {s.isGroup ? <span className="text-xs" style={LABEL_STYLE}>Section</span> : s.isMilestone ? <span className="text-xs" style={LABEL_STYLE}>Milestone</span> : (
                           <>
-                          <Tooltip text="How many working days this step takes. Empty means one.">
-                            <input type="number" min="1" max="3650" value={days[s.ref] ?? ''} placeholder="1" onChange={(e) => { setDays((d) => ({ ...d, [s.ref]: e.target.value })); setWhys((w) => { if (!(s.ref in w)) return w; const n = { ...w }; delete n[s.ref]; return n; }); }}
-                              aria-label={`Days for ${s.title}`} className={`${FIELD} w-20`} style={FIELD_STYLE} disabled={creating} />
-                          </Tooltip>
-                          {whys[s.ref] && <Tooltip text={`AI estimate: ${whys[s.ref]}. Change the number to make it your own.`}><span className="ml-1 text-xs cursor-help" style={{ color: 'var(--color-primary)' }} aria-label="AI estimate">✦</span></Tooltip>}
+                            <Tooltip text={isNote && s.hintDays ? 'The length written in the note. Type a number to change it.' : 'How many working days this step takes. Empty means one.'}>
+                              <input type="number" min="1" max="3650" value={days[s.ref] ?? ''} placeholder={String(s.durationDays)} onChange={(e) => { setDays((d) => ({ ...d, [s.ref]: e.target.value })); setWhys((w) => { if (!(s.ref in w)) return w; const n = { ...w }; delete n[s.ref]; return n; }); }}
+                                aria-label={`Days for ${s.title}`} className={`${FIELD} w-20`} style={FIELD_STYLE} disabled={creating} />
+                            </Tooltip>
+                            {whys[s.ref] && <Tooltip text={`AI estimate: ${whys[s.ref]}. Change the number to make it your own.`}><span className="ml-1 text-xs cursor-help" style={{ color: 'var(--color-primary)' }} aria-label="AI estimate">✦</span></Tooltip>}
                           </>
                         )}
                       </td>
@@ -196,13 +231,16 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
           </div>
         )}
 
-        {preview && (hasDecisionLeftOut || preview.droppedLoops > 0) && (
+        {preview && (hasDecisionLeftOut || preview.droppedLoops > 0 || (isNote && preview.emptyHeadings > 0)) && (
           <div className="rounded-xl p-3 text-xs space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-            {preview.leftOut.length > 0 && (
+            {!isNote && preview.leftOut.length > 0 && (
               <p>Every decision is taken as <strong>Yes</strong>, so the No branches are left out: {preview.leftOut.join(', ')}.</p>
             )}
-            {preview.droppedLoops > 0 && (
+            {!isNote && preview.droppedLoops > 0 && (
               <p>{preview.droppedLoops === 1 ? 'One arrow goes' : `${preview.droppedLoops} arrows go`} back to an earlier step (a loop, such as "no, ask again"). A plan cannot go in circles, so {preview.droppedLoops === 1 ? 'it is' : 'they are'} left out.</p>
+            )}
+            {isNote && preview.emptyHeadings > 0 && (
+              <p>{preview.emptyHeadings === 1 ? 'One heading has' : `${preview.emptyHeadings} headings have`} no list under {preview.emptyHeadings === 1 ? 'it' : 'them'}, so {preview.emptyHeadings === 1 ? 'it is' : 'they are'} left out. Only lists become steps; paragraphs are ignored.</p>
             )}
             {hasDecisionLeftOut && (
               <Tooltip text="Put the No branches in the plan too, as steps. You can delete any you will not need on the plan page.">

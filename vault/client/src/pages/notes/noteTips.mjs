@@ -74,6 +74,7 @@ export const NOTE_TIPS = {
   ai: 'AI actions for this note: summarise, pull out to-dos, tidy up, suggest tags or a title. Nothing changes until you choose.',
   dictate: 'Dictate: speak and your words are typed into this note. Press again to stop.',
   convertTask: 'Make one task from this whole note (its title and the start of its text). The note itself is not changed. For separate to-do lines, use Make tasks instead.',
+  makePlan: 'Turn the lists in this note into a dated plan: headings become sections and each line a step. You choose the dates and how long each step takes. It is a copy: later changes to the note are not copied into the plan.',
   takeToChat: 'Open this note as the first message of a chat, in a project or a general chat.',
   deleteNote: 'Delete this note. It is kept for 30 days in Recently deleted, so you can restore it.',
   undoAi: 'Put the note back as it was before the AI change.',

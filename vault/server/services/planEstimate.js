@@ -8,6 +8,7 @@
 const { PlanError } = require('./planErrors');
 const { extractJson } = require('./guideCore');
 const fromDiagram = require('./planFromDiagram');
+const fromNote = require('./planFromNote');
 
 const FEATURE = 'plans_estimate';
 const MAX_DAYS = 60;
@@ -58,8 +59,25 @@ function normalizeEstimates(raw, refs) {
  */
 async function askEstimate(userId, input = {}, deps = {}) {
   const draft = fromDiagram.buildDraft(input.diagram, { includeNo: input.includeNo === true }); // the same steps the plan will have
-  const steps = draft.steps.filter((s) => !s.isMilestone).map((s) => ({ ref: s.ref, title: tidy(s.title).slice(0, MAX_TITLE_CHARS) }));
-  if (!steps.length) throw new PlanError('There are no steps with a length to estimate (every box is a milestone).', 422);
+  return estimateSteps(userId, { steps: draft.steps, title: input.title }, deps);
+}
+
+/** The same, for a note the route has already loaded and checked to be the caller's: `note` is { title, body }. */
+async function askEstimateForNote(userId, input = {}, deps = {}) {
+  const draft = fromNote.buildDraft(input.note && input.note.body, { order: input.order == null ? 'lists' : input.order });
+  return estimateSteps(userId, { steps: draft.steps, title: input.title || (input.note && input.note.title) }, deps);
+}
+
+/**
+ * The model call, for any draft's steps: only steps with a length to estimate are sent (not a milestone, not a group, and not a step whose
+ * source already says how long it takes, such as a note line ending "3 days").
+ */
+async function estimateSteps(userId, input = {}, deps = {}) {
+  const all = Array.isArray(input.steps) ? input.steps : [];
+  const parents = new Set(all.filter((s) => s.parentRef != null).map((s) => s.parentRef));
+  const steps = all.filter((s) => !s.isMilestone && !parents.has(s.ref) && !(Number.isInteger(s.hintDays) && s.hintDays >= 1))
+    .map((s) => ({ ref: s.ref, title: tidy(s.title).slice(0, MAX_TITLE_CHARS) }));
+  if (!steps.length) throw new PlanError('There is nothing left to estimate: every step is a milestone or a group, or already has a length.', 422);
   const resolve = deps.getModels || require('./modelResolver').getModelsForUser;
   const call = deps.callModel || require('./callModel').callModel;
   const tiers = await resolve(userId);
@@ -73,4 +91,4 @@ async function askEstimate(userId, input = {}, deps = {}) {
   return { estimates };
 }
 
-module.exports = { FEATURE, MAX_DAYS, SYSTEM, buildPrompt, normalizeEstimates, askEstimate };
+module.exports = { FEATURE, MAX_DAYS, SYSTEM, buildPrompt, normalizeEstimates, askEstimate, askEstimateForNote, estimateSteps };

@@ -711,7 +711,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
             )}
           </div>
           <PlanButton
-            drawingId={id} title={title} disabled={!lib}
+            drawingId={id} sourceTitle={title} disabled={!lib}
             getDiagram={() => { const ex = apiRef.current; return ex ? readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds) : null; }}
             beforeOpen={async () => { clearTimeout(timerRef.current); await save(); }}
           />

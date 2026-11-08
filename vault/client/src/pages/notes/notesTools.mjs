@@ -27,6 +27,7 @@ export const NOTES_TOOLS = [
   { id: 'versions', label: 'Earlier versions', open: 'editor' },
   { id: 'live-todos', label: 'Live to-dos (make tasks)', open: 'editor' },
   { id: 'convert-task', label: 'Convert to task', open: 'editor' },
+  { id: 'make-plan', label: 'Make a plan', open: 'editor' },
   { id: 'open-as-chat', label: 'Open as chat', open: 'editor' },
   { id: 'chat-uses-notes', label: 'Use my notes in Chat', open: 'list' },
   { id: 'save-to-notes', label: 'Save a chat to Notes', open: 'list' },

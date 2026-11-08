@@ -103,16 +103,26 @@ function cleanDuration(v, label) {
   return n;
 }
 
-/** Give every step its length: the person's number when they gave one, otherwise one working day (a milestone has none). */
+/**
+ * Give every step its length: the person's number when they gave one, otherwise a length written in the source (a note line ending "3 days"),
+ * otherwise one working day. A milestone has none and a group (a step with sub-steps, `parentRef` pointing at it) takes its dates from them.
+ * Every step comes back with `isGroup` and a `durationDays`.
+ */
 function applyDurations(steps, durations) {
   const given = durations && typeof durations === 'object' ? durations : {};
-  return steps.map((s) => ({ ...s, durationDays: s.isMilestone ? 0 : (given[s.ref] == null || given[s.ref] === '' ? 1 : cleanDuration(given[s.ref], s.title)) }));
+  const parents = new Set(steps.filter((s) => s.parentRef != null).map((s) => s.parentRef));
+  return steps.map((s) => {
+    const isGroup = parents.has(s.ref);
+    const typed = given[s.ref] == null || given[s.ref] === '' ? null : cleanDuration(given[s.ref], s.title);
+    const durationDays = s.isMilestone ? 0 : (isGroup ? 1 : (typed ?? (Number.isInteger(s.hintDays) && s.hintDays >= 1 ? s.hintDays : 1)));
+    return { parentRef: null, status: 'todo', ...s, isGroup, durationDays };
+  });
 }
 
 /** Where every step lands, by the same rules as a saved plan. Keyed by the step's ref. */
 function place(steps, { startDate = null, targetEndDate = null, workWeek = 'weekdays' } = {}) {
   const idOf = new Map(steps.map((s, i) => [s.ref, i + 1]));
-  const flat = steps.map((s) => ({ id: idOf.get(s.ref), parentStepId: null, startDate: null, durationDays: s.durationDays, isMilestone: s.isMilestone }));
+  const flat = steps.map((s) => ({ id: idOf.get(s.ref), parentStepId: s.parentRef != null && idOf.has(s.parentRef) ? idOf.get(s.parentRef) : null, startDate: null, durationDays: s.durationDays, isMilestone: s.isMilestone && !s.isGroup }));
   const deps = [];
   for (const s of steps) for (const b of s.waitsOn) deps.push({ stepId: idOf.get(s.ref), blockedByStepId: idOf.get(b) });
   const r = sched.schedule({ steps: flat, deps, startDate, targetEndDate, workWeek });

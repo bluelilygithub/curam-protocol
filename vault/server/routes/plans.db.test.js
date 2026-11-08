@@ -11,6 +11,8 @@
 //     and a diagram that is not the caller's is refused;
 //   - steps can be sent to Tasks: one step or all, a group becomes a parent task and its sub-steps subtasks, waits-on links become task
 //     dependencies, a step already in Tasks is not sent twice, a deleted task lets the step be sent again, and another person cannot send;
+//   - a plan can be made from a note: headings become groups, list items steps, a ticked check-box a done step, a length written on a line is used,
+//     the order choice decides what waits on what, the preview saves nothing, and a note that is not the caller's is refused;
 //   - delete goes to the recycle bin and Undo brings back the plan with its steps, groups and dependencies and the same dates.
 const assert = require('node:assert/strict');
 const express = require('express');
@@ -211,6 +213,76 @@ function serve() {
     assert.equal((await call(B, 'GET', `/${made.plan.id}`)).status, 404);
     assert.equal((await dia({ title: 'no link' }, A, '/from-diagram')).body.links.length, 0, 'without a diagram there is no link');
 
+    // ---- a plan from a note ----
+    const mkNote = async (user, title, body) => (await pool.query('INSERT INTO notes (user_id, title, body) VALUES ($1,$2,$3) RETURNING id', [user, title, body])).rows[0].id;
+    const noteBody = ['# Bathroom', '', '## Demolition', '- Strip the room (2 days)', '- [x] Remove the bath', '', '## Fit out', '1. Plumbing', '   - Run the pipes (3 days)', '2. Tiling 4d', '3. Milestone: Signed off', ''].join('\n');
+    const noteA = await mkNote(A, 'Bathroom reno notes', noteBody);
+    const noteB = await mkNote(B, 'B note', '- B step\n- B other');
+    const fromNoteCall = (extra = {}, user = A, path = '/from-note/preview') => call(user, 'POST', path, { noteId: noteA, ...extra });
+
+    r = await fromNoteCall({ startDate: '2026-12-07', targetEndDate: '2026-12-31' });
+    assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+    assert.deepEqual(r.body.steps.map((s) => s.title), ['Bathroom', 'Demolition', 'Strip the room', 'Remove the bath', 'Fit out', 'Plumbing', 'Run the pipes', 'Tiling', 'Signed off']);
+    const pv = Object.fromEntries(r.body.steps.map((s) => [s.title, s]));
+    assert.equal(pv.Bathroom.isGroup, true);
+    assert.equal(pv['Strip the room'].parentRef, pv.Demolition.ref);
+    assert.equal(pv['Strip the room'].durationDays, 2, 'a length written on the line is used');
+    assert.equal(pv.Tiling.durationDays, 4);
+    assert.equal(pv['Remove the bath'].status, 'done', 'a ticked check-box is done');
+    assert.equal(pv['Signed off'].isMilestone, true);
+    assert.equal(pv.Plumbing.isGroup, true);
+    assert.deepEqual(pv.Tiling.waitsOn.sort(), [pv['Run the pipes'].ref], 'the numbered list runs in order, and waits for everything inside the step before');
+    assert.deepEqual(pv['Signed off'].waitsOn, [pv.Tiling.ref]);
+    assert.deepEqual(pv['Strip the room'].waitsOn, [], 'bullets run together');
+    assert.equal(r.body.schedule.steps[pv['Strip the room'].ref].start, '2026-12-07');
+    assert.equal(r.body.schedule.steps[pv.Tiling.ref].start, '2026-12-10', 'Tiling waits for the pipes (3 days from Mon 7), so it starts Thu 10');
+    assert.equal(r.body.note.id, noteA);
+    // the three orders
+    assert.ok((await fromNoteCall({ order: 'sequence', startDate: '2026-12-07' })).body.steps.filter((s) => s.waitsOn.length).length > r.body.steps.filter((s) => s.waitsOn.length).length, 'one after another links more steps');
+    assert.equal((await fromNoteCall({ order: 'parallel', startDate: '2026-12-07' })).body.steps.filter((s) => s.waitsOn.length).length, 0, 'all together links none');
+    assert.equal((await fromNoteCall({ order: 'sideways' })).status, 400);
+    // a length typed in the box overrides the note's; a group takes none
+    assert.equal((await fromNoteCall({ durations: { [pv['Strip the room'].ref]: 5, [pv.Bathroom.ref]: 99 }, startDate: '2026-12-07' })).body.steps.find((s) => s.title === 'Strip the room').durationDays, 5);
+    // refusals
+    assert.equal((await fromNoteCall({}, A, '/from-note/preview')).status, 200);
+    assert.equal((await call(A, 'POST', '/from-note/preview', { noteId: noteB })).status, 404, 'another person\'s note is not found');
+    assert.equal((await call(A, 'POST', '/from-note/preview', { noteId: 999999 })).status, 404);
+    assert.equal((await call(A, 'POST', '/from-note/preview', {})).status, 404);
+    const plainNote = await mkNote(A, 'No list', 'Just words and no list.');
+    assert.equal((await call(A, 'POST', '/from-note/preview', { noteId: plainNote })).status, 422);
+    assert.equal((await call(A, 'GET', '/by-source?kind=note&id=' + noteA)).body.plans.length, 0, 'the preview saved nothing');
+
+    r = await fromNoteCall({ title: 'Reno plan', startDate: '2026-12-07', targetEndDate: '2026-12-31' }, A, '/from-note');
+    assert.equal(r.status, 201, JSON.stringify(r.body).slice(0, 300));
+    const fromNoteMade = r.body;
+    assert.equal(fromNoteMade.plan.title, 'Reno plan');
+    assert.equal(fromNoteMade.plan.sourceKind, 'note');
+    assert.equal(fromNoteMade.plan.sourceId, String(noteA));
+    assert.equal(fromNoteMade.steps.length, 9);
+    const made2 = Object.fromEntries(fromNoteMade.steps.map((s) => [s.title, s]));
+    assert.equal(made2['Strip the room'].parentStepId, made2.Demolition.id, 'sub-steps point at their group');
+    assert.equal(made2.Demolition.parentStepId, made2.Bathroom.id, 'groups nest');
+    assert.equal(made2['Run the pipes'].parentStepId, made2.Plumbing.id);
+    assert.equal(made2['Remove the bath'].status, 'done');
+    assert.equal(made2['Signed off'].isMilestone, true);
+    assert.equal(made2['Run the pipes'].durationDays, 3);
+    assert.equal(fromNoteMade.deps.length, 2);
+    assert.deepEqual(fromNoteMade.links.map((l) => [l.kind, l.refId, l.label]), [['note', String(noteA), 'Bathroom reno notes']]);
+    assert.equal(fromNoteMade.schedule.steps[made2.Bathroom.id].isGroup, true);
+    assert.deepEqual((await call(A, 'GET', '/by-source?kind=note&id=' + noteA)).body.plans.map((p) => p.id), [fromNoteMade.plan.id]);
+    assert.equal((await call(B, 'GET', '/by-source?kind=note&id=' + noteA)).body.plans.length, 0, 'another person does not see plans made from this note');
+    // nothing is made for a note that is not the caller's, or a bad request
+    const beforeNotePlans = (await call(A, 'GET', '/')).body.plans.length;
+    assert.equal((await call(A, 'POST', '/from-note', { noteId: noteB })).status, 404);
+    assert.equal((await call(B, 'POST', '/from-note', { noteId: noteA })).status, 404, 'and B cannot make a plan from A\'s note');
+    assert.equal((await call(A, 'POST', '/from-note', { noteId: noteA, durations: { n3: -1 } })).status, 400);
+    assert.equal((await call(A, 'GET', '/')).body.plans.length, beforeNotePlans, 'a refused request leaves no half-made plan');
+    assert.equal((await call(B, 'GET', `/${fromNoteMade.plan.id}`)).status, 404);
+    // the plan keeps working like any other: send a sub-step to Tasks and it goes under its group's task when that is sent too
+    r = await call(A, 'POST', `/${fromNoteMade.plan.id}/send-to-tasks`, { stepIds: [made2.Demolition.id, made2['Strip the room'].id].map(Number) });
+    assert.equal(r.body.created.length, 2);
+    await pool.query('DELETE FROM tasks WHERE "userId" = $1', [A]); // leave none behind for the next section's count
+
     // ---- send to Tasks ----
     const tplan = (await call(A, 'POST', '/', { title: 'Garden', startDate: '2026-12-07', targetEndDate: '2026-12-31' })).body.plan.id;
     const tadd = async (body) => (await call(A, 'POST', `/${tplan}/steps`, body)).body.step;
@@ -356,6 +428,7 @@ function serve() {
     await new Promise((resolve) => server.close(resolve));
     await pool.query('DELETE FROM recycle_bin WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
     await pool.query('DELETE FROM drawings WHERE "userId" = ANY($1)', [[A, B]]).catch(() => {});
+    await pool.query('DELETE FROM notes WHERE user_id = ANY($1)', [[A, B]]).catch(() => {});
     await pool.query('DELETE FROM users WHERE id = ANY($1)', [[A, B]]).catch(() => {});
     await pool.end().catch(() => {});
   }

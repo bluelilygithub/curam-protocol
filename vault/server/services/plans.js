@@ -5,6 +5,7 @@
 
 const sched = require('./planSchedule');
 const fromDiagram = require('./planFromDiagram');
+const fromNote = require('./planFromNote');
 const { PlanError } = require('./planErrors');
 
 const MAX_PLANS_PER_USER = 100;
@@ -260,30 +261,56 @@ async function calendarSteps(db, userId, { from = null, to = null } = {}) {
 }
 
 /** The draft for a diagram, with the person's lengths and dates applied and where everything lands. Nothing is saved. */
-function previewFromDiagram(body = {}) {
+function previewFromDraft(draft, body = {}) {
   const startDate = cleanDate(body.startDate, 'Start date');
   const targetEndDate = cleanDate(body.targetEndDate, 'End date');
   if (startDate && targetEndDate && targetEndDate < startDate) throw new PlanError('The end date is before the start date.');
   const workWeek = body.workWeek == null ? 'weekdays' : oneOf(body.workWeek, WORK_WEEKS, 'That work week');
-  const draft = fromDiagram.buildDraft(body.diagram, { includeNo: body.includeNo === true });
   const steps = fromDiagram.applyDurations(draft.steps, body.durations);
   let schedule;
   try { schedule = fromDiagram.place(steps, { startDate, targetEndDate, workWeek }); } catch (err) { if (err.code === 'CYCLE') throw new PlanError(err.message); throw err; }
-  return { steps, droppedLoops: draft.droppedLoops, leftOut: draft.leftOut, schedule, startDate, targetEndDate, workWeek };
+  return { steps, droppedLoops: draft.droppedLoops || 0, leftOut: draft.leftOut || [], emptyHeadings: draft.emptyHeadings || 0, schedule, startDate, targetEndDate, workWeek };
 }
 
-/** Make the plan from a diagram: the plan, its steps and their dependencies, and a link back to the diagram, all or nothing. */
-async function createFromDiagram(pool, userId, body = {}) {
-  const preview = previewFromDiagram(body);
-  const drawingId = body.drawingId == null || body.drawingId === '' ? 0 : idOf(body.drawingId);
-  if (body.drawingId != null && body.drawingId !== '' && !drawingId) throw new PlanError('That diagram was not found.', 404);
+function previewFromDiagram(body = {}) {
+  return previewFromDraft(fromDiagram.buildDraft(body.diagram, { includeNo: body.includeNo === true }), body);
+}
+
+/** A note of the caller's, or "not found". */
+async function ownedNote(db, userId, noteId) {
+  const id = idOf(noteId);
+  const { rows } = id ? await db.query('SELECT id, title, body FROM notes WHERE id = $1 AND user_id = $2', [id, userId]) : { rows: [] };
+  if (!rows[0]) throw new PlanError('That note was not found.', 404);
+  return rows[0];
+}
+
+/** The same preview, from a note's lists (planFromNote.js). `order` is 'lists' | 'sequence' | 'parallel'. Nothing is saved. */
+async function previewFromNote(db, userId, body = {}) {
+  const note = await ownedNote(db, userId, body.noteId);
+  const draft = fromNote.buildDraft(note.body, { order: body.order == null ? 'lists' : body.order });
+  return { ...previewFromDraft(draft, body), note: { id: note.id, title: note.title } };
+}
+
+/**
+ * Make the plan from a draft: the plan, its steps (groups first, so a sub-step can point at its group), their dependencies, and a link back to
+ * the thing it came from, all or nothing. `source` is { kind: 'drawing' | 'note', rawId } or null; the thing is checked to be the caller's
+ * inside the transaction, so a link is only ever written to something the person owns.
+ */
+async function createFromPreview(pool, userId, body, preview, source) {
+  const kind = source && source.kind;
+  const rawId = source && source.rawId;
+  const sourceId = rawId == null || rawId === '' ? 0 : idOf(rawId);
+  const missing = kind === 'note' ? 'That note was not found.' : 'That diagram was not found.';
+  if (rawId != null && rawId !== '' && !sourceId) throw new PlanError(missing, 404);
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
-    let drawing = null;
-    if (drawingId) {
-      const { rows } = await db.query('SELECT id, title FROM drawings WHERE id = $1 AND "userId" = $2', [drawingId, userId]);
-      if (!rows[0]) throw new PlanError('That diagram was not found.', 404); // the link is only ever written to a diagram the person owns
+    let drawing = null; // { id, title }: the diagram or note the plan comes from
+    if (sourceId) {
+      const { rows } = kind === 'note'
+        ? await db.query('SELECT id, title FROM notes WHERE id = $1 AND user_id = $2', [sourceId, userId])
+        : await db.query('SELECT id, title FROM drawings WHERE id = $1 AND "userId" = $2', [sourceId, userId]);
+      if (!rows[0]) throw new PlanError(missing, 404);
       drawing = rows[0];
     }
     const { rows: n } = await db.query('SELECT COUNT(*) AS n FROM plans WHERE "userId" = $1', [userId]);
@@ -291,22 +318,23 @@ async function createFromDiagram(pool, userId, body = {}) {
     const { rows: planRows } = await db.query(
       `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId")
        VALUES ($1,$2,$3,'active',$4,$5,$6,$7,$8) RETURNING id`,
-      [userId, cleanTitle(body.title || (drawing && drawing.title), 'Plan from a diagram'), cleanText(body.description, MAX_DESCRIPTION),
-        preview.startDate, preview.targetEndDate, preview.workWeek, drawing ? 'drawing' : null, drawing ? String(drawing.id) : null]);
+      [userId, cleanTitle(body.title || (drawing && drawing.title), kind === 'note' ? 'Plan from a note' : 'Plan from a diagram'), cleanText(body.description, MAX_DESCRIPTION),
+        preview.startDate, preview.targetEndDate, preview.workWeek, drawing ? (kind === 'note' ? 'note' : 'drawing') : null, drawing ? String(drawing.id) : null]);
     const planId = planRows[0].id;
     const idOf2 = new Map();
     let position = 0;
-    for (const s of preview.steps) {
+    for (const s of preview.steps) { // in the source's order: a group always comes before the steps inside it
       const { rows } = await db.query(
-        `INSERT INTO plan_steps ("planId", "userId", title, notes, position, "durationDays", "isMilestone")
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [planId, userId, cleanTitle(s.title, 'Step'), cleanText(s.notes, MAX_NOTES), ++position, s.durationDays, s.isMilestone]);
+        `INSERT INTO plan_steps ("planId", "userId", title, notes, "parentStepId", position, "durationDays", "isMilestone", status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [planId, userId, cleanTitle(s.title, 'Step'), cleanText(s.notes, MAX_NOTES), s.parentRef != null ? (idOf2.get(s.parentRef) || null) : null, ++position, s.durationDays, !!s.isMilestone && !s.isGroup,
+          STEP_STATUSES.includes(s.status) ? s.status : 'todo']);
       idOf2.set(s.ref, rows[0].id);
     }
     for (const s of preview.steps) for (const b of s.waitsOn) {
       await db.query('INSERT INTO plan_step_deps ("planId", "stepId", "blockedByStepId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [planId, idOf2.get(s.ref), idOf2.get(b)]);
     }
-    if (drawing) await db.query('INSERT INTO plan_links ("userId", "planId", kind, "refId", label) VALUES ($1,$2,$3,$4,$5)', [userId, planId, 'drawing', String(drawing.id), cleanTitle(drawing.title, '')]);
+    if (drawing) await db.query('INSERT INTO plan_links ("userId", "planId", kind, "refId", label) VALUES ($1,$2,$3,$4,$5)', [userId, planId, kind === 'note' ? 'note' : 'drawing', String(drawing.id), cleanTitle(drawing.title, '')]);
     await db.query('COMMIT');
     return get(pool, userId, planId);
   } catch (err) {
@@ -315,7 +343,17 @@ async function createFromDiagram(pool, userId, body = {}) {
   } finally { db.release(); }
 }
 
-/** The person's plans that were made from one thing (a diagram, for now): { id, title } each, newest first. */
+/** Make the plan from a diagram (the Make a plan button in Diagrams). */
+async function createFromDiagram(pool, userId, body = {}) {
+  return createFromPreview(pool, userId, body, previewFromDiagram(body), { kind: 'drawing', rawId: body.drawingId });
+}
+
+/** Make the plan from a note (the Make a plan button in Notes). */
+async function createFromNote(pool, userId, body = {}) {
+  return createFromPreview(pool, userId, body, await previewFromNote(pool, userId, body), { kind: 'note', rawId: body.noteId });
+}
+
+/** The person's plans that were made from one thing (a diagram or a note): { id, title } each, newest first. */
 async function listBySource(db, userId, kind, id) {
   const k = cleanText(kind, 40); const ref = cleanText(id, 100);
   if (!k || !ref) throw new PlanError('Say which diagram.');
@@ -325,7 +363,7 @@ async function listBySource(db, userId, kind, id) {
 }
 
 module.exports = {
-  PlanError, previewFromDiagram, createFromDiagram, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
+  PlanError, previewFromDiagram, previewFromNote, createFromDiagram, createFromNote, ownedNote, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
   cleanTitle, cleanText, cleanDate, cleanDuration, PLAN_COLS, STEP_COLS,
   calendarSteps, touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
 };

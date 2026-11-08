@@ -9,6 +9,7 @@ import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startNotesTour, TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
+import NotePlanButton from './notes/NotePlanButton';
 import VoiceTodosPanel from './notes/VoiceTodosPanel';
 import NoteVersionsPanel from './notes/NoteVersionsPanel';
 import VoiceRewritePanel from './notes/VoiceRewritePanel';
@@ -1107,6 +1108,7 @@ export default function NotesPage() {
                   {getIcon('list-checks', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Convert to Task'}
                 </button>
               </Tooltip>
+              <NotePlanButton noteId={selected.id} noteTitle={title} beforeOpen={runSave} />
 
               <div className="relative">
                 <Tooltip text={NOTE_TIPS.takeToChat} side="bottom">

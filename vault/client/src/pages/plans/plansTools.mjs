@@ -34,10 +34,11 @@ export const HOW_IT_WORKS = [
   ['Groups', 'Add a sub-step inside a step and that step becomes a group: it has no length of its own and spans its sub-steps. A step that waits on something, or is waited on, cannot become a group; link its sub-steps instead.'],
   ['The timeline', 'Under the steps, the timeline draws every step as a bar from its first to its last day, with an arrow for each waits-on link and a line for today. Choose Week, Month or Quarter. Click a bar to jump to its step. Drag a bar to move that step to another day (it is then pinned there), or drag its right edge to change its length. A group cannot be dragged: its dates come from its sub-steps.'],
   ['From a diagram', 'In Diagrams, the Make a plan button turns a diagram into a plan: each box a step, each arrow a waits-on, decisions taken as Yes. It asks for the dates and the days each step takes, and links the plan back to the diagram. An Estimate lengths with AI button can suggest the days for each step: it is one AI request that sees only the step names, and every number can be changed.'],
+  ['From a note', 'In an open note, Make a plan (next to Convert to Task) turns the note\'s lists into a plan: headings become sections, each line of a list a step, and indented lines sub-steps. A length at the end of a line such as (3 days) or 2 weeks is used, a ticked check-box is a step that is already done, and a line starting Milestone: is a milestone. You choose whether numbered lists run in order and bullets together, everything one after another, or all together. The plan links back to the note.'],
   ['Send to Tasks', 'Plan steps are not Tasks until you send them, so they stay out of your task list, the weekly digest and the calendar. The checklist button on a step sends it to Tasks as a real task: its last day is the due date and its days are the estimate. Send all to Tasks does every step that is not there yet, and a group goes with its sub-steps as subtasks. It is a copy made at that moment: later changes to the plan are not copied to the task. The one thing that comes back is the status: when you tick, start or reopen the task in Tasks, its plan step gets the same status.'],
   ['On the calendar', 'In the Tasks calendar, the Plan steps button in its top bar shows the steps of your plans that are not in Tasks yet, each on the day it ends. They are read-only: click one to open its plan. A step you have sent to Tasks shows as the task itself, so nothing appears twice.'],
   ['Private', 'Your plans are yours alone. A deleted plan waits 30 days in the recycle bin in Settings, and an Undo button appears straight away. A deleted step cannot be undone.'],
-  ['Not included yet', 'Making a plan from a note, a task in Tasks keeping its dates or name in step with its plan step (only the status comes back), sharing a plan, and a recycle bin for a single deleted step.'],
+  ['Not included yet', 'A task in Tasks keeping its dates or name in step with its plan step (only the status comes back), sharing a plan, and a recycle bin for a single deleted step.'],
 ];
 
 // Everything the guide can point at: the two views plus the controls inside them.
@@ -47,6 +48,7 @@ export const GUIDE_TOOLS = [
   { id: 'search', label: 'Search', tool: 'list' },
   { id: 'delete', label: 'Delete and undo', tool: 'list' },
   { id: 'from-diagram', label: 'Make a plan from a diagram', tool: 'list' },
+  { id: 'from-note', label: 'Make a plan from a note', tool: 'list' },
   { id: 'editor', label: 'One plan', tool: 'editor' },
   { id: 'dates', label: 'Start, finish by and working week', tool: 'editor' },
   { id: 'fit', label: 'Does it fit?', tool: 'editor' },
