@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "ee9a38d7",
+   "fullHash": "ee9a38d7b58bf347e8e48508aaaefc6e921037e9",
+   "committedAt": "2026-11-08T10:09:22+10:00",
+   "author": "mrb",
+   "subject": "Drawings: Sketch / Clean look (reversible), To Notes with the picture shown inside the note",
+   "filesChanged": 24,
+   "insertions": 756,
+   "deletions": 41,
+   "area": "Drawings",
+   "goal": "Let a drawing be flipped between the hand-drawn look and a more conservative one in Vault's own colours, and let a drawing be copied into Notes in the way other tools save to Notes, with the picture shown inside the note.",
+   "whatChanged": "Drawings: two buttons above the board, Sketch and Clean. Clean makes steady straight lines, square corners, straight arrows, solid fills instead of hatching, a plain font (Excalidraw Helvetica family) and Vault's text colour in place of Excalidraw's default black (light themes only). Colours the person chose, freehand pen strokes and pictures are not changed. It is reversible: each piece remembers how it was drawn in its own customData, so Sketch restores exactly what was drawn (checked through three round trips) and Undo works; new pieces start in the drawing's look. The look is stored per drawing (new column drawings.look, added with ADD COLUMN IF NOT EXISTS) and shown on each card in the list. A Pictures choice (same / clean / sketch) changes only the exported PNG or SVG and the Notes picture, never the drawing; the .excalidraw file is always the drawing as it is. New To Notes button: makes a new note named after the drawing (optionally filed under a project or client, as in YouTube), attaches a PNG, and writes a marker line {picture:N} plus a link back to the drawing into the note, using only existing Notes routes. Notes Preview now shows a {picture:N} line as the attached picture (written like the existing {task:N} marker, so the note stays plain text and Write, Rich, search, Ask and the recycle bin keep it as it is); click opens it full size. Drawings guide, help box, tour step, tooltips and docs updated; Notes guide, (i) box and a tip mention the picture. No new package.",
+   "filesImpacted": [
+    "client/src/pages/drawings/lookConvert.mjs (new: Sketch to Clean and back) and its test",
+    "client/src/pages/drawings/saveDrawingToNotes.mjs (new: the three Notes steps) and its test",
+    "client/src/pages/drawings/DrawingEditor.jsx (look switch, Pictures choice, To Notes panel, look in the save fingerprint)",
+    "client/src/pages/drawings/DrawingsList.jsx (look on each card)",
+    "client/src/pages/notes/notePictures.mjs, NotePicture.jsx, NoteMarkdownView.jsx (picture marker shown in Preview) and notePictures.test.mjs",
+    "client/src/pages/notes/noteTips.mjs, notesInfo.mjs, server/services/notesTutor.js (wording)",
+    "server/db.js, server/services/drawings.js, server/routes/drawings.js (look column and checks)",
+    "server/services/drawingsTutor.js, drawingsTools.mjs, drawingsTour.js and tests (guide, help, tour)",
+    "docs/drawings.md, docs/notes.md, docs/schema-notes.md"
+   ],
+   "benefit": "Drawings can be made tidy and conservative for documents and flipped back to the sketch style without losing anything, and a drawing can go into a note in one step, shown inside the note.",
+   "concerns": "Not run on Railway. Tried by hand in the local app: Clean and back on a five-piece drawing (restored values checked against the saved scene), a reload keeping Clean, To Notes, the note in Preview and an edit in Rich keeping the marker, and the Pictures choice (clean and same gave identical PNGs, sketch a hatched one, the drawing unchanged). Not tried: drawing a new piece by mouse in the clean look (the starting settings were seen in the tool panel only), a very large drawing (conversion time), the same drawing in two tabs while switching, the guide's real answers (need a model key). Limits by design: the board cannot use Vault's DM Sans or any CSS font; line colour only follows the Vault theme in light themes; existing arrows become straight, not right-angled; converting a drawing from the list without opening it is not built. To Notes makes a new note each time and later drawing changes are not copied; a note shows the picture inside only in Preview (Write and Rich show the marker line {picture:N}, to be left as it is); if the picture is removed from the note a quiet line replaces it. Clean changes text sizes slightly because the font changes; text is re-measured once fonts load. The route inventory test still fails for 11 SERP Tracker routes from other work, not these. No package change, so a normal fast deploy."
+  },
+  {
    "commit": "e61457ad",
    "fullHash": "e61457ade89162fa5dbf5a1ef3803ae1dcd4944d",
    "committedAt": "2026-11-08T09:12:53+10:00",
