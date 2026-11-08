@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0ed192c5",
+   "fullHash": "0ed192c592301a561a9e7440b0d75fcf3a034608",
+   "committedAt": "2026-11-08T15:00:55+10:00",
+   "author": "mrb",
+   "subject": "Sketchbook: say plainly why a draw failed, and whether it was charged",
+   "filesChanged": 2,
+   "insertions": 66,
+   "deletions": 16,
+   "area": "Sketchbook",
+   "goal": "A first live attempt failed with a message saying nothing was charged. That claim covered every failure, including one after the picture was drawn and paid for, and it hid the real reason (a 404 from the image service).",
+   "whatChanged": "Draw and Change now separate two failures. Image service failed: the message gives the likely reason (no FAL key, graphics model not usable, 404 meaning the model set in Settings is not a FAL model name, out of credit or locked, timeout, blocked) and says no spend was recorded. Picture came back but could not be saved: the message says the person may have been charged and to check Usage (feature graphics_sketchbook). Provider text is still logged and never shown. Tests cover each message.",
+   "filesImpacted": [
+    "server/routes/sketchbook.js",
+    "server/routes/sketchbook.db.test.js"
+   ],
+   "benefit": "The person is told the real reason and is never told money was not spent when it may have been. The 404 case points at the Settings fix.",
+   "concerns": "The reason is picked by matching words in the provider error, so an unusual error still gets the generic line (plus \"no spend recorded\", which holds for any failure before a picture returns). The 404 wording is a best reading: the cause on the live site is not confirmed until the graphics model in Settings is checked. Does not fix the 404 itself; that is a Settings value."
+  },
+  {
    "commit": "65ce35ca",
    "fullHash": "65ce35ca81d1292bf7e24556773969af09edf872",
    "committedAt": "2026-11-08T14:41:15+10:00",
