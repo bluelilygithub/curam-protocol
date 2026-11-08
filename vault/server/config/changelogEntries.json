@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0c9c7e43",
+   "fullHash": "0c9c7e43762b53bf970808dcb0e85ca7db2d765f",
+   "committedAt": "2026-11-08T14:03:22+10:00",
+   "author": "mrb",
+   "subject": "Drawings: remove duplicate Undo/Redo buttons from the board's top right",
+   "filesChanged": 4,
+   "insertions": 7,
+   "deletions": 30,
+   "area": "Drawings",
+   "goal": "Remove a duplicate: the Undo and Redo buttons added in the board's top right only clicked the board's own arrows at its bottom left.",
+   "whatChanged": "Removed the Undo / Redo buttons from renderBoardTools, the canUndo / canRedo state and the 400 ms polling that kept them in step with the board. The board's own Undo / Redo arrows (bottom left) remain, and Ctrl+Z / Ctrl+Shift+Z still work through handleKeyboardGlobally. Guide chat, tour and docs/drawings.md now point to the bottom-left arrows.",
+   "filesImpacted": [
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/services/drawingsTutor.js",
+    "docs/drawings.md"
+   ],
+   "benefit": "One fewer duplicate control on a crowded screen, and no polling timer running while a drawing is open.",
+   "concerns": "The board's own Undo / Redo arrows are small. Checked on screen that one press removes a whole generated diagram and Redo then becomes available; the keyboard shortcuts were not exercised."
+  },
+  {
    "commit": "deee2dca",
    "fullHash": "deee2dcae468118a56abd879dab0c22ae1fd2c56",
    "committedAt": "2026-11-08T13:57:05+10:00",
