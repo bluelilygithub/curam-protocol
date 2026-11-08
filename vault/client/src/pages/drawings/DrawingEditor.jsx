@@ -93,7 +93,6 @@ export default function DrawingEditor({ id, onSavedChange }) {
   // Stretching: 'keep' (a stretch keeps the shape: nothing is squashed) or 'free' (wider or taller on its own). Holding Shift does the opposite for one drag.
   const [keepShape, setKeepShape] = useState(() => { try { return localStorage.getItem('vault:drawings:keepShape') === '1'; } catch { return false; } });
   const [gridOn, setGridOn] = useState(false); // the board's grid: shown, and what is drawn or moved snaps to it
-  const [arrowSel, setArrowSel] = useState({ count: 0, allTwoWay: false }); // the arrows selected on the board
   const [canUndo, setCanUndo] = useState(false); // whether the board has something to undo or redo (read from its own buttons)
   const [canRedo, setCanRedo] = useState(false);
   const [linkedNotes, setLinkedNotes] = useState([]); // the person's notes that link back to this drawing (made by To Notes)
@@ -270,18 +269,21 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const onChange = useCallback((elements, appState, files) => {
     if (sigRef.current === null || stoppedRef.current || leftRef.current) return;
     latestRef.current = { elements, appState, files };
+    // "Draw it for me" sits in the board's More tools menu (as the board's own text-to-diagram entry). The board would open its own dialog for it;
+    // instead that dialog is closed at once and our panel opens.
+    if (appState.openDialog && appState.openDialog.name === 'ttd' && appState.openDialog.tab === 'text-to-diagram') {
+      if (apiRef.current) apiRef.current.updateScene({ appState: { openDialog: null }, captureUpdate: lib && lib.CaptureUpdateAction ? lib.CaptureUpdateAction.NEVER : undefined });
+      setNotesOpen(false); setAiOpen(true);
+    }
     if (needsPreviewRef.current) { needsPreviewRef.current = false; sigRef.current = 'preview'; } // makes the next check see a change, so a first save (with its preview) happens
     // what is selected, and the grid: for the buttons above the board
     const picked = appState.selectedElementIds || {};
-    const arrows = elements.filter((e) => !e.isDeleted && picked[e.id] && e.type === 'arrow');
-    const all = arrows.length > 0 && arrows.every((e) => e.startArrowhead);
-    setArrowSel((p) => (p.count === arrows.length && p.allTwoWay === all ? p : { count: arrows.length, allTwoWay: all }));
     setGridOn((g) => (g === !!appState.gridModeEnabled ? g : !!appState.gridModeEnabled));
     if (fingerprint(elements, files, appState) === sigRef.current) return;
     setStatus((s) => (s === 'saving' ? s : 'dirty'));
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(save, SAVE_DELAY_MS);
-  }, [save]);
+  }, [save, lib]);
 
   // Leaving the drawing (back to the list, another page) saves what is waiting. The latest save is kept in a ref so this only runs on leaving.
   const saveRef = useRef(save);
@@ -390,7 +392,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
     }
   };
 
-  // ---- snap to grid, two-way arrows ----
+  // ---- snap to grid, select all, fit to screen ----
   const toggleGrid = () => {
     const ex = apiRef.current;
     if (!ex) return;
@@ -400,18 +402,18 @@ export default function DrawingEditor({ id, onSavedChange }) {
     latestRef.current = { elements: ex.getSceneElements(), appState: ex.getAppState(), files: ex.getFiles() };
     markDirty(); // the grid choice is saved with the drawing
   };
-  const toggleTwoWay = () => {
+  const selectAll = () => {
     const ex = apiRef.current;
-    if (!ex || !arrowSel.count) return;
-    const picked = ex.getAppState().selectedElementIds || {};
-    const els = ex.getSceneElements();
-    const selected = els.filter((e) => !e.isDeleted && picked[e.id] && e.type === 'arrow');
-    const makeTwoWay = !selected.every((e) => e.startArrowhead); // all two-way already: put the arrows back to one-way
-    const ids = new Set(selected.map((e) => e.id));
-    ex.updateScene({
-      elements: els.map((e) => (ids.has(e.id) ? { ...e, startArrowhead: makeTwoWay ? 'arrow' : null, version: (e.version || 0) + 1, versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() } : e)),
-      captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY,
-    });
+    if (!ex) return;
+    const ids = {};
+    ex.getSceneElements().forEach((e) => { if (!e.isDeleted) ids[e.id] = true; });
+    ex.updateScene({ appState: { selectedElementIds: ids, activeTool: { ...ex.getAppState().activeTool, type: 'selection' } }, captureUpdate: lib.CaptureUpdateAction.NEVER });
+  };
+  const fitToScreen = () => {
+    const ex = apiRef.current;
+    if (!ex) return;
+    const els = ex.getSceneElements().filter((e) => !e.isDeleted);
+    if (els.length) ex.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85, animate: true }); // zooms in or out so everything fills the screen
   };
 
   // ---- the look: sketch or clean ----
@@ -570,10 +572,11 @@ export default function DrawingEditor({ id, onSavedChange }) {
             </Tooltip>
           ))}
         </div>
-        <Tooltip text={arrowSel.count ? (arrowSel.allTwoWay ? 'Make the selected arrows point one way again.' : 'Make the selected arrows two-way: a head at both ends.') : 'Select an arrow first (click it), then press this to give it a head at both ends.'}>
-          <button type="button" disabled={!lib || !arrowSel.count} aria-pressed={arrowSel.count > 0 && arrowSel.allTwoWay} onClick={toggleTwoWay} className={BTN} style={{ ...BTN_STYLE, ...(arrowSel.count && arrowSel.allTwoWay ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
-            Two-way arrow
-          </button>
+        <Tooltip text="Select everything on the drawing (boxes, arrows and text), ready to stretch or move together. Ctrl+A does the same.">
+          <button type="button" disabled={!lib} onClick={selectAll} className={BTN} style={BTN_STYLE}>Select all</button>
+        </Tooltip>
+        <Tooltip text="Zoom so the whole drawing fills the screen, bigger or smaller as needed.">
+          <button type="button" disabled={!lib} onClick={fitToScreen} className={BTN} style={BTN_STYLE}>Fit to screen</button>
         </Tooltip>
         <Tooltip text={gridOn ? 'The grid is on: what you draw and move snaps to it. Press to turn it off.' : 'Show a grid and snap what you draw and move to it, so boxes line up neatly. The choice is saved with the drawing.'}>
           <button type="button" disabled={!lib} aria-pressed={gridOn} onClick={toggleGrid} className={BTN} style={{ ...BTN_STYLE, ...(gridOn ? { background: 'var(--color-primary)', color: '#fff' } : {}) }}>
@@ -600,33 +603,31 @@ export default function DrawingEditor({ id, onSavedChange }) {
           <Tooltip text="Save the drawing as a file ending in .excalidraw. You can open it again with Open a file, or in other Excalidraw programs.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} onClick={() => exportScene('file')}>{getIcon('download', { size: 13 })} File</button>
           </Tooltip>
-          <Tooltip text="Say or type a scenario and have it drawn for you: the steps of a process, who reports to whom, an idea with branches, or things in time order. You can then move and change everything.">
-            <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} aria-expanded={aiOpen} onClick={() => { setNotesOpen(false); setAiOpen((v) => !v); }} data-tour="drawings-draw-it">{getIcon('sparkles', { size: 13 })} Draw it for me</button>
-          </Tooltip>
-          {linkedNotes.length > 0 && (
-            <div className="relative" data-tour="drawings-in-notes">
-              <Tooltip text={linkedNotes.length === 1 ? `Go to the note this drawing is in: ${linkedNotes[0].title}.` : `This drawing is in ${linkedNotes.length} notes. Choose one to go to it.`}>
-                <button
-                  type="button" className={BTN} style={BTN_STYLE} aria-haspopup={linkedNotes.length > 1 ? 'menu' : undefined} aria-expanded={linkedNotes.length > 1 ? notesMenu : undefined}
-                  onClick={() => (linkedNotes.length === 1 ? openNote(linkedNotes[0].id) : setNotesMenu((v) => !v))}
-                >{getIcon('file-text', { size: 13 })} {linkedNotes.length === 1 ? 'In a note' : `In ${linkedNotes.length} notes`}</button>
-              </Tooltip>
-              {notesMenu && linkedNotes.length > 1 && (
-                <ul role="menu" className="absolute right-0 mt-1 z-20 min-w-[14rem] max-w-xs rounded-xl border p-1 shadow-lg" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                  {linkedNotes.map((n) => (
-                    <li key={n.id} role="none">
-                      <button type="button" role="menuitem" onClick={() => openNote(n.id)} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)' }}>
-                        {n.title || 'Untitled'}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          <Tooltip text="Put this drawing in a new note: the picture is attached and shown inside the note, with a link back to the drawing.">
-            <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} aria-expanded={notesOpen} onClick={openNotesPanel} data-tour="drawings-notes">{getIcon('file-text', { size: 13 })} To Notes</button>
-          </Tooltip>
+          <div className="relative" data-tour="drawings-notes">
+            <Tooltip text={linkedNotes.length === 0 ? 'Put this drawing in a new note: the picture is attached and shown inside the note, with a link back to the drawing.' : (linkedNotes.length === 1 ? `This drawing is in a note (${linkedNotes[0].title}). Go to it, or put it in another note.` : `This drawing is in ${linkedNotes.length} notes. Choose one to go to it, or put it in another note.`)}>
+              <button
+                type="button" className={BTN} style={BTN_STYLE} disabled={!lib}
+                aria-haspopup={linkedNotes.length ? 'menu' : undefined} aria-expanded={linkedNotes.length ? notesMenu : notesOpen}
+                onClick={() => (linkedNotes.length ? setNotesMenu((v) => !v) : openNotesPanel())}
+              >{getIcon('file-text', { size: 13 })} {linkedNotes.length === 0 ? 'To Notes' : (linkedNotes.length === 1 ? 'In a note' : `In ${linkedNotes.length} notes`)}</button>
+            </Tooltip>
+            {notesMenu && linkedNotes.length > 0 && (
+              <ul role="menu" className="absolute right-0 mt-1 z-20 min-w-[14rem] max-w-xs rounded-xl border p-1 shadow-lg" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                {linkedNotes.map((n) => (
+                  <li key={n.id} role="none">
+                    <button type="button" role="menuitem" onClick={() => { setNotesMenu(false); openNote(n.id); }} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)' }}>
+                      Go to: {n.title || 'Untitled'}
+                    </button>
+                  </li>
+                ))}
+                <li role="none">
+                  <button type="button" role="menuitem" onClick={() => { setNotesMenu(false); openNotesPanel(); }} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs border-t transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>
+                    Put in another note
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
         </div>
       </div>
       {aiOpen && (
@@ -710,6 +711,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
             handleKeyboardGlobally
             UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: false, toggleTheme: true } }}
           >
+            {lib.TTDDialogTrigger && <lib.TTDDialogTrigger icon={getIcon('sparkles', { size: 16 })}>Draw it for me</lib.TTDDialogTrigger>}
             <Menu>
               <Menu.DefaultItems.SaveAsImage />
               <Menu.DefaultItems.ClearCanvas />

@@ -90,7 +90,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-board',
     title: 'The drawing board',
-    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo go back and forward as many steps as you need. Keep shape or Free decides whether stretching keeps proportions, Two-way arrow puts a head at both ends of a selected arrow, and Snap to grid lines boxes up.',
+    text: 'Inside a drawing, the tools are along the top: rectangle, diamond, ellipse, arrow, line, pen, text, picture and eraser. Click a piece to change its colour and style in the panel on the left. The words beside the name say when it last saved. Undo and Redo go back and forward as many steps as you need. Select all and Fit to screen help with resizing, Keep shape or Free decides whether stretching keeps proportions, Snap to grid lines boxes up, and a selected arrow can take an arrowhead at both ends under Arrowheads in the left panel.',
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
@@ -98,7 +98,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-export',
     title: 'Look, export and Notes',
-    text: 'Use the buttons above the drawing: Draw it for me turns something you say or type into boxes and arrows, Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the drawing inside a new note.',
+    text: 'Use the buttons above the drawing: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the drawing inside a new note (once it is in a note, the same button takes you back to it). Draw it for me, which turns something you say or type into boxes and arrows, is in the More tools menu, the last icon in the row of tools along the top of the board.',
     when: { show() { injectStepCounter(6); } },
     buttons: [
       btnBack(),
