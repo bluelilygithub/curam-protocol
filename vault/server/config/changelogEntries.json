@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "a443d9f3",
+   "fullHash": "a443d9f31d40c7ff427948259ba9376d6cd8ada0",
+   "committedAt": "2026-11-08T19:54:26+10:00",
+   "author": "mrb",
+   "subject": "Plans: tooltip on the Make a plan box's Cancel button",
+   "filesChanged": 1,
+   "insertions": 1,
+   "deletions": 1,
+   "area": "Plans",
+   "goal": "Finish the tooltips on the Make a plan box so every button in it explains itself.",
+   "whatChanged": "The Cancel button in the Make a plan from this diagram box now has a tooltip saying it closes the box without making a plan and that nothing has been saved. This edit was made before the guide commit but was left out of it, so it is committed on its own.",
+   "filesImpacted": [
+    "client/src/pages/drawings/MakePlanDialog.jsx"
+   ],
+   "benefit": "Every button in the box has hover text.",
+   "concerns": "None noted. One-line change, built but not looked at on screen."
+  },
+  {
    "commit": "4b61f4ce",
    "fullHash": "4b61f4ce05a5fbc884109b107a074f09cadac524",
    "committedAt": "2026-11-08T19:53:46+10:00",
