@@ -6,6 +6,7 @@
 //   GET    /api/drawings               list (no scenes: id, title, preview, counts, dates)
 //   POST   /api/drawings               new drawing  { title?, scene?, thumbnail? }
 //   GET    /api/drawings/:id           one drawing with its scene
+//   GET    /api/drawings/:id/notes     the person's notes that link back to the drawing (made by To Notes)
 //   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
 //   POST   /api/drawings/:id/duplicate a copy
 //   DELETE /api/drawings/:id           into the recycle bin
@@ -53,6 +54,12 @@ router.get('/:id', async (req, res) => {
   try {
     res.json({ drawing: await drawings.get(pool, req.user.id, idOf(req)) });
   } catch (err) { fail(res, err, 'get'); }
+});
+
+router.get('/:id/notes', async (req, res) => {
+  try {
+    res.json({ notes: await drawings.linkedNotes(pool, req.user.id, idOf(req)) });
+  } catch (err) { fail(res, err, 'notes'); }
 });
 
 router.put('/:id', async (req, res) => {

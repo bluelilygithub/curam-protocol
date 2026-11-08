@@ -127,7 +127,20 @@ async function duplicate(db, userId, id) {
   return rows[0];
 }
 
+/**
+ * The person's notes that link back to this drawing: To Notes writes "[Title](/drawings/12)" into the note, so the note's own text is the
+ * record (a note the person wrote or pasted the same link into counts too, and a note that is deleted or whose link is removed stops
+ * counting). Newest change first, at most 20. Another person's drawing is "not found".
+ */
+async function linkedNotes(db, userId, id) {
+  await get(db, userId, id);
+  const { rows } = await db.query(
+    `SELECT id, title, updated_at AS "updatedAt" FROM notes WHERE user_id = $1 AND body LIKE $2 ESCAPE '\\' ORDER BY updated_at DESC, id DESC LIMIT 20`,
+    [userId, `%](/drawings/${Number(id)})%`]);
+  return rows;
+}
+
 module.exports = {
-  list, get, create, update, duplicate, checkScene, checkThumbnail, checkLook, cleanTitle, DrawingError, LOOKS,
+  list, get, create, update, duplicate, linkedNotes, checkScene, checkThumbnail, checkLook, cleanTitle, DrawingError, LOOKS,
   MAX_SCENE_BYTES, MAX_THUMB_BYTES, MAX_ELEMENTS, MAX_DRAWINGS_PER_USER, MAX_TITLE, DEFAULT_TITLE, EMPTY_SCENE,
 };

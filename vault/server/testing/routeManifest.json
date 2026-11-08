@@ -688,6 +688,9 @@
   "GET /api/drawings/:id": {
    "class": "authed"
   },
+  "GET /api/drawings/:id/notes": {
+   "class": "authed"
+  },
   "PUT /api/drawings/:id": {
    "class": "authed"
   },

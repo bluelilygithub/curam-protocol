@@ -33,6 +33,8 @@ checkGuide({
     ['style', 'notes', /cannot use Vault\'s own font/, 'the font limit is stated'],
     ['to-notes', 'does', /shows that picture inside the note/, 'the picture is shown inside the note'],
     ['to-notes', 'notes', /new note each time/, 'it makes a new note each time'],
+    ['to-notes', 'does', /In a note button/, 'the way back to the note is named'],
+    ['to-notes', 'notes', /link back to the drawing/, 'how the notes are found is stated'],
     ['pictures', 'notes', /6 MB/, 'the size limit is stated for pictures'],
   ],
   gaps: [/other people at the same time/, /Graphics or Chat/, /Vault\'s own font or to any CSS style/, /Right-angled arrows/, /description in words/, /Searching inside/, /Visio/, /Folders or tags/, /over 6 MB/],

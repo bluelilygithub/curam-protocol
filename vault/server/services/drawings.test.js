@@ -70,6 +70,7 @@ if (!url) {
     const alter = dbjs.indexOf('ALTER TABLE drawings ADD COLUMN IF NOT EXISTS look');
     assert.ok(alter > 0, 'the look column is added in db.js');
     await client.query(dbjs.slice(alter, dbjs.indexOf('`', alter)));
+    await client.query('CREATE TABLE notes (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT \'Untitled\', body TEXT NOT NULL DEFAULT \'\', updated_at TIMESTAMPTZ DEFAULT NOW())');
     await client.query('INSERT INTO users (id) VALUES (1), (2)');
     const pool = { query: (...a) => client.query(...a), connect: async () => ({ query: (...a) => client.query(...a), release() {} }) };
     const rowsOf = async (uid) => (await client.query('SELECT id, title, "elementCount" FROM drawings WHERE "userId" = $1 ORDER BY id', [uid])).rows;
@@ -138,6 +139,24 @@ if (!url) {
     await assert.rejects(() => D.duplicate(pool, 2, a.id), (e) => e.status === 404, "another person cannot copy it");
     assert.strictEqual((await rowsOf(2)).length, 0);
 
+    // the notes that link back to a drawing (To Notes writes "[Title](/drawings/N)" into the note)
+    const addNote = async (uid, title, body, at) => (await client.query('INSERT INTO notes (user_id, title, body, updated_at) VALUES ($1, $2, $3, COALESCE($4, NOW())) RETURNING id', [uid, title, body, at || null])).rows[0].id;
+    const n1 = await addNote(1, 'Older note', `{picture:9}\n\nFrom the drawing [A](/drawings/${a.id}).\n`, '2026-01-01T00:00:00Z');
+    const n2 = await addNote(1, 'Newer note', `Text [x](/drawings/${a.id}) more`, '2026-02-01T00:00:00Z');
+    await addNote(1, 'Other drawing', `[x](/drawings/${a.id}0)`);                 // /drawings/70 is not /drawings/7
+    await addNote(1, 'Prefix only', `[x](/drawings/${a.id}`);                     // no closing bracket: not a link to it
+    await addNote(1, 'Plain mention', `see /drawings/${a.id} in the app`);       // not a Markdown link
+    await addNote(2, 'Someone else', `[x](/drawings/${a.id})`);                   // another person's note never counts
+    const linked = await D.linkedNotes(pool, 1, a.id);
+    assert.deepStrictEqual(linked.map((r) => r.id), [n2, n1], 'only this person\'s notes that link to exactly this drawing, newest first');
+    assert.strictEqual(linked[0].title, 'Newer note');
+    assert.ok(linked[0].updatedAt);
+    assert.deepStrictEqual(await D.linkedNotes(pool, 1, blank.id), [], 'a drawing nothing links to');
+    await assert.rejects(() => D.linkedNotes(pool, 2, a.id), (e) => e.status === 404, "another person's drawing is not found");
+    await assert.rejects(() => D.linkedNotes(pool, 1, 999999), (e) => e.status === 404);
+    await client.query('DELETE FROM notes WHERE user_id = 1');
+    await client.query('DELETE FROM notes WHERE user_id = 2');
+
     // the cap
     await client.query('INSERT INTO drawings ("userId", title, scene) SELECT 2, \'filler\', $1 FROM generate_series(1, $2)', [D.EMPTY_SCENE, D.MAX_DRAWINGS_PER_USER]);
     await assert.rejects(() => D.create(pool, 2, {}), (e) => e.status === 409 && e.code === 'FULL');
@@ -183,6 +202,12 @@ if (!url) {
       assert.strictEqual((await call('GET', `/${id}`, null, 2)).status, 404);
       assert.strictEqual((await call('GET', '/abc')).status, 404, 'a bad id is simply not found');
       assert.strictEqual((await call('GET', '/0')).status, 404);
+      const noteId = (await client.query('INSERT INTO notes (user_id, title, body) VALUES (1, \'Linked\', $1) RETURNING id', [`[Route drawing](/drawings/${id})`])).rows[0].id;
+      const ln = await call('GET', `/${id}/notes`);
+      assert.strictEqual(ln.status, 200);
+      assert.deepStrictEqual(ln.body.notes.map((x) => x.id), [noteId]);
+      assert.strictEqual((await call('GET', `/${id}/notes`, null, 2)).status, 404, "another person gets not found, not an empty list");
+      assert.strictEqual((await call('GET', '/abc/notes')).status, 404);
 
       const p = await call('PUT', `/${id}`, { title: 'Renamed', baseUpdatedAt: g.body.drawing.updatedAt });
       assert.strictEqual(p.status, 200);

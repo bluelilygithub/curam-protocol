@@ -81,6 +81,8 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [clients, setClients] = useState([]);
   const [projectId, setProjectId] = useState('');
   const [clientId, setClientId] = useState('');
+  const [linkedNotes, setLinkedNotes] = useState([]); // the person's notes that link back to this drawing (made by To Notes)
+  const [notesMenu, setNotesMenu] = useState(false);
 
   const apiRef = useRef(null);
   const lookRef = useRef('sketch');
@@ -140,6 +142,16 @@ export default function DrawingEditor({ id, onSavedChange }) {
     })();
     return () => { alive = false; };
   }, [id]);
+
+  // ---- the notes this drawing was sent to ----
+  const loadLinkedNotes = useCallback(async () => {
+    try {
+      const res = await api.get(`/api/drawings/${idRef.current}/notes`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.notes)) setLinkedNotes(data.notes);
+    } catch { /* the button just stays hidden: it is a convenience */ }
+  }, []);
+  useEffect(() => { setLinkedNotes([]); setNotesMenu(false); loadLinkedNotes(); }, [id, loadLinkedNotes]);
 
   // ---- saving ----
   const buildThumbnail = useCallback(async (elements, appState, files) => {
@@ -217,6 +229,14 @@ export default function DrawingEditor({ id, onSavedChange }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [status]);
+
+  // Go to one of those notes. Anything still waiting is saved first, as for "Your drawings".
+  const openNote = async (noteId) => {
+    setNotesMenu(false);
+    clearTimeout(timerRef.current);
+    await save();
+    navigate(`/notes?note=${noteId}`);
+  };
 
   const goBack = async () => {
     clearTimeout(timerRef.current);
@@ -317,6 +337,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
       });
       addToast('Saved to Notes ✓', 'success', undefined, open(noteId));
       setNotesOpen(false);
+      loadLinkedNotes();
     } catch (err) {
       addToast(err.message || 'That could not be saved to Notes. Try again.', 'error', undefined, err.noteId ? open(err.noteId) : undefined);
     } finally {
@@ -393,6 +414,27 @@ export default function DrawingEditor({ id, onSavedChange }) {
           <Tooltip text="Save the drawing as a file ending in .excalidraw. You can open it again with Open a file, or in other Excalidraw programs.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} onClick={() => exportScene('file')}>{getIcon('download', { size: 13 })} File</button>
           </Tooltip>
+          {linkedNotes.length > 0 && (
+            <div className="relative" data-tour="drawings-in-notes">
+              <Tooltip text={linkedNotes.length === 1 ? `Go to the note this drawing is in: ${linkedNotes[0].title}.` : `This drawing is in ${linkedNotes.length} notes. Choose one to go to it.`}>
+                <button
+                  type="button" className={BTN} style={BTN_STYLE} aria-haspopup={linkedNotes.length > 1 ? 'menu' : undefined} aria-expanded={linkedNotes.length > 1 ? notesMenu : undefined}
+                  onClick={() => (linkedNotes.length === 1 ? openNote(linkedNotes[0].id) : setNotesMenu((v) => !v))}
+                >{getIcon('file-text', { size: 13 })} {linkedNotes.length === 1 ? 'In a note' : `In ${linkedNotes.length} notes`}</button>
+              </Tooltip>
+              {notesMenu && linkedNotes.length > 1 && (
+                <ul role="menu" className="absolute right-0 mt-1 z-20 min-w-[14rem] max-w-xs rounded-xl border p-1 shadow-lg" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                  {linkedNotes.map((n) => (
+                    <li key={n.id} role="none">
+                      <button type="button" role="menuitem" onClick={() => openNote(n.id)} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)' }}>
+                        {n.title || 'Untitled'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <Tooltip text="Put this drawing in a new note: the picture is attached and shown inside the note, with a link back to the drawing.">
             <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} aria-expanded={notesOpen} onClick={openNotesPanel} data-tour="drawings-notes">{getIcon('file-text', { size: 13 })} To Notes</button>
           </Tooltip>
