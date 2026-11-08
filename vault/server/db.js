@@ -747,6 +747,70 @@ async function initSchema() {
       )
     `);
 
+    // ── Plans (docs/plans.md) ─────────────────────────────────────────────────
+    // A plan owns its steps. Steps are NOT rows in `tasks`, so nothing that reads tasks (digest, attention, dashboard, calendar) ever
+    // sees them; a step reaches Tasks only when the person sends it, and plan_links records that (and every other link out of a plan).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plans (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title           TEXT NOT NULL,
+        description     TEXT NOT NULL DEFAULT '',
+        status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft','active','done','archived')),
+        "startDate"     DATE,
+        "targetEndDate" DATE,
+        "workWeek"      TEXT NOT NULL DEFAULT 'weekdays' CHECK ("workWeek" IN ('weekdays','all')),
+        "sourceKind"    TEXT,
+        "sourceId"      TEXT,
+        "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_user ON plans ("userId", "updatedAt" DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plan_steps (
+        id              SERIAL PRIMARY KEY,
+        "planId"        INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title           TEXT NOT NULL,
+        notes           TEXT NOT NULL DEFAULT '',
+        "parentStepId"  INTEGER REFERENCES plan_steps(id) ON DELETE CASCADE,
+        position        INTEGER NOT NULL DEFAULT 0,
+        "startDate"     DATE,
+        "durationDays"  INTEGER NOT NULL DEFAULT 1 CHECK ("durationDays" >= 0),
+        "isMilestone"   BOOLEAN NOT NULL DEFAULT FALSE,
+        status          TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo','in-progress','done')),
+        "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps ("planId", position, id)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plan_step_deps (
+        id                 SERIAL PRIMARY KEY,
+        "planId"           INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        "stepId"           INTEGER NOT NULL REFERENCES plan_steps(id) ON DELETE CASCADE,
+        "blockedByStepId"  INTEGER NOT NULL REFERENCES plan_steps(id) ON DELETE CASCADE,
+        UNIQUE ("stepId", "blockedByStepId")
+      )
+    `);
+    // Links from a plan, or one of its steps, to anything else in Vault: kind 'task' | 'note' | 'drawing' | 'sketch' | 'client' | 'event'...
+    // "refId" is text so a link can point at any table's key. A step with no row here is not linked to anything.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plan_links (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "planId"    INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        "stepId"    INTEGER REFERENCES plan_steps(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        "refId"     TEXT NOT NULL,
+        label       TEXT NOT NULL DEFAULT '',
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plan_links_plan ON plan_links ("planId", "stepId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plan_links_ref ON plan_links ("userId", kind, "refId")`);
+
     // ── Gmail ─────────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS gmail_tokens (

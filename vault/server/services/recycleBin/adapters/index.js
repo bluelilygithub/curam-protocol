@@ -16,3 +16,4 @@ require('./serpSite'); // SERP Tracker sites (with their saved lookups)
 require('./sharesThesis'); // Shares theses (with their check history)
 require('./drawings'); // saved Excalidraw drawings
 require('./sketchbook'); // Sketchbook cartoon pictures
+require('./plans'); // Plans (with their steps, dependencies and links)

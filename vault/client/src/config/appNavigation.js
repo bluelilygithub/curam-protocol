@@ -8,6 +8,7 @@ export const APP_NAV_GROUPS = [
     items: [
       // Notes leads the workspace: where things are written down first, then filed, searched, and worked on in Chat.
       { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line', featureKey: null },
+      { id: 'plans', label: 'Plans', path: '/plans', icon: 'gantt-chart', featureKey: 'plans', matchPrefix: true, aliases: 'plan project gantt schedule timeline steps milestones dependencies' },
       { id: 'talk', label: 'Talk', path: '/talk', icon: 'mic', featureKey: null },
       { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: 'memory' },
       { id: 'guide', label: 'User Guide', path: '/guide', icon: 'help-circle', featureKey: null },

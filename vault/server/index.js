@@ -235,6 +235,7 @@ app.use('/api/drawings-tutor', requireFeature('drawings'), aiLimiter, require('.
 app.use('/api/drawings', requireFeature('drawings'), require('./routes/drawings')); // saved Excalidraw drawings (docs/drawings.md)
 app.use('/api/sketchbook-tutor', requireFeature('sketchbook'), aiLimiter, require('./routes/sketchbookTutor')); // the Sketchbook guide chat (sees no sketches)
 app.use('/api/sketchbook', requireFeature('sketchbook'), require('./routes/sketchbook')); // cartoon pictures drawn from a description (docs/sketchbook.md); paid: the Graphics image limits apply
+app.use('/api/plans', requireFeature('plans'), require('./routes/plans')); // plans with dated steps, dependencies and a Gantt (docs/plans.md)
 // aiLimiter is applied inside music.js to POST /jobs only — the client polls GET /jobs/:id every 2s,
 // which alone would exhaust the 30/min per-user limit.
 app.use('/api/music', requireFeature('music'), require('./routes/music'));

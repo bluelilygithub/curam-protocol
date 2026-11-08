@@ -19,6 +19,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   videos: true,
   drawings: false, // new and not yet run on Railway: off until an admin switches it on (admins can always open it)
   sketchbook: false, // new and not yet tried with the live image service: off until an admin switches it on (admins can always open it)
+  plans: false, // new (docs/plans.md): off until an admin switches it on (admins can always open it)
   music: true,
   recipes: true,
   pdf: true,
@@ -79,6 +80,7 @@ const FEATURE_LIFECYCLE = {
   memory: 'parked',           // rarely used; hidden from menus by default
   drawings: 'preview',        // new: the Excalidraw editor in Vault; not yet run on Railway (fonts, memory, the font-subsetting helper blocked by the CSP)
   sketchbook: 'preview',      // new: cartoon pictures from a description; paid image calls, not yet tried with the live image service
+  plans: 'preview',           // new: plans with dates, dependencies and a Gantt; not yet used on Railway
 };
 const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
 

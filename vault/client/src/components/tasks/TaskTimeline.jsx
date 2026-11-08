@@ -75,7 +75,8 @@ function computeRange(tasks, project) {
     const due = parseDate(t.dueDate);
     if (!due || isNaN(due.getTime())) return; // skip unparseable dates
     const dur = t.estimatedMinutes ? Math.max(t.estimatedMinutes / DAY_MINS, 1) : DEF_DAYS;
-    const s   = addDays(due, -Math.ceil(dur));
+    const own = parseDate(t.startDate); // a plan step carries its own start day
+    const s   = own && !isNaN(own.getTime()) ? own : addDays(due, -Math.ceil(dur));
     if (!min || s < min) min = s;
     if (!max || due > max) max = due;
   });
@@ -103,8 +104,10 @@ function buildRows(tasks) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PROJECT, onEdit }) {
-  const [zoomKey, setZoomKey] = useState('month');
+// showBlocked: paint a task that waits on an unfinished one as Blocked (Tasks does; Plans does not, since waiting is normal in a plan).
+// defaultZoom: the zoom the timeline opens at.
+export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PROJECT, onEdit, showBlocked = true, defaultZoom = 'month' }) {
+  const [zoomKey, setZoomKey] = useState(defaultZoom);
   const { ppd } = ZOOM.find(z => z.key === zoomKey);
 
   const taskMap     = Object.fromEntries(tasks.map(t => [t.id, t]));
@@ -131,7 +134,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
 
   // A task is "blocked" if any of its blockers are not done yet
   function resolveStatus(task) {
-    if (task.blockerIds?.length) {
+    if (showBlocked && task.blockerIds?.length) {
       const isBlocked = task.blockerIds.some(bid => taskMap[bid]?.status !== 'done');
       if (isBlocked) return 'blocked';
     }
@@ -143,6 +146,13 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
     if (!task.dueDate) return null;
     const due  = parseDate(task.dueDate);
     if (!due || isNaN(due.getTime())) return null;
+    // A task with its own start day (a plan step) fills the days from that start to its last day, both counted.
+    const own  = parseDate(task.startDate);
+    if (own && !isNaN(own.getTime())) {
+      const x = diffDays(range.start, own) * ppd;
+      const w = Math.max(diffDays(own, due) + 1, 1) * ppd;
+      return { x, w, endX: task.isMilestone ? x + ppd / 2 : x + w };
+    }
     const dur  = task.estimatedMinutes ? Math.max(task.estimatedMinutes / DAY_MINS, 1) : DEF_DAYS;
     const endD = diffDays(range.start, due);
     const barW = Math.max(dur * ppd, ppd);
@@ -186,7 +196,7 @@ export default function TaskTimeline({ tasks = SAMPLE_TASKS, project = SAMPLE_PR
         className="flex-shrink-0 flex flex-wrap items-center gap-x-5 gap-y-1.5 px-6 py-2 border-b"
         style={{ borderColor: 'var(--color-border)' }}
       >
-        {[['todo', 'To-do'], ['in-progress', 'In progress'], ['done', 'Done'], ['blocked', 'Blocked']].map(([s, label]) => (
+        {[['todo', 'To-do'], ['in-progress', 'In progress'], ['done', 'Done'], ...(showBlocked ? [['blocked', 'Blocked']] : [])].map(([s, label]) => (
           <div key={s} className="flex items-center gap-1.5">
             <div
               className="w-3 h-2 rounded-sm flex-shrink-0"

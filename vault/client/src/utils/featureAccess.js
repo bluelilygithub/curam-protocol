@@ -15,6 +15,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   videos: true,
   drawings: false,
   sketchbook: false,
+  plans: false,
   music: true,
   recipes: true,
   pdf: true,
@@ -61,6 +62,7 @@ export const FEATURE_LIFECYCLE = {
   memory: 'parked',
   drawings: 'preview',
   sketchbook: 'preview',
+  plans: 'preview',
 };
 export const LIFECYCLE_LABELS = {
   preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
@@ -101,6 +103,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'videos', label: 'Video Tools' },
       { key: 'drawings', label: 'Diagrams' },
       { key: 'sketchbook', label: 'Sketchbook' },
+      { key: 'plans', label: 'Plans' },
       { key: 'music', label: 'Music' },
       { key: 'recipes', label: 'Recipes' },
       { key: 'pdf', label: 'PDF Tools' },

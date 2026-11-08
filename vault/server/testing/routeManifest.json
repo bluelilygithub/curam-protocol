@@ -4218,6 +4218,36 @@
   },
   "GET /api/changelog": {
    "class": "admin"
+  },
+  "DELETE /api/plans/:id/steps/:stepId/deps/:blockedByStepId": {
+   "class": "authed"
+  },
+  "POST /api/plans/:id/steps/:stepId/deps": {
+   "class": "authed"
+  },
+  "DELETE /api/plans/:id/steps/:stepId": {
+   "class": "authed"
+  },
+  "PUT /api/plans/:id/steps/:stepId": {
+   "class": "authed"
+  },
+  "POST /api/plans/:id/steps": {
+   "class": "authed"
+  },
+  "DELETE /api/plans/:id": {
+   "class": "authed"
+  },
+  "GET /api/plans/:id": {
+   "class": "authed"
+  },
+  "PUT /api/plans/:id": {
+   "class": "authed"
+  },
+  "GET /api/plans": {
+   "class": "authed"
+  },
+  "POST /api/plans": {
+   "class": "authed"
   }
  }
 }
