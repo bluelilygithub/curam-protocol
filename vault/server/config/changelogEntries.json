@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "1f5fefe8",
+   "fullHash": "1f5fefe87cdb6f1f6dea9510180b49f19bef6b36",
+   "committedAt": "2026-11-08T13:43:10+10:00",
+   "author": "mrb",
+   "subject": "Drawings: shape numbers and \"What have I missed?\"",
+   "filesChanged": 16,
+   "insertions": 379,
+   "deletions": 27,
+   "area": "Drawings",
+   "goal": "Let the owner refer to a shape by number when asking for changes on a busy drawing, and have the AI point out what a diagram may be missing.",
+   "whatChanged": "New Numbers button shows a small number on each box, diamond and oval that has writing in it. The number is saved in the box's customData.vaultNo and kept; the badges are an HTML overlay on the board, so they never print or export (PNG, SVG, file, Notes). New shapeNumbers.mjs: a box put in between two numbered boxes gets a sub-number of the one before (4.1, then 4.2); anything else gets the next whole number; a copied box with a repeated number gets its own. Numbers are given when the toggle is on, before Change it and What have I missed?, and for boxes the AI adds. The diagram JSON carries a num per node and the prompt tells the AI to copy every num and never invent one, so changes can refer to shapes (add a step after 7). New What have I missed? button in the Draw it for me box: POST /api/drawings/suggestions (askSuggestions in drawingDiagram.js, AI rate limit, usage feature drawing_diagram) sends only the diagram structure and returns up to six suggestions naming shapes by number; Add this makes the change through Change it, Dismiss hides one; nothing changes until Add this. Guide chat, help text, tour, tooltips, docs/drawings.md and routeManifest.json updated.",
+   "filesImpacted": [
+    "client/src/pages/drawings/shapeNumbers.mjs",
+    "client/src/pages/drawings/shapeNumbers.test.mjs",
+    "client/src/pages/drawings/sceneDiagram.mjs",
+    "client/src/pages/drawings/diagramLayout.mjs",
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/routes/drawings.js",
+    "server/services/drawingDiagram.js",
+    "server/services/drawingsTutor.js",
+    "server/testing/routeManifest.json",
+    "docs/drawings.md"
+   ],
+   "benefit": "On a drawing with many shapes a change or a gap can be pointed at by number, and the AI can raise gaps the owner had not thought of.",
+   "concerns": "Checked on screen only with a stand-in AI, never a real model: how useful and accurate the suggestions are, and whether a real model keeps shape numbers when changing a diagram, is unproven. The overlay badges are repositioned on every board change, which is fine for a few dozen shapes and unmeasured for hundreds. A number freed by deleting a shape is not reused within a visit, but after a drawing is reopened a freed top number can be reused. Only a box put in between two numbered boxes gets a sub-number; branches and additions at either end take whole numbers. Each What have I missed? press is one AI request. Separately, crossUser.test.js reports 11 SERP Tracker routes missing from routeManifest.json; those are not Drawings routes and were not changed here."
+  },
+  {
    "commit": "e196370c",
    "fullHash": "e196370c8ad343d440404363b0c4ae4af8a28ee5",
    "committedAt": "2026-11-08T13:13:12+10:00",
