@@ -2,6 +2,31 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "e196370c",
+   "fullHash": "e196370c8ad343d440404363b0c4ae4af8a28ee5",
+   "committedAt": "2026-11-08T13:13:12+10:00",
+   "author": "mrb",
+   "subject": "Drawings: change any diagram by voice, waiting steps loop back",
+   "filesChanged": 8,
+   "insertions": 187,
+   "deletions": 17,
+   "area": "Drawings",
+   "goal": "Let the owner change an existing drawing by voice (insert, add at the start or end), not only the diagram the AI drew a moment ago, and make waiting steps (a deposit not paid) loop back to the earlier step dependably.",
+   "whatChanged": "New client/src/pages/drawings/sceneDiagram.mjs (readDiagram) reads a diagram back out of the drawing: boxes with bound writing (rectangle = box, diamond = decision, ellipse = start/end) and arrows bound at both ends, with labels and two-way heads. Change it now uses that instead of the structure remembered from the last AI run, so it works on hand-made diagrams and ones from earlier visits, and reflects hand edits; the diagram containing the selection is used, otherwise the biggest, over 40 boxes is refused. The pieces read are deleted and the updated diagram drawn at their top left (one Undo reverts). The Change it box shows whenever a diagram is readable; Start fresh was removed. The AI prompt now describes insert / add at start / add at end / rename / remove / loop back, and says a step that must wait (payment, approval, reply) is a Yes/No decision whose No arrow loops back to the earlier step. Guide chat, help text and docs/drawings.md updated.",
+   "filesImpacted": [
+    "client/src/pages/drawings/sceneDiagram.mjs",
+    "client/src/pages/drawings/sceneDiagram.test.mjs",
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "server/services/drawingDiagram.js",
+    "server/services/drawingDiagram.test.js",
+    "server/services/drawingsTutor.js",
+    "docs/drawings.md"
+   ],
+   "benefit": "Diagrams can be extended or corrected by voice at any time, including older and hand-made ones, and processes that must wait for something loop back instead of moving on.",
+   "concerns": "Seen working on screen only with a stand-in AI (reload, then add a step after the visit); never with a real model, so how well the model inserts steps or draws the deposit loop from real wording is unproven. Boxes moved by hand inside the diagram are laid out again on a change. Arrows from outside a replaced diagram that were bound to its boxes become unattached. Reading a diagram relies on writing being bound inside boxes (the board's normal behaviour), so loose text next to a box is not read. Several diagrams on one drawing rely on selecting a box to choose; otherwise the biggest is used."
+  },
+  {
    "commit": "62bcd551",
    "fullHash": "62bcd5512d270611ef28ead535f0f1d31ae615c4",
    "committedAt": "2026-11-08T12:55:07+10:00",
