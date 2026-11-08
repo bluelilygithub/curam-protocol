@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "776542c0",
+   "fullHash": "776542c0800b835987ddb6705355a9bb128203ee",
+   "committedAt": "2026-11-08T18:16:23+10:00",
+   "author": "mrb",
+   "subject": "Rename Projects to Workspaces in the UI; drop the project brief",
+   "filesChanged": 24,
+   "insertions": 82,
+   "deletions": 113,
+   "area": "Workspaces",
+   "goal": "Stop calling a named group of chats a Project, a word that belongs to planning and the Gantt idea, and remove the brief fields nobody uses.",
+   "whatChanged": "On-screen text only: Projects becomes Workspaces in the sidebar, home page, New Workspace modal, detail page, mobile menu, chat list toggle, New Chat modal, Chat page hints, Chat History, Notes, Mood, Settings text, Admin tile, task filter and command palette. The Goal, Problem, Audience, Constraints, Success Criteria and Tone fields are gone from the workspace form and the New Workspace modal, and chat.js no longer adds them to the system prompt or the branch-chat opener. Tech stack, Notes and the type settings stay. Routes (/projects/...), store names, the projects table and its columns are unchanged. noteGroups.test.mjs updated for the new No workspace label.",
+   "filesImpacted": [
+    "client/src/pages/ProjectDetail.jsx",
+    "client/src/pages/ProjectList.jsx",
+    "client/src/components/ProjectSidebar.jsx",
+    "client/src/components/NewProjectModal.jsx",
+    "client/src/components/NewChatModal.jsx",
+    "client/src/pages/ChatPage.jsx",
+    "client/src/pages/ChatHistoryPage.jsx",
+    "client/src/pages/NotesPage.jsx",
+    "client/src/pages/MoodPage.jsx",
+    "client/src/utils/mobileConfig.js",
+    "client/src/utils/paletteItems.mjs",
+    "server/routes/chat.js"
+   ],
+   "benefit": "One clear word for a chat collection, which frees Project for planning work, and a shorter workspace form with a smaller chat prompt.",
+   "concerns": "A workspace that already has a goal, problem, audience, constraints, success criteria or tone saved stops sending it to the AI; the data is kept but now unreachable from the screen, and production was not checked. Some project wording remains in the Settings tour mock-up, tour text and UserGuidePage body text. Home cards still show an old goal if one was saved. Checked on screen locally on the sidebar, home page, New Workspace modal and detail page only; Chat, Notes, Mood and Admin edits were not viewed. Creating a workspace failed on the local database because only one non-chat model is configured there; the cause was not confirmed."
+  },
+  {
    "commit": "47988776",
    "fullHash": "47988776ef225addca9c37d05c15ba757d66e70e",
    "committedAt": "2026-11-08T15:31:03+10:00",
