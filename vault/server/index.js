@@ -233,6 +233,7 @@ require('./services/fontGoogleCatalog').warmCatalog(); // background build — f
 app.use('/api/videos', requireFeature('videos'), aiLimiter, require('./routes/videos'));
 app.use('/api/drawings-tutor', requireFeature('drawings'), aiLimiter, require('./routes/drawingsTutor')); // the Drawings guide chat (sees no drawings); before /api/drawings so the longer path is matched first
 app.use('/api/drawings', requireFeature('drawings'), require('./routes/drawings')); // saved Excalidraw drawings (docs/drawings.md)
+app.use('/api/sketchbook-tutor', requireFeature('sketchbook'), aiLimiter, require('./routes/sketchbookTutor')); // the Sketchbook guide chat (sees no sketches)
 app.use('/api/sketchbook', requireFeature('sketchbook'), require('./routes/sketchbook')); // cartoon pictures drawn from a description (docs/sketchbook.md); paid: the Graphics image limits apply
 // aiLimiter is applied inside music.js to POST /jobs only — the client polls GET /jobs/:id every 2s,
 // which alone would exhaust the 30/min per-user limit.

@@ -30,6 +30,7 @@ export default function SketchList() {
   const [query, setQuery] = useState('');
   const [renaming, setRenaming] = useState(null); // { id, title }
   const [confirmId, setConfirmId] = useState(null);
+  const [notesMenu, setNotesMenu] = useState(null); // { id, notes } while a card's list of notes is open
 
   const [text, setText] = useState('');
   const [style, setStyle] = useState('pencil');
@@ -51,6 +52,19 @@ export default function SketchList() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // The notes a sketch was sent to: one goes straight there, several show a short list under the card's buttons.
+  const showNotes = async (s) => {
+    if (notesMenu && notesMenu.id === s.id) { setNotesMenu(null); return; }
+    try {
+      const res = await api.get(`/api/sketchbook/${s.id}/notes`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not find the notes.');
+      if (data.notes.length === 1) navigate(`/notes?note=${data.notes[0].id}`);
+      else if (data.notes.length === 0) { addToast('No note links to this sketch any more.', 'info'); load(); }
+      else setNotesMenu({ id: s.id, notes: data.notes });
+    } catch (err) { addToast(err.message, 'error'); }
+  };
 
   const draw = async () => {
     const description = text.trim();
@@ -238,6 +252,13 @@ export default function SketchList() {
                         <Tooltip text="Change the name of this sketch.">
                           <button type="button" className={BTN} style={BTN_STYLE} onClick={() => setRenaming({ id: s.id, title: s.title })}>{getIcon('edit', { size: 13 })} Rename</button>
                         </Tooltip>
+                        {s.noteCount > 0 && (
+                          <Tooltip text={s.noteCount === 1 ? 'Go to the note this sketch is in.' : `This sketch is in ${s.noteCount} notes. Choose one to go to it.`}>
+                            <button type="button" className={BTN} style={BTN_STYLE} aria-expanded={s.noteCount > 1 ? !!(notesMenu && notesMenu.id === s.id) : undefined} onClick={() => showNotes(s)}>
+                              {getIcon('file-text', { size: 13 })} {s.noteCount === 1 ? 'In a note' : `In ${s.noteCount} notes`}
+                            </button>
+                          </Tooltip>
+                        )}
                         <Tooltip text="Make another sketch from this one. The two are separate afterwards, so you can try a different change on the copy.">
                           <button type="button" className={BTN} style={BTN_STYLE} onClick={() => copy(s)}>{getIcon('copy', { size: 13 })} Copy</button>
                         </Tooltip>
@@ -247,6 +268,15 @@ export default function SketchList() {
                       </>
                     )}
                   </div>
+                  {notesMenu && notesMenu.id === s.id && (
+                    <ul role="menu" className="rounded-xl border p-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      {notesMenu.notes.map((n) => (
+                        <li key={n.id} role="none">
+                          <button type="button" role="menuitem" onClick={() => navigate(`/notes?note=${n.id}`)} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)' }}>{n.title || 'Untitled'}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </li>
             ))}

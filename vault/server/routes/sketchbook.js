@@ -9,6 +9,7 @@
 //   POST   /api/sketchbook/draw                    describe a scene -> a new sketch  { description, style?, penColor?, aspect?, title? }  (paid)
 //   GET    /api/sketchbook/:id                     one sketch with its picture and a summary of earlier pictures
 //   POST   /api/sketchbook/:id/change              change the same picture  { instruction?, style?, penColor?, baseUpdatedAt? }  (paid)
+//   GET    /api/sketchbook/:id/notes               the person's notes that link back to the sketch (made by To Notes)
 //   GET    /api/sketchbook/:id/versions/:vid       one earlier picture
 //   POST   /api/sketchbook/:id/versions/:vid/restore  put an earlier picture back  { baseUpdatedAt? }
 //   PUT    /api/sketchbook/:id                     rename  { title }
@@ -146,6 +147,12 @@ router.post('/:id/duplicate', async (req, res) => {
   try {
     res.status(201).json({ sketch: await sketches.duplicate(pool, req.user.id, idOf(req)) });
   } catch (err) { fail(res, err, 'duplicate'); }
+});
+
+router.get('/:id/notes', async (req, res) => {
+  try {
+    res.json({ notes: await sketches.linkedNotes(pool, req.user.id, idOf(req)) });
+  } catch (err) { fail(res, err, 'notes'); }
 });
 
 router.get('/:id/versions/:vid', async (req, res) => {

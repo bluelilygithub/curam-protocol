@@ -171,8 +171,32 @@ function pushVersion(list, { image, thumb, note, style, penColor }) {
 
 const LIST_COLS = 'id, title, description, style, "penColor", thumbnail, width, height, "changeCount", "createdAt", "updatedAt"';
 
+/**
+ * How many of the person's notes link back to each sketch, as { [sketchId]: count }. One pass over the notes that mention "/sketchbook/" at
+ * all. The note's own text is the record (To Notes writes "[Title](/sketchbook/12)" into it), so a deleted note or a removed link stops
+ * counting, and a note the person linked by hand counts too.
+ */
+async function noteCounts(db, userId) {
+  const { rows } = await db.query(
+    `SELECT (m.hit)[1]::int AS id, COUNT(DISTINCT n.id)::int AS n
+       FROM notes n, LATERAL regexp_matches(n.body, '\\]\\(/sketchbook/([0-9]+)\\)', 'g') AS m(hit)
+      WHERE n.user_id = $1 AND n.body LIKE '%](/sketchbook/%'
+      GROUP BY 1`, [userId]);
+  return Object.fromEntries(rows.map((r) => [r.id, r.n]));
+}
+
 async function list(db, userId) {
   const { rows } = await db.query(`SELECT ${LIST_COLS} FROM sketches WHERE "userId" = $1 ORDER BY "updatedAt" DESC, id DESC LIMIT 500`, [userId]);
+  const counts = await noteCounts(db, userId);
+  return rows.map((r) => ({ ...r, noteCount: counts[r.id] || 0 }));
+}
+
+/** The person's notes that link back to this sketch, newest change first, at most 20. Another person's sketch is "not found". */
+async function linkedNotes(db, userId, id) {
+  await getRow(db, userId, id);
+  const { rows } = await db.query(
+    `SELECT id, title, updated_at AS "updatedAt" FROM notes WHERE user_id = $1 AND body LIKE $2 ESCAPE '\\' ORDER BY updated_at DESC, id DESC LIMIT 20`,
+    [userId, `%](/sketchbook/${Number(id)})%`]);
   return rows;
 }
 
@@ -287,7 +311,7 @@ function titleFromDescription(description) {
 }
 
 module.exports = {
-  list, get, getVersion, create, applyChange, restoreVersion, rename, duplicate, checkRoom,
+  list, linkedNotes, get, getVersion, create, applyChange, restoreVersion, rename, duplicate, checkRoom,
   buildDrawPrompt, buildChangePrompt, restyleInstruction, styleWords, titleFromDescription,
   cleanTitle, cleanDescription, cleanInstruction, checkStyle, checkPenColor, checkAspect, checkImage, checkThumbnail,
   parseVersions, summariseVersions, pushVersion,

@@ -703,6 +703,9 @@
   "DELETE /api/drawings/:id": {
    "class": "authed"
   },
+  "POST /api/sketchbook-tutor": {
+   "class": "authed"
+  },
   "GET /api/sketchbook": {
    "class": "authed"
   },
@@ -719,6 +722,9 @@
    "class": "authed"
   },
   "POST /api/sketchbook/:id/duplicate": {
+   "class": "authed"
+  },
+  "GET /api/sketchbook/:id/notes": {
    "class": "authed"
   },
   "GET /api/sketchbook/:id/versions/:vid": {

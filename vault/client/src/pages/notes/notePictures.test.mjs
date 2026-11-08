@@ -1,6 +1,6 @@
 // node client/src/pages/notes/notePictures.test.mjs
 import assert from 'node:assert';
-import { pictureToken, pictureify, pictureIds, drawingNoteBody, PICTURE_SRC } from './notePictures.mjs';
+import { pictureToken, pictureify, pictureIds, drawingNoteBody, sketchNoteBody, PICTURE_SRC } from './notePictures.mjs';
 import { chipify } from './noteTodos.mjs';
 
 assert.strictEqual(pictureToken(41), '{picture:41}');
@@ -41,5 +41,12 @@ assert.strictEqual(made.split('\n')[0], '{picture:41}');
 assert.ok(made.includes('[Kitchen v2 plan](/drawings/12)'), 'brackets and line breaks in a title cannot break the link');
 assert.deepStrictEqual(pictureIds(made), [41]);
 assert.ok(drawingNoteBody({ attachmentId: 1, title: '', drawingPath: '/drawings/1' }).includes('[Diagram](/drawings/1)'));
+
+// the note made from a sketch
+const fromSketch = sketchNoteBody({ attachmentId: 9, title: 'Rig [day 1]\nwin', sketchPath: '/sketchbook/5' });
+assert.strictEqual(fromSketch.split('\n')[0], '{picture:9}');
+assert.ok(fromSketch.includes('From the sketch [Rig day 1 win](/sketchbook/5).'), 'brackets and line breaks in a title cannot break the link');
+assert.deepStrictEqual(pictureIds(fromSketch), [9]);
+assert.ok(sketchNoteBody({ attachmentId: 1, title: '', sketchPath: '/sketchbook/1' }).includes('[Sketch](/sketchbook/1)'));
 
 console.log('notePictures tests: all ok');

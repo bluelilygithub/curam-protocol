@@ -42,3 +42,9 @@ export function drawingNoteBody({ attachmentId, title, drawingPath }) {
   const name = String(title || 'Diagram').replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Diagram';
   return `${pictureToken(attachmentId)}\n\nFrom the diagram [${name}](${drawingPath}).\n`;
 }
+
+/** The text of a note made from a Sketchbook picture: the picture, then where it came from. `sketchPath` is a path inside Vault such as /sketchbook/12. */
+export function sketchNoteBody({ attachmentId, title, sketchPath }) {
+  const name = String(title || 'Sketch').replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Sketch';
+  return `${pictureToken(attachmentId)}\n\nFrom the sketch [${name}](${sketchPath}).\n`;
+}

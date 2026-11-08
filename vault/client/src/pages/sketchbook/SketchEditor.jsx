@@ -9,6 +9,7 @@ import Skeleton from '../../components/Skeleton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import LookPicker from './LookPicker';
 import { useSketchOptions, useSketchCost } from './useSketchOptions';
+import { saveSketchToNotes } from './saveSketchToNotes.mjs';
 import { EXPORT_FORMATS, convertPicture, saveBlob, fileBase, versionLabel, lookLabel, costText, when } from './sketchbookLogic.mjs';
 
 const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-60 disabled:opacity-40';
@@ -35,6 +36,17 @@ export default function SketchEditor({ id }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [preview, setPreview] = useState(null); // { vid, note, image } an earlier picture being looked at
   const busyRef = useRef(false);
+  // Notes: the person's notes that link back to this sketch (made by To Notes). The note's own text is the record, so the button always
+  // reflects what is true now: none -> "To Notes", one -> "Go to note", several -> "In N notes" with a list.
+  const [linkedNotes, setLinkedNotes] = useState([]);
+  const [notesMenu, setNotesMenu] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false); // the box that files a new note under a project or client
+  const [savingNote, setSavingNote] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [projectId, setProjectId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const listsLoaded = useRef(false);
 
   const adopt = useCallback((s) => {
     setSketch(s);
@@ -54,6 +66,45 @@ export default function SketchEditor({ id }) {
     })();
     return () => { live = false; };
   }, [id, adopt]);
+
+  const loadLinkedNotes = useCallback(async () => {
+    try {
+      const res = await api.get(`/api/sketchbook/${id}/notes`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.notes)) setLinkedNotes(data.notes);
+    } catch { /* the button then just offers To Notes */ }
+  }, [id]);
+  useEffect(() => { loadLinkedNotes(); }, [loadLinkedNotes]);
+
+  const openNote = (noteId) => navigate(`/notes?note=${noteId}`);
+
+  const openNotesPanel = () => {
+    setNotesOpen((v) => !v);
+    if (listsLoaded.current) return;
+    listsLoaded.current = true;
+    api.get('/api/projects').then((r) => r.json()).then((d) => setProjects(Array.isArray(d) ? d : [])).catch(() => {});
+    api.get('/api/clients?status=active').then((r) => r.json()).then((d) => setClients(Array.isArray(d) ? d : [])).catch(() => {});
+  };
+
+  const saveToNotes = async () => {
+    setSavingNote(true);
+    const open = (noteId) => ({ label: 'Open', onClick: () => openNote(noteId) });
+    try {
+      const png = await convertPicture(sketch.image, 'png');
+      const { noteId } = await saveSketchToNotes({
+        api, title: sketch.title, sketchId: id, png,
+        projectId: projectId ? Number(projectId) : null, clientId: clientId ? Number(clientId) : null,
+      });
+      addToast('Saved to Notes ✓', 'success', undefined, open(noteId));
+      setNotesOpen(false);
+      loadLinkedNotes();
+    } catch (err) {
+      addToast(err.message || 'That could not be saved to Notes. Try again.', 'error', undefined, err.noteId ? open(err.noteId) : undefined);
+      if (err.noteId) loadLinkedNotes();
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   // One request at a time: a second press while a picture is being drawn does nothing.
   const run = async (label, fn) => {
@@ -272,7 +323,68 @@ export default function SketchEditor({ id }) {
               <Tooltip text="Copy the picture so you can paste it into an email, a document or a chat.">
                 <button type="button" className={BTN} style={BTN_STYLE} onClick={copyPicture}>{getIcon('copy', { size: 13 })} Copy picture</button>
               </Tooltip>
+              <div className="relative" data-tour="sketchbook-notes">
+                <Tooltip text={linkedNotes.length === 0
+                  ? 'Put this sketch in a new note: the picture is attached and shown inside the note, with a link back to the sketch.'
+                  : (linkedNotes.length === 1 ? `This sketch is in a note (${linkedNotes[0].title || 'Untitled'}). Go to it.` : `This sketch is in ${linkedNotes.length} notes. Choose one to go to it.`)}>
+                  <button
+                    type="button" className={BTN} style={BTN_STYLE}
+                    aria-haspopup={linkedNotes.length > 1 ? 'menu' : undefined} aria-expanded={linkedNotes.length > 1 ? notesMenu : (linkedNotes.length === 0 ? notesOpen : undefined)}
+                    onClick={() => {
+                      if (linkedNotes.length === 1) { openNote(linkedNotes[0].id); return; }
+                      if (linkedNotes.length > 1) { setNotesMenu((v) => !v); return; }
+                      openNotesPanel();
+                    }}
+                  >{getIcon('file-text', { size: 13 })} {linkedNotes.length === 0 ? 'To Notes' : (linkedNotes.length === 1 ? 'Go to note' : `In ${linkedNotes.length} notes`)}</button>
+                </Tooltip>
+                {notesMenu && linkedNotes.length > 1 && (
+                  <ul role="menu" className="absolute left-0 mt-1 z-20 min-w-[14rem] max-w-xs rounded-xl border p-1 shadow-lg" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                    {linkedNotes.map((n) => (
+                      <li key={n.id} role="none">
+                        <button type="button" role="menuitem" onClick={() => { setNotesMenu(false); openNote(n.id); }} className="block w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-text)' }}>
+                          Go to: {n.title || 'Untitled'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {linkedNotes.length > 0 && (
+                <Tooltip text="Make another note with a fresh picture of this sketch as it is now. Earlier notes keep the picture they had.">
+                  <button type="button" className={BTN} style={BTN_STYLE} aria-expanded={notesOpen} onClick={openNotesPanel}>{getIcon('plus', { size: 13 })} Put in another note</button>
+                </Tooltip>
+              )}
             </div>
+            {notesOpen && (
+              <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Makes a new note named “{sketch.title}” with this picture inside it. Optionally file it:</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="block space-y-0.5">
+                    <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Project</span>
+                    <Tooltip text="File the new note under one of your projects. Leave it empty to file it later.">
+                      <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="block px-2 py-1.5 rounded-xl border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        <option value="">No project</option>
+                        {projects.map((p) => <option key={p.id} value={p.id}>{p.name || p.title}</option>)}
+                      </select>
+                    </Tooltip>
+                  </label>
+                  <label className="block space-y-0.5">
+                    <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Client</span>
+                    <Tooltip text="File the new note under one of your clients. Leave it empty to file it later.">
+                      <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="block px-2 py-1.5 rounded-xl border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        <option value="">No client</option>
+                        {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </Tooltip>
+                  </label>
+                  <Tooltip text="Save the note now. A picture of the sketch as it is now is attached to the new note, with a link back to the sketch.">
+                    <button type="button" disabled={savingNote} onClick={saveToNotes} className="px-4 py-1.5 rounded-xl text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                      {savingNote ? 'Saving…' : 'Save to Notes'}
+                    </button>
+                  </Tooltip>
+                </div>
+              </div>
+            )}
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Need an SVG, a PDF or a print file? Save a PNG, then open it in Graphics (Vectorize, Print Ready).</p>
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               {confirmDelete ? (

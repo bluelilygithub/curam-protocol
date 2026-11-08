@@ -218,6 +218,29 @@ const pic = async (rgb) => `data:image/png;base64,${(await sharp({ create: { wid
     const copyId = r.body.sketch.id;
     assert.deepEqual((await call(A, 'GET', `/${copyId}`)).body.sketch.versions, [], 'a copy starts with no history');
 
+    // ---- the two-way link with Notes: the note's own text is the record ----
+    {
+      const note = async (user, title, body) => (await pool.query('INSERT INTO notes (user_id, title, body) VALUES ($1, $2, $3) RETURNING id', [user, title, body])).rows[0].id;
+      assert.deepEqual((await call(A, 'GET', `/${s1.id}/notes`)).body.notes, [], 'no note yet: the page offers To Notes');
+      assert.equal((await call(A, 'GET', '/')).body.sketches.find((x) => x.id === s1.id).noteCount, 0);
+      const n1 = await note(A, 'Rig deal', `{picture:5}\n\nFrom the sketch [Dog and ball](/sketchbook/${s1.id}).\n`);
+      await note(A, 'Other sketch', `From the sketch [x](/sketchbook/${s1.id}0).\n`); // another sketch whose number starts with this one's
+      await note(B, 'Bs note', `[Dog and ball](/sketchbook/${s1.id})`); // someone else's note that happens to use the same number
+      await note(A, 'Not a link', `I like /sketchbook/${s1.id} but no link`);
+      r = await call(A, 'GET', `/${s1.id}/notes`);
+      assert.deepEqual(r.body.notes.map((n) => n.id), [n1], 'only my note with the real link back');
+      assert.equal((await call(A, 'GET', '/')).body.sketches.find((x) => x.id === s1.id).noteCount, 1, 'the list card shows In a note');
+      const n2 = await note(A, 'Second note', `[again](/sketchbook/${s1.id}) and again [twice](/sketchbook/${s1.id})`);
+      r = await call(A, 'GET', `/${s1.id}/notes`);
+      assert.deepEqual(r.body.notes.map((n) => n.id).sort(), [n1, n2].sort());
+      assert.equal((await call(A, 'GET', '/')).body.sketches.find((x) => x.id === s1.id).noteCount, 2, 'a note linking twice counts once');
+      assert.equal((await call(B, 'GET', `/${s1.id}/notes`)).status, 404, 'another person cannot ask about my sketch');
+      await pool.query('DELETE FROM notes WHERE id = $1', [n2]);
+      assert.equal((await call(A, 'GET', '/')).body.sketches.find((x) => x.id === s1.id).noteCount, 1, 'a deleted note stops counting, so the button goes back');
+      await pool.query('DELETE FROM notes WHERE user_id = ANY($1)', [[A, B]]);
+      assert.deepEqual((await call(A, 'GET', `/${s1.id}/notes`)).body.notes, [], 'with every link gone the page offers To Notes again');
+    }
+
     // ---- the image service refuses or fails: plain words, nothing saved, nothing charged ----
     const count = (await call(A, 'GET', '/')).body.sketches.length;
     failWith = Object.assign(new Error('That idea is not allowed here.'), { status: 422, code: 'CONTENT_RESTRICTED', matches: ['gore'] });

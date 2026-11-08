@@ -10,6 +10,8 @@ It is its own tool, not part of Graphics, because it is project-shaped (a saved 
 - **Change this picture**: words in, the same sketch changes. The picture it replaces is kept as an **earlier picture** (last 6, newest first) with the words that replaced it. **Put back** makes an earlier picture current again, restores its look, and keeps the one it replaced, so putting back can itself be undone.
 - **Pencil, pen or colour**: redraw the same picture in another look, or **Colour it in** with no words needed.
 - **Save or share**: PNG, JPG, WebP (made in the browser from the stored picture; JPG gets a white background) and **Copy picture**. SVG, PDF and print files are reached by saving a PNG and opening it in Graphics (Vectorize, Print Ready).
+- **To Notes, a two-way link** (same design as Diagrams): `saveSketchToNotes.mjs` makes a new note named after the sketch (optionally filed under a project or client), attaches a PNG, and writes `{picture:N}` and a link back (`From the sketch [Title](/sketchbook/ID)`, `sketchNoteBody` in `pages/notes/notePictures.mjs`) into the note, using only existing Notes routes. The note's own text is the record of the link, so nothing extra is stored: `GET /api/sketchbook/:id/notes` finds the person's notes containing `](/sketchbook/ID)` (matched with the closing bracket, so /sketchbook/7 never matches /sketchbook/70; newest first, at most 20), and `GET /api/sketchbook` adds `noteCount` to every row from one pass over the notes (a note linking twice counts once). **The buttons follow the state:** no note -> **To Notes** (opens a box to file the note, then **Save to Notes**); one note -> **Go to note** (straight there) plus **Put in another note**; several -> **In N notes** with a list of **Go to** entries plus **Put in another note**. Each card in the collection shows **In a note** / **In N notes** when `noteCount > 0` (one goes straight there, several show a short list). A deleted note or a removed link makes the button go back to To Notes; a note linked by hand with the same link counts. From the note, the link goes back to the sketch. A later change to a sketch is not copied into an earlier note (Put in another note makes a fresh one). Test: `node client/src/pages/sketchbook/saveSketchToNotes.test.mjs`, and the link lookup is in `sketchbook.db.test.js`.
+- **Help:** the (i) box, a 6-step tour (Settings -> tours, key `vault_tour_sketchbook_completed`, `/sketchbook?tour=1`, `client/src/utils/tours/sketchbookTour.js`), a tooltip on every control, the microphone on every text box, and the **Sketchbook guide** round button (`guideId` `sketchbook`, `POST /api/sketchbook-tutor`, `server/services/sketchbookTutor.js` on `guideCore.js`, wrapper `SketchbookTutorChat.jsx`, flag `sketchbook`). The guide sees no sketches. `client/src/pages/sketchbook/sketchbookTools.mjs` is the list of views and controls the page and the guide share; `node server/services/sketchbookTutor.test.js` (tested with `guideTestKit.js`) fails if it and the guide's catalogue drift apart. When a Sketchbook control is added or changed, update `sketchbookTools.mjs` and `CATALOG` together.
 - Collection: search by name or description, rename, copy (a copy starts with no history), delete (inline Yes/No, 30 days in the shared recycle bin, Undo button). 200 sketches per person.
 
 ## Where things are
@@ -21,12 +23,13 @@ It is its own tool, not part of Graphics, because it is project-shaped (a saved 
 | image provider calls (draw, change, price, thumbnail, normalise) | `server/services/sketchbookEngine.js` |
 | HTTP | `server/routes/sketchbook.js`, mounted at `/api/sketchbook` behind `requireFeature('sketchbook')` |
 | recycle bin | `server/services/recycleBin/adapters/sketchbook.js` (type `sketch`) |
-| page | `client/src/pages/SketchbookPage.jsx`, `sketchbook/SketchList.jsx`, `SketchEditor.jsx`, `LookPicker.jsx`, `useSketchOptions.js`, `sketchbookLogic.mjs` |
-| tests | `node server/routes/sketchbook.db.test.js` (needs `DATABASE_URL`; wording part runs without), `node client/src/pages/sketchbook/sketchbookLogic.test.mjs` |
+| page | `client/src/pages/SketchbookPage.jsx`, `sketchbook/SketchList.jsx`, `SketchEditor.jsx`, `LookPicker.jsx`, `useSketchOptions.js`, `sketchbookLogic.mjs`, `saveSketchToNotes.mjs`, `sketchbookTools.mjs`, `SketchbookTutorChat.jsx` |
+| guide and tour | `server/services/sketchbookTutor.js`, `server/routes/sketchbookTutor.js` (`/api/sketchbook-tutor`), `server/config/guides.js`, `client/src/utils/tours/sketchbookTour.js` |
+| tests | `node server/routes/sketchbook.db.test.js` (needs `DATABASE_URL`; wording part runs without), `node client/src/pages/sketchbook/sketchbookLogic.test.mjs`, `saveSketchToNotes.test.mjs`, `node server/services/sketchbookTutor.test.js`, `npm run test:guides` |
 
 ## API
 
-`GET /api/sketchbook` (list: previews only), `GET /options`, `GET /cost?kind=draw|change`, `POST /draw { description, style?, penColor?, aspect?, title? }`, `GET /:id`, `POST /:id/change { instruction?, style?, penColor?, baseUpdatedAt? }`, `GET /:id/versions/:vid`, `POST /:id/versions/:vid/restore`, `PUT /:id { title }`, `POST /:id/duplicate`, `DELETE /:id`. Another person's sketch is "not found" (404) on every route. A change from a stale tab is refused with 409 `CHANGED`.
+`GET /api/sketchbook` (list: previews and `noteCount` only), `GET /options`, `GET /cost?kind=draw|change`, `POST /draw { description, style?, penColor?, aspect?, title? }`, `GET /:id`, `GET /:id/notes`, `POST /:id/change { instruction?, style?, penColor?, baseUpdatedAt? }`, `GET /:id/versions/:vid`, `POST /:id/versions/:vid/restore`, `PUT /:id { title }`, `POST /:id/duplicate`, `DELETE /:id`. Another person's sketch is "not found" (404) on every route. A change from a stale tab is refused with 409 `CHANGED`.
 
 ## How a picture is made
 
@@ -45,9 +48,8 @@ It is its own tool, not part of Graphics, because it is project-shaped (a saved 
 
 ## Not built yet (said honestly)
 
-- **To Notes** (the same way Diagrams does it: new note, attached PNG, link back). Asked for as a later step.
 - **Drawing or painting by hand** on the picture (pens, colouring-in tools). Today pencil, pen and colour are looks the AI draws, and any sketch can be redrawn or coloured in.
 - **Several pictures in a row** (a comic strip) and **the same character across pictures**.
-- **Guide chat, tour and Feature Access tour entry**: not written yet (the (i) box is).
+- **The guide chat was checked on screen to open and show its starter questions, but no question was sent to a real model** (no AI key locally); its logic is covered by `sketchbookTutor.test.js` with a stand-in model.
 - **PDF and SVG export inside the tool**.
 - **Not tried with the live image service.** The screens and the flow were checked against a stand-in that draws simple shapes. The default edit model id and how well it follows instructions on a cartoon are unproven until an admin switches the flag on and tries it on Railway.
