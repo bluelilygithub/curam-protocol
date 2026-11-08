@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b78ef146",
+   "fullHash": "b78ef1465173aba3b2df10564bf3ff35ffd722fa",
+   "committedAt": "2026-11-09T07:33:00+10:00",
+   "author": "mrb",
+   "subject": "Plans: file plans under clients and client projects",
+   "filesChanged": 19,
+   "insertions": 478,
+   "deletions": 31,
+   "area": "Plans",
+   "goal": "Let a plan belong to a CRM client and to one of that client's projects, so client work shows its plans and the tasks that come from them.",
+   "whatChanged": "plans gets \"clientId\" (FK clients) and \"clientProjectId\" (FK projects, a projects row with projectType client), both ON DELETE SET NULL, added in db.js right after the clients table is created. resolveClientLink in plans.js checks both are the caller's own, that a project belongs to the chosen client, that naming only a project chooses its client, that changing the client without naming a project drops a project of the old client, and that clearing the client clears the project; an ordinary chat workspace is refused as a client project. A plan made from a note starts with the note's client (and its project when that is a client project), shown in the box and overridable; tasks sent from a plan are created with the plan's client and project (tasks.clientId and projectId). GET /api/plans takes clientId and clientProjectId filters, and plan and list rows carry clientName and clientProjectName; create, update and the from-diagram and from-note routes accept the two fields (no new routes). Screens: Client and Client project boxes (PlanClientPicker.jsx) on the plan, in the Start a plan box and in the Make a plan box; a client filter and a chip on each Plans list card, with /plans?client= and ?clientProject= opening it filtered; a Plans section with New plan and Open in Plans on a client's page and a client project's page (ClientPlans.jsx). The Plans guide (21 controls), the CRM guide (a plans control), the Plans (i) box and docs/plans.md were updated.",
+   "filesImpacted": [
+    "server/db.js",
+    "server/services/plans.js",
+    "server/services/planTasks.js",
+    "server/routes/plans.js",
+    "client/src/pages/plans/PlanClientPicker.jsx",
+    "client/src/components/ClientPlans.jsx",
+    "client/src/pages/plans/PlanEditor.jsx",
+    "client/src/pages/plans/PlanList.jsx",
+    "client/src/pages/drawings/MakePlanDialog.jsx",
+    "client/src/pages/ClientDetailPage.jsx",
+    "client/src/pages/ClientProjectPage.jsx",
+    "server/services/plansTutor.js",
+    "server/services/crmTutor.js",
+    "docs/plans.md"
+   ],
+   "benefit": "Plans, and the tasks sent from them, show up under the right client and client project, and a note filed under a client makes plans for that client without re-entering it.",
+   "concerns": "Adds two columns and two indexes to plans at boot (additive, idempotent). Tasks already sent are not moved if a plan's client changes later. Checked on screen only with test data (one client, one client project, one note), not a real client with many projects; the Client pickers load every client and client project once per box, which is fine for dozens but untested for hundreds. The client and project sections are left out when the CRM or Plans is off for the person, which was seen only for the on case. The CRM guide page test passes but the new Plans section was not added to the CRM tour. No new routes, so routeManifest.json is unchanged."
+  },
+  {
    "commit": "3a0cd66c",
    "fullHash": "3a0cd66c24863e0815f163f5f01007ee01c827a5",
    "committedAt": "2026-11-09T06:46:35+10:00",
