@@ -76,7 +76,7 @@ export default function MakePlanDialog({ diagram, drawingId, drawingTitle, onClo
       onClose={creating ? undefined : onClose}
       footer={(
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onClose} disabled={creating} className={BTN} style={BTN_STYLE}>Cancel</button>
+          <Tooltip text="Close this box without making a plan. Nothing has been saved."><button type="button" onClick={onClose} disabled={creating} className={BTN} style={BTN_STYLE}>Cancel</button></Tooltip>
           <Tooltip text="Make the plan with these steps, lengths and dates, and link it to this diagram. You can change anything afterwards on the plan page.">
             <button type="button" onClick={create} disabled={creating || !preview || !!error} className={BTN} style={{ ...BTN_STYLE, background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)', borderColor: 'var(--color-primary)' }}>
               {creating ? 'Making…' : 'Create plan'}
