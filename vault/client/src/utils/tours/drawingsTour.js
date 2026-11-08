@@ -97,8 +97,8 @@ export function startDrawingsTour() {
 
   tour.addStep({
     id: 'drawings-export',
-    title: 'Getting a drawing out',
-    text: 'Use the Export buttons above the drawing to save a PNG or SVG picture, or a .excalidraw file you can open again. Pictures go to your computer, ready to use in Graphics, Notes or a message.',
+    title: 'Look, export and Notes',
+    text: 'Use the buttons above the drawing: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the drawing inside a new note.',
     when: { show() { injectStepCounter(6); } },
     buttons: [
       btnBack(),

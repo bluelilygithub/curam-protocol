@@ -30,9 +30,11 @@ export const HOW_IT_WORKS = [
   ['Your drawings', 'Every drawing you make is saved to your Vault account and shown with a small preview. Click one to open it. You can rename it, make a copy, or delete it. A deleted drawing waits 30 days in the recycle bin in Settings, and a message with an Undo button appears straight away.'],
   ['The drawing board', 'An endless page with shapes, arrows, lines, text, freehand and an eraser, drawn in a hand-sketched style. Pick a tool along the top, drag on the page, and change colours and line style in the panel on the left. Everything saves by itself a moment after you stop; the words next to the title say when it last did.'],
   ['Pictures and shapes', 'Paste or drop a picture onto the page, or use the picture tool. The Library button holds ready-made shapes you can add to the page. Very large pictures make a drawing too big to save (the limit is 6 MB), so shrink them first.'],
-  ['Export and files', 'Export a PNG or SVG picture of the drawing, or save it as a file ending in .excalidraw that you can open again here (Open a file) or in other Excalidraw programs.'],
+  ['Sketch and Clean', 'Sketch is the hand-drawn look. Press Clean for a more conservative one: steady straight lines, square corners, straight arrows, solid fills, a plain font and Vault\'s own text colour for lines. Colours you chose yourself are kept. Every piece remembers how it was drawn, so pressing Sketch again gives you exactly what you drew, and Undo works too. New pieces you add start in the look the drawing is in. Each drawing in the list says which look it is in.'],
+  ['Export and files', 'Export a PNG or SVG picture of the drawing, or save it as a file ending in .excalidraw that you can open again here (Open a file) or in other Excalidraw programs. The Pictures choice beside the buttons can show a picture in the other look without changing the drawing.'],
+  ['To Notes', 'The To Notes button makes a new note named after the drawing, with the picture attached and shown inside the note (in Preview), and a link back to the drawing. You can file the note under a project or client as you save it. Later changes to the drawing are not copied into the note: press To Notes again for a fresh picture.'],
   ['Private', 'Your drawings are yours alone. Nobody else can see them, and there is no sharing link or live co-editing in Vault yet.'],
-  ['Not included yet', 'Several people drawing at once, share links, and sending a drawing into Graphics, Notes or Chat. Export a picture and use it there for now.'],
+  ['Not included yet', 'Several people drawing at once, share links, and sending a drawing into Graphics or Chat. Export a picture and use it there for now.'],
 ];
 
 // Everything the guide can point at: the two views plus the controls inside them.
@@ -51,4 +53,6 @@ export const GUIDE_TOOLS = [
   { id: 'saving', label: 'Saving', tool: 'editor' },
   { id: 'export', label: 'Export and save as a file', tool: 'editor' },
   { id: 'look', label: 'Background and dark mode', tool: 'editor' },
+  { id: 'style', label: 'Sketch and Clean look', tool: 'editor' },
+  { id: 'to-notes', label: 'To Notes', tool: 'editor' },
 ];

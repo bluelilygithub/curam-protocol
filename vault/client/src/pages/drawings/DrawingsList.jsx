@@ -194,7 +194,7 @@ export default function DrawingsList() {
                   ) : (
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }} title={d.title}>{d.title}</p>
                   )}
-                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{pieceCount(d.elementCount)} · changed {when(d.updatedAt)}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{pieceCount(d.elementCount)} · {d.look === 'clean' ? 'clean look' : 'sketch look'} · changed {when(d.updatedAt)}</p>
                   <div className="flex flex-wrap items-center gap-1.5 mt-auto pt-1">
                     {confirmId === d.id ? (
                       <>

@@ -67,6 +67,9 @@ if (!url) {
       assert.ok(start > 0, `${name} is defined in db.js`);
       await client.query(dbjs.slice(start, dbjs.indexOf('`', start)));
     }
+    const alter = dbjs.indexOf('ALTER TABLE drawings ADD COLUMN IF NOT EXISTS look');
+    assert.ok(alter > 0, 'the look column is added in db.js');
+    await client.query(dbjs.slice(alter, dbjs.indexOf('`', alter)));
     await client.query('INSERT INTO users (id) VALUES (1), (2)');
     const pool = { query: (...a) => client.query(...a), connect: async () => ({ query: (...a) => client.query(...a), release() {} }) };
     const rowsOf = async (uid) => (await client.query('SELECT id, title, "elementCount" FROM drawings WHERE "userId" = $1 ORDER BY id', [uid])).rows;
@@ -112,10 +115,25 @@ if (!url) {
     await assert.rejects(() => D.update(pool, 1, a.id, { scene: scene(1, { files: { a: { dataURL: 'x'.repeat(D.MAX_SCENE_BYTES) } } }) }), (e) => e.status === 413);
     assert.strictEqual((await D.get(pool, 1, a.id)).elementCount, 7, 'a refused save kept the old scene');
 
+    // the look: sketch unless said otherwise; only the two known looks; copied with the drawing
+    assert.strictEqual(a.look, 'sketch', 'a new drawing is a sketch');
+    const cleanOne = await D.create(pool, 1, { title: 'Tidy', look: 'clean' });
+    assert.strictEqual(cleanOne.look, 'clean');
+    await assert.rejects(() => D.create(pool, 1, { look: 'fancy' }), /sketch or clean/);
+    const lk = await D.update(pool, 1, a.id, { look: 'clean' });
+    assert.strictEqual(lk.look, 'clean');
+    assert.strictEqual(lk.elementCount, 7, 'changing only the look leaves the scene alone');
+    await assert.rejects(() => D.update(pool, 1, a.id, { look: 'neon' }), /sketch or clean/);
+    assert.strictEqual((await D.get(pool, 1, a.id)).look, 'clean', 'a refused look changed nothing');
+    assert.strictEqual((await D.list(pool, 1)).find((r) => r.id === a.id).look, 'clean', 'the list carries the look');
+    await D.update(pool, 1, a.id, { look: 'sketch' });
+    await client.query('DELETE FROM drawings WHERE id = $1', [cleanOne.id]);
+
     // copy
     const copy = await D.duplicate(pool, 1, a.id);
     assert.strictEqual(copy.title, 'No guard (copy)');
     assert.strictEqual(copy.elementCount, 7);
+    assert.strictEqual(copy.look, 'sketch', 'the copy keeps the look');
     assert.notStrictEqual(copy.id, a.id);
     await assert.rejects(() => D.duplicate(pool, 2, a.id), (e) => e.status === 404, "another person cannot copy it");
     assert.strictEqual((await rowsOf(2)).length, 0);
@@ -172,6 +190,9 @@ if (!url) {
       assert.strictEqual((await call('PUT', `/${id}`, { title: 'stale', baseUpdatedAt: g.body.drawing.createdAt })).status, 409);
       assert.strictEqual((await call('PUT', `/${id}`, { title: 'hijack' }, 2)).status, 404);
       assert.strictEqual((await call('PUT', `/${id}`, {})).status, 400);
+      assert.strictEqual((await call('PUT', `/${id}`, { look: 'clean' })).body.drawing.look, 'clean');
+      assert.strictEqual((await call('PUT', `/${id}`, { look: 'bad' })).status, 400);
+      assert.strictEqual((await call('PUT', `/${id}`, { look: 'sketch' })).body.drawing.look, 'sketch');
       assert.strictEqual((await call('POST', `/${id}/duplicate`, null, 2)).status, 404);
       const dup = await call('POST', `/${id}/duplicate`);
       assert.strictEqual(dup.status, 201);

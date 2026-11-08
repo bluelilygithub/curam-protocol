@@ -7,6 +7,8 @@ import { mdComponents } from '../../utils/mdComponents';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { chipify, dueLabel } from './noteTodos.mjs';
+import { pictureify, PICTURE_SRC } from './notePictures.mjs';
+import NotePicture from './NotePicture';
 
 // react-markdown does not render raw HTML by default, so a pasted <script> or <img onerror> shows as text, never runs.
 // remark-breaks keeps a single line break as a line break, so notes typed as plain text look the same here as in the editor.
@@ -53,6 +55,11 @@ export default function NoteMarkdownView({ body, onToggleTask, linkedTasks = {},
         </Tooltip>
       );
     },
+    // a picture saved with the note ({picture:41} on its own line) is drawn from the attachment; any other image is shown as before
+    img: ({ src, alt, node: _node, ...rest }) => {
+      const m = PICTURE_SRC.exec(src || '');
+      return m ? <NotePicture id={Number(m[1])} /> : <img src={src} alt={alt} {...rest} />;
+    },
     input: ({ type, checked }) => (type === 'checkbox' ? <TaskCheckbox checked={checked} onToggle={onToggleTask} /> : null),
     li: ({ node, children, className }) => (
       <TaskLine.Provider value={node?.position?.start?.line ?? null}>
@@ -69,7 +76,7 @@ export default function NoteMarkdownView({ body, onToggleTask, linkedTasks = {},
         .notes-md li.task-list-item:has(input:checked) { color: var(--color-muted); text-decoration: line-through; }
         .notes-md img { max-width: 100%; height: auto; }
       `}</style>
-      <ReactMarkdown remarkPlugins={PLUGINS} components={components} urlTransform={(url) => (/^vault-task:\d+$/.test(url) ? url : defaultUrlTransform(url))}>{chipify(body)}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={PLUGINS} components={components} urlTransform={(url) => (/^vault-(?:task|picture):\d+$/.test(url) ? url : defaultUrlTransform(url))}>{chipify(pictureify(body))}</ReactMarkdown>
     </div>
   );
 }

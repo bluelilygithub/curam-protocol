@@ -1176,6 +1176,9 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_drawings_user ON drawings ("userId", "updatedAt" DESC)`);
+    // Added later (2026-11-08): the look the drawing is in now. The pieces remember how they were drawn (customData in the scene), so the
+    // person can flip between the two looks and get back exactly what they drew. Only the page changes the pieces; this says which look it is.
+    await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS look TEXT NOT NULL DEFAULT 'sketch'`);
     // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
     // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
     await client.query(`

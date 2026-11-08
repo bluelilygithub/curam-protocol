@@ -6,7 +6,7 @@
 //   GET    /api/drawings               list (no scenes: id, title, preview, counts, dates)
 //   POST   /api/drawings               new drawing  { title?, scene?, thumbnail? }
 //   GET    /api/drawings/:id           one drawing with its scene
-//   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
+//   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
 //   POST   /api/drawings/:id/duplicate a copy
 //   DELETE /api/drawings/:id           into the recycle bin
 
@@ -58,7 +58,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const b = req.body || {};
-    res.json({ drawing: await drawings.update(pool, req.user.id, idOf(req), { title: b.title, scene: b.scene, thumbnail: b.thumbnail, baseUpdatedAt: b.baseUpdatedAt }) });
+    res.json({ drawing: await drawings.update(pool, req.user.id, idOf(req), { title: b.title, scene: b.scene, thumbnail: b.thumbnail, look: b.look, baseUpdatedAt: b.baseUpdatedAt }) });
   } catch (err) { fail(res, err, 'update'); }
 });
 
