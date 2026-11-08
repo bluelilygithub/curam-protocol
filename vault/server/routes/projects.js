@@ -175,6 +175,9 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'No model configured. Ask an admin to configure models in Settings.' });
     }
 
+    // dates that came from the plans, and a DIFFERENT date typed over them: the person has chosen their own (projectPlanDates.js)
+    if (startDate !== undefined || targetEndDate !== undefined) await require('../services/projectPlanDates').noteManualDates(pool, req.user.id, p.id, startDate, targetEndDate);
+
     await pool.query(
       `UPDATE projects SET
         name=$1, goal=$2, problem=$3, audience=$4, "techStack"=$5, constraints=$6,

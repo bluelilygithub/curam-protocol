@@ -166,6 +166,7 @@ async function create(db, userId, body = {}) {
       body.workWeek == null ? 'weekdays' : oneOf(body.workWeek, WORK_WEEKS, 'That work week'),
       body.sourceKind ? cleanText(body.sourceKind, 40) : null, body.sourceId != null && body.sourceId !== '' ? cleanText(body.sourceId, 100) : null,
       link.clientId, link.clientProjectId]);
+  await syncProject(db, userId, link.clientProjectId);
   return get(db, userId, rows[0].id);
 }
 
@@ -184,11 +185,20 @@ async function update(db, userId, planId, body = {}) {
   await db.query(
     `UPDATE plans SET title=$3, description=$4, status=$5, "startDate"=$6, "targetEndDate"=$7, "workWeek"=$8, "clientId"=$9, "clientProjectId"=$10, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
     [plan.id, userId, next.title, next.description, next.status, next.startDate, next.targetEndDate, next.workWeek, link.clientId, link.clientProjectId]);
+  for (const pid of new Set([plan.clientProjectId, link.clientProjectId])) await syncProject(db, userId, pid); // its dates, status or project may have changed: the old and the new project
   return get(db, userId, plan.id);
 }
 
-async function touch(db, userId, planId) {
-  await db.query('UPDATE plans SET "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2', [planId, userId]);
+/** Re-sync a client project's dates with its plans (projectPlanDates.js). Never lets a plan change fail: it is logged and the plan stays as saved. */
+async function syncProject(db, userId, projectId) {
+  if (!projectId) return;
+  try { await require('./projectPlanDates').syncProjectDates(db, userId, projectId); } catch (err) { console.error('[plans] project dates sync failed:', err.message); }
+}
+
+/** Mark the plan changed, and re-sync the dates of the client project it is filed under (a step, a length or a link may have moved them). */
+async function touch(db, userId, planId, { sync = true } = {}) {
+  const { rows } = await db.query('UPDATE plans SET "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2 RETURNING "clientProjectId"', [planId, userId]);
+  if (sync && rows[0] && rows[0].clientProjectId) await syncProject(db, userId, rows[0].clientProjectId);
 }
 
 async function hasDeps(db, stepId) {
@@ -369,6 +379,7 @@ async function createFromPreview(pool, userId, body, preview, source) {
   const sourceId = rawId == null || rawId === '' ? 0 : idOf(rawId);
   const missing = kind === 'note' ? 'That note was not found.' : 'That diagram was not found.';
   if (rawId != null && rawId !== '' && !sourceId) throw new PlanError(missing, 404);
+  let projectForSync = null;
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
@@ -388,6 +399,7 @@ async function createFromPreview(pool, userId, body, preview, source) {
     if (chose) wanted = { ...(Object.prototype.hasOwnProperty.call(body, 'clientId') ? { clientId: body.clientId } : {}), ...(Object.prototype.hasOwnProperty.call(body, 'clientProjectId') ? { clientProjectId: body.clientProjectId } : {}) };
     else if (kind === 'note' && drawing) wanted = await noteClientDefaults(db, userId, await db.query('SELECT client_id, project_id FROM notes WHERE id = $1 AND user_id = $2', [drawing.id, userId]).then((r) => r.rows[0] || {}));
     const link = await resolveClientLink(db, userId, wanted);
+    projectForSync = link.clientProjectId;
     const { rows: planRows } = await db.query(
       `INSERT INTO plans ("userId", title, description, status, "startDate", "targetEndDate", "workWeek", "sourceKind", "sourceId", "clientId", "clientProjectId")
        VALUES ($1,$2,$3,'active',$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
@@ -409,6 +421,7 @@ async function createFromPreview(pool, userId, body, preview, source) {
     }
     if (drawing) await db.query('INSERT INTO plan_links ("userId", "planId", kind, "refId", label) VALUES ($1,$2,$3,$4,$5)', [userId, planId, kind === 'note' ? 'note' : 'drawing', String(drawing.id), cleanTitle(drawing.title, '')]);
     await db.query('COMMIT');
+    await syncProject(pool, userId, projectForSync);
     return get(pool, userId, planId);
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});
@@ -438,5 +451,5 @@ async function listBySource(db, userId, kind, id) {
 module.exports = {
   PlanError, resolveClientLink, previewFromDiagram, previewFromNote, createFromDiagram, createFromNote, ownedNote, listBySource, MAX_PLANS_PER_USER, MAX_STEPS_PER_PLAN, MAX_TITLE, STEP_STATUSES, PLAN_STATUSES, WORK_WEEKS,
   cleanTitle, cleanText, cleanDate, cleanDuration, PLAN_COLS, STEP_COLS,
-  calendarSteps, touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
+  computed, syncProject, calendarSteps, touch, list, get, create, update, addStep, updateStep, deleteStep, addDependency, removeDependency, ownedPlan, loadSteps,
 };

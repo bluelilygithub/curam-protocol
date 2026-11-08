@@ -80,7 +80,7 @@ async function sendToTasks(pool, userId, planId, body = {}) {
       known.push({ stepId: a, blockedByStepId: b });
       dependencies++;
     }
-    await plans.touch(db, userId, plan.id);
+    await plans.touch(db, userId, plan.id, { sync: false }); // sending tasks moves no date
     await db.query('COMMIT');
     return { created, skipped, undated, dependencies };
   } catch (err) {

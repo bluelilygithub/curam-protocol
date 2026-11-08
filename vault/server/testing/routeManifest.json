@@ -4311,6 +4311,9 @@
   },
   "POST /api/plans/from-note": {
    "class": "authed"
+  },
+  "PUT /api/client-projects/:id/dates-mode": {
+   "class": "authed"
   }
  }
 }

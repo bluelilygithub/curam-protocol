@@ -32,6 +32,7 @@ register('plan', {
       await db.query('INSERT INTO plan_links ("userId", "planId", "stepId", kind, "refId", label) VALUES ($1,$2,$3,$4,$5,$6)',
         [userId, planId, l.stepId != null ? (newId.get(l.stepId) ?? null) : null, l.kind, l.refId, l.label || '']);
     }
+    await require('../../plans').syncProject(db, userId, plan.clientProjectId); // the project's dates include it again (a project that is gone left the link empty)
     return { entityId: planId };
   },
 });

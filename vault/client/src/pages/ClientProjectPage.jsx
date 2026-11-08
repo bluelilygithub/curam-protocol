@@ -5,6 +5,7 @@ import useToastStore from '../store/toastStore';
 import AttachmentChip from '../components/AttachmentChip';
 import { StatusSelect } from './ClientProjectsPage';
 import { useClientPlans, ClientPlansBody } from '../components/ClientPlans';
+import Tooltip from '../components/Tooltip';
 
 // Everything for one piece of client work, in one place: brief, activity log, notes, files and
 // links, tasks, chats, and (read-only) the client's quotes and invoices.
@@ -69,6 +70,18 @@ function Brief({ project, onSaved }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
+  // The project's dates can follow its plans (docs/plans.md "Project dates"): datesDerived says the dates showing now came from them.
+  const derived = !!project.datesDerived;
+  const following = project.datesFollowPlans !== false;
+
+  const setMode = async (follow) => {
+    try {
+      const res = await api.put(`/api/client-projects/${project.id}/dates-mode`, { follow });
+      if (!res.ok) throw new Error();
+      addToast(follow ? 'Dates now follow the plans' : 'Your own dates are back');
+      onSaved();
+    } catch { addToast('Could not change that', 'error'); }
+  };
 
   const start = () => {
     setForm({ ...Object.fromEntries(BRIEF_FIELDS.map(([k]) => [k, project[k] || ''])), startDate: dateOnly(project.startDate), targetEndDate: dateOnly(project.targetEndDate) });
@@ -77,7 +90,9 @@ function Brief({ project, onSaved }) {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await api.put(`/api/projects/${project.id}`, form);
+      // dates that come from the plans are not sent back, so saving the brief never turns following off by accident
+      const { startDate, targetEndDate, ...rest } = form;
+      const res = await api.put(`/api/projects/${project.id}`, derived ? rest : form);
       if (!res.ok) throw new Error();
       addToast('Brief saved');
       setEditing(false);
@@ -103,16 +118,21 @@ function Brief({ project, onSaved }) {
             {[['startDate', 'Start date'], ['targetEndDate', 'Target end date']].map(([k, label]) => (
               <label key={k} className="block">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
-                <input type="date" value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} className={`${INPUT} mt-1`} style={FIELD} />
+                <input type="date" value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} disabled={derived} className={`${INPUT} mt-1`} style={FIELD} />
               </label>
             ))}
+            {derived && (
+              <p className="col-span-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                These dates come from this project's plans (see Plans below). Press Cancel, then Use my own dates, to type your own.
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <button onClick={save} disabled={saving} className="px-3.5 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-40" style={PRIMARY}>{saving ? 'Saving…' : 'Save'}</button>
             <button onClick={() => setEditing(false)} className="px-3.5 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-70" style={GHOST}>Cancel</button>
           </div>
         </div>
-      ) : filled.length === 0 && !project.startDate && !project.targetEndDate ? (
+      ) : filled.length === 0 && !project.startDate && !project.targetEndDate && !derived && following ? (
         <Empty>No brief yet. Use Edit to write down what was asked for.</Empty>
       ) : (
         <div className="space-y-3">
@@ -122,9 +142,22 @@ function Brief({ project, onSaved }) {
               <div className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{project[k]}</div>
             </div>
           ))}
-          {(project.startDate || project.targetEndDate) && (
-            <div className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              {project.startDate && <>Starts {day(project.startDate)}</>}{project.startDate && project.targetEndDate && ' · '}{project.targetEndDate && <>Target end {day(project.targetEndDate)}</>}
+          {(project.startDate || project.targetEndDate || derived || !following) && (
+            <div className="text-sm flex flex-wrap items-center gap-x-2 gap-y-1" style={{ color: 'var(--color-muted)' }}>
+              <span>{project.startDate && <>Starts {day(project.startDate)}</>}{project.startDate && project.targetEndDate && ' · '}{project.targetEndDate && <>Target end {day(project.targetEndDate)}</>}</span>
+              {derived && (
+                <>
+                  <span>· from its plans</span>
+                  <Tooltip text="These dates are the earliest start and latest finish of the plans filed under this project. Press to type your own instead: the dates you had before are put back.">
+                    <button onClick={() => setMode(false)} className="text-xs px-2 py-0.5 rounded-lg transition-opacity hover:opacity-70" style={GHOST}>Use my own dates</button>
+                  </Tooltip>
+                </>
+              )}
+              {!following && (
+                <Tooltip text="Let the dates follow the plans filed under this project: the earliest start and latest finish. The dates you have now are kept and put back if you switch it off or the plans go away.">
+                  <button onClick={() => setMode(true)} className="text-xs px-2 py-0.5 rounded-lg transition-opacity hover:opacity-70" style={GHOST}>Follow its plans</button>
+                </Tooltip>
+              )}
             </div>
           )}
         </div>
@@ -528,7 +561,7 @@ const NAV = [['brief', 'Brief'], ['activity', 'Activity'], ['notes', 'Notes'], [
 function PlansSection({ cp, project }) {
   if (!cp.available) return null;
   return (
-    <Section id="plans" title={`Plans${cp.plans?.length ? ` (${cp.plans.length})` : ''}`} hint="Dated plans for this project, with steps, lengths and what waits on what. Tasks sent from a plan are filed under this project.">
+    <Section id="plans" title={`Plans${cp.plans?.length ? ` (${cp.plans.length})` : ''}`} hint="Dated plans for this project, with steps, lengths and what waits on what. Tasks sent from a plan are filed under this project, and the project's start and end dates follow its plans (see the Brief).">
       <ClientPlansBody plans={cp.plans} clientId={project.clientId} clientProjectId={project.id} name={project.name} />
     </Section>
   );

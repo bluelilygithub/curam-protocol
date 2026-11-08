@@ -121,6 +121,7 @@ router.delete('/:id', async (req, res) => {
     });
     await db.query('DELETE FROM plans WHERE id = $1 AND "userId" = $2', [plan.id, req.user.id]); // steps, dependencies and links go with it
     await db.query('COMMIT');
+    await plans.syncProject(pool, req.user.id, plan.clientProjectId); // its project's dates no longer include it
     res.json({ ok: true, binId });
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});

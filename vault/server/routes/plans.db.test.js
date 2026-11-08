@@ -16,6 +16,8 @@
 //   - a plan can belong to a client and to one of that client's projects: both must be the caller's, a project must belong to the client,
 //     choosing a project fills in its client, changing the client drops a project of the old one, a plan made from a note starts with the note's
 //     client and project, tasks sent from the plan carry them, the list can be filtered, and deleting the client only empties the link;
+//   - a client project's dates follow its plans: the earliest start and latest finish of its draft and active plans, the typed dates kept and put
+//     back when the plans go, a different date typed by hand (or the switch) turns following off, only the caller's client projects are touched;
 //   - delete goes to the recycle bin and Undo brings back the plan with its steps, groups and dependencies and the same dates.
 const assert = require('node:assert/strict');
 const express = require('express');
@@ -384,6 +386,85 @@ function serve() {
     await pool.query('DELETE FROM clients WHERE id = $1', [acme]);
     assert.equal((await call(A, 'GET', `/${cplan}`)).body.plan.clientId, null, 'the plan stays, without its client');
     assert.equal((await call(A, 'GET', `/${cplan}`)).body.plan.clientName, null);
+
+
+    // ---- a client project's dates follow its plans ----
+    const pd = require('../services/projectPlanDates');
+    const dClient = await mkClient(A, 'Dates Client');
+    const dProj = (await pool.query(`INSERT INTO projects (name, model, "userId", "projectType", "clientId", "startDate", "targetEndDate") VALUES ('Dates project','x',$1,'client',$2,'2026-01-05','2026-02-27') RETURNING id`, [A, dClient])).rows[0].id;
+    const dates = async (id = dProj) => (await pool.query(`SELECT "startDate"::text AS s, "targetEndDate"::text AS e, "datesFollowPlans" AS f, "datesDerived" AS d, "ownStartDate"::text AS os, "ownTargetEndDate"::text AS oe FROM projects WHERE id = $1`, [id])).rows[0];
+    assert.deepEqual(await dates(), { s: '2026-01-05', e: '2026-02-27', f: true, d: false, os: null, oe: null }, 'a new project keeps what was typed');
+
+    // a plan with no steps has no dates, so nothing changes; the first dated step takes over and the typed dates are kept
+    r = await call(A, 'POST', '/', { title: 'Dates plan 1', startDate: '2026-12-07', clientProjectId: dProj });
+    const dp1 = r.body.plan.id;
+    assert.equal((await dates()).d, false, 'no steps yet: nothing to follow');
+    const d1a = (await call(A, 'POST', `/${dp1}/steps`, { title: 'One', durationDays: 2 })).body.step;
+    const d1b = (await call(A, 'POST', `/${dp1}/steps`, { title: 'Two', durationDays: 3 })).body.step;
+    await call(A, 'POST', `/${dp1}/steps/${d1b.id}/deps`, { blockedByStepId: d1a.id });
+    assert.deepEqual(await dates(), { s: '2026-12-07', e: '2026-12-11', f: true, d: true, os: '2026-01-05', oe: '2026-02-27' }, 'the plan\'s dates, and the typed ones kept');
+
+    // a second plan stretches it; a longer step stretches it more; archiving the plan shrinks it
+    r = await call(A, 'POST', '/', { title: 'Dates plan 2', startDate: '2026-12-14', clientProjectId: dProj });
+    const dp2 = r.body.plan.id;
+    const d2a = (await call(A, 'POST', `/${dp2}/steps`, { title: 'Long', durationDays: 5 })).body.step;
+    assert.deepEqual([(await dates()).s, (await dates()).e], ['2026-12-07', '2026-12-18'], 'earliest start, latest finish');
+    await call(A, 'PUT', `/${dp2}/steps/${d2a.id}`, { durationDays: 10 });
+    assert.equal((await dates()).e, '2026-12-25', 'a step edit moves the project\'s end');
+    await call(A, 'PUT', `/${dp2}`, { status: 'archived' });
+    assert.deepEqual([(await dates()).s, (await dates()).e], ['2026-12-07', '2026-12-11'], 'an archived plan no longer counts');
+    await call(A, 'PUT', `/${dp2}`, { status: 'active' });
+    assert.equal((await dates()).e, '2026-12-25', 'and counts again when it is active');
+    await call(A, 'PUT', `/${dp2}`, { status: 'done' });
+    assert.equal((await dates()).e, '2026-12-11', 'a plan marked Done stops counting');
+    await call(A, 'PUT', `/${dp2}`, { status: 'active', startDate: '2026-12-08' });
+    assert.deepEqual([(await dates()).s, (await dates()).e], ['2026-12-07', '2026-12-21'], 'changing a plan\'s start moves it too');
+
+    // moving a plan away, and back
+    await call(A, 'PUT', `/${dp2}`, { clientProjectId: null });
+    assert.equal((await dates()).e, '2026-12-11', 'the project loses the plan that moved away');
+    await call(A, 'PUT', `/${dp1}`, { clientProjectId: null });
+    assert.deepEqual(await dates(), { s: '2026-01-05', e: '2026-02-27', f: true, d: false, os: null, oe: null }, 'no plans left: the typed dates come back');
+    await call(A, 'PUT', `/${dp1}`, { clientProjectId: dProj });
+    assert.equal((await dates()).d, true);
+
+    // deleting a plan puts the typed dates back; Undo takes the plan's dates again
+    r = await call(A, 'DELETE', `/${dp1}`);
+    assert.equal(r.status, 200);
+    assert.deepEqual(await dates(), { s: '2026-01-05', e: '2026-02-27', f: true, d: false, os: null, oe: null }, 'deleting the only plan restores the typed dates');
+    await bin.restoreItem(A, r.body.binId);
+    assert.deepEqual([(await dates()).d, (await dates()).s, (await dates()).e], [true, '2026-12-07', '2026-12-11'], 'Undo brings the plan\'s dates back');
+
+    // a different date typed by hand turns following off; the same dates sent back change nothing
+    assert.equal(await pd.noteManualDates(pool, A, dProj, '2026-12-07', '2026-12-11'), false, 'a form that sends the same dates back is not a choice');
+    assert.equal(await pd.noteManualDates(pool, A, dProj, undefined, undefined), false, 'nothing sent');
+    assert.equal((await dates()).d, true);
+    assert.equal(await pd.noteManualDates(pool, A, dProj, '2026-03-01', undefined), true, 'a different start typed by hand');
+    assert.deepEqual([(await dates()).f, (await dates()).d, (await dates()).os], [false, false, null], 'following is off and no typed dates are held back');
+    await pool.query(`UPDATE projects SET "startDate" = '2026-03-01', "targetEndDate" = '2026-04-30' WHERE id = $1`, [dProj]); // what the save then writes
+    await call(A, 'POST', `/${dp1}/steps`, { title: 'Three', durationDays: 1 });
+    assert.deepEqual([(await dates()).s, (await dates()).e], ['2026-03-01', '2026-04-30'], 'with following off, plan changes leave the dates alone');
+
+    // the switch: on takes the plans' dates and keeps the typed ones; off puts them back
+    r = await pd.setFollow(pool, A, dProj, true);
+    assert.deepEqual([r.follow, r.derived, r.startDate], [true, true, '2026-12-07']);
+    assert.deepEqual([(await dates()).os, (await dates()).oe], ['2026-03-01', '2026-04-30'], 'what was typed is held');
+    r = await pd.setFollow(pool, A, dProj, false);
+    assert.deepEqual([r.follow, r.derived, r.startDate, r.targetEndDate], [false, false, '2026-03-01', '2026-04-30']);
+    await pd.setFollow(pool, A, dProj, true);
+
+    // only the caller's client projects: another person cannot switch it or sync it, and an ordinary workspace is never touched
+    await assert.rejects(pd.setFollow(pool, B, dProj, false), (e) => e.status === 404);
+    assert.equal(await pd.syncProjectDates(pool, B, dProj), null);
+    assert.equal(await pd.syncProjectDates(pool, A, plainWorkspace), null, 'an ordinary workspace has no plan dates');
+    await assert.rejects(pd.setFollow(pool, A, plainWorkspace, true), (e) => e.status === 404);
+    assert.equal((await dates()).d, true, 'B\'s attempts changed nothing');
+    r = await pool.query(`INSERT INTO projects (name, model, "userId", "projectType", "clientId", "startDate", "datesFollowPlans") VALUES ('Off project','x',$1,'client',$2,'2026-05-01',FALSE) RETURNING id`, [A, dClient]);
+    const offProj = r.rows[0].id;
+    await call(A, 'POST', '/', { title: 'For the off project', startDate: '2026-12-07', clientProjectId: offProj });
+    const offPlan = (await call(A, 'GET', `/?clientProjectId=${offProj}`)).body.plans[0].id;
+    await call(A, 'POST', `/${offPlan}/steps`, { title: 'x', durationDays: 2 });
+    assert.equal((await dates(offProj)).s, '2026-05-01', 'a project that does not follow is left alone');
 
 
     // ---- send to Tasks ----

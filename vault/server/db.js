@@ -267,6 +267,12 @@ async function initSchema() {
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "transcript_summary" TEXT DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "startDate" DATE DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "targetEndDate" DATE DEFAULT NULL`);
+    // A client project's dates can follow its plans (server/services/projectPlanDates.js, docs/plans.md "Project dates"): the preference, whether the
+    // dates now showing came from the plans, and the dates the person typed, kept while the plans' dates are shown and put back afterwards.
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "datesFollowPlans" BOOLEAN NOT NULL DEFAULT TRUE`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "datesDerived" BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "ownStartDate" DATE DEFAULT NULL`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "ownTargetEndDate" DATE DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ALTER COLUMN model DROP DEFAULT`);
 
     // ── Client projects (additive, nullable) ───────────────────────────────────

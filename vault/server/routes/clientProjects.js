@@ -169,6 +169,18 @@ router.patch('/:id/status', async (req, res) => {
 
 // ── Activity (the client's log, filtered to this project) ─────────────────────
 
+// PUT /api/client-projects/:id/dates-mode  { follow: boolean }
+// Whether this project's start and target end dates follow its plans (services/projectPlanDates.js). On takes the plans' dates now and keeps the typed
+// ones safe; off puts the typed ones back. Only the caller's own client projects.
+router.put('/:id/dates-mode', async (req, res) => {
+  try {
+    const project = await loadClientProject(req, res);
+    if (!project) return;
+    if (typeof (req.body || {}).follow !== 'boolean') return res.status(400).json({ error: 'follow must be true or false' });
+    res.json(await require('../services/projectPlanDates').setFollow(pool, req.user.id, project.id, req.body.follow));
+  } catch (err) { fail(res, err); }
+});
+
 router.get('/:id/activity', async (req, res) => {
   try {
     const p = await loadClientProject(req, res);
