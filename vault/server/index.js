@@ -322,6 +322,7 @@ const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
 const { startRecycleBinPurge } = require('./cron/recycleBinCron');
+const { startStaleDealsCron } = require('./cron/staleDealsCron');
 const { startAttachmentExpiry } = require('./cron/attachmentExpiryCron');
 const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startYoutubeFollows } = require('./cron/youtubeFollowsCron');
@@ -349,6 +350,7 @@ async function start() {
 
   startFitnessTasksSync(); // sends nothing, so it runs on staging too
   startRecycleBinPurge(); // removes bin items older than 30 days; sends nothing, so it runs everywhere
+  startStaleDealsCron(); // daily: Suggestions card for each open deal quiet for 21+ days; sends nothing, so it runs everywhere
   startAttachmentExpiry(); // removes kept voice-note audio past its time; sends nothing, so it runs everywhere
   startYoutubeFollows(); // looks for new videos from followed YouTube channels/searches (cron-locked, quota-counted, sends no email)
   startBurnerMailPurge(); // removes burner addresses a day after they expire; sends nothing, so it runs everywhere
