@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7c0b9d0f",
+   "fullHash": "7c0b9d0f532da30a0062daa0277eb9adac929ace",
+   "committedAt": "2026-11-09T10:44:11+10:00",
+   "author": "mrb",
+   "subject": "CRM: log client email from Gmail into Activity, back to 1 July 2026",
+   "filesChanged": 14,
+   "insertions": 591,
+   "deletions": 10,
+   "area": "CRM",
+   "goal": "Stop the Activity log depending on remembering to type emails in: record the email exchanged with a client's people automatically, including everything since 1 July 2026.",
+   "whatChanged": "New server/services/clientEmailSync.js and server/cron/clientEmailSyncCron.js. A client is matched by its contacts' email addresses (exact) and by email domains saved on the client (new Email domains field on New client and Edit client; free-mail domains such as gmail.com are refused, a pasted website address is tidied to its domain). Inbox and sent mail is read from the person's own connected Gmail (existing read-only permission) and kept as one Activity entry per Gmail thread (type email, source gmail_sync): subject and a sent/received count only, never the message text; newsletters and automated mail are skipped. Each entry carries externalId thread:<id> with a unique index, so nothing is logged twice, a grown thread moves its entry on, and an entry the person edited is left alone until its thread grows. Every client starts unread, so the first daily run seeds all existing clients back to 1 July 2026 (Brisbane); creating a client with a domain, adding or changing a contact email, or changing the domain list marks that client unread and reads it back to 1 July straight away in the background. The daily job runs at 21:00 UTC (7:00 am Brisbane), before the stale-deal check, under withCronLock, and only where external cron is on. New: POST /api/clients/:id/email-sync and a Check email now button with a status line at the top of the Info card. New columns clients.emailDomains, clients.emailSyncedAt, client_interactions.externalId. A Gmail login failure in the daily run raises a Suggestions alert. docs/crm-email-sync.md, the CRM guide and related docs describe it.",
+   "filesImpacted": [
+    "server/services/clientEmailSync.js",
+    "server/cron/clientEmailSyncCron.js",
+    "server/routes/clients.js",
+    "server/db.js",
+    "server/index.js",
+    "server/testing/routeManifest.json",
+    "server/services/clientEmailSync.test.js",
+    "server/services/crmTutor.js",
+    "client/src/pages/ClientDetailPage.jsx",
+    "client/src/pages/ClientsPage.jsx",
+    "docs/crm-email-sync.md",
+    "docs/crm-activity-model.md",
+    "docs/crm-deals-schema.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "The activity log fills itself with the real email history for each client, and a new client or contact is filled back to 1 July without any extra step. It also stops the stale-deal flag raising a deal you are actively emailing about.",
+   "concerns": "NEVER RUN AGAINST A REAL GMAIL ACCOUNT: it was tested with a fake Gmail (rules, and a real database sync: first read goes back to 1 July, later reads are incremental, no duplicates, a grown thread updates, another person's client is not read) and on screen for the domain field (a free-mail domain is refused, a pasted URL is tidied) and the Check email now button with Gmail not connected. Gmail's own search behaviour (the from:@domain match, sent mail, the after: time) and header names are as documented but unproven here, so the first live read, for example Check email now on a client with a domain, is the real test. The first daily run reads every client of every person with Gmail connected, back to 1 July: up to 500 messages per client, one Gmail call per message, so it can take a while and use quota. A deleted email entry comes back the next time its thread is read (there is no memory of deletions). Domain matching includes everyone at the domain, so a client's staff you never email still count if they email you. Anyone whose Gmail is connected gets this, and mail from known contacts and domains is copied (subject only) into the database. Three small columns are added at boot and the cron is off on staging. The ownership tests and the cross-user route manifest pass (one new route, authed)."
+  },
+  {
    "commit": "6fb76226",
    "fullHash": "6fb76226101654cf3a320482d268605688f72d41",
    "committedAt": "2026-11-09T10:20:19+10:00",
