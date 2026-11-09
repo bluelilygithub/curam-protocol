@@ -2,6 +2,54 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "6fb76226",
+   "fullHash": "6fb76226101654cf3a320482d268605688f72d41",
+   "committedAt": "2026-11-09T10:20:19+10:00",
+   "author": "mrb",
+   "subject": "CRM: flag stale deals in the Suggestions inbox",
+   "filesChanged": 4,
+   "insertions": 126,
+   "deletions": 0,
+   "area": "CRM",
+   "goal": "Notice an open deal that has gone quiet, instead of it sitting unseen in the Pipeline.",
+   "whatChanged": "New server/services/staleDeals.js and server/cron/staleDealsCron.js, started from server/index.js. Daily at 22:00 UTC (8:00 am Brisbane), under withCronLock, every open deal (not won or lost, client not archived) with no sign of life for 21 days gets one Suggestions card (alert, source staleDeals, linked to the client). Sign of life is the later of the deal's last edit and the client's latest logged call, email or note; deal-stage and contact-added rows do not count. The card is keyed on the deal id, so a repeat run updates it and an Ignored card stays quiet. It sends nothing and calls no paid service, so it runs on every server, including where external cron is switched off. Test: node server/services/staleDeals.test.js.",
+   "filesImpacted": [
+    "server/services/staleDeals.js",
+    "server/cron/staleDealsCron.js",
+    "server/services/staleDeals.test.js",
+    "server/index.js"
+   ],
+   "benefit": "A quiet deal is raised to you rather than relying on remembering to look.",
+   "concerns": "The 21-day limit is a constant (STALE_DAYS), not a setting. A card is not removed when the deal is touched or closed; it is dismissed by hand. Checked with a unit test and by running the real query and capture against the local database (one card for the stale deal, none for the fresh one, a second run updated rather than duplicated); the scheduled job itself did not fire locally. Staging and production share the code, so if they share a database both will raise the same cards (the key stops duplicates). Documentation for this commit is in the next commit."
+  },
+  {
+   "commit": "0e337934",
+   "fullHash": "0e33793493f0c0e456fd2087eeafffe2e17cb0a1",
+   "committedAt": "2026-11-09T10:20:24+10:00",
+   "author": "mrb",
+   "subject": "CRM: Pipeline becomes a tab on the CRM page",
+   "filesChanged": 10,
+   "insertions": 51,
+   "deletions": 18,
+   "area": "CRM",
+   "goal": "Stop Pipeline being a separate menu entry for what is only a read-only view of the CRM's own deals.",
+   "whatChanged": "ClientsPage.jsx is now a shell with a Clients | Pipeline switch (?view=pipeline); the client list is unchanged inside it, and PipelinePage.jsx renders inside the shell with its own heading hidden (embedded). /pipeline redirects to /clients?view=pipeline, so old links and bookmarks still work. The two Pipeline entries were removed from appNavigation.js (Apps menu and sidebar). The dashboard Pipeline tile, the CRM guide's Open button, crmTutor.js and crmGuideTools.mjs point at the new address. The mobile nav keeps its pipeline item, whose /pipeline path redirects. docs/crm-deals-schema.md (section 7, and the stale-deal flag paragraph) and docs/key-files.md describe the change.",
+   "filesImpacted": [
+    "client/src/pages/ClientsPage.jsx",
+    "client/src/pages/PipelinePage.jsx",
+    "client/src/App.jsx",
+    "client/src/config/appNavigation.js",
+    "client/src/pages/ProjectList.jsx",
+    "client/src/pages/crm/CrmTutorChat.jsx",
+    "client/src/pages/crm/crmGuideTools.mjs",
+    "server/services/crmTutor.js",
+    "docs/crm-deals-schema.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "One fewer menu entry, and the deals table sits next to the clients it belongs to.",
+   "concerns": "Checked on screen: /pipeline lands on the Pipeline tab, the Clients tab switches back, and the nav, guide, featureAccess and build checks pass. Not checked: the mobile nav's Pipeline item and the dashboard tile by clicking them, phone width, or the guide's Open button for Pipeline. The Pipeline tab appears for anyone with the CRM, as the old page did. Anyone who had Pipeline pinned or customised in the mobile nav keeps that item."
+  },
+  {
    "commit": "d8478abe",
    "fullHash": "d8478abe78e9360873add3763c803d7d4bd7cb06",
    "committedAt": "2026-11-09T09:39:32+10:00",
