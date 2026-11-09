@@ -115,11 +115,15 @@ Both fixes land in the same PR as the column addition — not deferred, since th
 
 ## 7. Dashboard/reporting
 
-**Table view done:** workspace-wide **Pipeline** page (`client/src/pages/PipelinePage.jsx`, `/pipeline`) — flat, cross-client table of every deal (Client | Deal | Stage | Value | Expected close | Actual close), stage multi-select filter, open/all toggle, sortable by close date/value/stage. Backed by `GET /api/deals` (already existed, scoped by `clientId` — extended to support no-`clientId` = all deals, comma-separated multi-stage filter, `sortBy`/`order`). Row click navigates to that deal's client (`ClientDetailPage`) — deals stay client-owned, this is a view, not a new ownership model. Read-only, no new write endpoints.
+**Moved into the CRM page (2026-11-09):** Pipeline is no longer its own menu entry. It is the **Pipeline** tab beside **Clients** on the CRM page (`ClientsPage.jsx` is a shell with that switch; `?view=pipeline` selects it), `PipelinePage.jsx` renders inside it (`embedded`), the old `/pipeline` address redirects to `/clients?view=pipeline`, and the Pipeline items were removed from `appNavigation.js` (Apps menu and sidebar). The mobile nav keeps its `pipeline` item (its path `/pipeline` redirects). Reason: it is a read-only view of data the CRM owns, with no data or workflow of its own.
+
+**Table view done:** workspace-wide **Pipeline** page (`client/src/pages/PipelinePage.jsx`) — flat, cross-client table of every deal (Client | Deal | Stage | Value | Expected close | Actual close), stage multi-select filter, open/all toggle, sortable by close date/value/stage. Backed by `GET /api/deals` (already existed, scoped by `clientId` — extended to support no-`clientId` = all deals, comma-separated multi-stage filter, `sortBy`/`order`). Row click navigates to that deal's client (`ClientDetailPage`) — deals stay client-owned, this is a view, not a new ownership model. Read-only, no new write endpoints.
 
 Deliberately not built this pass (kanban/drag-drop stage changes, aggregate stats like win rate/value-by-stage) — table view first, validate it's useful before adding drag-drop; aggregate stats are the separate item below.
 
-**Not started:** pipeline value by stage / win rate as aggregate stats (distinct from the flat table above), stale-deal flag (`stage` not `won`/`lost` and `updatedAt` > N days ago → `SuggestionService.captureIf`, matching the mandatory-suggestions convention already in this codebase).
+**Stale-deal flag (done 2026-11-09):** `server/services/staleDeals.js` + `server/cron/staleDealsCron.js` (daily 22:00 UTC = 8:00 am Brisbane, `withCronLock('stale-deals')`, runs on every server because it sends nothing and calls no paid service). An open deal (not `won`/`lost`, client not archived) with no sign of life for **21 days** (`STALE_DAYS`) gets one Suggestions-inbox card (`category: 'alert'`, `source: 'staleDeals'`, fingerprint = the deal id, `context` = `/clients/<id>`). Sign of life = the later of the deal's `updatedAt` and the client's latest logged call/email/note (`deal_stage` and `contact` system rows do not count). A repeat run updates the same card (its age); a card marked Ignore stays quiet; a card is not removed when the deal is touched or closed (dismiss it). Test: `node server/services/staleDeals.test.js`.
+
+**Not started:** pipeline value by stage / win rate as aggregate stats (distinct from the flat table above).
 
 ## 8. AI agent layer
 

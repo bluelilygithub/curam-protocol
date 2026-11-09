@@ -28,7 +28,7 @@ export const APP_NAV_GROUPS = [
     ],
   },
   {
-    // Business operations — CRM/Pipeline (previously stranded under "Admin") and
+    // Business operations — CRM (Pipeline is a view inside it: /clients?view=pipeline; /pipeline redirects) (previously stranded under "Admin") and
     // Finance/Shares (previously under a "Money & data" grab-bag with Usage/News, neither of
     // which is actually money) now sit together as the coherent "running the business" set.
     // Dashboard folded in here too rather than being a 1-item "Admin" group on its own — it
@@ -38,7 +38,6 @@ export const APP_NAV_GROUPS = [
     items: [
       { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
       { id: 'clientProjects', label: 'Client work', path: '/client-projects', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
-      { id: 'pipeline', label: 'Pipeline', path: '/pipeline', icon: 'trending-up', featureKey: 'clients' },
       { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
       { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
       { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
@@ -165,7 +164,6 @@ export const SIDEBAR_WORKSPACE_LINKS = [
   { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals' },
   { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
   { id: 'clientProjects', label: 'Client work', path: '/client-projects', icon: 'list-checks', featureKey: 'clients', matchPrefix: true },
-  { id: 'pipeline', label: 'Pipeline', path: '/pipeline', icon: 'trending-up', featureKey: 'clients' },
 ];
 
 /** 7 Habits shortcuts — shown in Apps launcher when habitsSidebar + goals are enabled. */

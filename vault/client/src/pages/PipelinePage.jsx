@@ -46,7 +46,7 @@ function DealStageBadge({ stage }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
-export default function PipelinePage() {
+export default function PipelinePage({ embedded = false }) {
   const navigate = useNavigate();
 
   const [deals,       setDeals]       = useState([]);
@@ -94,9 +94,11 @@ export default function PipelinePage() {
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Pipeline</h1>
-      </div>
+      {!embedded && (
+        <div className="flex items-center justify-between mb-5">
+          <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Pipeline</h1>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-5">

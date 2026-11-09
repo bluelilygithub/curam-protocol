@@ -1,6 +1,6 @@
 // The CRM guide's controls: what each Open button in the guide chat can reach. `where` says which page it lives on:
 //   list     the CRM page (/clients)          detail   a client's page (/clients/:id), `section` is the key in its `sections` state
-//   pipeline the Pipeline page (/pipeline)
+//   pipeline the Pipeline view of the CRM page (/clients?view=pipeline; /pipeline redirects there)
 // The ids must match CATALOG in server/services/crmTutor.js (npm run test:crm-tutor fails if they drift).
 
 export const GUIDE_TOOLS = [

@@ -20,7 +20,6 @@ import NotesPage from './pages/NotesPage';
 import TalkPage from './pages/TalkPage';
 import FinancePage from './pages/FinancePage';
 import ClientsPage from './pages/ClientsPage';
-import PipelinePage from './pages/PipelinePage';
 import ClientDetailPage from './pages/ClientDetailPage';
 import ClientProjectsPage from './pages/ClientProjectsPage';
 import ClientProjectPage from './pages/ClientProjectPage';
@@ -193,7 +192,7 @@ function App() {
               <Route path="/clients/:id" element={<ClientDetailPage />} />
               <Route path="/client-projects" element={<ClientProjectsPage />} />
               <Route path="/client-projects/:id" element={<ClientProjectPage />} />
-              <Route path="/pipeline" element={<PipelinePage />} />
+              <Route path="/pipeline" element={<Navigate to="/clients?view=pipeline" replace />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/usage" element={<UsagePage />} />
               <Route path="/mood" element={<MoodPage />} />

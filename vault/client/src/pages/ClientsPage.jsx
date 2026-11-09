@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import MoodDot from '../components/mood/MoodDot';
 import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
 import CrmTutorChat from './crm/CrmTutorChat';
+import PipelinePage from './PipelinePage';
+import Tooltip from '../components/Tooltip';
 import ShelfInboxModal from './crm/ShelfInboxModal';
 import Dialog from '../components/Dialog';
 
@@ -309,7 +311,35 @@ const STATUS_FILTERS = [
   { value: 'archived', label: 'Archived' },
 ];
 
+// The CRM page has two views of the same data: the client list, and the Pipeline (every deal across all clients, one table).
+// ?view=pipeline opens the second; /pipeline redirects here. The Pipeline is a read-only view, not a separate tool.
 export default function ClientsPage() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'pipeline' ? 'pipeline' : 'clients';
+  const pick = (next) => {
+    const p = new URLSearchParams(params);
+    if (next === 'pipeline') p.set('view', 'pipeline'); else p.delete('view');
+    setParams(p, { replace: true });
+  };
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div role="tablist" aria-label="CRM views" className="flex gap-1 px-4 sm:px-6 pt-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        {[['clients', 'Clients', 'Your clients: contacts, deals, projects, plans and activity.'], ['pipeline', 'Pipeline', 'Every open deal across all clients in one table, by stage.']].map(([key, label, tip]) => {
+          const on = view === key;
+          return (
+            <Tooltip key={key} text={tip}>
+              <button role="tab" aria-selected={on} onClick={() => pick(key)} className="px-3 py-2 text-sm hover:opacity-70 transition-opacity duration-200"
+                style={{ color: on ? 'var(--color-text)' : 'var(--color-muted)', fontWeight: on ? 600 : 400, borderBottom: `2px solid ${on ? 'var(--color-primary)' : 'transparent'}`, marginBottom: -1 }}>{label}</button>
+            </Tooltip>
+          );
+        })}
+      </div>
+      {view === 'pipeline' ? <PipelinePage embedded /> : <ClientList />}
+    </div>
+  );
+}
+
+function ClientList() {
   const navigate   = useNavigate();
   const addToast   = useToastStore(s => s.addToast);
 

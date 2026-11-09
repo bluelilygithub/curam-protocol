@@ -49,7 +49,7 @@ export default function CrmTutorChat({ where, currentTool, onSection, onNewClien
   const open = (id) => {
     const t = byId(id);
     if (!t) return;
-    if (t.where === 'pipeline') { navigate('/pipeline'); return; }
+    if (t.where === 'pipeline') { navigate('/clients?view=pipeline'); return; }
     if (t.where === 'list') {
       if (where !== 'list') { navigate('/clients'); return; }
       if (id === 'new-client' && onNewClient) onNewClient();

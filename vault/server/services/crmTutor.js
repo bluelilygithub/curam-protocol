@@ -26,7 +26,7 @@ const CATALOG = [
     notes: 'Touchpoints are a past-tense log. A follow-up becomes a Task, in one direction only. Gmail search on the page can find the emails with this client.' },
   { id: 'deals', label: 'Deals', group: 'A client\'s page',
     does: 'The Deals section of a client\'s page: add, edit or delete a deal with its title, value, stage (lead, qualified, proposal, negotiation, won, lost) and expected close date.',
-    notes: 'The Pipeline page lists the deals of every client together.' },
+    notes: 'The Pipeline view of the CRM page (the Pipeline tab above the client list) lists the deals of every client together.' },
   { id: 'contacts', label: 'Contacts', group: 'A client\'s page',
     does: 'The people at the client: add, edit or delete a contact. A contact can be chosen as the person on a touchpoint.',
     notes: '' },
@@ -40,7 +40,7 @@ const CATALOG = [
     does: 'The dated plans filed under this client (the section is left out when Plans is switched off for the person). Each shows how many steps are done and its dates; click one to open it on the Plans page. New plan starts an empty plan already filed under the client, and Open in Plans shows only this client\'s plans. A client project\'s own page has the same section for that project\'s plans, and the project\'s start and target end dates follow them (the earliest start and latest finish), with a Use my own dates button in its Brief to type your own instead.',
     notes: 'A plan is filed under a client (and optionally one of the client\'s projects) from the Client box on the plan itself, or it starts there when it is made on this page or from a note that is filed under the client. Tasks sent from the plan are filed under the client and project. Plans do not have an owner other than the person.' },
   { id: 'pipeline', label: 'Pipeline', group: 'Deals',
-    does: 'The Pipeline page (/pipeline): every deal across all clients in one table (client, deal, stage, value, expected and actual close). Filter by stage, show open deals only, click a column heading to sort, click a row to open that client.',
+    does: 'The Pipeline tab on the CRM page (the old /pipeline address redirects there): every deal across all clients in one table (client, deal, stage, value, expected and actual close). Filter by stage, show open deals only, click a column heading to sort, click a row to open that client.',
     notes: 'Deals are created and edited on the client\'s page, not here.' },
 ];
 

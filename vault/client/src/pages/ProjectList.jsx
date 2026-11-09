@@ -125,7 +125,7 @@ function OverviewWidget() {
         </OverviewTile>
       )}
       {hasPipeline && (
-        <OverviewTile title="Pipeline" to="/pipeline">
+        <OverviewTile title="Pipeline" to="/clients?view=pipeline">
           {pipeline.stages.length > 0 ? (
             <div className="flex flex-col gap-0.5">
               {pipeline.stages.map((st) => (
