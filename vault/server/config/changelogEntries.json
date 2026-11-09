@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "46bccebe",
+   "fullHash": "46bccebe9f2ec3ef8c9cbb4b9077e19f0b9983b6",
+   "committedAt": "2026-11-09T11:24:01+10:00",
+   "author": "mrb",
+   "subject": "CRM email log: real subject, day span and an AI summary per thread",
+   "filesChanged": 4,
+   "insertions": 143,
+   "deletions": 21,
+   "area": "CRM",
+   "goal": "Make the logged email entries readable: fix the \"(no subject)\" threads, show how long a thread ran, and summarise what the exchange was about.",
+   "whatChanged": "In server/services/clientEmailSync.js the subject is now the first message in a thread that has one (a blank first message made a whole thread \"(no subject)\"). The note shows the days a thread ran over in Brisbane time (for example 6-9 Nov; nothing when it was all one day) after the sent/received counts, and a 2 to 4 sentence summary of the exchange written by the light model (getModelsForUser().light, usage logged as clients_email_summary). The model is shown the thread text (quoted earlier mail and reply trails removed, about 9,000 characters across the thread) only to write the summary; the message text is not stored, only the summary. The prompt treats email text as data, not instructions, and asks it not to repeat passwords or card or account numbers. A thread is summarised when first logged and when it grows, at most 40 per client per run; an entry this job wrote that has no summary yet (logged before this change, or a failed attempt) gets one on the next read of its client as long as its note was not edited. If the model fails the entry is logged without a summary and retried. docs/crm-email-sync.md and the CRM guide text describe it.",
+   "filesImpacted": [
+    "server/services/clientEmailSync.js",
+    "server/services/clientEmailSync.test.js",
+    "server/services/crmTutor.js",
+    "docs/crm-email-sync.md"
+   ],
+   "benefit": "Each email entry says what the exchange was about and what is outstanding, instead of a bare subject and counts.",
+   "concerns": "PRIVACY AND COST: to write a summary the text of your client emails is sent to the AI model provider (it is not stored here, only the summary is). One model call per thread, up to 40 per client per run, and the first run over many threads costs the most; usage shows under clients_email_summary. Existing entries get a summary the next time their client is read (the daily run or Check email now), so a large first pass may take a while. Tested with a fake Gmail and a fake model (subject choice, day span, quote stripping, prompt shape, failure gives no summary, retry, edited notes left alone); never run with a real model or real mail, so how good the summaries read is unchecked. Summary quality depends on the light model and on how much of a long thread fits in the 9,000 characters. A summary is not rewritten when nothing new arrives, so one that reads poorly stays until the thread grows."
+  },
+  {
    "commit": "7c0b9d0f",
    "fullHash": "7c0b9d0f532da30a0062daa0277eb9adac929ace",
    "committedAt": "2026-11-09T10:44:11+10:00",
