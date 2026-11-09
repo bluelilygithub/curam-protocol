@@ -257,7 +257,7 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const rackSummary = `${typeCount} type${typeCount === 1 ? '' : 's'}${defaultType ? ` · standard: ${defaultType.name || 'unnamed'}` : ''}${unconfirmed ? ` · ${unconfirmed} not confirmed by supplier` : ''}`;
   const featureSummary = form.features.length ? `${form.features.length} group${form.features.length === 1 ? '' : 's'}, ${optionCount} option${optionCount === 1 ? '' : 's'}` : 'None: the Features step is off';
   const doorSummary = `Single ${form.singleMm} mm · double ${form.doubleMm} mm`;
-  const priceSummary = form.show ? `Shown to visitors, range ± ${form.rangePct}%` : 'Hidden from visitors';
+  const priceSummary = form.show ? 'Amounts sent to the website (never shown there)' : 'Kept in Vault';
   const pageSummary = `Colour ${form.accent || 'standard'} · ${form.phone ? `call ${form.phone}` : 'no phone number'}`;
   const mobileSummary = form.mnShow ? 'Shown on phones' : 'Off';
   const guideSummary = form.guideOn ? 'On: visitors see the help button' : 'Off';
@@ -421,19 +421,19 @@ export default function CellarLiteSettings({ onDirtyChange }) {
       <Panel {...pp('price', 'Guide price', priceSummary)}>
         <div className="flex items-center gap-3">
           <span className="flex-1" />
-          <Tooltip text={form.show ? 'Visitors currently see the guide price. Click to hide it. Hidden prices are never sent from Vault.' : 'The guide price is hidden from visitors. Click to show it (enter at least one amount, then press Save).'}>
+          <Tooltip text={form.show ? 'The website planner never shows a price, but these amounts are currently included in the settings it reads, so anyone could find them. Click to keep them in Vault (recommended), then press Save.' : 'These amounts stay in Vault and are never sent to the website. The website planner shows no price either way.'}>
           <button
             onClick={() => set('show', !form.show)}
             className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
             style={{ borderColor: form.show ? 'var(--color-primary)' : 'var(--color-border)', color: form.show ? 'var(--color-primary)' : 'var(--color-muted)', background: 'transparent' }}
             aria-pressed={form.show}
           >
-            {form.show ? 'Showing to visitors' : 'Hidden'}
+            {form.show ? 'Sent to the website' : 'Kept in Vault'}
           </button>
           </Tooltip>
         </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Price = fixed amount + (the default rack type's price per unit × number of units) + the door price. Visitors see a range around it. Leave any amount blank if it doesn't apply. While this is hidden, none of these amounts leave Vault.
+          Price = fixed amount + (the default rack type's price per unit × number of units) + the door price, as a range. The website planner no longer shows any price (its Price button explains what a price depends on, without figures); staff still use these amounts for the customer range. Leave any amount blank if it doesn't apply. While this is set to Kept in Vault, none of these amounts leave Vault.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Fixed amount" tip="An amount added to every guide price, for things every job has whatever its size. Leave blank if it doesn't apply." hint="Anything charged on every job (design, delivery, glass…).">{numInput('fixed')}</Field>

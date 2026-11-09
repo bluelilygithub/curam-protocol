@@ -14,4 +14,10 @@
   <FilesMatch "^cellar-lite-guide\.js$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
+  # Only the website itself may show the planner in a frame (www and non-www are different origins to the browser, so both are listed).
+  # Another site framing it could lay its own page over the quote form. If the domain changes, change both names here.
+  <FilesMatch "^index\.html$">
+    Header set Content-Security-Policy "frame-ancestors 'self' https://wiwc.com.au https://www.wiwc.com.au"
+  </FilesMatch>
+  Header set X-Content-Type-Options "nosniff"
 </IfModule>

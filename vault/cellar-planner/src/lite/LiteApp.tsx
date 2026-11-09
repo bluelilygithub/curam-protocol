@@ -11,17 +11,15 @@ import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
 import { PriceHelp } from './PriceHelp';
 import { QuoteForm } from './QuoteForm';
 import { DoorPicker } from './DoorPicker';
-import { cardPriceLabel, chosenOptions, effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
+import { cardPriceLabel, chosenOptions, effectsOf, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
 import { STEP_TITLES, stepKeys, type StepKey } from './steps';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
 import { Icon } from '../ui/icons';
 import { PHONE_QUERY, PhoneNotice } from './PhoneNotice';
-import { PhotoModal } from './PhotoModal';
 import { savePicture } from './savePicture';
 import { DEFAULT_CONFIG, accentColours, loadConfig, telHref, type LiteConfig, type LitePreset } from './config';
 import { FINISH_LOOK } from './finishes';
-import { priceRange } from './price';
 import { suggestFix } from './fixes';
 import { track, type EventName } from './events';
 import { clearLastDesign, readLastDesign, readUnit, writeLastDesign, writeUnit } from './remember';
@@ -29,7 +27,7 @@ import { LENGTH_UNITS, UNIT_NAMES, describeLength, formatLength, parseLength, ra
 import { BOTTLES, DOOR_POSITIONS, FINISHES, FINISH_NAMES, LIMITS, WALLS, decodeDesign, defaultLite, encodeDesign, liteResult, rackUnitCount, summaryLine, type DoorPosition, type DoorStyle, type Finish, type LiteMode, type LiteSettings } from './settings';
 
 // The public "lite" tool: a planner in steps. Space (size, door), racking and finish (bottles, how many, timber), Features (the owner's "Make it yours"
-// options, only while the owner has any) and a review (what it is, the guide price, the plan to keep). A large picture (3D, plan, or one wall of racks) is always beside the controls, with the
+// options, only while the owner has any) and a review (what it is). No price figure is shown anywhere: the business quotes after a site measure. A large picture (3D, plan, or one wall of racks) is always beside the controls, with the
 // capacity, footprint, configuration and quote button along the bottom. The browser remembers only the last design and the chosen unit.
 
 const WALL_NAMES: Record<WallSide, string> = { NORTH: 'North', EAST: 'East', SOUTH: 'South', WEST: 'West' };
@@ -81,8 +79,6 @@ export function LiteApp() {
   const [restored, setRestored] = useState(start.restored);
   const [stepKey, setStepKey] = useState<StepKey>('space');
   const [view, setView] = useState<'inside' | 'plan' | 'racks'>('inside');
-  // Render photo: desktop and tablet only. A phone is told so (the same width the layout treats as a phone).
-  const [photoOpen, setPhotoOpen] = useState(false);
   const [isPhone, setIsPhone] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(PHONE_QUERY).matches);
   useEffect(() => {
     const mq = window.matchMedia?.(PHONE_QUERY);
@@ -96,7 +92,6 @@ export function LiteApp() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [priceHelpOpen, setPriceHelpOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState<'' | 'done' | 'failed'>('');
-  const [pdf, setPdf] = useState<'' | 'working' | 'done' | 'failed'>('');
   const [thumb, setThumb] = useState('');
   // Features accordion: which groups the visitor has opened or closed (the first starts open)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -122,8 +117,7 @@ export function LiteApp() {
   const result = useMemo(() => liteResult(s, cfg), [s, cfg]);
   const analysis = useMemo(() => analyseApp(result.project), [result]);
   const code = useMemo(() => encodeDesign(s), [s]);
-  const price = useMemo(() => priceRange(cfg, rackUnitCount(result.project), s.doorStyle, result.problems.length, resolved.extras), [cfg, result, s.doorStyle, resolved]);
-  const summary = useMemo(() => summaryLine(s, result.bottles, cfg) + (price ? ` Guide price shown: ${price.text}.` : ''), [s, result.bottles, cfg, price]);
+  const summary = useMemo(() => summaryLine(s, result.bottles, cfg), [s, result.bottles, cfg]);
   const fix = useMemo(() => (result.problems.length ? suggestFix(s, cfg, unit) : null), [s, cfg, unit, result.problems.length]);
   const e = result.project.enclosure;
   const plan = useMemo(() => planView(e, fullRuns(result.project), analysis.racks, { walkwayMm: null, badRuns: badRunIds(analysis.racks.issues), plainLabels: true }), [result, analysis, e]);
@@ -141,8 +135,8 @@ export function LiteApp() {
     // only a design the visitor has changed is worth remembering: the untouched standard room would just greet them as "welcome back" for nothing
     if (code === encodeDesign(defaultLite())) clearLastDesign(); else writeLastDesign(code);
     const to = parentOrigin();
-    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', thumb, requested: false, footer: true }, to);
-  }, [code, summary, result.bottles, price, thumb]);
+    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: '', thumb, requested: false, footer: true }, to);
+  }, [code, summary, result.bottles, thumb]);
 
   // a small picture for the page's phone bar, redrawn a moment after the design stops changing (only when embedded: standalone nobody shows it)
   useEffect(() => {
@@ -346,10 +340,8 @@ export function LiteApp() {
   const copyLink = async (): Promise<void> => {
     try { await navigator.clipboard.writeText(designLink()); setLinkCopied('done'); say('link_copied'); } catch { setLinkCopied('failed'); }
   };
-  const download = async (): Promise<void> => {
-    setPdf('working');
-    try { const { downloadPlan } = await import('./planPdf'); await downloadPlan(result.project, code); setPdf('done'); say('plan_downloaded'); } catch { setPdf('failed'); }
-  };
+  /** The plan PDF for the business: made in this browser when the enquiry is sent and attached to the owner's email (the visitor never downloads it). */
+  const makePdf = async (): Promise<string> => { const { planPdfBase64 } = await import('./planPdf'); return planPdfBase64(result.project, code); };
   const startAgain = (): void => { clearLastDesign(); setRestored(false); show(defaultLite()); setStepKey('space'); };
   // Request a quote: the visitor's name, email, phone and state are asked for right here (QuoteForm), not on another page.
   const ask = (): void => { say('quote'); setQuoteOpen(true); };
@@ -395,12 +387,9 @@ export function LiteApp() {
             <button type="button" className="btn icon labelled" aria-label="Take the tour" title="Take the tour: a guided walk through the screen, one step at a time." onClick={() => void startTour()} data-testid="lite-tour"><Icon name="compass" /><span className="btn-label">Tour</span></button>
             <button type="button" className="btn icon labelled" aria-label="Help" title="Help: the plain-language guide, what each question means." onClick={() => setHelpOpen(true)} data-testid="lite-help-open"><Icon name="info" /><span className="btn-label">Help</span></button>
             <button type="button" className="btn icon labelled" aria-label="Save design" onClick={() => void copyLink()} data-testid="lite-share" title="Save design: copies a link to this exact design. Paste it anywhere to come back to it, or send it to someone."><Icon name="bookmark" /><span className="btn-label">Save</span></button>
-            <button type="button" className="btn icon labelled" aria-label="Download my plan (PDF)" aria-busy={pdf === 'working'} disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title={pdf === 'working' ? 'Preparing your plan…' : 'Download my plan (PDF): saves your plan to keep or show someone. It is a preliminary design, not a quote.'}><Icon name="download" /><span className="btn-label">Download</span></button>
-            {price && <button type="button" className="btn icon labelled" aria-label="How is this price worked out?" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="How is this price worked out? A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open"><Icon name="calc" /><span className="btn-label">Price</span></button>}
+            <button type="button" className="btn icon labelled" aria-label="How is the price worked out?" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="How is the price worked out? A short outline of what the price of a cellar depends on. Your exact price comes with your quote." data-testid="lite-price-help-open"><Icon name="calc" /><span className="btn-label">Price</span></button>
           </span>
         </div>
-        {pdf === 'done' && <p className="lite-note" role="status" data-testid="lite-download-done">Your plan has been saved.</p>}
-        {pdf === 'failed' && <p className="lite-note" role="alert">Could not make the PDF. Please try again.</p>}
         {linkCopied === 'done' && <p className="lite-note" role="status" data-testid="lite-share-done">Link copied. Anyone you send it to sees these choices.</p>}
         {linkCopied === 'failed' && <p className="lite-note" role="status">Could not copy the link automatically. Copy the address from your browser's address bar instead: it holds your design.</p>}
         {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
@@ -518,7 +507,7 @@ export function LiteApp() {
             <>
               <p className="lite-eyebrow" data-testid="lite-progress">Step 3 of {totalSteps}</p>
               <h2 tabIndex={-1} ref={panelTitle} className="lite-step-title">Make it yours</h2>
-              <p className="lite-lede">The finishing touches that turn storage into a room you show off. Add as much or as little as you like.{price ? ' The guide price updates as you go.' : ''}</p>
+              <p className="lite-lede">The finishing touches that turn storage into a room you show off. Add as much or as little as you like.</p>
               <div data-tour="lt-features" data-testid="lite-features">
                 {resolved.groups.map(({ group, chosen }, gi) => {
                   const one = group.mode === 'ONE';
@@ -542,7 +531,7 @@ export function LiteApp() {
                           {group.options.filter((o) => o.enabled || chosen.some((c) => c.code === o.code)).map((o) => {
                             const on = chosen.some((c) => c.code === o.code);
                             const why = unavailableReason(o, { widthMm: s.widthMm, depthMm: s.depthMm });
-                            const label = cardPriceLabel(o, { widthMm: s.widthMm, depthMm: s.depthMm }, cfg.pricing.currency, cfg.pricing.show);
+                            const label = cardPriceLabel(o, { widthMm: s.widthMm, depthMm: s.depthMm }, cfg.pricing.currency, false);
                             return (
                               <button type="button" key={o.id} role={one ? 'radio' : 'checkbox'} aria-checked={on} aria-disabled={why !== null} disabled={why !== null && !on}
                                 className={`feat-card${on ? ' on' : ''}${why ? ' off' : ''}`} data-testid={`feat-${group.id}-${o.id}`}
@@ -603,17 +592,9 @@ export function LiteApp() {
               ? <DrawingView look="warm" finish={s.finish} ctrlZoom key="plan" prims={plan} testid="lite-plan" description={`Plan of the cellar from above: ${roomText} inside, door on the ${s.doorWall.toLowerCase()} wall, about ${result.bottles} bottles.`} />
               : <DrawingView look="warmWall" finish={s.finish} ctrlZoom key={`racks-${rackWall}`} prims={racks} testid="lite-racks" description={`The racks on the ${rackWall.toLowerCase()} wall seen from inside, with each bottle drawn end-on.`} />}
           </div>
-          {view === 'inside' && (
+          {view === 'inside' && !isPhone && (
             <div className="lite-photo-row" data-testid="lite-photo-row">
-              {isPhone ? (
-                <p className="lite-note" data-testid="lite-photo-phone">Render photo is not available on a phone. Open this page on a laptop or tablet to make a realistic picture of your cellar.</p>
-              ) : (
-                <>
-                  <button type="button" className="btn" onClick={() => setPhotoOpen(true)} title="Make a realistic picture of your cellar, with lifelike light and shadow. It is drawn by your own computer and takes a few minutes." data-testid="lite-photo-open">Render photo&hellip;</button>
-                  <button type="button" className="btn" onClick={() => void savePicture(document.querySelector('[data-testid="lite-inside-canvas"]') ?? document, result.project.name)} title="Save the 3D picture as it is now, straight away, as a PNG file." data-testid="lite-photo-quick">Save picture</button>
-                  <span className="lite-note lite-photo-hint">Render photo is a realistic picture and takes a few minutes.</span>
-                </>
-              )}
+              <button type="button" className="btn" onClick={() => void savePicture(document.querySelector('[data-testid="lite-inside-canvas"]') ?? document, result.project.name)} title="Save the 3D picture as it is now, straight away, as a PNG file." data-testid="lite-photo-quick">Save picture</button>
             </div>
           )}
           {view === 'racks' && <p className="lite-note lite-units" data-testid="lite-racks-summary" role="status"><strong>{rackWallSummary(analysis.racks, fullRuns(result.project), rackWall).text}</strong> Each circle in the picture is one bottle, so you can count them. The whole cellar is about {result.bottles}.</p>}
@@ -622,13 +603,8 @@ export function LiteApp() {
             <div className="lite-added" data-testid="lite-added" aria-live="polite">
               <h3>Added so far</h3>
               {resolved.extras.length === 0
-                ? <p className="lite-note">Nothing extra yet. Your cellar is priced with the standard options: {resolved.groups.filter((g) => g.group.mode === 'ONE').map((g) => g.chosen[0]?.name).filter(Boolean).join(', ')}.</p>
-                : <ul className="lite-added-list">{resolved.extras.map((o) => <li key={o.code}><span>{o.name}</span>{priceLabel(o, cfg.pricing.currency, cfg.pricing.show) && <span>{priceLabel(o, cfg.pricing.currency, cfg.pricing.show)}</span>}</li>)}</ul>}
-              {cfg.pricing.show && (() => {
-                const t = featureTotals(resolved.extras), fmt = (n: number): string => `${cfg.pricing.currency}${n.toLocaleString('en-AU')}`;
-                return <p className="lite-added-total"><span>Features total</span><strong data-testid="lite-features-total">{t.low === 0 && t.high === 0 ? fmt(0) : t.low === t.high ? fmt(t.low) : `${fmt(t.low)} to ${fmt(t.high)}`}</strong></p>;
-              })()}
-              {resolved.extras.some((o) => featureTotals([o]).unpriced.length > 0) && cfg.pricing.show && <p className="lite-note">Some of your choices are priced on request: they are not in the total.</p>}
+                ? <p className="lite-note">Nothing extra yet. Your cellar has the standard options: {resolved.groups.filter((g) => g.group.mode === 'ONE').map((g) => g.chosen[0]?.name).filter(Boolean).join(', ')}.</p>
+                : <ul className="lite-added-list">{resolved.extras.map((o) => <li key={o.code}><span>{o.name}</span>{priceLabel(o, cfg.pricing.currency, false) && <span>{priceLabel(o, cfg.pricing.currency, false)}</span>}</li>)}</ul>}
             </div>
           )}
           <p className="lite-note lite-units" data-testid="lite-units">Built from standard-size rack units, about {describeLength(cfg.rack.unitWidthMm, unit)} wide, placed whole along the walls. A gap at the end of a wall is left-over space, not a mistake.</p>
@@ -649,12 +625,6 @@ export function LiteApp() {
           <span className="lite-cell-label">Configuration</span>
           <strong className="lite-cell-value" data-testid="lite-config">{configuration}</strong>
         </div>
-        {price && (
-          <div className="lite-cell">
-            <span className="lite-cell-label">Guide price</span>
-            <strong className="lite-cell-value" data-testid="lite-price">{price.text}{cfg.pricing.note && <small className="lite-price-note"> {cfg.pricing.note}</small>}</strong>
-          </div>
-        )}
         <div className="lite-cell lite-cta-cell" data-tour="lt-quote">
           {isPhone && navButtons('lite-quote')}
           {!isPhone && (
@@ -669,9 +639,8 @@ export function LiteApp() {
       </section>
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
 
-      <QuoteForm open={quoteOpen} onClose={() => setQuoteOpen(false)} design={{ code, summary, bottles: result.bottles, priceText: price?.text ?? '' }} phone={cfg.phone} note={cfg.quoteNote} onSent={() => say('quote_sent')} />
-      <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label, extras: resolved.extras.map((o) => o.name) }} />
-      <PhotoModal open={photoOpen} onClose={() => setPhotoOpen(false)} input={insideInput} name={result.project.name} />
+      <QuoteForm open={quoteOpen} onClose={() => setQuoteOpen(false)} design={{ code, summary, bottles: result.bottles, priceText: '' }} makePdf={result.problems.length ? undefined : makePdf} phone={cfg.phone} note={cfg.quoteNote} onSent={() => say('quote_sent')} />
+      <PriceHelp open={priceHelpOpen} onClose={() => setPriceHelpOpen(false)} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label, extras: resolved.extras.map((o) => o.name) }} />
       <TooltipHost look="vault" />
       <LiteHelp unit={unit} doorSingleMm={cfg.doors.singleMm} doorDoubleMm={cfg.doors.doubleMm} unitWidthMm={cfg.rack.unitWidthMm} open={helpOpen} onClose={closeHelp} onTour={() => { closeHelp(); window.setTimeout(() => void startTour(), 250); }} />
     </div>

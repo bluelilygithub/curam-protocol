@@ -46,7 +46,7 @@
   var TOP_INSET = -1;           // pixels of fixed menu bar across the top of your site, so pop-ups are not hidden behind it: -1 = work it out by itself, 0 = none
   var STICKY_TOP = 12;          // gap above the picture in pixels: raise it if your site has a fixed menu bar across the top
   // 4b. The website help chat. This script loads it for you, on the planner page only (cellar-lite-guide.js sits in the planner folder, inside
-  //     the upload zip). Set to '' to not load it. The chat itself stays hidden until it is switched on in Vault (Cellar Planner -> Settings).
+  //     the upload folder). Set to '' to not load it. The chat itself stays hidden until it is switched on in Vault (Cellar Planner -> Settings).
   var GUIDE_SCRIPT = PLANNER_LINK + 'cellar-lite-guide.js';
   // 5. Set to false once everything works. While true, each step is written to the browser Console (F12), every line starting "[cellar-lite]".
   var DEBUG = false;
@@ -56,7 +56,7 @@
   var CODE_RE = /^CL\d+\.[A-Za-z0-9_-]{1,200}$/;
   var START = '--- Cellar planner design ---';
   var END = '---';
-  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick', 'step', 'finish'];
+  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick', 'step', 'finish', 'feature', 'quote_sent'];
   var wasRequested = false;
   var latest = null; // the newest valid design message { code, summary, bottles, priceText, thumb }
   var plannerWin = null, plannerOrigin = ''; // where the newest design message came from, so the phone bar can ask the planner to open its own quote form
@@ -227,7 +227,7 @@
     if (d.type === 'cellar-lite:event') {
       if (!TRACK_EVENTS || EVENTS.indexOf(d.name) === -1) return;
       var push = { event: 'cellar_lite_' + d.name };
-      ['room', 'unit', 'view', 'step', 'finish'].forEach(function (k) { if (typeof d[k] === 'string' && /^[a-z0-9-]{1,40}$/.test(d[k])) push['cellar_lite_' + k] = d[k]; });
+      ['room', 'unit', 'view', 'step', 'finish', 'group', 'option'].forEach(function (k) { if (typeof d[k] === 'string' && /^[a-z0-9-]{1,40}$/.test(d[k])) push['cellar_lite_' + k] = d[k]; });
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push(push);
       log('dataLayer.push', JSON.stringify(push));

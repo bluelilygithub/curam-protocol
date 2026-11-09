@@ -1,4 +1,4 @@
-// Public planner and owner settings: guide price, starting rooms, highlight, tooltips on every control, the price-help modal, and every fallback when Vault is unreachable.
+// Public planner and owner settings: no price figure ever shown, starting rooms, highlight, tooltips on every control, the price-help modal, and every fallback when Vault is unreachable.
 // Needs the built lite bundle (npm run build:lite) and Chrome. Serves the bundle itself and stands in for Vault's settings address with the REAL
 // settings routes (server/routes/cellarLiteConfigRouter.js) backed by an in-memory table, so nothing external is touched.
 // Run: node scripts/e2e-lite-config.mjs
@@ -67,20 +67,19 @@ check('owner settings saved through the real admin route', res.status === 200, a
 let { ctx, page, logs, errors } = await openPage();
 await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-bottles').waitFor();
-await page.getByTestId('lite-price').waitFor({ timeout: 8000 }).catch(() => {});
+await page.getByTestId('lite-promise').waitFor({ timeout: 8000 }).catch(() => {});
+await page.waitForFunction(() => /750 mm/.test(document.querySelector('[data-testid="lite-units"]')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
 check('promise line from settings is on the page', /Two minutes/.test(await page.getByTestId('lite-promise').innerText().catch(() => '')));
-const priceText = await page.getByTestId('lite-price').innerText().catch(() => '');
-check('a guide price appears, in the owner\'s currency, with the owner\'s note', /\$[\d,]+ to \$[\d,]+/.test(priceText) && /Guide only/.test(priceText), priceText);
+check('no price figure is shown, even with the owner\'s prices switched on', (await page.getByTestId('lite-price').count()) === 0 && !/\$\s?\d/.test(await page.locator('body').innerText()));
 const units = await page.evaluate(() => document.querySelector('[data-testid="lite-units"]').innerText);
 check('the screen says the owner\'s rack unit width (750 mm)', /about 750 mm wide/.test(units), units);
 const presets = await page.getByTestId('lite-presets').locator('button').allInnerTexts();
 check('the owner\'s two starting rooms are offered, not the defaults', JSON.stringify(presets) === '["Tiny","Huge"]', JSON.stringify(presets));
 const bottlesBefore = Number((await page.getByTestId('lite-bottles').innerText()).match(/\d+/)[0]);
-const priceBefore = priceText;
 await page.getByTestId('lite-preset-tiny').click();
 check('choosing a starting room fills in its size', (await page.getByTestId('lite-widthMm').inputValue()) === '1500' && (await page.getByTestId('lite-heightMm').inputValue()) === '2300');
 const bottlesAfter = Number((await page.getByTestId('lite-bottles').innerText()).match(/\d+/)[0]);
-check('and the estimate and price follow', bottlesAfter !== bottlesBefore && (await page.getByTestId('lite-price').innerText()) !== priceBefore, `${bottlesBefore} -> ${bottlesAfter}`);
+check('and the estimate follows', bottlesAfter !== bottlesBefore, `${bottlesBefore} -> ${bottlesAfter}`);
 const pressed = async (id) => (await page.getByTestId(`lite-preset-${id}`).getAttribute('aria-pressed')) === 'true';
 const isPrimary = async (id) => /primary/.test(await page.getByTestId(`lite-preset-${id}`).getAttribute('class'));
 check('the chosen starting room is highlighted and the other is not', (await pressed('tiny')) && (await isPrimary('tiny')) && !(await pressed('huge')) && !(await isPrimary('huge')));
@@ -89,8 +88,6 @@ check('changing the size by hand un-highlights it', !(await pressed('tiny')) && 
 await page.getByTestId('lite-preset-huge').click();
 check('choosing another room moves the highlight', (await pressed('huge')) && !(await pressed('tiny')));
 check('a starting room can carry a double door', (await page.getByTestId('lite-doorstyle-DOUBLE').getAttribute('aria-checked')) === 'true');
-// price formula by hand: units on the current design
-const wanted = await page.evaluate(() => 0);
 check('console says where the settings came from', logs.some((l) => /\[cellar-lite\] settings loaded/.test(l)), logs.join(' | '));
 
 
@@ -110,12 +107,12 @@ await page.mouse.move(5, 5);
 await page.getByTestId('lite-step-4').click(); // Review
 await page.getByTestId('lite-price-help-open').waitFor({ timeout: 3000 });
 const helpBtnBox = await page.getByTestId('lite-price-help-open').boundingBox();
-const shareBox = await page.getByTestId('lite-download').boundingBox();
-check('the price-help button sits beside "Download my plan" in the top row of buttons', !!helpBtnBox && !!shareBox && Math.abs(helpBtnBox.y - shareBox.y) < 20 && await page.getByTestId('lite-price-help-open').evaluate((el) => el.closest('.lite-help-btns') !== null), JSON.stringify([helpBtnBox, shareBox]));
+const shareBox = await page.getByTestId('lite-share').boundingBox();
+check('the price-help button sits beside "Save" in the top row of buttons', !!helpBtnBox && !!shareBox && Math.abs(helpBtnBox.y - shareBox.y) < 20 && await page.getByTestId('lite-price-help-open').evaluate((el) => el.closest('.lite-help-btns') !== null), JSON.stringify([helpBtnBox, shareBox]));
 await page.getByTestId('lite-price-help-open').click();
 await page.getByTestId('lite-price-help').waitFor({ timeout: 3000 });
 const modalText = await page.getByTestId('lite-price-help').innerText();
-check('it opens as a modal and explains the parts that are in use', /rack unit/i.test(modalText) && /door/i.test(modalText) && /basics every cellar needs/i.test(modalText) && /range/i.test(modalText), modalText);
+check('it opens as a modal and explains what the price depends on', /rack unit/i.test(modalText) && /door/i.test(modalText) && /basics every cellar needs/i.test(modalText) && /site/i.test(modalText), modalText);
 check('it says what THIS design uses (units, door, room)', /rack units?: \d+/i.test(modalText) || /uses \d+ rack unit/i.test(modalText));
 check('it never states what any part costs (none of the owner\'s amounts appear)', !/(2,?000|1,?000|500|900|\$\s?\d)/.test(modalText.replace(/\d+\s[×x]\s\d+\s[×x]\s\d+\s*mm/, '').replace(/about \d+ bottles/g, '').replace(/rack units?: \d+/gi, '').replace(/uses \d+ rack units?/gi, '').replace(/Rack units: \d+/g, '')), modalText);
 await page.keyboard.press('Escape');
@@ -144,18 +141,6 @@ check('no script errors', errors.length === 0, errors.join(' | '));
 await ctx.close();
 
 
-// ---- A2: only a per-unit price set -> the outline mentions only the racking
-await adminPut({ pricing: { show: true, perUnit: 1000 } });
-{
-  const c2 = await openPage();
-  await c2.page.goto('http://localhost:8802/index.html');
-  await c2.page.getByTestId('lite-step-4').click(); // Review
-  await c2.page.getByTestId('lite-price-help-open').waitFor({ timeout: 8000 });
-  await c2.page.getByTestId('lite-price-help-open').click();
-  const t = await c2.page.getByTestId('lite-price-help').innerText();
-  check('with only a per-unit price, the outline mentions the racking and not the door or basics', /The racking/.test(t) && !/The door\./.test(t) && !/basics every cellar needs/.test(t), t);
-  await c2.ctx.close();
-}
 await adminPut({
   promise: 'Free. No sign-up. Two minutes.',
   rack: { unitWidthMm: 750, unitHeightMm: 2000 }, doors: { singleMm: 970, doubleMm: 1500 },
@@ -171,6 +156,8 @@ await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-bottles').waitFor();
 await page.waitForTimeout(800);
 check('no price shown when switched off', (await page.getByTestId('lite-price').count()) === 0);
+await page.getByTestId('lite-step-4').click();
+check('the price-help button is still there with prices off', (await page.getByTestId('lite-price-help-open').count()) === 1);
 await ctx.close();
 
 // ---- C: Vault down -> defaults, still works, says why
@@ -187,13 +174,13 @@ await ctx.close();
 ({ ctx, page, logs, errors } = await openPage());
 await adminPut({ rack: { unitWidthMm: 900 }, pricing: { show: true, perUnit: 1000 } });
 await page.goto('http://localhost:8802/index.html');
-await page.getByTestId('lite-price').waitFor({ timeout: 8000 });
+await page.waitForFunction(() => /900 mm/.test(document.querySelector('[data-testid="lite-units"]')?.textContent || ''), null, { timeout: 8000 });
 await page.unroute('https://curam-vault.up.railway.app/api/cellar-lite/config');
 await page.route('https://curam-vault.up.railway.app/api/cellar-lite/config', (r) => r.abort('failed'));
 await page.reload();
 await page.getByTestId('lite-bottles').waitFor();
-await page.getByTestId('lite-price').waitFor({ timeout: 8000 }).catch(() => {});
-check('network down on a later visit: the last settings seen are used (price still shown)', (await page.getByTestId('lite-price').count()) === 1, logs.join(' | '));
+await page.waitForFunction(() => /900 mm/.test(document.querySelector('[data-testid="lite-units"]')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+check('network down on a later visit: the last settings seen are used (900 mm units)', /900 mm/.test(await page.getByTestId('lite-units').innerText()), logs.join(' | '));
 check('and the Console says they were remembered', logs.some((l) => /remembered from the last visit/.test(l)));
 await ctx.close();
 

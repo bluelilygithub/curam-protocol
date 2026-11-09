@@ -22,7 +22,19 @@ const EMAIL_RE = /^[^\s@<>"',;:()\[\]\\]{1,64}@[^\s@<>"',;:()\[\]\\]{1,190}\.[A-
 /** The states and territories of Australia the form offers. */
 const STATES = ['NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'ACT', 'NT'];
 const STATE_NAMES = { NSW: 'New South Wales', VIC: 'Victoria', QLD: 'Queensland', SA: 'South Australia', WA: 'Western Australia', TAS: 'Tasmania', ACT: 'Australian Capital Territory', NT: 'Northern Territory' };
-const LIMITS = { name: 100, email: 254, phone: 24, message: 2000, summary: 400, priceText: 60, perIpPerHour: 5, perDay: 100, dedupeHours: 24 };
+const LIMITS = { name: 100, email: 254, phone: 24, message: 2000, summary: 400, priceText: 60, pdfBytes: 2 * 1024 * 1024, perIpPerHour: 5, perDay: 100, dedupeHours: 24 };
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * The plan PDF the planner makes in the visitor's browser, as base64. It comes from the public internet, so it is only ever attached to the owner's
+ * email (never stored, never shown to anyone else), and only when it really is a PDF within the size limit. Anything else is dropped (null) and the
+ * enquiry goes on without it: the email's design link always works.
+ */
+function readPdf(v) {
+  if (typeof v !== 'string' || !v || v.length > Math.ceil(LIMITS.pdfBytes / 3) * 4 || v.length % 4 !== 0 || !BASE64_RE.test(v)) return null;
+  const buf = Buffer.from(v, 'base64');
+  return buf.length >= 64 && buf.length <= LIMITS.pdfBytes && buf.subarray(0, 5).toString('latin1') === '%PDF-' ? buf : null;
+}
 const HOUR = 60 * 60 * 1000;
 
 // control characters are never wanted in text that ends up in a CRM note or an email
@@ -54,11 +66,13 @@ function validateEnquiry(raw) {
       message: clean(raw.message, LIMITS.message),
       summary: cleanLine(raw.summary, LIMITS.summary),
       priceText: cleanLine(raw.priceText, LIMITS.priceText),
+      pdf: readPdf(raw.pdf),
     },
   };
 }
 
-const ipOf = (req) => (String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown');
+// req.ip honours app 'trust proxy' (server/index.js); the first X-Forwarded-For entry is whatever the visitor sent, so never read it directly
+const ipOf = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
 const hashIp = (ip) => crypto.createHash('sha256').update(`cellar-lead:${ip}`).digest('hex').slice(0, 24);
 
 function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null, sendEmail = null, appUrl = () => process.env.APP_URL || 'https://curam-vault.up.railway.app' }) {
@@ -88,11 +102,13 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px"><h2 style="margin:0 0 8px;font-size:18px">New Cellar Planner enquiry</h2>`
       + `<table role="presentation" cellspacing="0" cellpadding="0" style="font-size:14px">${row('Name', e.name)}${row('Email', e.email)}${row('Phone', e.phone)}${row('State', e.state ? `${STATE_NAMES[e.state]} (${e.state})` : '')}${row('Design', e.summary)}${row('Bottles', e.bottles !== null ? String(e.bottles) : '')}${row('Guide price shown', e.priceText)}${row('Their message', e.message)}</table>`
       + `<p style="margin:14px 0"><a href="${esc(link)}">Open the design in the Cellar Planner</a></p>`
+      + (e.pdf ? `<p style="font-size:13px">The plan PDF is attached. It was made by the planner in the visitor's browser; the design link above is the master copy. The customer has not been sent a PDF.</p>` : `<p style="font-size:13px">No plan PDF came with this enquiry: open the design above to make one.</p>`)
       + `<p style="font-size:12px;color:#888">It is also in your CRM as a new lead. Reply to this email to answer them directly.</p></div>`;
     const subject = `New cellar enquiry from ${e.name}${e.state ? ` (${e.state})` : ''}`;
+    const attachments = e.pdf ? [{ filename: `cellar-plan-lead-${lead}.pdf`, content: e.pdf, contentType: 'application/pdf' }] : undefined;
     for (const addr of to) {
       // eslint-disable-next-line no-await-in-loop
-      await sendEmail({ to: addr, subject, html, replyTo: EMAIL_RE.test(e.email) ? e.email : undefined });
+      await sendEmail({ to: addr, subject, html, replyTo: EMAIL_RE.test(e.email) ? e.email : undefined, attachments });
     }
     log().info({ leadId: lead, admins: to.length }, '[cellar-leads] owner notified');
   }
@@ -106,7 +122,8 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
     next();
   });
   // The page script sends text/plain (a "simple" request: no preflight, and it survives the page navigating away); accept JSON too.
-  publicRouter.use(express.text({ type: () => true, limit: '16kb' }));
+  // 3 MB: room for the plan PDF (2 MB as base64) beside the form fields
+  publicRouter.use(express.text({ type: () => true, limit: '3mb' }));
 
   publicRouter.post('/', async (req, res) => {
     try {

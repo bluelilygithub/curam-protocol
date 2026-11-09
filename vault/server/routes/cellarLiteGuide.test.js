@@ -35,7 +35,7 @@ function build({ enabled = true, used = 0, admins = ['boss@example.com'], emailO
   const ask = async (userId, input) => { state.asked.push({ userId, input }); return state.reply || { verdict: 'doable', answer: 'Go to Space.', steps: [{ tool: 'space', do: 'Set size.', label: 'Space', group: 'Steps' }], missing: '', tip: '' }; };
   const router = createCellarLiteGuideRouter({ pool, ask, tutorEmail, sendEmail: mail, now: () => state.clock, capture: async (s) => { state.captured.push(s); } });
   const app = express();
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1); // as in server/index.js
   app.use('/api/cellar-lite/guide', router);
   return { app, state };
 }

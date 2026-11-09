@@ -113,22 +113,17 @@ const sliderVal = await page.getByTestId('lite-target-slider').inputValue();
 const targetVal = await page.getByTestId('lite-target').inputValue();
 check('the bottle slider sets the number wanted (to the nearest step it allows)', sliderVal === targetVal && Math.abs(Number(targetVal) - 300) <= 6, `slider ${sliderVal} text ${targetVal}`);
 
-// ---- download
+// ---- no plan download and no Render photo for visitors (the business sends the plan with the quote)
 await page.getByTestId('lite-mode-FILL').click();
 await page.getByTestId('lite-step-4').click(); // Review is the fourth step now that the Features step exists
-const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByTestId('lite-download').click()]);
-const dlPath = await dl.path();
-const bytes = readFileSync(dlPath);
-check('Download my plan gives a real PDF', dl.suggestedFilename() === 'my-wine-cellar-plan.pdf' && bytes.slice(0, 5).toString() === '%PDF-' && bytes.length > 5000, `${dl.suggestedFilename()} ${bytes.length}`);
-await page.getByTestId('lite-download-done').waitFor({ timeout: 5000 }).catch(() => {});
-check('and says it was saved', (await page.getByTestId('lite-download-done').count()) === 1);
+check('there is no Download button and no Render photo button', (await page.getByTestId('lite-download').count()) === 0 && (await page.getByTestId('lite-photo-open').count()) === 0);
 
 // ---- quote note
 await page.getByTestId('lite-quote').click();
 check('asking for a quote opens the form with the owner reassurance line and the design summary', /We reply within a day\./.test(await page.getByTestId('lite-quote-form').innerText().catch(() => '')) && /bottles/.test(await page.getByTestId('lite-quote-form').innerText().catch(() => '')));
 await page.getByTestId('lite-quote-form-close').click();
 check('closing it puts the visitor straight back to the design', await page.getByTestId('lite-quote-form').waitFor({ state: 'detached', timeout: 4000 }).then(() => true, () => false));
-check('the plan, price-help and save buttons are in the top row with the tour and help buttons', await page.evaluate(() => { const top = (id) => document.querySelector('[data-testid="' + id + '"]')?.closest('.lite-help-btns') !== null; return ['lite-tour', 'lite-help-open', 'lite-share', 'lite-download'].every(top); }));
+check('the price-help and save buttons are in the top row with the tour and help buttons', await page.evaluate(() => { const top = (id) => document.querySelector('[data-testid="' + id + '"]')?.closest('.lite-help-btns') !== null; return ['lite-tour', 'lite-help-open', 'lite-share', 'lite-price-help-open'].every(top); }));
 
 // ---- every control has a tooltip
 const untipped = await page.evaluate(() => [...document.querySelectorAll('button, input, select, textarea')].filter((el) => el.offsetParent !== null && !el.hasAttribute('title') && !el.hasAttribute('data-tip')).map((el) => el.getAttribute('data-testid') || el.outerHTML.slice(0, 70)));
@@ -409,7 +404,7 @@ const footInfo = async () => {
 };
 const fi = await footInfo();
 check('phone width: the page script draws no second quote bar (the planner has its own footer)', fi.bar === 'none', JSON.stringify(fi));
-check('phone width: the sticky footer is on screen while the controls are, with bottles, price and Next', fi.top >= 0 && fi.bottom <= fi.vh + 2 && /bottles/i.test(fi.text) && /\$/.test(fi.text) && /Next/.test(fi.text), JSON.stringify(fi));
+check('phone width: the sticky footer is on screen while the controls are, with bottles and Next and no price', fi.top >= 0 && fi.bottom <= fi.vh + 2 && /bottles/i.test(fi.text) && !/\$/.test(fi.text) && /Next/.test(fi.text), JSON.stringify(fi));
 await page.evaluate(() => window.scrollTo(0, document.getElementById('f').getBoundingClientRect().top + window.scrollY + 300));
 await page.waitForTimeout(600);
 const fi2 = await footInfo();

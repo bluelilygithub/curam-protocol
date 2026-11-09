@@ -64,6 +64,7 @@ function fakePool({ admin = 1 } = {}) {
 function serve(pool, { now, capture, sendEmail } = {}) {
   const { publicRouter, staffRouter } = createCellarLeadsRouters({ pool, now, capture, sendEmail, appUrl: () => 'https://vault.test' });
   const app = express();
+  app.set('trust proxy', 1); // as in server/index.js
   app.use('/api/cellar-lite/enquiry', publicRouter); // public: before the JSON parser, like the real mount
   app.use(express.json());
   app.use('/api/cellar-planner/leads', (req, res, next) => { req.user = { id: Number(req.headers['x-test-user'] || 1) }; next(); }, staffRouter);
@@ -192,6 +193,12 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
     assert.strictEqual((await post(s, { ...GOOD, email: 'later@example.com' }, ip)).status, 200);
     s.close();
   });
+  await t('per-visitor limit: a made-up first X-Forwarded-For entry does not get round it (the proxy-added last entry counts)', async () => {
+    const pool = fakePool(); const s = await serve(pool);
+    for (let i = 0; i < LIMITS.perIpPerHour; i++) assert.strictEqual((await post(s, { ...GOOD, email: `s${i}@example.com` }, { 'x-forwarded-for': `10.0.0.${i}, 203.0.113.50` })).status, 200, `enquiry ${i}`);
+    assert.strictEqual((await post(s, { ...GOOD, email: 's9@example.com' }, { 'x-forwarded-for': '10.9.9.9, 203.0.113.50' })).status, 429);
+    s.close();
+  });
   await t('daily ceiling: at the limit new enquiries are refused and the Suggestions inbox is told (once per day)', async () => {
     const pool = fakePool(); const captured = []; const s = await serve(pool, { capture: async (x) => { captured.push(x); } });
     for (let i = 0; i < LIMITS.perDay; i++) pool.db.leads.push({ id: 5000 + i, userId: 1, email: `x${i}@e.com`, designCode: 'CL1.x', createdAt: Date.now(), status: 'new' });
@@ -313,6 +320,30 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
     // a duplicate (same person, same design) is not emailed twice
     await post(s, { ...GOOD, state: 'VIC' }); await new Promise((res) => setTimeout(res, 50));
     assert.strictEqual(sent.length, 2, 'no second email for a duplicate');
+    s.close();
+  });
+
+  await t('the plan PDF is attached to the owner email only when it really is a PDF within the size limit; anything else is dropped and the enquiry still goes through', async () => {
+    const sent = [];
+    const mail = Object.assign(async (m) => { sent.push(m); }, { isConfigured: async () => true });
+    const pool = fakePool(); const s = await serve(pool, { sendEmail: mail });
+    const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 32)]).toString('base64');
+    assert.strictEqual((await post(s, { ...GOOD, pdf })).status, 200);
+    await new Promise((res) => setTimeout(res, 50));
+    assert.strictEqual(sent[0].attachments.length, 1);
+    assert.strictEqual(sent[0].attachments[0].contentType, 'application/pdf');
+    assert.ok(sent[0].attachments[0].content.subarray(0, 5).toString() === '%PDF-');
+    assert.match(sent[0].html, /plan PDF is attached/);
+    const notPdf = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(200, 1)]).toString('base64');
+    for (const [i, bad] of [notPdf, 'not base64!!', 12345].entries()) {
+      assert.strictEqual((await post(s, { ...GOOD, email: `bad${i}@example.com`, pdf: bad })).status, 200);
+    }
+    await new Promise((res) => setTimeout(res, 50));
+    assert.strictEqual(sent.length, 4);
+    for (const m of sent.slice(1)) { assert.strictEqual(m.attachments, undefined); assert.match(m.html, /No plan PDF/); }
+    assert.ok(!('pdf' in pool.db.leads[0]), 'the PDF is never stored');
+    const big = validateEnquiry({ ...GOOD, pdf: Buffer.concat([Buffer.from('%PDF-'), Buffer.alloc(LIMITS.pdfBytes)]).toString('base64') });
+    assert.strictEqual(big.ok, true); assert.strictEqual(big.value.pdf, null);
     s.close();
   });
 

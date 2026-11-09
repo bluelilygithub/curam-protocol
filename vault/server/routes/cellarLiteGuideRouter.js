@@ -20,7 +20,8 @@ const LIMITS = { askPerHour: 15, askPerDay: 40, emailPerHour: 3, emailPerDay: 6,
 const STRICT_EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){1,5}$/;
 const FEATURE = 'cellar_lite_guide';
 
-const ipOf = (req) => (String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown');
+// req.ip honours app 'trust proxy' (server/index.js); the first X-Forwarded-For entry is whatever the visitor sent, so never read it directly
+const ipOf = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
 const hashIp = (ip) => crypto.createHash('sha256').update(`cellar-guide:${ip}`).digest('hex').slice(0, 24);
 
 /** A small in-memory window counter: a restart only resets a limit. */

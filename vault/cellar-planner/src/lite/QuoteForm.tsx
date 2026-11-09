@@ -21,17 +21,18 @@ export function quoteProblem(f: QuoteFields): { field: keyof QuoteFields | ''; t
   return { field: '', text: '' };
 }
 
-/** The body Vault's public enquiry route expects. */
-export function enquiryBody(f: QuoteFields, d: QuoteDesign, honeypot = ''): Record<string, unknown> {
+/** The body Vault's public enquiry route expects. `pdf` is the plan PDF as base64 ('' = none: the owner's email then has the design link only). */
+export function enquiryBody(f: QuoteFields, d: QuoteDesign, honeypot = '', pdf = ''): Record<string, unknown> {
   return {
     name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), state: f.state, message: f.message.trim(),
     code: d.code, summary: d.summary.slice(0, 400), bottles: Number.isFinite(d.bottles) ? d.bottles : null, priceText: d.priceText.slice(0, 60), website: honeypot,
+    ...(pdf ? { pdf } : {}),
   };
 }
 
 /** The design as plain text, for pasting into an email when the form could not be sent. */
 export const fallbackText = (d: QuoteDesign): string => `${d.summary}
-About ${d.bottles} bottles${d.priceText ? `, guide price ${d.priceText}` : ''}
+About ${d.bottles} bottles
 Design code: ${d.code}`;
 
 async function copyText(text: string): Promise<boolean> {
@@ -45,8 +46,9 @@ type Phase = 'form' | 'sending' | 'sent' | 'failed';
  * (which files it in the CRM and emails the owner). Nothing is sent until they press Send. If Vault cannot be reached the design stays on screen and
  * they are told to try again or call, never left guessing.
  */
-export function QuoteForm({ open, onClose, design, phone, note = '', onSent, fetchFn = fetch }: {
-  open: boolean; onClose(): void; design: QuoteDesign; phone: string; /** The owner's own reassurance line (for example how quickly they reply). */ note?: string; onSent?(): void; fetchFn?: typeof fetch;
+export function QuoteForm({ open, onClose, design, phone, note = '', onSent, makePdf, fetchFn = fetch }: {
+  open: boolean; onClose(): void; design: QuoteDesign; phone: string; /** The owner's own reassurance line (for example how quickly they reply). */ note?: string; onSent?(): void;
+  /** Makes the plan PDF (base64) for the owner's email. A failure never stops the enquiry: it is sent without the PDF. */ makePdf?: () => Promise<string>; fetchFn?: typeof fetch;
 }) {
   const [f, setF] = useState<QuoteFields>({ name: '', email: '', phone: '', state: '', message: '' });
   const [phase, setPhase] = useState<Phase>('form');
@@ -78,9 +80,11 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, fet
     const p = quoteProblem(f);
     if (p.text) { setShown(p); if (p.field) refs[p.field].current?.focus(); return; }
     setPhase('sending'); setShown(null);
+    let pdf = '';
+    if (makePdf) { try { pdf = await makePdf(); } catch { pdf = ''; } }
     try {
       // text/plain is a "simple" request, so the browser makes no preflight round trip to Vault
-      const r = await fetchFn(`${apiBase()}/api/cellar-lite/enquiry`, { method: 'POST', body: JSON.stringify(enquiryBody(f, design, trap)), headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, credentials: 'omit' });
+      const r = await fetchFn(`${apiBase()}/api/cellar-lite/enquiry`, { method: 'POST', body: JSON.stringify(enquiryBody(f, design, trap, pdf)), headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, credentials: 'omit' });
       if (r.ok) { setPhase('sent'); onSent?.(); return; }
       let said = '';
       try { const j = (await r.json()) as { error?: unknown }; if (typeof j.error === 'string') said = j.error; } catch { /* no body */ }
@@ -99,12 +103,12 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, fet
         <div className="modal-head"><h2>{phase === 'sent' ? 'Thank you' : 'Request a quote'}</h2><button type="button" className="icon-btn" aria-label="Close" title="Close" onClick={onClose} data-testid="lite-quote-form-close">×</button></div>
         {phase === 'sent' ? (
           <div className="modal-body" data-testid="lite-quote-sent">
-            <p role="status">Your enquiry has been sent. We have your design: about {design.bottles} bottles{design.priceText ? `, guide price ${design.priceText}` : ''}. We will be in touch to talk it through and arrange a time to measure.</p>
+            <p role="status">Your enquiry has been sent. We have your design: about {design.bottles} bottles. We will be in touch with your plan and to arrange a time to measure.</p>
             <p><button type="button" className="btn primary" onClick={onClose} data-testid="lite-quote-sent-close">Back to my design</button></p>
           </div>
         ) : (
           <form className="modal-body" onSubmit={(e) => void send(e)} noValidate data-testid="lite-quote-fields">
-            <p className="lite-note">We will get a quote to you for exactly this design: about {design.bottles} bottles{design.priceText ? `, guide price ${design.priceText}` : ''}. Nothing is sent until you press Send. {note}</p>
+            <p className="lite-note">We will get a quote and your plan to you for exactly this design: about {design.bottles} bottles. Nothing is sent until you press Send. {note}</p>
             <label className="qf-row">Your name
               <input ref={first} title="Your name, so we know who to ask for." type="text" autoComplete="name" value={f.name} onChange={set('name')} maxLength={100} aria-invalid={shown?.field === 'name'} aria-describedby={err('name')} data-testid="lite-quote-name" />
             </label>

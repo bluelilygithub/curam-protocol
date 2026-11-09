@@ -7,7 +7,7 @@
  * browser has one). A visitor types or says what they want to do ("how do I measure my room?"); the chat answers in plain words and its "Show me"
  * links take the planner to the right step. After an answer, "Email this conversation to the team" sends the chat to your team.
  *
- * cellar-lite-fill.js loads this file for you on the planner page (GUIDE_SCRIPT there); it is inside the upload zip beside the planner.
+ * cellar-lite-fill.js loads this file for you on the planner page (GUIDE_SCRIPT there); it is in the upload folder beside the planner (siteground-upload/cellar-lite/).
  *  - It stays hidden until you switch it on in Vault (Cellar Planner -> Settings -> Website help chat). Off there = no button on the site.
  *  - It never sees the visitor's design, never gives a price, and sends nothing until the visitor asks a question or presses Send.
  *  - "Email this conversation" goes to YOUR admin address (set in Vault). Never to an address the visitor types.
@@ -58,6 +58,7 @@
   var history = [];   // what the model is sent: [{ role, content }]
   var turns = [];     // what an emailed copy shows
   var currentStep = '';
+  var frameOrigin = ''; // the planner frame's real origin, learned from its own messages (www and non-www differ, and postMessage needs it exact)
   var anchored = false; // the button sits beside the planner's title (true) or floats in the corner of the screen (false)
   var busy = false, root, panel, list, input, sendBtn, micBtn, openBtn, emailRow, wideBtn, clearBtn, endMark, accent = ACCENT;
 
@@ -76,10 +77,11 @@
   // The planner tells the page which step the visitor is on (the same anonymous events the analytics use), so answers can say "you are here".
   window.addEventListener('message', function (ev) {
     var d = ev.data;
-    if (!d || d.type !== 'cellar-lite:event' || d.name !== 'step') return;
+    if (!d || typeof d.type !== 'string' || d.type.indexOf('cellar-lite:') !== 0) return;
     var f = plannerFrame();
-    if (!f || ev.source !== f.contentWindow) return;
-    if (/^(space|racking|features|review)$/.test(d.step)) currentStep = d.step;
+    if (!f || ev.source !== f.contentWindow || !sameSite(ev.origin, PLANNER_ORIGIN)) return;
+    frameOrigin = ev.origin;
+    if (d.type === 'cellar-lite:event' && d.name === 'step' && /^(space|racking|features|review)$/.test(d.step)) currentStep = d.step;
   });
 
   function el(tag, cls, text) {
@@ -275,7 +277,7 @@
   function goTo(id) {
     var f = plannerFrame();
     if (!f) return;
-    try { f.contentWindow.postMessage({ type: 'cellar-lite:go', version: 1, id: id }, PLANNER_ORIGIN); } catch (e) { log('go failed', e); }
+    try { f.contentWindow.postMessage({ type: 'cellar-lite:go', version: 1, id: id }, frameOrigin || PLANNER_ORIGIN); } catch (e) { log('go failed', e); }
     var r = f.getBoundingClientRect();
     if (r.top < 0 || r.top > window.innerHeight * 0.6) {
       var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
