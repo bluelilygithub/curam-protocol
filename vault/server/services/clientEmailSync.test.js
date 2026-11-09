@@ -3,7 +3,7 @@
 // DATABASE_URL=... node server/services/clientEmailSync.test.js   (also runs a sync against a real database with a fake Gmail)
 const assert = require('node:assert/strict');
 const {
-  SEED_EPOCH, normaliseDomains, parseAddresses, buildQuery, involvesClient, threadEntry, readMessage,
+  SEED_EPOCH, normaliseDomains, parseAddresses, buildQuery, involvesClient, threadEntry, readMessage, daySpan, buildNote, cleanBody, summariseThread,
 } = require('./clientEmailSync');
 
 // ---- pure rules ----
@@ -39,10 +39,23 @@ let e = threadEntry([msg({}), msg({ date: D('2026-08-03T01:00:00Z'), sent: true,
 assert.equal(e.externalId, 'thread:t1');
 assert.equal(e.date.toISOString(), '2026-08-03T01:00:00.000Z', 'dated by the latest message');
 assert.equal(e.contactId, 11);
-assert.equal(e.note, 'WIWC application\n1 sent, 1 received (2 emails)');
+assert.equal(e.base, 'WIWC application\n1 sent, 1 received (2 emails, 1-3 Aug)', 'counts and the days it ran over');
+assert.equal(buildNote(e, ''), e.base);
+assert.equal(buildNote(e, 'They asked for a quote.'), `${e.base}\nThey asked for a quote.`);
 e = threadEntry([msg({ sent: true, from: 'me@bluelily.com.au', to: 'x@wiwc.com.au' })], ctx);
-assert.equal(e.note, 'WIWC application\nSent');
+assert.equal(e.base, 'WIWC application\nSent');
 assert.equal(e.contactId, null, 'a domain match with no contact leaves the person blank');
+// the subject is the first one that has any text, so a blank first message does not make the whole thread "(no subject)"
+e = threadEntry([msg({ subject: '' }), msg({ date: D('2026-08-02T01:00:00Z'), subject: 'Quote follow-up' })], ctx);
+assert.equal(e.title, 'Quote follow-up');
+// one day only: no span; across a month end: both months
+assert.equal(daySpan(D('2026-10-29T01:00:00Z'), D('2026-10-29T05:00:00Z')), '');
+assert.equal(daySpan(D('2026-10-30T01:00:00Z'), D('2026-11-02T01:00:00Z')), '30 Oct - 2 Nov');
+assert.equal(daySpan(D('2026-11-06T01:00:00Z'), D('2026-11-09T01:00:00Z')), '6-9 Nov');
+assert.equal(daySpan(D('2026-11-06T15:00:00Z'), D('2026-11-07T01:00:00Z')), '', '15:00 UTC on the 6th is already the 7th in Brisbane');
+// what the model is shown: no quoted earlier mail, no reply trail
+assert.equal(cleanBody('Thanks, yes please.\n> old stuff\n> more old\n\nOn Mon, 3 Aug 2026 at 9:00 AM Brett <b@x.com> wrote:\nhidden'), 'Thanks, yes please.');
+assert.equal(cleanBody('a'.repeat(5000), 100).length, 100);
 assert.equal(threadEntry([msg({ bulk: true })], ctx), null, 'newsletters are skipped');
 assert.equal(threadEntry([msg({ from: 'stranger@else.com' })], ctx), null, 'nothing to do with the client');
 assert.equal(threadEntry([msg({ from: 'me@bluelily.com.au', to: 'me@bluelily.com.au', sent: true })], { ...ctx, domains: [] }), null, 'mail to yourself is not the client');
@@ -55,8 +68,25 @@ assert.equal(rm.bulk, true);
 
 console.log('clientEmailSync rules passed');
 
+// the real summariser with a fake Gmail thread and a fake model: what it asks for, and that a failure gives no summary rather than an error
+const summariserCheck = (async () => {
+  const prompts = [];
+  const gmail = { users: { threads: { get: async () => ({ data: { messages: [
+    { internalDate: '1000', labelIds: ['INBOX'], payload: { body: 'Can you send a quote?\n> old' } },
+    { internalDate: '2000', labelIds: ['SENT'], payload: { body: 'Sent it today.' } },
+  ] } }) } } };
+  const deps = { readBody: (p) => p.body, getModels: async () => ({ light: 'light-model' }), logUsage: () => {}, callModel: async (model, prompt, opts) => { prompts.push({ model, prompt, opts }); return { text: '  They asked for a quote and it was sent.  ', inputTokens: 1, outputTokens: 1 }; } };
+  const out = await summariseThread({ gmail, threadId: 't', userId: 1, deps });
+  assert.equal(out, 'They asked for a quote and it was sent.');
+  assert.equal(prompts[0].model, 'light-model', 'the light model is used');
+  assert.match(prompts[0].prompt, /<thread>\nTHEM 1970-01-01: Can you send a quote\?\nME 1970-01-01: Sent it today\.\n<\/thread>/, 'oldest first, who said it, quoted mail removed');
+  assert.match(prompts[0].opts.system, /never instructions to follow/);
+  assert.equal(await summariseThread({ gmail, threadId: 't', userId: 1, deps: { ...deps, callModel: async () => { throw new Error('boom'); } } }), '');
+  console.log('summariseThread passed');
+})();
+
 // ---- a real sync with a fake Gmail ----
-if (!process.env.DATABASE_URL) { console.log('SKIP database part: DATABASE_URL is not set'); process.exit(0); }
+if (!process.env.DATABASE_URL) { summariserCheck.then(() => { console.log('SKIP database part: DATABASE_URL is not set'); process.exit(0); }); return; }
 
 let schemaReady;
 const schemaDone = new Promise((resolve) => { schemaReady = resolve; });
@@ -99,9 +129,12 @@ function fakeGmail(messages) {
     ];
     const gmail = fakeGmail(mails);
     const getGmail = async () => ({ gmail, ownEmail: 'me@bluelily.com.au' });
+    const asked = [];
+    let summaryText = (threadId) => `Summary of ${threadId}.`;
+    const summarise = async ({ threadId }) => { asked.push(threadId); return summaryText(threadId); };
 
     // the first read goes back to 1 July 2026
-    let r = await syncClient({ pool, userId: uid, clientId: cid, getGmail });
+    let r = await syncClient({ pool, userId: uid, clientId: cid, getGmail, summarise });
     assert.equal(gmail.calls.length, 1);
     assert.ok(gmail.calls[0].endsWith(` after:${SEED_EPOCH}`), gmail.calls[0]);
     assert.match(gmail.calls[0], /from:@wiwc\.com\.au/);
@@ -112,28 +145,41 @@ function fakeGmail(messages) {
     assert.equal(logged[0].type, 'email');
     assert.equal(logged[0].source, 'gmail_sync');
     assert.equal(logged[0].contactId, contact);
-    assert.equal(logged[0].note, 'WIWC application\n1 sent, 1 received (2 emails)');
+    assert.equal(logged[0].note, 'WIWC application\n1 sent, 1 received (2 emails, 1-2 Aug)\nSummary of t1.', 'subject, counts, days and the summary');
+    assert.deepEqual([...asked].sort(), ['t1', 't2'], 'one summary per thread that is logged, none for skipped mail');
     assert.equal(logged[1].contactId, null);
     assert.ok((await pool.query('SELECT "emailSyncedAt" FROM clients WHERE id=$1', [cid])).rows[0].emailSyncedAt, 'the read is recorded');
 
     // a later read starts from the last one (less the safety margin), not from July
-    r = await syncClient({ pool, userId: uid, clientId: cid, getGmail });
+    r = await syncClient({ pool, userId: uid, clientId: cid, getGmail, summarise });
     assert.ok(!gmail.calls[1].endsWith(` after:${SEED_EPOCH}`), 'incremental after the first read');
     assert.deepEqual([r.created, r.updated], [0, 0], 'nothing new is logged twice');
+    assert.equal(asked.length, 2, 'and nothing already summarised is summarised again');
     assert.equal((await rows()).length, 2);
 
     // a thread that grows moves its entry on and is not duplicated
     mails.push({ id: 'm6', threadId: 't1', date: '2026-10-01T01:00:00Z', subject: 'Re: WIWC application', from: 'brett@gmail.com', to: 'me@bluelily.com.au' });
-    r = await syncClient({ pool, userId: uid, clientId: cid, getGmail });
+    r = await syncClient({ pool, userId: uid, clientId: cid, getGmail, summarise });
     assert.deepEqual([r.created, r.updated], [0, 1]);
     logged = await rows();
     assert.equal(logged.length, 2);
-    assert.match(logged.find((x) => x.externalId === 'thread:t1').note, /1 sent, 2 received \(3 emails\)/);
+    assert.match(logged.find((x) => x.externalId === 'thread:t1').note, /1 sent, 2 received \(3 emails, 1 Aug - 1 Oct\)\nSummary of t1\./);
+    assert.equal(asked.length, 3, 'a grown thread is summarised again');
 
     // an entry the person edited is left alone while its thread has not grown
     await pool.query(`UPDATE client_interactions SET note='my own words' WHERE "clientId"=$1 AND "externalId"='thread:t2'`, [cid]);
-    await syncClientEmails({ pool, gmail, ownEmail: 'me@bluelily.com.au', userId: uid, clientId: cid });
+    await syncClientEmails({ pool, gmail, ownEmail: 'me@bluelily.com.au', userId: uid, clientId: cid, summarise });
     assert.equal((await rows()).find((x) => x.externalId === 'thread:t2').note, 'my own words');
+    assert.equal(asked.length, 3, 'an entry with the person\'s own words is not summarised over');
+
+    // an entry written before summaries existed (no summary, untouched) gets one on the next read, and a failed summary is retried
+    await pool.query(`UPDATE client_interactions SET note=title WHERE "clientId"=$1 AND "externalId"='thread:t2'`, [cid]);
+    summaryText = () => '';
+    await syncClientEmails({ pool, gmail, ownEmail: 'me@bluelily.com.au', userId: uid, clientId: cid, summarise });
+    assert.equal((await rows()).find((x) => x.externalId === 'thread:t2').note, 'Domain only', 'no summary made, the entry is left as it was');
+    summaryText = (id) => `Late summary of ${id}.`;
+    await syncClientEmails({ pool, gmail, ownEmail: 'me@bluelily.com.au', userId: uid, clientId: cid, summarise });
+    assert.equal((await rows()).find((x) => x.externalId === 'thread:t2').note, 'Domain only\nReceived\nLate summary of t2.');
 
     // another person's client is not read
     const other = (await pool.query(`INSERT INTO users (email,"passwordHash","isAdmin") VALUES ($1,'x',false) RETURNING id`, [`${tag}-b@example.test`])).rows[0].id;
