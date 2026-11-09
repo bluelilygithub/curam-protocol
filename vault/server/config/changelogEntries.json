@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "da2fe616",
+   "fullHash": "da2fe616068add2fcf538497199d30ae3276a289",
+   "committedAt": "2026-11-09T12:07:32+10:00",
+   "author": "mrb",
+   "subject": "CRM email log: full read on Check email now, one-time repair, line breaks",
+   "filesChanged": 6,
+   "insertions": 32,
+   "deletions": 10,
+   "area": "CRM",
+   "goal": "Make a client email entry that was logged wrongly actually get corrected, and make the summary start on its own line.",
+   "whatChanged": "The previous fix only reached threads the read looked at, and Check email now read only recent mail, so an old quiet thread (a real 7-email thread whose only recent item was an unsent draft) was never corrected. Now: (1) Check email now (POST /api/clients/:id/email-sync) reads that client back to 1 July 2026 every time, whatever the last read was; it is safe to repeat (nothing already logged is duplicated and nothing already summarised is summarised again). The daily job still reads only what is new. (2) A one-time reset in server/db.js, guarded by a workspace_settings marker (client_email_resync_2026_11_09) so it never repeats, marks every client unread on the next boot, so the next daily run re-reads every client back to 1 July and corrects entries the first rules got wrong; corrected entries keep their summary. (3) A thread Gmail cannot read is counted and logged, and the button's message says so, instead of failing silently. (4) In ClientDetailPage.jsx the Activity feed shows a note's lines separately (whitespace-pre-line), so the summary starts on its own line under the counts; manual notes with line breaks show them too. docs/crm-email-sync.md describes it.",
+   "filesImpacted": [
+    "server/services/clientEmailSync.js",
+    "server/routes/clients.js",
+    "server/db.js",
+    "client/src/pages/ClientDetailPage.jsx",
+    "server/services/clientEmailSync.test.js",
+    "docs/crm-email-sync.md"
+   ],
+   "benefit": "A wrongly logged entry can be put right with one press, every client's earlier entries repair themselves, and the entry reads clearly.",
+   "concerns": "Check email now now does a larger read (a thread call per conversation back to 1 July) than before, so on a client with a long history it takes longer and uses more Gmail quota than the old button. The one-time reset makes the next daily run re-read every client from 1 July for everyone with Gmail connected (Gmail calls only; summaries are kept, and only entries with no summary or a grown thread are summarised by the model). Tested with a fake Gmail, including a damaged entry that a short read skips and a full read repairs, and on a real entry by you after the previous push (it showed the right counts and dates); the one-time reset and the button's full read were not run against a real mailbox before this push. Ownership tests and the build pass."
+  },
+  {
    "commit": "8f836033",
    "fullHash": "8f83603362040f1ee96ed2ef33ead69fee80f681",
    "committedAt": "2026-11-09T11:43:02+10:00",
