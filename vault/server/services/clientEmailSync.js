@@ -69,6 +69,7 @@ function involvesClient(address, addressSet, domains) {
 function threadEntry(messages, { ownEmail = '', addressSet, domains, contactByEmail }) {
   const own = String(ownEmail || '').toLowerCase();
   const usable = messages.filter((m) => {
+    if (m.skip) return false; // an unsent draft, or something in the bin or spam: not email that was exchanged
     if (m.bulk) return false; // newsletters and automated mail
     const people = [...parseAddresses(m.from), ...parseAddresses(m.to), ...parseAddresses(m.cc)].filter((a) => a !== own);
     return people.some((a) => involvesClient(a, addressSet, domains));
@@ -78,8 +79,7 @@ function threadEntry(messages, { ownEmail = '', addressSet, domains, contactByEm
   const last = usable[usable.length - 1];
   const sent = usable.filter((m) => m.sent).length;
   const received = usable.length - sent;
-  const firstWithSubject = usable.find((m) => String(m.subject || '').trim());
-  const subject = String(firstWithSubject?.subject || '').replace(/\s+/g, ' ').trim().slice(0, 200) || '(no subject)';
+  const subject = String(usable[0].subject || '').replace(/\s+/g, ' ').trim().slice(0, 200) || '(no subject)'; // the first email's, even when it had none
   let contactId = null;
   for (const m of usable) {
     for (const a of [...parseAddresses(m.from), ...parseAddresses(m.to), ...parseAddresses(m.cc)]) {
@@ -88,27 +88,23 @@ function threadEntry(messages, { ownEmail = '', addressSet, domains, contactByEm
     if (contactId) break;
   }
   const what = sent && received ? `${sent} sent, ${received} received` : sent ? 'Sent' : 'Received';
-  const span = daySpan(usable[0].date, last.date);
-  const count = usable.length > 1 ? ` (${usable.length} emails${span ? `, ${span}` : ''})` : '';
+  const when = usable.length > 1 ? `first ${fmtDate(usable[0].date)}, last ${fmtDate(last.date)}` : fmtDate(last.date);
+  const count = usable.length > 1 ? ` (${usable.length} emails)` : '';
   return {
     externalId: `thread:${last.threadId}`,
     threadId: last.threadId,
     date: last.date,
     title: subject,
-    base: `${subject}\n${what}${count}`, // the note without a summary
+    base: `${subject}\n${what}${count} · ${when}`, // the note without a summary
     contactId,
   };
 }
 
-/** The days a thread ran over, in Brisbane time: '30 Oct - 2 Nov', '6-9 Nov', or '' when it all happened on one day. Pure. */
-function daySpan(from, to) {
-  const part = (d, opt) => new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Brisbane', ...opt }).format(d);
-  const key = (d) => part(d, { year: 'numeric', month: '2-digit', day: '2-digit' });
-  if (key(from) === key(to)) return '';
-  const sameMonth = part(from, { month: 'short', year: 'numeric' }) === part(to, { month: 'short', year: 'numeric' });
-  return sameMonth
-    ? `${part(from, { day: 'numeric' })}-${part(to, { day: 'numeric', month: 'short' })}`
-    : `${part(from, { day: 'numeric', month: 'short' })} - ${part(to, { day: 'numeric', month: 'short' })}`;
+/** A date as '6 Nov 2026', in Brisbane time, with three-letter months always (the locale spells some in full). Pure. */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDate(d) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(d).map((p) => [p.type, p.value]));
+  return `${Number(parts.day)} ${MONTHS[Number(parts.month) - 1]} ${parts.year}`;
 }
 
 /** The note: the subject and counts, then the summary when there is one. Pure. */
@@ -131,7 +127,7 @@ async function summariseThread({ gmail, threadId, userId, ownEmail = '', deps = 
   try {
     const { data } = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
     const readBody = deps.readBody || require('../routes/gmail').extractBody;
-    const msgs = (data.messages || []).slice().sort((a, b) => Number(a.internalDate) - Number(b.internalDate));
+    const msgs = (data.messages || []).filter((m) => !(m.labelIds || []).some((l) => l === 'DRAFT' || l === 'TRASH' || l === 'SPAM')).sort((a, b) => Number(a.internalDate) - Number(b.internalDate));
     if (!msgs.length) return '';
     const each = Math.max(300, Math.floor(SUMMARY_INPUT_CHARS / msgs.length));
     const lines = msgs.map((m) => {
@@ -161,6 +157,7 @@ function readMessage(data) {
     threadId: data.threadId,
     date: new Date(Number(data.internalDate) || Date.now()),
     sent: (data.labelIds || []).includes('SENT'),
+    skip: (data.labelIds || []).some((l) => l === 'DRAFT' || l === 'TRASH' || l === 'SPAM'),
     subject: header(p, 'Subject'),
     from: header(p, 'From'),
     to: header(p, 'To'),
@@ -189,26 +186,27 @@ async function syncClientEmails({ pool, gmail, ownEmail = '', userId, clientId, 
   const q = buildQuery({ addresses: [...addressSet], domains, sinceEpoch });
   if (!q) return { messages: 0, threads: 0, created: 0, updated: 0, truncated: false, skipped: 'nothing_to_match' };
 
-  const ids = [];
+  const threadIds = [];
+  let found = 0;
   let pageToken;
   let truncated = false;
   do {
     const res = await gmail.users.messages.list({ userId: 'me', q, maxResults: 100, pageToken });
-    for (const m of res.data.messages || []) ids.push(m.id);
+    for (const m of res.data.messages || []) { found += 1; if (m.threadId && !threadIds.includes(m.threadId)) threadIds.push(m.threadId); }
     pageToken = res.data.nextPageToken;
-    if (ids.length >= MAX_MESSAGES) { truncated = !!pageToken || ids.length > MAX_MESSAGES; ids.length = Math.min(ids.length, MAX_MESSAGES); pageToken = null; }
+    if (found >= MAX_MESSAGES) { truncated = !!pageToken || found > MAX_MESSAGES; pageToken = null; }
   } while (pageToken);
 
+  // each thread is read whole (every message in it, not only the ones inside the search window), so the counts and the first and last
+  // dates are those of the full exchange however much of it is new
   const messages = [];
-  for (let i = 0; i < ids.length; i += FETCH_AT_ONCE) {
-    const got = await Promise.all(ids.slice(i, i + FETCH_AT_ONCE).map((id) => gmail.users.messages.get({
-      userId: 'me', id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'To', 'Cc', 'List-Unsubscribe', 'Precedence', 'Auto-Submitted'],
-    }).then((r) => readMessage(r.data)).catch(() => null)));
-    for (const m of got) if (m) messages.push(m);
-  }
-
   const byThread = new Map();
-  for (const m of messages) { if (!byThread.has(m.threadId)) byThread.set(m.threadId, []); byThread.get(m.threadId).push(m); }
+  for (let i = 0; i < threadIds.length; i += FETCH_AT_ONCE) {
+    const got = await Promise.all(threadIds.slice(i, i + FETCH_AT_ONCE).map((id) => gmail.users.threads.get({
+      userId: 'me', id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'To', 'Cc', 'List-Unsubscribe', 'Precedence', 'Auto-Submitted'],
+    }).then((r) => (r.data.messages || []).map((m) => readMessage({ ...m, threadId: r.data.id || m.threadId }))).catch(() => null)));
+    got.forEach((msgs, k) => { if (msgs && msgs.length) { byThread.set(threadIds[i + k], msgs); messages.push(...msgs); } });
+  }
 
   let created = 0;
   let updated = 0;
@@ -220,31 +218,34 @@ async function syncClientEmails({ pool, gmail, ownEmail = '', userId, clientId, 
     threads += 1;
     const { rows: [have] } = await pool.query('SELECT id, date, title, note FROM client_interactions WHERE "clientId"=$1 AND "externalId"=$2', [clientId, e.externalId]);
     const lines = have ? String(have.note || '').split('\n') : [];
-    // an entry this job wrote and nobody has touched (its first line is its subject) that has no summary yet gets one, whenever there is room
-    const untouchedNoSummary = !!have && lines[0] === have.title && lines.length <= 2;
+    // an entry this job wrote and nobody has edited starts with its own subject; an entry the person wrote in is left alone
+    const untouched = !!have && lines[0] === have.title;
     const grown = !have || new Date(have.date) < e.date;
-    if (!grown && !untouchedNoSummary) continue; // up to date, or the person's own words: left alone
-    const summary = summaries < MAX_SUMMARIES_PER_RUN && summarise
-      ? await summarise({ gmail, threadId: e.threadId, userId, ownEmail: own, deps: summaryDeps })
-      : '';
-    if (summary) summaries += 1;
-    const note = buildNote(e, summary);
-    if (have && !grown) {
-      // same thread, no new mail: only add the summary (and the better subject) that was missing
-      if (summary) { await pool.query('UPDATE client_interactions SET note=$1, title=$2 WHERE id=$3', [note, e.title, have.id]); updated += 1; }
-      continue;
+    if (have && !untouched && !grown) continue;
+    // a summary already written stays while the thread has nothing new; otherwise (new, grown, or never made) one is written when there is room
+    let summary = have && untouched && !grown ? lines.slice(2).join('\n') : '';
+    if (!summary && summaries < MAX_SUMMARIES_PER_RUN && summarise) {
+      summary = await summarise({ gmail, threadId: e.threadId, userId, ownEmail: own, deps: summaryDeps });
+      if (summary) summaries += 1;
     }
-    // a thread that has grown moves the entry's date and note on
-    const { rows } = await pool.query(
-      `INSERT INTO client_interactions ("clientId","userId",type,source,date,title,note,"contactId","externalId")
-       VALUES ($1,$2,'email','gmail_sync',$3,$4,$5,$6,$7)
-       ON CONFLICT ("clientId","externalId") WHERE "externalId" IS NOT NULL
-       DO UPDATE SET date=EXCLUDED.date, title=EXCLUDED.title, note=EXCLUDED.note, "contactId"=COALESCE(client_interactions."contactId", EXCLUDED."contactId")
-         WHERE client_interactions.date < EXCLUDED.date
-       RETURNING (xmax = 0) AS inserted`,
-      [clientId, userId, e.date, e.title, note, e.contactId, e.externalId]
-    );
-    if (rows[0]) { if (rows[0].inserted) created += 1; else updated += 1; }
+    const note = buildNote(e, summary);
+    if (!have) {
+      const { rows } = await pool.query(
+        `INSERT INTO client_interactions ("clientId","userId",type,source,date,title,note,"contactId","externalId")
+         VALUES ($1,$2,'email','gmail_sync',$3,$4,$5,$6,$7)
+         ON CONFLICT ("clientId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
+         RETURNING id`,
+        [clientId, userId, e.date, e.title, note, e.contactId, e.externalId]
+      );
+      if (rows[0]) created += 1;
+    } else if (note !== have.note || e.title !== have.title || new Date(have.date).getTime() !== e.date.getTime()) {
+      // brings an entry in line with the whole thread: new mail, a summary that was missing, or counts and dates an earlier read got wrong
+      await pool.query(
+        'UPDATE client_interactions SET date=$1, title=$2, note=$3, "contactId"=COALESCE("contactId", $4) WHERE id=$5',
+        [e.date, e.title, note, e.contactId, have.id]
+      );
+      updated += 1;
+    }
   }
   return { messages: messages.length, threads, created, updated, truncated };
 }
@@ -324,5 +325,5 @@ async function syncAllUsers({ pool = require('../db').pool, getGmail, capture } 
 module.exports = {
   SEED_FROM, SEED_EPOCH, MAX_MESSAGES, FREE_MAIL,
   normaliseDomains, parseAddresses, buildQuery, involvesClient, threadEntry, readMessage,
-  syncClientEmails, syncClient, requestSync, syncAllUsers, summariseThread, cleanBody, daySpan, buildNote,
+  syncClientEmails, syncClient, requestSync, syncAllUsers, summariseThread, cleanBody, fmtDate, buildNote,
 };
