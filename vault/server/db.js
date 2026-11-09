@@ -2607,6 +2607,10 @@ async function initSchema() {
     await client.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "emailSyncedAt" TIMESTAMPTZ`);
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "externalId" TEXT`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_client_interactions_external ON client_interactions("clientId", "externalId") WHERE "externalId" IS NOT NULL`);
+    // One time (2026-11-09): entries logged under the first email-sync rules (drafts counted, counts from a partial read) are put right by
+    // reading every client's mail again from 1 July at the next daily run. The marker row makes this run once, never on later boots.
+    const resync = await client.query(`INSERT INTO workspace_settings (key, value) VALUES ('client_email_resync_2026_11_09', 'done') ON CONFLICT (key) DO NOTHING RETURNING key`);
+    if (resync.rows.length) await client.query(`UPDATE clients SET "emailSyncedAt" = NULL WHERE "emailSyncedAt" IS NOT NULL`);
     // Below the ADD COLUMN above — on a pre-existing table (not the fresh
     // CREATE TABLE just above), "needsFollowUp" doesn't exist until that
     // ALTER runs; a partial index referencing it any earlier fails outright.

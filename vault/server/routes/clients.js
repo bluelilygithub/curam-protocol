@@ -963,10 +963,10 @@ router.post('/:id/email-sync', async (req, res) => {
   try {
     const ok = await assertClientOwner(clientId, req.user.id, res);
     if (!ok) return;
-    const r = await syncClient({ userId: req.user.id, clientId });
+    const r = await syncClient({ userId: req.user.id, clientId, full: true });
     if (r.skipped === 'gmail_not_connected') return res.json({ error: 'gmail_not_connected' });
     if (r.skipped === 'already_running') return res.json({ error: 'already_running' });
-    res.json({ threads: r.threads || 0, created: r.created || 0, updated: r.updated || 0, since: r.since || null, truncated: !!r.truncated, nothingToMatch: r.skipped === 'nothing_to_match' });
+    res.json({ threads: r.threads || 0, created: r.created || 0, updated: r.updated || 0, since: r.since || null, truncated: !!r.truncated, unreadable: r.unreadable || 0, nothingToMatch: r.skipped === 'nothing_to_match' });
   } catch (err) {
     getLogger().error({ err }, 'client email sync failed');
     res.status(500).json({ error: 'Could not read Gmail just now. Try again, or reconnect Gmail in Settings.' });

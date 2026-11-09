@@ -109,7 +109,8 @@ function fakeGmail(messages) {
     calls,
     window: null, // null: a search finds every message; an array of ids: only those (what a later read inside a short window finds)
     users: {
-      messages: { list: async ({ q }) => { calls.push(q); return { data: { messages: messages.filter((m) => !g.window || g.window.includes(m.id)).map((m) => ({ id: m.id, threadId: m.threadId })) } }; } },
+      // a read back to 1 July finds everything; a later, shorter window finds only the messages in g.window
+      messages: { list: async ({ q }) => { calls.push(q); const wide = q.endsWith(` after:${SEED_EPOCH}`); return { data: { messages: messages.filter((m) => wide || !g.window || g.window.includes(m.id)).map((m) => ({ id: m.id, threadId: m.threadId })) } }; } },
       // a thread is always returned whole, whatever the search window was
       threads: { get: async ({ id }) => ({ data: { id, messages: messages.filter((m) => m.threadId === id).map(toApi) } }) },
     },
@@ -202,6 +203,18 @@ function fakeGmail(messages) {
     assert.equal(fixed.note, 'WIWC application\n1 sent, 2 received (3 emails) · first 1 Aug 2026, last 1 Oct 2026\nAn earlier summary.');
     assert.equal(fixed.date.toISOString(), '2026-10-01T01:00:00.000Z');
     assert.equal(asked.length, askedBefore, 'its summary is kept, not paid for again');
+
+    // a thread with nothing new in a short window is not looked at, so a damaged entry stays damaged; the full read (the button) puts it right
+    await pool.query(`UPDATE client_interactions SET title='Re:', note='Re:\nReceived\nAn earlier summary.', date=now() WHERE "clientId"=$1 AND "externalId"='thread:t1'`, [cid]);
+    gmail.window = ['m3']; // the short window only holds a message of another thread
+    await syncClient({ pool, userId: uid, clientId: cid, getGmail, summarise });
+    assert.equal((await rows()).find((x) => x.externalId === 'thread:t1').title, 'Re:', 'a short read does not reach a thread outside its window');
+    const callsBefore = gmail.calls.length;
+    r = await syncClient({ pool, userId: uid, clientId: cid, getGmail, summarise, full: true });
+    assert.ok(gmail.calls[callsBefore].endsWith(` after:${SEED_EPOCH}`), 'a full read goes back to 1 July whatever the last read was');
+    assert.equal((await rows()).find((x) => x.externalId === 'thread:t1').title, 'WIWC application');
+    assert.equal(r.unreadable, 0);
+    gmail.window = null;
 
     // another person's client is not read
     const other = (await pool.query(`INSERT INTO users (email,"passwordHash","isAdmin") VALUES ($1,'x',false) RETURNING id`, [`${tag}-b@example.test`])).rows[0].id;

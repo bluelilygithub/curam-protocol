@@ -201,10 +201,11 @@ async function syncClientEmails({ pool, gmail, ownEmail = '', userId, clientId, 
   // dates are those of the full exchange however much of it is new
   const messages = [];
   const byThread = new Map();
+  let unreadable = 0;
   for (let i = 0; i < threadIds.length; i += FETCH_AT_ONCE) {
     const got = await Promise.all(threadIds.slice(i, i + FETCH_AT_ONCE).map((id) => gmail.users.threads.get({
       userId: 'me', id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'To', 'Cc', 'List-Unsubscribe', 'Precedence', 'Auto-Submitted'],
-    }).then((r) => (r.data.messages || []).map((m) => readMessage({ ...m, threadId: r.data.id || m.threadId }))).catch(() => null)));
+    }).then((r) => (r.data.messages || []).map((m) => readMessage({ ...m, threadId: r.data.id || m.threadId }))).catch((err) => { unreadable += 1; console.warn(`[client-email-sync] could not read thread ${id}: ${err.message}`); return null; })));
     got.forEach((msgs, k) => { if (msgs && msgs.length) { byThread.set(threadIds[i + k], msgs); messages.push(...msgs); } });
   }
 
@@ -247,7 +248,7 @@ async function syncClientEmails({ pool, gmail, ownEmail = '', userId, clientId, 
       updated += 1;
     }
   }
-  return { messages: messages.length, threads, created, updated, truncated };
+  return { messages: messages.length, threads, created, updated, truncated, unreadable };
 }
 
 const running = new Set(); // `${userId}:${clientId}` while a sync is in progress, so two never overlap
@@ -261,7 +262,9 @@ async function gmailFor(pool, userId, gmailFor_) {
 }
 
 /** Syncs one client now (since 1 July 2026 if it has never been synced, otherwise since the last sync) and records when. */
-async function syncClient({ pool = require('../db').pool, userId, clientId, getGmail, summarise, summaryDeps } = {}) {
+// full: read everything back to 1 July 2026 whatever the last read was (the button on the client page does this; it is safe to repeat, since
+// nothing already logged is duplicated and nothing already summarised is summarised again)
+async function syncClient({ pool = require('../db').pool, userId, clientId, getGmail, summarise, summaryDeps, full = false } = {}) {
   const key = `${userId}:${clientId}`;
   if (running.has(key)) return { skipped: 'already_running' };
   running.add(key);
@@ -271,7 +274,7 @@ async function syncClient({ pool = require('../db').pool, userId, clientId, getG
     const startedAt = new Date();
     const { rows: [c] } = await pool.query('SELECT "emailSyncedAt" FROM clients WHERE id=$1 AND "userId"=$2', [clientId, userId]);
     if (!c) return { skipped: 'no_client' };
-    const since = c.emailSyncedAt ? Math.max(SEED_EPOCH, Math.floor(new Date(c.emailSyncedAt).getTime() / 1000) - LOOKBACK_SECONDS) : SEED_EPOCH;
+    const since = c.emailSyncedAt && !full ? Math.max(SEED_EPOCH, Math.floor(new Date(c.emailSyncedAt).getTime() / 1000) - LOOKBACK_SECONDS) : SEED_EPOCH;
     const out = await syncClientEmails({ pool, gmail: g.gmail, ownEmail: g.ownEmail, userId, clientId, sinceEpoch: since, ...(summarise ? { summarise } : {}), ...(summaryDeps ? { summaryDeps } : {}) });
     await pool.query('UPDATE clients SET "emailSyncedAt"=$1 WHERE id=$2 AND "userId"=$3', [startedAt, clientId, userId]);
     return { ...out, since: new Date(since * 1000) };

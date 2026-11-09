@@ -1104,7 +1104,7 @@ function ActivityFeed({ clientId, refreshKey, onChanged }) {
                 </div>
                 <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
               </div>
-              {it.detail && <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
+              {it.detail && <p className="text-sm mt-1 whitespace-pre-line" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
               {it.attachments?.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {it.attachments.map(a => (
@@ -1143,7 +1143,8 @@ function EmailSyncLine({ client, clientId, onRefresh }) {
       if (out.error === 'already_running') { addToast('It is already reading this client\'s email. Try again in a minute.', 'info'); return; }
       if (!res.ok || out.error) throw new Error(out.error || 'Could not read Gmail just now.');
       if (out.nothingToMatch) addToast('Nothing to match yet: add a contact with an email address, or an email domain, then try again.', 'info');
-      else addToast(out.threads ? `Email checked: ${out.created} new and ${out.updated} updated of ${out.threads} conversations.` : 'Email checked: nothing found.', 'success');
+      else if (out.unreadable) addToast(`Email checked, but ${out.unreadable} ${out.unreadable === 1 ? 'conversation' : 'conversations'} could not be read from Gmail. Try again in a minute.`, 'error');
+      else addToast(out.threads ? `Email checked back to 1 July 2026: ${out.created} new and ${out.updated} corrected or updated of ${out.threads} conversations.` : 'Email checked back to 1 July 2026: nothing found.', 'success');
       onRefresh();
     } catch (e) { addToast(e.message || 'Could not read Gmail just now.', 'error'); } finally { setBusy(false); }
   };
