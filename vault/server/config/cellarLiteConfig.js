@@ -19,7 +19,10 @@ const LIMITS = {
   quoteValidityDays: [1, 365],
   featureCode: [1, 999], featureRoomMm: [1000, 8000],
   panelConductivity: [0.01, 0.1], glassU: [0.5, 6], floorU: [0.1, 6], internalGainsW: [0, 5000], marginPct: [0, 100], targetC: [0, 25], ambientC: [15, 50],
+  notifyEmails: 5,
 };
+// plain addresses only: they go into an email's To line
+const NOTIFY_EMAIL_RE = /^[a-z0-9._%+-]{1,64}@[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){1,5}$/;
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
 const MAX_RACK_TYPES = 8;
@@ -101,6 +104,8 @@ const DEFAULTS = Object.freeze({
   },
   // the website guide (the round help button on the public planner): off until the owner ticks it, because every answer is an AI call that costs money
   guide: { enabled: false },
+  // who gets the email for a website enquiry (with the plan PDF). Empty = every Vault admin, as before. Staff only: never sent to the public tool.
+  notify: { emails: [] },
   // The other costs of a job (staff only, never sent to the public tool): glass, the cooling unit, lighting, installation, and the margin. Every amount here
   // is a PLACEHOLDER until the owner confirms it (rough figures from public cost guides, mostly US and Canadian: NOT supplier quotes and NOT checked for
   // Australia). `confirmed: false` is shown on the price and BLOCKS the customer quote, so a guess never reaches a customer. A blank amount is "not set",
@@ -323,6 +328,19 @@ function validateConfig(raw) {
   const gd = isObj(src.guide) ? src.guide : {};
   const guide = { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true };
 
+  const nt = isObj(src.notify) ? src.notify : {};
+  const rawEmails = Array.isArray(nt.emails) ? nt.emails : [];
+  if (nt.emails !== undefined && nt.emails !== null && !Array.isArray(nt.emails)) errors.push('The enquiry email addresses were not in the expected format.');
+  if (rawEmails.length > LIMITS.notifyEmails) errors.push(`At most ${LIMITS.notifyEmails} enquiry email addresses.`);
+  const notifyEmails = [];
+  for (const e of rawEmails.slice(0, LIMITS.notifyEmails)) {
+    const t = cleanText(e ?? '', 254).toLowerCase();
+    if (!t) continue;
+    if (!NOTIFY_EMAIL_RE.test(t)) { errors.push(`"${t.slice(0, 60)}" is not a valid email address.`); continue; }
+    if (!notifyEmails.includes(t)) notifyEmails.push(t);
+  }
+  const notify = { emails: notifyEmails };
+
   const cl = isObj(src.cooling) ? src.cooling : {};
   const num = (v, [lo, hi], fallback, label) => {
     if (v === undefined || v === null || v === '') return fallback;
@@ -432,6 +450,7 @@ function validateConfig(raw) {
     cooling,
     costs,
     guide,
+    notify,
     features,
     presets,
   };
@@ -440,8 +459,9 @@ function validateConfig(raw) {
 
 /** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
 function publicView(config) {
-  const { quote: _quote, cooling: _cooling, costs: _costs, ...open } = config; // the quote details, cooling assumptions and cost lines are for staff only
-  void _quote; void _cooling; void _costs;
+  // the quote details, cooling assumptions, cost lines and enquiry email addresses are for staff only
+  const { quote: _quote, cooling: _cooling, costs: _costs, notify: _notify, ...open } = config;
+  void _quote; void _cooling; void _costs; void _notify;
   config = open;
   if (config.pricing.show) return config;
   return {

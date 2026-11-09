@@ -169,7 +169,7 @@ await t('the round button sits beside the planner title (and scrolls with it, no
   await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
   const dot = page.locator('#clg .open'); await dot.waitFor({ timeout: 8000 });
   await page.waitForFunction(() => document.getElementById('clg')?.classList.contains('a'), null, { timeout: 8000 });
-  const title = () => planner(page).locator('.lite-head h1').boundingBox();
+  const title = () => planner(page).locator('.lite-promise').boundingBox();
   const beside = async () => {
     const t = await title(), b = await dot.boundingBox();
     return { dy: Math.abs((b.y + b.height / 2) - (t.y + t.height / 2)), gap: b.x - (t.x + t.width), t, b };
@@ -209,7 +209,7 @@ await t('on a phone-width screen the button still sits beside the title and the 
   await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
   const dot = page.locator('#clg .open'); await dot.waitFor({ timeout: 8000 });
   await page.waitForFunction(() => document.getElementById('clg')?.classList.contains('a'), null, { timeout: 8000 });
-  const t0 = await planner(page).locator('.lite-head h1').boundingBox(), b = await dot.boundingBox();
+  const t0 = await planner(page).locator('.lite-promise').boundingBox(), b = await dot.boundingBox();
   assert.ok(Math.abs((b.y + b.height / 2) - (t0.y + t0.height / 2)) < 6 && b.x >= t0.x + t0.width && b.x + b.width <= 390, 'beside the title, inside the screen: ' + JSON.stringify([t0, b]));
   const btns = await planner(page).locator('.lite-help-btns .btn').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }));
   const frameBox = await page.locator('#p').boundingBox();

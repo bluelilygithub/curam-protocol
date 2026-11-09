@@ -164,9 +164,10 @@ export function LiteApp() {
       // where the big picture sits in the page, so the page around us knows when it is on screen
       const pic = document.querySelector('.lite-visual')?.getBoundingClientRect();
       const top = pic ? Math.round(pic.top + window.scrollY) : 0, bottom = pic ? Math.round(pic.bottom + window.scrollY) : 0;
-      // where the website's help chat button belongs: just right of the title block, level with the title (the page script puts it there)
-      const box = document.querySelector('.lite-titlebox')?.getBoundingClientRect(), h1 = document.querySelector('.lite-head h1')?.getBoundingClientRect();
-      const helpSpot = box && h1 ? { left: Math.round(box.right - HELP_BTN), top: Math.round(h1.top + window.scrollY + h1.height / 2 - HELP_BTN / 2) } : null;
+      // where the website's help chat button belongs: at the right end of the line beside the top buttons, level with that line (the page script puts it there)
+      const box = document.querySelector('.lite-titlebox')?.getBoundingClientRect();
+      const line = (document.querySelector('.lite-promise') ?? document.querySelector('.lite-help-btns'))?.getBoundingClientRect();
+      const helpSpot = box && line ? { left: Math.round(box.right - HELP_BTN), top: Math.round(line.top + window.scrollY + line.height / 2 - HELP_BTN / 2) } : null;
       const key = `${h}/${top}/${bottom}/${helpSpot ? `${helpSpot.left},${helpSpot.top}` : ''}`;
       if (key !== last) { last = key; window.parent.postMessage({ type: HEIGHT_TYPE, version: 1, height: h, pictureTop: top, pictureBottom: bottom, helpSpot }, to); }
     };
@@ -378,9 +379,10 @@ export function LiteApp() {
       <PhoneNotice show={cfg.mobileNotice.show} text={cfg.mobileNotice.text} phone={cfg.phone} onCall={() => say('call')} />
       <header className="lite-head">
         <div className="lite-head-row">
+          {/* no visible title: the website page around the planner has its own. The heading stays for screen readers. */}
+          <h1 className="lite-sr">Cellar planner</h1>
           <div className="lite-titlebox">
-            <h1>Cellar Planner</h1>
-            <p className="lite-sub">Create a cellar that fits your space.</p>
+            {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
           </div>
           <span className="lite-help-btns">
             {/* icons, not words: each has a name for screen readers and a tooltip */}
@@ -392,7 +394,6 @@ export function LiteApp() {
         </div>
         {linkCopied === 'done' && <p className="lite-note" role="status" data-testid="lite-share-done">Link copied. Anyone you send it to sees these choices.</p>}
         {linkCopied === 'failed' && <p className="lite-note" role="status">Could not copy the link automatically. Copy the address from your browser's address bar instead: it holds your design.</p>}
-        {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
         <Stepper step={step} steps={keys.map((k) => STEP_TITLES[k])} onGo={(n) => setStepTracked(keys[n - 1] ?? 'space')} />
       </header>
 

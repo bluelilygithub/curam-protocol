@@ -266,7 +266,7 @@ await page.getByTestId('lite-bottles').waitFor();
 const note = page.getByTestId('lite-phone-notice');
 check('phone notice: shown on a phone-sized screen', await note.isVisible());
 check('phone notice: says it is for a desktop computer or tablet', /Best on a computer or tablet/.test(await note.innerText()) && /desktop computer or a tablet/.test(await page.getByTestId('lite-phone-notice-text').innerText()), await note.innerText());
-check('phone notice: it is the first thing on the page, above the heading', (await note.boundingBox()).y < (await page.locator('h1').boundingBox()).y);
+check('phone notice: it is the first thing on the page, above the heading', (await note.boundingBox()).y < (await page.locator('.lite-head').boundingBox()).y);
 check('phone notice: no call link when the owner has set no number', (await page.getByTestId('lite-phone-call').count()) === 0);
 check('phone notice: Continue is big enough to tap', (await page.getByTestId('lite-phone-continue').boundingBox()).height >= 43);
 check('phone notice: it does not cause sideways scrolling', (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);

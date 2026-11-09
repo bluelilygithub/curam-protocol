@@ -30,6 +30,7 @@ function fakePool({ admin = 1 } = {}) {
     if (/^\s*COMMIT/i.test(sql)) { log.commit++; return { rows: [] }; }
     if (/^\s*ROLLBACK/i.test(sql)) { log.rollback++; const s = JSON.parse(db._snapshot); for (const k of Object.keys(s)) if (k !== '_snapshot') db[k] = s[k]; return { rows: [] }; }
     if (/SELECT email FROM users/i.test(sql)) return { rows: state.adminEmails ?? [{ email: 'boss@example.com' }] };
+    if (/FROM workspace_settings WHERE key=\$1/i.test(sql)) return { rows: state.settings ? [{ value: JSON.stringify(state.settings) }] : [] };
     if (/FROM users WHERE "isAdmin"/i.test(sql)) return { rows: admin ? [{ id: admin }] : [] };
     if (/FROM cellar_leads WHERE "userId"=\$1 AND lower\(email\)=\$2/i.test(sql)) {
       const cutoff = state.clock() - Number(p[3]) * 3600e3;
@@ -344,6 +345,32 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
     assert.ok(!('pdf' in pool.db.leads[0]), 'the PDF is never stored');
     const big = validateEnquiry({ ...GOOD, pdf: Buffer.concat([Buffer.from('%PDF-'), Buffer.alloc(LIMITS.pdfBytes)]).toString('base64') });
     assert.strictEqual(big.ok, true); assert.strictEqual(big.value.pdf, null);
+    s.close();
+  });
+
+  await t('Enquiry emails setting: up to 5 plain addresses, lower-cased and de-duplicated; bad ones refused in plain words; never in the public answer', () => {
+    const { validateConfig, publicView } = require('../config/cellarLiteConfig');
+    const ok = validateConfig({ notify: { emails: ['A@B.example', 'a@b.example', ' ', 'c@d.example'] } });
+    assert.deepStrictEqual(ok.config.notify.emails, ['a@b.example', 'c@d.example']); assert.deepStrictEqual(ok.errors, []);
+    const bad = validateConfig({ notify: { emails: ['not an email', 'x@y.example\nBcc: z@evil.example'] } });
+    assert.deepStrictEqual(bad.config.notify.emails, []); assert.ok(bad.errors.some((m) => /not a valid email address/.test(m)), JSON.stringify(bad.errors));
+    assert.ok(validateConfig({ notify: { emails: Array.from({ length: 6 }, (_, i) => `p${i}@x.example`) } }).errors.some((m) => /At most 5/.test(m)));
+    assert.ok(!('notify' in publicView(ok.config)), 'the addresses never reach the website');
+    assert.deepStrictEqual(validateConfig(undefined).config.notify.emails, [], 'none by default: the admins get it');
+  });
+
+  await t('Enquiry emails set in Settings: the email goes to those addresses instead of the admins; blank goes back to the admins', async () => {
+    const sent = [];
+    const mail = Object.assign(async (m) => { sent.push(m); }, { isConfigured: async () => true });
+    const pool = fakePool(); pool.state.settings = { notify: { emails: ['Sales@Cellars.example', 'owner@cellars.example'] } };
+    const s = await serve(pool, { sendEmail: mail });
+    assert.strictEqual((await post(s, GOOD)).status, 200);
+    await new Promise((res) => setTimeout(res, 50));
+    assert.deepStrictEqual(sent.map((m) => m.to), ['sales@cellars.example', 'owner@cellars.example'], 'the set addresses, not boss@example.com');
+    pool.state.settings = { notify: { emails: [] } };
+    assert.strictEqual((await post(s, { ...GOOD, email: 'next@example.com' })).status, 200);
+    await new Promise((res) => setTimeout(res, 50));
+    assert.strictEqual(sent.at(-1).to, 'boss@example.com', 'none set: the admins');
     s.close();
   });
 

@@ -45,6 +45,7 @@ const toForm = (c) => ({
   costMargin: blank(c.costs?.margin?.pct), costMarginOk: c.costs?.margin?.confirmed === true,
   mnShow: c.mobileNotice?.show !== false, mnText: c.mobileNotice?.text ?? '',
   guideOn: c.guide?.enabled === true,
+  notifyEmails: (c.notify?.emails || []).join('\n'),
   qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -68,6 +69,7 @@ const toConfig = (f) => ({
   },
   mobileNotice: { show: f.mnShow, text: f.mnText },
   guide: { enabled: f.guideOn },
+  notify: { emails: String(f.notifyEmails || '').split(/[\s,;]+/).filter(Boolean) },
   quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -89,7 +91,7 @@ function Field({ label, hint, tip, children }) {
 
 
 const OPEN_KEY = 'cellar-settings:open:v1';
-const PANEL_IDS = ['rack', 'features', 'doors', 'price', 'costs', 'onpage', 'mobile', 'guide', 'rooms', 'quote', 'cooling'];
+const PANEL_IDS = ['rack', 'features', 'doors', 'price', 'costs', 'onpage', 'enquiries', 'mobile', 'guide', 'rooms', 'quote', 'cooling'];
 
 /** A collapsible card: the header always shows the title and a one-line summary of what is set, so nothing is hidden or easy to miss. */
 function Panel({ id, title, summary, warn, open, onToggle, testid, children }) {
@@ -261,6 +263,8 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const pageSummary = `Colour ${form.accent || 'standard'} · ${form.phone ? `call ${form.phone}` : 'no phone number'}`;
   const mobileSummary = form.mnShow ? 'Shown on phones' : 'Off';
   const guideSummary = form.guideOn ? 'On: visitors see the help button' : 'Off';
+  const notifyList = String(form.notifyEmails || '').split(/[\s,;]+/).filter(Boolean);
+  const enquirySummary = notifyList.length ? `To ${notifyList.join(', ')}` : 'To every Vault admin (none set)';
   const roomsSummary = `${form.presets.length} starting room${form.presets.length === 1 ? '' : 's'}`;
   const quoteSummary = form.qBusinessName ? `From ${form.qBusinessName}` : 'Business name not set';
   const coolingSummary = `Target ${form.clTarget} °C · outside ${form.clAmbient} °C · margin ${form.clMargin}%`;
@@ -521,8 +525,17 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <Field label="After a visitor asks for a quote" tip="A reassuring line shown once they press Request a quote, such as when you will reply. Leave blank to show nothing." hint="For example: We usually reply within one business day.">
           <textarea value={form.quoteNote} rows={2} maxLength={200} onChange={(e) => set('quoteNote', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
-        <Field label="Line under the heading" tip="A short line shown under the planner's heading. Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
+        <Field label="Line beside the top buttons" tip="A short line at the top of the planner, level with the Tour, Help, Save and Price buttons (the planner has no title of its own: your website page has it). Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
           <textarea value={form.promise} rows={2} maxLength={200} onChange={(e) => set('promise', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
+      </Panel>
+
+      <Panel {...pp('enquiries', 'Enquiry emails', enquirySummary)} testid="cellar-lite-enquiries">
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          When a visitor sends <b>Request a quote</b> from the website planner, an email with their details, a link to the design and the <b>plan PDF</b> goes to the addresses below. Pressing Reply in that email answers the visitor. The enquiry is also saved in the CRM either way. Leave this blank to send it to every Vault admin, as before. The visitor is never sent a copy, and these addresses are never shown on the website.
+        </p>
+        <Field label="Send enquiries to" tip="One email address per line (or separated by commas), up to five. Each address gets its own copy of every website enquiry with the plan PDF. Leave blank to send to every Vault admin." hint="Up to five addresses, one per line. Blank sends to every Vault admin.">
+          <textarea value={form.notifyEmails} rows={3} maxLength={1300} onChange={(e) => set('notifyEmails', e.target.value)} className={INPUT} style={FIELD_STYLE} data-testid="cellar-lite-notify-emails" spellCheck={false} autoComplete="off" />
         </Field>
       </Panel>
 

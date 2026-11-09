@@ -1,7 +1,7 @@
 /*
  * Cellar Planner lite: the help chat for the website's planner page.
  *
- * It is the same chat as the guide inside Vault: a round button that sits beside the planner's title (it scrolls with the page, like the title; an
+ * It is the same chat as the guide inside Vault: a round button that sits beside the planner's top line (it scrolls with the page, like the title; an
  * older planner that does not say where its title is gets the button in the bottom right corner of the screen instead) that opens a chat you can drag out of the way (by its
  * title bar; double-click the bar to put it back), make wider or narrower, resize by its top-left corner, and speak into (microphone button, where the
  * browser has one). A visitor types or says what they want to do ("how do I measure my room?"); the chat answers in plain words and its "Show me"

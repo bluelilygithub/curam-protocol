@@ -67,6 +67,8 @@ export interface LiteConfig {
   costs: CostSettings;
   /** The website help chat (the round help button on the page around the tool): off until the owner switches it on. The page script reads this, not the tool. */
   guide: { enabled: boolean };
+  /** Who gets a website enquiry's email (staff only: the public answer never carries it). Empty = every Vault admin. */
+  notify: { emails: string[] };
   /** The "Make it yours" feature groups (empty = the tool has no Features step). */
   features: FeatureGroup[];
   presets: LitePreset[];
@@ -131,6 +133,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
   },
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   guide: { enabled: false },
+  notify: { emails: [] },
   cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
   costs: { glassPerM2: { amount: 1400, confirmed: false }, cooling: { amount: 6500, confirmed: false }, lighting: { amount: 1200, confirmed: false }, installation: { amount: 3500, confirmed: false }, margin: { pct: 25, confirmed: false } },
   features: DEFAULT_FEATURES,
@@ -274,6 +277,12 @@ export function normaliseConfig(raw: unknown): LiteConfig {
   const mg = isObj(cs.margin) ? (cs.margin as Record<string, unknown>) : {};
   const marginPct = mg.pct === undefined ? D.costs.margin.pct : mg.pct === null || mg.pct === '' ? null : Number.isFinite(Number(mg.pct)) && Number(mg.pct) >= R.marginPct[0] && Number(mg.pct) <= R.marginPct[1] ? Math.round(Number(mg.pct) * 10) / 10 : D.costs.margin.pct;
   const gd = isObj(src.guide) ? src.guide : {};
+  const nt = isObj(src.notify) ? src.notify : {};
+  const notifyEmails: string[] = [];
+  for (const e of (Array.isArray(nt.emails) ? nt.emails : []).slice(0, 5)) {
+    const t = text(e ?? '', 254).toLowerCase();
+    if (/^[a-z0-9._%+-]{1,64}@[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){1,5}$/.test(t) && !notifyEmails.includes(t)) notifyEmails.push(t);
+  }
   const cl = isObj(src.cooling) ? src.cooling : {};
   const T0 = D.rackTypes[0]!;
   const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -353,6 +362,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     },
     costs: { glassPerM2: cost('glassPerM2'), cooling: cost('cooling'), lighting: cost('lighting'), installation: cost('installation'), margin: { pct: marginPct, confirmed: mg.confirmed === true } },
     guide: { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true },
+    notify: { emails: notifyEmails },
     cooling: {
       panelConductivity: decimal(cl.panelConductivity, R.panelConductivity, D.cooling.panelConductivity), glassU: decimal(cl.glassU, R.glassU, D.cooling.glassU),
       floorU: decimal(cl.floorU, R.floorU, D.cooling.floorU), internalGainsW: decimal(cl.internalGainsW, R.internalGainsW, D.cooling.internalGainsW),

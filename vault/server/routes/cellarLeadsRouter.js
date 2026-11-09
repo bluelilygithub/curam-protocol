@@ -16,6 +16,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
+const { KEY: CONFIG_KEY, validateConfig } = require('../config/cellarLiteConfig');
 
 const CODE_RE = /^CL\d+\.[A-Za-z0-9_-]{1,200}$/;
 const EMAIL_RE = /^[^\s@<>"',;:()\[\]\\]{1,64}@[^\s@<>"',;:()\[\]\\]{1,190}\.[A-Za-z]{2,24}$/;
@@ -91,12 +92,28 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
   }
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  /** An email to the admin address(es) with what the visitor sent and a link that opens the design. Reply-To is the visitor's own (strictly checked) address. */
+  /** The addresses set in Cellar Planner -> Settings -> Enquiry emails; [] when none are set (or the settings cannot be read). */
+  async function settingsRecipients() {
+    let rows;
+    try { ({ rows } = await pool.query('SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1', [CONFIG_KEY])); } catch { return []; }
+    if (!rows.length) return [];
+    let raw = null;
+    try { raw = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value; } catch { raw = null; }
+    return validateConfig(raw).config.notify.emails;
+  }
+
+  /**
+   * An email with what the visitor sent and a link that opens the design, to the addresses set in Settings (Enquiry emails), or, when none are
+   * set, to the admin address(es). Reply-To is the visitor's own (strictly checked) address.
+   */
   async function notifyOwner({ lead, e, link }) {
     if (!sendEmail) return;
     if (typeof sendEmail.isConfigured === 'function' && !(await sendEmail.isConfigured())) return;
-    const { rows } = await pool.query(`SELECT email FROM users WHERE "isAdmin" = TRUE AND email IS NOT NULL AND email <> '' ORDER BY id ASC LIMIT 5`);
-    const to = [...new Set(rows.map((r) => String(r.email).trim()).filter(Boolean))];
+    let to = await settingsRecipients();
+    if (!to.length) {
+      const { rows } = await pool.query(`SELECT email FROM users WHERE "isAdmin" = TRUE AND email IS NOT NULL AND email <> '' ORDER BY id ASC LIMIT 5`);
+      to = [...new Set(rows.map((r) => String(r.email).trim()).filter(Boolean))];
+    }
     if (!to.length) return;
     const row = (k, v) => (v ? `<tr><td style="padding:3px 12px 3px 0;color:#666;vertical-align:top">${esc(k)}</td><td style="padding:3px 0">${esc(v).replace(/\n/g, '<br>')}</td></tr>` : '');
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px"><h2 style="margin:0 0 8px;font-size:18px">New Cellar Planner enquiry</h2>`
@@ -110,7 +127,7 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
       // eslint-disable-next-line no-await-in-loop
       await sendEmail({ to: addr, subject, html, replyTo: EMAIL_RE.test(e.email) ? e.email : undefined, attachments });
     }
-    log().info({ leadId: lead, admins: to.length }, '[cellar-leads] owner notified');
+    log().info({ leadId: lead, recipients: to.length }, '[cellar-leads] owner notified');
   }
 
   // ---------------------------------------------------------------- public: POST /api/cellar-lite/enquiry
