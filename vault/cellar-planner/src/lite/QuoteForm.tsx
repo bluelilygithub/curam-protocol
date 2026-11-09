@@ -55,6 +55,7 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, mak
   const [shown, setShown] = useState<{ field: keyof QuoteFields | ''; text: string } | null>(null);
   const [trap, setTrap] = useState('');
   const [copied, setCopied] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const first = useRef<HTMLInputElement>(null);
   const before = useRef<Element | null>(null);
   const refs = { name: first, email: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null), state: useRef<HTMLSelectElement>(null), message: useRef<HTMLTextAreaElement>(null) };
@@ -85,7 +86,11 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, mak
     try {
       // text/plain is a "simple" request, so the browser makes no preflight round trip to Vault
       const r = await fetchFn(`${apiBase()}/api/cellar-lite/enquiry`, { method: 'POST', body: JSON.stringify(enquiryBody(f, design, trap, pdf)), headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, credentials: 'omit' });
-      if (r.ok) { setPhase('sent'); onSent?.(); return; }
+      if (r.ok) {
+        let j: { confirmation?: unknown } = {};
+        try { j = (await r.json()) as { confirmation?: unknown }; } catch { /* an older Vault answers without it */ }
+        setConfirmed(j.confirmation === true); setPhase('sent'); onSent?.(); return;
+      }
       let said = '';
       try { const j = (await r.json()) as { error?: unknown }; if (typeof j.error === 'string') said = j.error; } catch { /* no body */ }
       // 400 is something to fix in the form; anything else is on our side
@@ -103,7 +108,7 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, mak
         <div className="modal-head"><h2>{phase === 'sent' ? 'Thank you' : 'Request a quote'}</h2><button type="button" className="icon-btn" aria-label="Close" title="Close" onClick={onClose} data-testid="lite-quote-form-close">×</button></div>
         {phase === 'sent' ? (
           <div className="modal-body" data-testid="lite-quote-sent">
-            <p role="status">Your enquiry has been sent. We have your design: about {design.bottles} bottles. We will be in touch with your plan and to arrange a time to measure.</p>
+            <p role="status">Your enquiry has been sent. We have your design: about {design.bottles} bottles. We will be in touch with your plan and to arrange a time to measure.{confirmed ? ` You will also get a confirmation email from us at ${f.email.trim()}.` : ''}</p>
             <p><button type="button" className="btn primary" onClick={onClose} data-testid="lite-quote-sent-close">Back to my design</button></p>
           </div>
         ) : (

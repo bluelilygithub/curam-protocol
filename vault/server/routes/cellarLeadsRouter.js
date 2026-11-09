@@ -92,28 +92,65 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
   }
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  /** The addresses set in Cellar Planner -> Settings -> Enquiry emails; [] when none are set (or the settings cannot be read). */
-  async function settingsRecipients() {
-    let rows;
-    try { ({ rows } = await pool.query('SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1', [CONFIG_KEY])); } catch { return []; }
-    if (!rows.length) return [];
+  /** The saved Cellar Planner settings (the standard ones when none are saved or they cannot be read). */
+  async function loadSettings() {
+    let rows = [];
+    try { ({ rows } = await pool.query('SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1', [CONFIG_KEY])); } catch { rows = []; }
     let raw = null;
-    try { raw = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value; } catch { raw = null; }
-    return validateConfig(raw).config.notify.emails;
+    try { raw = rows.length ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : null; } catch { raw = null; }
+    return validateConfig(raw).config;
   }
 
   /**
-   * An email with what the visitor sent and a link that opens the design, to the addresses set in Settings (Enquiry emails), or, when none are
-   * set, to the admin address(es). Reply-To is the visitor's own (strictly checked) address.
+   * Every successful answer has this one shape, whether the enquiry was new, a repeat or a robot's: it says only whether confirmation emails are
+   * switched on, never whether this address already had one today (that would tell anyone who typed an address whether its owner had enquired).
    */
-  async function notifyOwner({ lead, e, link }) {
+  const okReply = async (cfg = null) => ({ ok: true, confirmation: !!(sendEmail && (cfg || (await loadSettings())).notify.confirm) });
+
+  /** Where the business reads enquiries: the addresses set in Settings (Enquiry emails), or, when none are set, the admin address(es). */
+  async function businessAddresses(cfg) {
+    if (cfg.notify.emails.length) return cfg.notify.emails;
+    const { rows } = await pool.query(`SELECT email FROM users WHERE "isAdmin" = TRUE AND email IS NOT NULL AND email <> '' ORDER BY id ASC LIMIT 5`);
+    return [...new Set(rows.map((r) => String(r.email).trim()).filter(Boolean))];
+  }
+
+  /**
+   * True when the visitor should get a confirmation: switched on in Settings, and the first enquiry from this address in 24 hours (anyone can
+   * type any address into the form, so one address never gets more than one of these a day).
+   */
+  async function shouldConfirm(cfg, userId, email) {
+    if (!sendEmail || !cfg.notify.confirm) return false;
+    const { rows: [r] } = await pool.query(
+      `SELECT COUNT(*) AS recent FROM cellar_leads WHERE "userId"=$1 AND lower(email)=$2 AND "createdAt" > NOW() - INTERVAL '24 hours'`, [userId, email]);
+    return Number(r.recent) <= 1;
+  }
+
+  /**
+   * The visitor's confirmation: no attachment (the team sends the plan with the quote), nothing the visitor typed except their first name reduced
+   * to letters (so it cannot carry a link), Reply-To the business. Only the owner's own words (business name, reply note, phone) are added.
+   */
+  async function confirmVisitor({ e, cfg, replyTo }) {
+    if (typeof sendEmail.isConfigured === 'function' && !(await sendEmail.isConfigured())) return;
+    const first = (e.name.split(/\s+/)[0] || '').replace(/[^\p{L}'-]/gu, '').slice(0, 30);
+    const biz = cfg.quote.businessName;
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;font-size:14px;line-height:1.5">`
+      + `<p>${first ? `Hi ${esc(first)},` : 'Hello,'}</p>`
+      + `<p>Thank you for your cellar enquiry${biz ? ` to ${esc(biz)}` : ''}. We have your design${e.bottles !== null ? `: about ${e.bottles} bottles` : ''}.</p>`
+      + `<p>We will be in touch with your plan and a quote, and to arrange a time to measure your space.${cfg.quoteNote ? ` ${esc(cfg.quoteNote)}` : ''}</p>`
+      + (cfg.phone ? `<p>Prefer to talk? Call us on ${esc(cfg.phone)}.</p>` : '')
+      + `<p>You can reply to this email with any questions.</p>`
+      + `<p style="font-size:12px;color:#888">You are receiving this because this address was entered in the cellar planner on our website. If that was not you, please ignore this email.</p></div>`;
+    await sendEmail({ to: e.email, subject: biz ? `Your cellar enquiry with ${biz}` : 'We have your cellar enquiry', html, replyTo: replyTo || undefined });
+    log().info('[cellar-leads] visitor confirmation sent');
+  }
+
+  /**
+   * An email with what the visitor sent and a link that opens the design, to the business addresses. Reply-To is the visitor's own (strictly
+   * checked) address.
+   */
+  async function notifyOwner({ lead, e, link, to }) {
     if (!sendEmail) return;
     if (typeof sendEmail.isConfigured === 'function' && !(await sendEmail.isConfigured())) return;
-    let to = await settingsRecipients();
-    if (!to.length) {
-      const { rows } = await pool.query(`SELECT email FROM users WHERE "isAdmin" = TRUE AND email IS NOT NULL AND email <> '' ORDER BY id ASC LIMIT 5`);
-      to = [...new Set(rows.map((r) => String(r.email).trim()).filter(Boolean))];
-    }
     if (!to.length) return;
     const row = (k, v) => (v ? `<tr><td style="padding:3px 12px 3px 0;color:#666;vertical-align:top">${esc(k)}</td><td style="padding:3px 0">${esc(v).replace(/\n/g, '<br>')}</td></tr>` : '');
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px"><h2 style="margin:0 0 8px;font-size:18px">New Cellar Planner enquiry</h2>`
@@ -147,7 +184,7 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
       let body = req.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'The enquiry could not be read.' }); } }
       // a field real visitors never see: anything in it means a robot. Answer as if it worked so the robot learns nothing.
-      if (body && typeof body === 'object' && String(body.website ?? '').trim()) return res.json({ ok: true });
+      if (body && typeof body === 'object' && String(body.website ?? '').trim()) return res.json(await okReply());
       const v = validateEnquiry(body);
       if (!v.ok) return res.status(400).json({ error: v.error });
       const e = v.value;
@@ -162,7 +199,7 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
       const { rows: dup } = await pool.query(
         `SELECT id FROM cellar_leads WHERE "userId"=$1 AND lower(email)=$2 AND "designCode"=$3 AND "createdAt" > NOW() - ($4 || ' hours')::interval LIMIT 1`,
         [userId, e.email, e.code, String(LIMITS.dedupeHours)]);
-      if (dup.length) return res.json({ ok: true });
+      if (dup.length) return res.json(await okReply());
 
       // a daily ceiling on new enquiries, so a flood cannot fill the CRM
       const { rows: [today] } = await pool.query(`SELECT COUNT(*) AS n FROM cellar_leads WHERE "createdAt" > NOW() - INTERVAL '24 hours'`);
@@ -212,9 +249,18 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
         await client.query(`UPDATE cellar_leads SET "clientId"=$1, "dealId"=$2 WHERE id=$3`, [clientId, deal.id, lead.id]);
         await client.query('COMMIT');
         log().info({ leadId: lead.id, clientId, dealId: deal.id, newClient: isNew }, '[cellar-leads] enquiry recorded');
-        res.json({ ok: true });
-        // tell the owner (a new enquiry has no website email of its own now that the form is inside the planner); never delays or fails the answer
-        void notifyOwner({ lead: lead.id, e, link }).catch((err) => log().warn({ err: err.message }, '[cellar-leads] owner email failed'));
+        // the enquiry is safely recorded: nothing below may fail it
+        const cfg = await loadSettings();
+        let willConfirm = false;
+        try { willConfirm = await shouldConfirm(cfg, userId, e.email); } catch (err) { log().warn({ err: err.message }, '[cellar-leads] could not check the confirmation'); }
+        res.json(await okReply(cfg));
+        // tell the business, then confirm to the visitor; never delays or fails the answer
+        void (async () => {
+          const settings = cfg;
+          const to = await businessAddresses(settings);
+          try { await notifyOwner({ lead: lead.id, e, link, to }); } catch (err) { log().warn({ err: err.message }, '[cellar-leads] owner email failed'); }
+          if (willConfirm) { try { await confirmVisitor({ e, cfg: settings, replyTo: to[0] }); } catch (err) { log().warn({ err: err.message }, '[cellar-leads] visitor confirmation failed'); } }
+        })().catch((err) => log().warn({ err: err.message }, '[cellar-leads] enquiry emails failed'));
       } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         throw err;

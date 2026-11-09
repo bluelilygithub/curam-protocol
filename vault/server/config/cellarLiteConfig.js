@@ -104,8 +104,9 @@ const DEFAULTS = Object.freeze({
   },
   // the website guide (the round help button on the public planner): off until the owner ticks it, because every answer is an AI call that costs money
   guide: { enabled: false },
-  // who gets the email for a website enquiry (with the plan PDF). Empty = every Vault admin, as before. Staff only: never sent to the public tool.
-  notify: { emails: [] },
+  // who gets the email for a website enquiry (with the plan PDF). Empty = every Vault admin, as before. The addresses are staff only: never sent
+  // to the public tool. `confirm` = the visitor gets a short confirmation email (no attachment, at most one per address a day).
+  notify: { emails: [], confirm: true },
   // The other costs of a job (staff only, never sent to the public tool): glass, the cooling unit, lighting, installation, and the margin. Every amount here
   // is a PLACEHOLDER until the owner confirms it (rough figures from public cost guides, mostly US and Canadian: NOT supplier quotes and NOT checked for
   // Australia). `confirmed: false` is shown on the price and BLOCKS the customer quote, so a guess never reaches a customer. A blank amount is "not set",
@@ -339,7 +340,7 @@ function validateConfig(raw) {
     if (!NOTIFY_EMAIL_RE.test(t)) { errors.push(`"${t.slice(0, 60)}" is not a valid email address.`); continue; }
     if (!notifyEmails.includes(t)) notifyEmails.push(t);
   }
-  const notify = { emails: notifyEmails };
+  const notify = { emails: notifyEmails, confirm: nt.confirm === undefined ? D.notify.confirm : nt.confirm === true };
 
   const cl = isObj(src.cooling) ? src.cooling : {};
   const num = (v, [lo, hi], fallback, label) => {
@@ -462,7 +463,8 @@ function publicView(config) {
   // the quote details, cooling assumptions, cost lines and enquiry email addresses are for staff only
   const { quote: _quote, cooling: _cooling, costs: _costs, notify: _notify, ...open } = config;
   void _quote; void _cooling; void _costs; void _notify;
-  config = open;
+  // only whether a confirmation is sent goes out (the planner's thank-you says so), never the addresses
+  config = { ...open, notify: { emails: [], confirm: _notify.confirm } };
   if (config.pricing.show) return config;
   return {
     ...config,

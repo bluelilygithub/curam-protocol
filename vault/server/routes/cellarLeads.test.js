@@ -32,6 +32,7 @@ function fakePool({ admin = 1 } = {}) {
     if (/SELECT email FROM users/i.test(sql)) return { rows: state.adminEmails ?? [{ email: 'boss@example.com' }] };
     if (/FROM workspace_settings WHERE key=\$1/i.test(sql)) return { rows: state.settings ? [{ value: JSON.stringify(state.settings) }] : [] };
     if (/FROM users WHERE "isAdmin"/i.test(sql)) return { rows: admin ? [{ id: admin }] : [] };
+    if (/SELECT COUNT\(\*\) AS recent FROM cellar_leads/i.test(sql)) return { rows: [{ recent: String(db.leads.filter((l) => l.userId === p[0] && l.email.toLowerCase() === p[1] && l.createdAt > state.clock() - 24 * 3600e3).length) }] };
     if (/FROM cellar_leads WHERE "userId"=\$1 AND lower\(email\)=\$2/i.test(sql)) {
       const cutoff = state.clock() - Number(p[3]) * 3600e3;
       return { rows: db.leads.filter((l) => l.userId === p[0] && l.email.toLowerCase() === p[1] && l.designCode === p[2] && l.createdAt > cutoff).map((l) => ({ id: l.id })) };
@@ -107,7 +108,7 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
   await t('a new person: a prospect client with a primary contact, a lead deal carrying the design and the staff link, a timeline note', async () => {
     const pool = fakePool(); const s = await serve(pool);
     const r = await post(s, GOOD);
-    assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.json, { ok: true });
+    assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.json, { ok: true, confirmation: false }); // no mail set up in this test
     const { db, log } = pool;
     assert.strictEqual(db.leads.length, 1); assert.strictEqual(db.clients.length, 1); assert.strictEqual(db.contacts.length, 1); assert.strictEqual(db.deals.length, 1);
     assert.deepStrictEqual({ status: db.clients[0].status, user: db.clients[0].userId, tags: db.clients[0].tags }, { status: 'prospect', user: 1, tags: '["cellar-enquiry"]' });
@@ -170,7 +171,7 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
   await t('the honeypot: a robot that fills the hidden field is told "ok" and nothing is recorded', async () => {
     const pool = fakePool(); const s = await serve(pool);
     const r = await post(s, { ...GOOD, website: 'http://spam.example' });
-    assert.deepStrictEqual([r.status, r.json], [200, { ok: true }]);
+    assert.deepStrictEqual([r.status, r.json], [200, { ok: true, confirmation: false }]);
     assert.strictEqual(pool.db.leads.length, 0);
     s.close();
   });
@@ -226,7 +227,7 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
   });
   await t('the response never echoes anything back (no ids, no CRM details)', async () => {
     const pool = fakePool(); const s = await serve(pool);
-    assert.strictEqual((await post(s, GOOD)).text, '{"ok":true}');
+    assert.strictEqual((await post(s, GOOD)).text, '{"ok":true,"confirmation":false}');
     s.close();
   });
 
@@ -307,7 +308,7 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
 
   await t('a new enquiry emails the owner: every admin address, what the visitor sent (escaped), a link to the design, Reply-To the visitor', async () => {
     const sent = [];
-    const mail = Object.assign(async (m) => { sent.push(m); }, { isConfigured: async () => true });
+    const mail = Object.assign(async (m) => { if (/New cellar enquiry/.test(m.subject)) sent.push(m); }, { isConfigured: async () => true }); // owner emails only
     const pool = fakePool(); pool.state.adminEmails = [{ email: 'boss@example.com' }, { email: 'second@example.com' }];
     const s = await serve(pool, { sendEmail: mail });
     const r = await post(s, { ...GOOD, name: 'Sam <b>Rivera</b>', state: 'VIC', message: '<script>alert(1)</script> hi' });
@@ -326,7 +327,7 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
 
   await t('the plan PDF is attached to the owner email only when it really is a PDF within the size limit; anything else is dropped and the enquiry still goes through', async () => {
     const sent = [];
-    const mail = Object.assign(async (m) => { sent.push(m); }, { isConfigured: async () => true });
+    const mail = Object.assign(async (m) => { if (/New cellar enquiry/.test(m.subject)) sent.push(m); }, { isConfigured: async () => true }); // owner emails only
     const pool = fakePool(); const s = await serve(pool, { sendEmail: mail });
     const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 32)]).toString('base64');
     assert.strictEqual((await post(s, { ...GOOD, pdf })).status, 200);
@@ -355,13 +356,13 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
     const bad = validateConfig({ notify: { emails: ['not an email', 'x@y.example\nBcc: z@evil.example'] } });
     assert.deepStrictEqual(bad.config.notify.emails, []); assert.ok(bad.errors.some((m) => /not a valid email address/.test(m)), JSON.stringify(bad.errors));
     assert.ok(validateConfig({ notify: { emails: Array.from({ length: 6 }, (_, i) => `p${i}@x.example`) } }).errors.some((m) => /At most 5/.test(m)));
-    assert.ok(!('notify' in publicView(ok.config)), 'the addresses never reach the website');
+    assert.deepStrictEqual(publicView(ok.config).notify, { emails: [], confirm: true }, 'the addresses never reach the website; only whether a confirmation is sent');
     assert.deepStrictEqual(validateConfig(undefined).config.notify.emails, [], 'none by default: the admins get it');
   });
 
   await t('Enquiry emails set in Settings: the email goes to those addresses instead of the admins; blank goes back to the admins', async () => {
     const sent = [];
-    const mail = Object.assign(async (m) => { sent.push(m); }, { isConfigured: async () => true });
+    const mail = Object.assign(async (m) => { if (/New cellar enquiry/.test(m.subject)) sent.push(m); }, { isConfigured: async () => true }); // owner emails only
     const pool = fakePool(); pool.state.settings = { notify: { emails: ['Sales@Cellars.example', 'owner@cellars.example'] } };
     const s = await serve(pool, { sendEmail: mail });
     assert.strictEqual((await post(s, GOOD)).status, 200);
@@ -371,6 +372,36 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
     assert.strictEqual((await post(s, { ...GOOD, email: 'next@example.com' })).status, 200);
     await new Promise((res) => setTimeout(res, 50));
     assert.strictEqual(sent.at(-1).to, 'boss@example.com', 'none set: the admins');
+    s.close();
+  });
+
+  await t('the visitor gets a confirmation: no attachment, first name only (letters), Reply-To the business, at most one per address a day, and the switch turns it off', async () => {
+    const all = [];
+    const mail = Object.assign(async (m) => { all.push(m); }, { isConfigured: async () => true });
+    const pool = fakePool(); pool.state.settings = { notify: { emails: ['sales@cellars.example'] }, quote: { businessName: 'Cellar Co' }, phone: '03 9123 4567' };
+    const s = await serve(pool, { sendEmail: mail });
+    const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 32)]).toString('base64');
+    const r = await post(s, { ...GOOD, name: 'Sam<a href=x>http://evil.example</a> Rivera', pdf });
+    assert.strictEqual(r.status, 200); assert.strictEqual(r.json.confirmation, true, 'the planner is told a confirmation is on its way');
+    await new Promise((res) => setTimeout(res, 50));
+    const conf = all.filter((m) => m.to === 'sam@example.com');
+    assert.strictEqual(conf.length, 1);
+    assert.strictEqual(conf[0].attachments, undefined, 'no PDF for the visitor');
+    assert.strictEqual(conf[0].replyTo, 'sales@cellars.example');
+    assert.match(conf[0].subject, /Cellar Co/); assert.match(conf[0].html, /about 840 bottles/); assert.match(conf[0].html, /03 9123 4567/);
+    assert.ok(!/evil|href|http/i.test(conf[0].html.replace(/If that was not you[\s\S]*/, '')), 'nothing the visitor typed can carry a link: ' + conf[0].html);
+    assert.ok(all.some((m) => m.to === 'sales@cellars.example' && m.attachments), 'the business still gets the PDF');
+    // a second design from the same address the same day: recorded, but no second confirmation
+    const r2 = await post(s, { ...GOOD, code: 'CL1.WzMwMDAsMjAwMCwyMTUwLDIsMCwwLDUwMCwwXQ' });
+    assert.strictEqual(r2.status, 200); assert.strictEqual(r2.json.confirmation, true, 'the answer never reveals that this address already had one today');
+    await new Promise((res) => setTimeout(res, 50));
+    assert.strictEqual(all.filter((m) => m.to === 'sam@example.com').length, 1);
+    // switched off in Settings
+    pool.state.settings = { notify: { emails: [], confirm: false } };
+    const r3 = await post(s, { ...GOOD, email: 'third@example.com' });
+    assert.strictEqual(r3.json.confirmation, false);
+    await new Promise((res) => setTimeout(res, 50));
+    assert.strictEqual(all.filter((m) => m.to === 'third@example.com').length, 0);
     s.close();
   });
 

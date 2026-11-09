@@ -67,8 +67,8 @@ export interface LiteConfig {
   costs: CostSettings;
   /** The website help chat (the round help button on the page around the tool): off until the owner switches it on. The page script reads this, not the tool. */
   guide: { enabled: boolean };
-  /** Who gets a website enquiry's email (staff only: the public answer never carries it). Empty = every Vault admin. */
-  notify: { emails: string[] };
+  /** Who gets a website enquiry's email (staff only: the public answer carries it empty; empty = every Vault admin), and whether the visitor gets a confirmation. */
+  notify: { emails: string[]; confirm: boolean };
   /** The "Make it yours" feature groups (empty = the tool has no Features step). */
   features: FeatureGroup[];
   presets: LitePreset[];
@@ -133,7 +133,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
   },
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   guide: { enabled: false },
-  notify: { emails: [] },
+  notify: { emails: [], confirm: true },
   cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
   costs: { glassPerM2: { amount: 1400, confirmed: false }, cooling: { amount: 6500, confirmed: false }, lighting: { amount: 1200, confirmed: false }, installation: { amount: 3500, confirmed: false }, margin: { pct: 25, confirmed: false } },
   features: DEFAULT_FEATURES,
@@ -362,7 +362,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     },
     costs: { glassPerM2: cost('glassPerM2'), cooling: cost('cooling'), lighting: cost('lighting'), installation: cost('installation'), margin: { pct: marginPct, confirmed: mg.confirmed === true } },
     guide: { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true },
-    notify: { emails: notifyEmails },
+    notify: { emails: notifyEmails, confirm: nt.confirm === undefined ? D.notify.confirm : nt.confirm === true },
     cooling: {
       panelConductivity: decimal(cl.panelConductivity, R.panelConductivity, D.cooling.panelConductivity), glassU: decimal(cl.glassU, R.glassU, D.cooling.glassU),
       floorU: decimal(cl.floorU, R.floorU, D.cooling.floorU), internalGainsW: decimal(cl.internalGainsW, R.internalGainsW, D.cooling.internalGainsW),

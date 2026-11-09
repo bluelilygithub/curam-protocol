@@ -41,7 +41,7 @@ await ctx.route('https://curam-vault.up.railway.app/**', async (route) => {
   const cors = { 'access-control-allow-origin': '*' };
   if (mode === 'down') return route.abort();
   if (mode === 'bad') return route.fulfill({ status: 400, contentType: 'application/json', headers: cors, body: '{"error":"That email address does not look right."}' });
-  return route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{"ok":true}' });
+  return route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{"ok":true,"confirmation":true}' });
 });
 await page.goto('http://localhost:8801/planner.html');
 const frame = page.frameLocator('#f');
@@ -88,6 +88,7 @@ const before = sent.length;
 await frame.getByTestId('lite-quote-send').click();
 await frame.getByTestId('lite-quote-sent').waitFor();
 check('a good form is sent once and the visitor is thanked', sent.length === before + 1 && /Thank you/.test(await frame.getByTestId('lite-quote-form').innerText()));
+check('the thank-you says a confirmation email is coming, to the address they typed', /confirmation email from us at sam@example\.com/.test(await frame.getByTestId('lite-quote-sent').innerText()), await frame.getByTestId('lite-quote-sent').innerText());
 const body = JSON.parse(sent.at(-1).body);
 check('as text/plain (no preflight), with name, email, phone, state, the design, the count and the message', /^text\/plain/.test(sent.at(-1).type || '') && body.name === 'Sam Rivera' && body.email === 'sam@example.com' && body.phone === '0412 345 678' && body.state === 'VIC' && /^CL1\./.test(body.code) && body.bottles === 1120 && body.message === 'After 5pm please.' && body.website === '', JSON.stringify(body).slice(0, 400));
 const pdfBytes = Buffer.from(body.pdf || '', 'base64');

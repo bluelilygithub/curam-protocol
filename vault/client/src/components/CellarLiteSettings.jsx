@@ -45,7 +45,7 @@ const toForm = (c) => ({
   costMargin: blank(c.costs?.margin?.pct), costMarginOk: c.costs?.margin?.confirmed === true,
   mnShow: c.mobileNotice?.show !== false, mnText: c.mobileNotice?.text ?? '',
   guideOn: c.guide?.enabled === true,
-  notifyEmails: (c.notify?.emails || []).join('\n'),
+  notifyEmails: (c.notify?.emails || []).join('\n'), notifyConfirm: c.notify?.confirm !== false,
   qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -69,7 +69,7 @@ const toConfig = (f) => ({
   },
   mobileNotice: { show: f.mnShow, text: f.mnText },
   guide: { enabled: f.guideOn },
-  notify: { emails: String(f.notifyEmails || '').split(/[\s,;]+/).filter(Boolean) },
+  notify: { emails: String(f.notifyEmails || '').split(/[\s,;]+/).filter(Boolean), confirm: f.notifyConfirm },
   quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -264,7 +264,7 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const mobileSummary = form.mnShow ? 'Shown on phones' : 'Off';
   const guideSummary = form.guideOn ? 'On: visitors see the help button' : 'Off';
   const notifyList = String(form.notifyEmails || '').split(/[\s,;]+/).filter(Boolean);
-  const enquirySummary = notifyList.length ? `To ${notifyList.join(', ')}` : 'To every Vault admin (none set)';
+  const enquirySummary = `${notifyList.length ? `To ${notifyList.join(', ')}` : 'To every Vault admin (none set)'} · visitor confirmation ${form.notifyConfirm ? 'on' : 'off'}`;
   const roomsSummary = `${form.presets.length} starting room${form.presets.length === 1 ? '' : 's'}`;
   const quoteSummary = form.qBusinessName ? `From ${form.qBusinessName}` : 'Business name not set';
   const coolingSummary = `Target ${form.clTarget} °C · outside ${form.clAmbient} °C · margin ${form.clMargin}%`;
@@ -532,11 +532,29 @@ export default function CellarLiteSettings({ onDirtyChange }) {
 
       <Panel {...pp('enquiries', 'Enquiry emails', enquirySummary)} testid="cellar-lite-enquiries">
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          When a visitor sends <b>Request a quote</b> from the website planner, an email with their details, a link to the design and the <b>plan PDF</b> goes to the addresses below. Pressing Reply in that email answers the visitor. The enquiry is also saved in the CRM either way. Leave this blank to send it to every Vault admin, as before. The visitor is never sent a copy, and these addresses are never shown on the website.
+          When a visitor sends <b>Request a quote</b> from the website planner, an email with their details, a link to the design and the <b>plan PDF</b> goes to the addresses below. Pressing Reply in that email answers the visitor. The enquiry is also saved in the CRM either way. Leave this blank to send it to every Vault admin, as before. These addresses are never shown on the website.
         </p>
         <Field label="Send enquiries to" tip="One email address per line (or separated by commas), up to five. Each address gets its own copy of every website enquiry with the plan PDF. Leave blank to send to every Vault admin." hint="Up to five addresses, one per line. Blank sends to every Vault admin.">
           <textarea value={form.notifyEmails} rows={3} maxLength={1300} onChange={(e) => set('notifyEmails', e.target.value)} className={INPUT} style={FIELD_STYLE} data-testid="cellar-lite-notify-emails" spellCheck={false} autoComplete="off" />
         </Field>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium flex-1" style={{ color: 'var(--color-text)' }}>Confirmation email to the visitor</span>
+          <Tooltip text={form.notifyConfirm ? 'Visitors get a short thank-you email (no attachment) saying you have their enquiry. Click to stop sending it (then press Save).' : 'Visitors get no email from you. Click to send them a short thank-you email (then press Save).'}>
+            <button
+              type="button"
+              onClick={() => set('notifyConfirm', !form.notifyConfirm)}
+              className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+              style={{ borderColor: form.notifyConfirm ? 'var(--color-primary)' : 'var(--color-border)', color: form.notifyConfirm ? 'var(--color-primary)' : 'var(--color-muted)', background: 'transparent' }}
+              aria-pressed={form.notifyConfirm}
+              data-testid="cellar-lite-notify-confirm"
+            >
+              {form.notifyConfirm ? 'On' : 'Off'}
+            </button>
+          </Tooltip>
+        </div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The confirmation thanks the visitor by first name, says about how many bottles their design holds and that you will be in touch with their plan and a quote, and adds your business name (Quote details), your reply line and phone number (On the page) when set. It has no attachment and does not repeat anything else they typed. Replies go to the first address above (or the first admin). An address gets at most one confirmation a day, so the form cannot be used to flood someone's inbox.
+        </p>
       </Panel>
 
       <Panel {...pp('mobile', 'Message on phones', mobileSummary)} testid="cellar-lite-mobile">
