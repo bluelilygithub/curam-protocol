@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0b34b4bc",
+   "fullHash": "0b34b4bcd77152056d0c28d7a093d7db82922088",
+   "committedAt": "2026-11-09T15:32:25+10:00",
+   "author": "mrb",
+   "subject": "Cellar lite: no visible title; Enquiry emails setting for who gets website enquiries",
+   "filesChanged": 12,
+   "insertions": 116,
+   "deletions": 25,
+   "area": "Cellar Planner",
+   "goal": "Let the planner sit cleanly inside the WordPress page (which has its own title), and let the owner choose who receives website enquiries instead of every Vault admin.",
+   "whatChanged": "Public planner (LiteApp.tsx, lite.css): the visible 'Cellar Planner' title and 'Create a cellar that fits your space' line are removed; a screen-reader-only h1 stays; the owner's promise line now sits in .lite-titlebox level with the Tour / Help / Save / Price buttons (above them on a phone). The website help chat's round button anchors to the right end of that line (helpSpot measured from .lite-promise, or the button row when the promise is blank), so cellar-lite-guide.js needed only a comment change. Vault: new Cellar Planner -> Settings -> Enquiry emails card (CellarLiteSettings.jsx) storing notify.emails in cellar_lite_config: up to five plain addresses, lower-cased and de-duplicated, a bad one refused with a plain message (server/config/cellarLiteConfig.js, mirrored in cellar-planner/src/lite/config.ts); publicView strips it. notifyOwner in cellarLeadsRouter.js sends the enquiry email (with the plan PDF) to those addresses, or to every Vault admin when blank or when the settings cannot be read. The 'Line under the heading' field is renamed 'Line beside the top buttons'. Tests: two new checks in server/routes/cellarLeads.test.js; e2e-lite-guide.mjs and e2e-lite-ux.mjs point at the promise line instead of the old title. docs/cellar-planner.md and cellar-planner/TODO.md updated.",
+   "filesImpacted": [
+    "vault/cellar-planner/src/lite/LiteApp.tsx",
+    "vault/cellar-planner/src/lite/lite.css",
+    "vault/cellar-planner/src/lite/config.ts",
+    "vault/cellar-planner/lite-wordpress/cellar-lite-guide.js",
+    "vault/cellar-planner/scripts/e2e-lite-guide.mjs",
+    "vault/cellar-planner/scripts/e2e-lite-ux.mjs",
+    "vault/client/src/components/CellarLiteSettings.jsx",
+    "vault/server/config/cellarLiteConfig.js",
+    "vault/server/routes/cellarLeadsRouter.js",
+    "vault/server/routes/cellarLeads.test.js",
+    "vault/docs/cellar-planner.md",
+    "vault/cellar-planner/TODO.md"
+   ],
+   "benefit": "No doubled title on the website page, and website enquiries (with the plan PDF) can go straight to the business's own inbox without giving them a Vault login.",
+   "concerns": "Until Enquiry emails is filled in, enquiries still go to every Vault admin. The addresses are typed by an admin and not confirmed by a test email, so a typo means enquiries go to the wrong place (they are still saved in the CRM). The help chat's 'Email this conversation' still goes to the admins only. The settings card was checked on screen in a local run (save, reload, bad address refused, not in the public answer); the title change was checked by screenshot and the browser tests but not yet on the real WordPress page or a real phone."
+  },
+  {
    "commit": "0c879121",
    "fullHash": "0c87912165cca0809a5d27652d5ab777b328876d",
    "committedAt": "2026-11-09T15:01:31+10:00",
