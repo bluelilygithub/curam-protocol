@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8f836033",
+   "fullHash": "8f83603362040f1ee96ed2ef33ead69fee80f681",
+   "committedAt": "2026-11-09T11:43:02+10:00",
+   "author": "mrb",
+   "subject": "CRM email log: ignore drafts, read whole threads, show first and last dates",
+   "filesChanged": 4,
+   "insertions": 101,
+   "deletions": 75,
+   "area": "CRM",
+   "goal": "Fix client email entries that showed the wrong date, subject and counts (found on a real thread), and show the dates of the first and last email.",
+   "whatChanged": "In server/services/clientEmailSync.js: (1) an unsent draft, or mail in the bin or spam, no longer counts as an email, nor moves the entry's date or subject, nor appears in the summary (an unsent reply in Drafts had been counted as received, dating the entry today with an empty \"Re:\" subject); a thread that is only a draft is not logged. (2) Each thread the Gmail search finds is now read whole (threads.get, one call per thread instead of one per message), so the counts and the first and last dates cover the full exchange even when only one new message fell inside the search window (a re-read had rebuilt a 7-email thread from one message). (3) The subject is the first email's, even when blank, so a thread started from a phone with no subject stays \"(no subject)\" (the previous change had wrongly skipped to the first message with a subject). (4) The note reads, for example, 5 sent, 2 received (7 emails), first 6 Nov 2026, last 9 Nov 2026, then the summary, with three-letter months in Brisbane time. (5) An entry this job wrote and nobody edited (its note starts with its own subject) is brought in line with the whole thread on the next read: counts, dates and subject are corrected and its existing summary is kept with no new model call, unless the thread has new mail. An entry whose note the person wrote is left alone until its thread grows. docs/crm-email-sync.md and the CRM guide describe it.",
+   "filesImpacted": [
+    "server/services/clientEmailSync.js",
+    "server/services/clientEmailSync.test.js",
+    "server/services/crmTutor.js",
+    "docs/crm-email-sync.md"
+   ],
+   "benefit": "Entries show the true number of emails and the real first and last dates, and a draft you have open can no longer change them. Entries already logged wrongly repair themselves.",
+   "concerns": "Tested with a fake Gmail (a draft in a thread, a thread read whole when only the newest message is in the window, a damaged entry repaired with its summary kept, an edited note left alone); not run against a real mailbox, so the real test is pressing Check email now on the client that showed the wrong entry. Reading a thread whole means a thread with many messages is read in full even if one is new (one call per thread). The daily job and Check email now will rewrite the date and note of every entry this job wrote that disagrees with its thread, once. A person who edited an entry by changing only part of its note (keeping the first line) will have it treated as unedited and overwritten on the next read."
+  },
+  {
    "commit": "46bccebe",
    "fullHash": "46bccebe9f2ec3ef8c9cbb4b9077e19f0b9983b6",
    "committedAt": "2026-11-09T11:24:01+10:00",
