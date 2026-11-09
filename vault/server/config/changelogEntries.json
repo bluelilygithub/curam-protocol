@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8d94aebd",
+   "fullHash": "8d94aebd62ba847227acbb20ab819b64a106cac8",
+   "committedAt": "2026-11-09T16:04:47+10:00",
+   "author": "mrb",
+   "subject": "Cellar lite: confirmation email to the visitor after an enquiry",
+   "filesChanged": 10,
+   "insertions": 149,
+   "deletions": 46,
+   "area": "Cellar Planner",
+   "goal": "Let a website visitor know their cellar enquiry arrived, without sending them the plan PDF (the team sends that with the quote).",
+   "whatChanged": "server/routes/cellarLeadsRouter.js: after the business email, confirmVisitor sends the visitor a short thank-you: their first name reduced to letters only, about how many bottles, that the team will be in touch with the plan and a quote, plus the owner's business name (Quote details), reply line and phone when set. No attachment and nothing else the visitor typed; Reply-To is the first business address. shouldConfirm limits it to one per address in 24 hours. okReply gives every successful answer (new, repeat or honeypot) the same shape { ok, confirmation } where confirmation is only whether the switch is on. Settings: notify.confirm (default on) in server/config/cellarLiteConfig.js and cellar-planner/src/lite/config.ts; publicView now sends notify as { emails: [], confirm }; CellarLiteSettings.jsx adds a 'Confirmation email to the visitor' switch and explanation to the Enquiry emails card. QuoteForm.tsx: the thank-you adds 'You will also get a confirmation email from us at <address>' when confirmation is true. Tests: a new confirmation check in server/routes/cellarLeads.test.js (no attachment, no link from the name, Reply-To, one a day, switch off), reply-shape checks updated, and a thank-you check in scripts/e2e-lite-quote.mjs. Docs, TODO.md and cellarLiteTutor.js updated.",
+   "filesImpacted": [
+    "vault/server/routes/cellarLeadsRouter.js",
+    "vault/server/routes/cellarLeads.test.js",
+    "vault/server/config/cellarLiteConfig.js",
+    "vault/server/services/cellarLiteTutor.js",
+    "vault/cellar-planner/src/lite/config.ts",
+    "vault/cellar-planner/src/lite/QuoteForm.tsx",
+    "vault/cellar-planner/scripts/e2e-lite-quote.mjs",
+    "vault/client/src/components/CellarLiteSettings.jsx",
+    "vault/docs/cellar-planner.md",
+    "vault/cellar-planner/TODO.md"
+   ],
+   "benefit": "Visitors get a reassuring receipt for their enquiry, and replies to it reach the business; the form cannot be used to flood someone's inbox or to check whether an address has enquired.",
+   "concerns": "The confirmation goes to whatever address was typed, so a stranger can still cause one email a day to reach someone else's inbox from the business (it carries no link or visitor text beyond a letters-only first name). Deliverability of this new outbound email (spam filtering, the sending domain) is untested on the live mail setup. The thank-you on the planner says a confirmation is coming even on a same-day repeat, when none is sent (by design, to avoid revealing earlier enquiries). The Settings switch was checked on screen in a local run (on, off, saved, reloaded, only the switch in the public answer); the email text itself was checked only by tests, not in a real inbox. The new thank-you line needs the planner files re-uploaded to SiteGround."
+  },
+  {
    "commit": "0b34b4bc",
    "fullHash": "0b34b4bcd77152056d0c28d7a093d7db82922088",
    "committedAt": "2026-11-09T15:32:25+10:00",
