@@ -13,7 +13,7 @@ Follows the touchpoint→task follow-up bridge (§5). User asked for something c
 Checked production data first rather than assuming: `SELECT type, COUNT(*) FROM client_touchpoints GROUP BY type` returned exactly one row (`call`, count 1) — the table is effectively unused so far, so there's no drift/inconsistency to clean up, but also nothing to validate reuse against. The decision is "no data cost either way," not "confirmed safe by volume." `type` already carries channel-shaped values (`call`/`email`/`meeting` mixed with non-channel `decision`/`milestone`/`other`, free text, no CHECK constraint) — good enough to filter/group a communication view on directly.
 
 **Other two phase-1 questions:**
-- **Manual-only for now.** No Gmail/calendar auto-ingest. Revisit only if the manual log actually gets used.
+- **Manual-only for now.** No Gmail/calendar auto-ingest. Revisit only if the manual log actually gets used. *(Revisited 2026-11-09: a small daily Gmail email log was built, see `docs/crm-email-sync.md`; calendar ingest is still not built.)*
 - **UI placement: filter within the existing Touchpoints section on `ClientDetailPage`, not a new tab.** Lower cost, and the page is already dense with sections.
 
 **Explicitly deferred, not part of this decision:** auto-logging emails/calls, threading, read receipts (all imply an integration, not a data-model change); file attachments on touchpoints (own initiative, §10 candidate, sequenced after this since it depends on the channel view existing first); calendar export (independent, lowest complexity, sequenced last — see chat history for the one-way-export-first reasoning).

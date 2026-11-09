@@ -13,6 +13,7 @@ const {
 } = require('../utils/attachments');
 const { logCrmAudit } = require('../utils/crmAudit');
 const { getLogger } = require('../middleware/requestContext');
+const { normaliseDomains, requestSync, syncClient } = require('../services/clientEmailSync');
 
 // client_interactions holds every interaction type (manual log entries PLUS
 // deal_stage/contact history for the Activity feed) — this literal picks
@@ -120,11 +121,15 @@ router.get('/', async (req, res) => {
   }
 });
 
+function domainError(rejected) {
+  return `${rejected.join(', ')} cannot be used as an email domain. Use the company's own domain, such as wiwc.com.au; a free-mail address such as gmail.com is matched on a contact's email address instead.`;
+}
+
 // POST /api/clients
 router.post('/', async (req, res) => {
   const {
     name, company, status, communicationPref,
-    howTheyWork, startDate, tags, notes, clientType,
+    howTheyWork, startDate, tags, notes, clientType, emailDomains,
   } = req.body;
 
   if (!name || !name.trim()) {
@@ -132,12 +137,14 @@ router.post('/', async (req, res) => {
   }
 
   const safeType = (clientType === 'individual') ? 'individual' : 'company';
+  const domains = normaliseDomains(emailDomains);
+  if (domains.rejected.length) return res.status(400).json({ error: domainError(domains.rejected) });
 
   try {
     const { rows } = await pool.query(`
       INSERT INTO clients
-        ("userId", name, company, status, "communicationPref", "howTheyWork", "startDate", tags, notes, "clientType")
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        ("userId", name, company, status, "communicationPref", "howTheyWork", "startDate", tags, notes, "clientType", "emailDomains")
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *
     `, [
       req.user.id,
@@ -150,9 +157,11 @@ router.post('/', async (req, res) => {
       tags ? JSON.stringify(tags) : null,
       notes || null,
       safeType,
+      JSON.stringify(domains.domains),
     ]);
 
     const client = rows[0];
+    if (domains.domains.length) requestSync({ userId: req.user.id, clientId: client.id }); // read its email back to 1 July 2026
 
     // Auto-create primary contact for individual clients
     if (safeType === 'individual') {
@@ -303,7 +312,7 @@ router.put('/:id', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);
   const {
     name, company, status, communicationPref,
-    howTheyWork, startDate, tags, notes, clientType,
+    howTheyWork, startDate, tags, notes, clientType, emailDomains,
   } = req.body;
 
   if (!name || !name.trim()) {
@@ -311,8 +320,12 @@ router.put('/:id', async (req, res) => {
   }
 
   const safeType = (clientType === 'individual') ? 'individual' : 'company';
+  // emailDomains is only changed when the caller sends it (older callers do not)
+  const domains = emailDomains === undefined ? null : normaliseDomains(emailDomains);
+  if (domains && domains.rejected.length) return res.status(400).json({ error: domainError(domains.rejected) });
 
   try {
+    const { rows: [before] } = await pool.query('SELECT "emailDomains" FROM clients WHERE id=$1 AND "userId"=$2', [clientId, req.user.id]);
     const { rows } = await pool.query(`
       UPDATE clients
       SET
@@ -325,6 +338,7 @@ router.put('/:id', async (req, res) => {
         tags               = $7,
         notes              = $8,
         "clientType"       = $9,
+        "emailDomains"     = COALESCE($12::jsonb, "emailDomains"),
         "updatedAt"        = NOW()
       WHERE id=$10 AND "userId"=$11
       RETURNING *
@@ -340,9 +354,13 @@ router.put('/:id', async (req, res) => {
       safeType,
       clientId,
       req.user.id,
+      domains ? JSON.stringify(domains.domains) : null,
     ]);
 
     if (!rows.length) return res.status(404).json({ error: 'Client not found' });
+    // a new or removed domain means mail has to be read back again (to 1 July 2026)
+    const was = JSON.stringify([...(Array.isArray(before?.emailDomains) ? before.emailDomains : [])].sort());
+    if (domains && JSON.stringify([...domains.domains].sort()) !== was) requestSync({ userId: req.user.id, clientId });
     res.json(rows[0]);
   } catch (err) {
     console.error('[clients] update error:', err);
@@ -482,6 +500,8 @@ router.post('/:id/contacts', async (req, res) => {
       [clientId, req.user.id, `Contact added: ${rows[0].name}`, rows[0].id]
     ).catch(err => getLogger().error({ err }, 'client_interactions write failed (contact create)'));
 
+    if (rows[0].email) requestSync({ userId: req.user.id, clientId }); // a new address: read this client's email back to 1 July 2026
+
     res.status(201).json(rows[0]);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -524,6 +544,7 @@ router.put('/:id/contacts/:contactId', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Contact not found' });
 
     logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: contactId, action: 'update', before: beforeRows[0] || null, after: rows[0] });
+    if (rows[0].email && String(rows[0].email).toLowerCase() !== String(beforeRows[0]?.email || '').toLowerCase()) requestSync({ userId: req.user.id, clientId });
 
     res.json(rows[0]);
   } catch (err) {
@@ -935,6 +956,22 @@ const TOUCHPOINT_TYPE_LABELS = {
   call: 'Call', email: 'Email', meeting: 'Meeting', note: 'Note',
   decision: 'Decision', milestone: 'Milestone', other: 'Touchpoint',
 };
+
+// POST /api/clients/:id/email-sync: read this client's email from Gmail now (everything since the last read, or since 1 July 2026 the first time)
+router.post('/:id/email-sync', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  try {
+    const ok = await assertClientOwner(clientId, req.user.id, res);
+    if (!ok) return;
+    const r = await syncClient({ userId: req.user.id, clientId });
+    if (r.skipped === 'gmail_not_connected') return res.json({ error: 'gmail_not_connected' });
+    if (r.skipped === 'already_running') return res.json({ error: 'already_running' });
+    res.json({ threads: r.threads || 0, created: r.created || 0, updated: r.updated || 0, since: r.since || null, truncated: !!r.truncated, nothingToMatch: r.skipped === 'nothing_to_match' });
+  } catch (err) {
+    getLogger().error({ err }, 'client email sync failed');
+    res.status(500).json({ error: 'Could not read Gmail just now. Try again, or reconnect Gmail in Settings.' });
+  }
+});
 
 // GET /api/clients/:id/activity
 router.get('/:id/activity', async (req, res) => {

@@ -376,6 +376,9 @@
   "PATCH /api/clients/:id/assign-project": {
    "class": "authed"
   },
+  "POST /api/clients/:id/email-sync": {
+    "class": "authed"
+  },
   "POST /api/clients/:id/attachments": {
    "class": "authed"
   },

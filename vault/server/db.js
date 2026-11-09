@@ -2601,6 +2601,12 @@ async function initSchema() {
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "source" VARCHAR(20) NOT NULL DEFAULT 'manual'`);
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "needsFollowUp" BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "taskId" INTEGER REFERENCES tasks(id) ON DELETE SET NULL`);
+    // Client email sync (docs/crm-email-sync.md): the email domains that identify a client, when its mail was last read, and the key
+    // (thread:<gmail thread id>) that stops a thread being logged twice.
+    await client.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "emailDomains" JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await client.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "emailSyncedAt" TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "externalId" TEXT`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_client_interactions_external ON client_interactions("clientId", "externalId") WHERE "externalId" IS NOT NULL`);
     // Below the ADD COLUMN above — on a pre-existing table (not the fresh
     // CREATE TABLE just above), "needsFollowUp" doesn't exist until that
     // ALTER runs; a partial index referencing it any earlier fails outright.

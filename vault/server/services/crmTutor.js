@@ -49,6 +49,7 @@ const RULES = [
   'A touchpoint is a log of something that already happened. To plan something, use + Follow up, which creates a Task linked to the client.',
   'A task linked to a client shows in the client\'s Tasks section whether it came through a project or was linked directly.',
   'Deals belong to a client and move through the stages lead, qualified, proposal, negotiation, won and lost.',
+  'If Gmail is connected, email with a client is logged in Activity by itself, one entry per conversation. It matches the email addresses of the client\'s contacts and the email domains saved on the client (Edit, Email domains, for example wiwc.com.au), goes back to 1 July 2026 for a new client, contact email or domain, and checks again each morning; Check email now in the Info card does it straight away. Only the subject and how many were sent and received are kept, not the message.',
   'Files can be attached to a touchpoint or a task; there is a size limit per file and a storage limit per person.',
   'A client page lays its work out as tabs (Activity first, then Deals, Projects, Plans, Tasks, Research and Email follow-up, each with a count when it has something in it), with Info, Contacts, Outstanding and the open deal in a side panel that stays in view. The Activity tab filters by All, Notes, Calls, Emails or Tasks.',
   'A client page has a tour (compass icon) and an information box (info icon) that explains touchpoints, follow-ups and tasks.',

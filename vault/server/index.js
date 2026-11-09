@@ -323,6 +323,7 @@ const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
 const { startRecycleBinPurge } = require('./cron/recycleBinCron');
 const { startStaleDealsCron } = require('./cron/staleDealsCron');
+const { startClientEmailSyncCron } = require('./cron/clientEmailSyncCron');
 const { startAttachmentExpiry } = require('./cron/attachmentExpiryCron');
 const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startYoutubeFollows } = require('./cron/youtubeFollowsCron');
@@ -372,6 +373,7 @@ async function start() {
     startNoteRemindersCron(); // emails note reminders that have fallen due
     startTopicResearchCron(); // searches watched Topic Research topics that are due (calls feeds and search services)
     startSerpTrackerCron(); // SERP Tracker daily run at 20:00 UTC (calls DataForSEO, a paid service)
+    startClientEmailSyncCron(); // daily: logs email with each client into its Activity (reads Gmail, so it is off where external cron is off)
     startGscDailySync(); // SERP Tracker Keywords: Search Console history update at 21:00 UTC = 7:00 am Brisbane (free, reads Google only)
   }
 

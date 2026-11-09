@@ -233,6 +233,7 @@ function EditModal({ client, onClose, onSaved }) {
     tags:              Array.isArray(client.tags) ? client.tags : (client.tags ? JSON.parse(client.tags) : []),
     notes:             client.notes             || '',
     clientType:        client.clientType        || 'company',
+    emailDomains:      Array.isArray(client.emailDomains) ? client.emailDomains : [],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
@@ -243,7 +244,8 @@ function EditModal({ client, onClose, onSaved }) {
     if (!form.name.trim()) { setError('Name is required'); return; }
     setSaving(true);
     try {
-      await api.put(`/api/clients/${client.id}`, form).then(r => r.json());
+      const out = await api.put(`/api/clients/${client.id}`, form).then(r => r.json());
+      if (out && out.error) throw new Error(out.error);
       addToast('Client updated');
       onSaved();
       onClose();
@@ -297,6 +299,7 @@ function EditModal({ client, onClose, onSaved }) {
           <Field label="How they work"><Input rows={3} value={form.howTheyWork} onChange={set('howTheyWork')} placeholder="e.g. Prefers email, responds within 24hrs…" /></Field>
           <Field label="Start date"><Input type="date" value={form.startDate} onChange={set('startDate')} /></Field>
           <Field label="Tags"><TagInput tags={form.tags} onChange={set('tags')} /></Field>
+          <Field label="Email domains"><TagInput tags={form.emailDomains} onChange={set('emailDomains')} /><p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Email to or from anyone at these domains (for example wiwc.com.au) is logged to Activity from your Gmail, back to 1 July 2026. A contact's own email address is matched too. Use the company's domain, not gmail.com.</p></Field>
           <Field label="Notes"><Input rows={3} value={form.notes} onChange={set('notes')} /></Field>
           {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
           <div className="flex gap-2 justify-end pt-1">
@@ -1126,6 +1129,39 @@ function ActivityFeed({ clientId, refreshKey, onChanged }) {
 // Explicitly never for credentials — a username is fine, a password isn't
 // (see docs/crm-activity-model.md Addendum 3).
 
+// Where this client's email is read from, when it was last read, and a button to read it now (docs/crm-email-sync.md).
+function EmailSyncLine({ client, clientId, onRefresh }) {
+  const addToast = useToastStore(s => s.addToast);
+  const [busy, setBusy] = useState(false);
+  const domains = Array.isArray(client.emailDomains) ? client.emailDomains : [];
+  const checkNow = async () => {
+    setBusy(true);
+    try {
+      const res = await api.post(`/api/clients/${clientId}/email-sync`);
+      const out = await res.json().catch(() => ({}));
+      if (out.error === 'gmail_not_connected') { addToast('Connect Gmail in Settings first, then try again.', 'error'); return; }
+      if (out.error === 'already_running') { addToast('It is already reading this client\'s email. Try again in a minute.', 'info'); return; }
+      if (!res.ok || out.error) throw new Error(out.error || 'Could not read Gmail just now.');
+      if (out.nothingToMatch) addToast('Nothing to match yet: add a contact with an email address, or an email domain, then try again.', 'info');
+      else addToast(out.threads ? `Email checked: ${out.created} new and ${out.updated} updated of ${out.threads} conversations.` : 'Email checked: nothing found.', 'success');
+      onRefresh();
+    } catch (e) { addToast(e.message || 'Could not read Gmail just now.', 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Email logging</p>
+      <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+        {domains.length ? `Domains: ${domains.join(', ')}. ` : 'No email domain set. '}
+        {client.emailSyncedAt ? `Last checked ${fmtDate(client.emailSyncedAt)}.` : 'Not checked yet; the first check goes back to 1 July 2026.'}
+      </p>
+      <button type="button" onClick={checkNow} disabled={busy} className="mt-1.5 text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+        style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Read this client's email from Gmail now and log it in Activity">
+        {busy ? 'Checking…' : 'Check email now'}
+      </button>
+    </div>
+  );
+}
+
 function InfoSection({ client, clientId, customFields, attachments, onRefresh }) {
   const [showFieldForm, setShowFieldForm] = useState(false);
   const [fieldLabel, setFieldLabel] = useState('');
@@ -1198,6 +1234,7 @@ function InfoSection({ client, clientId, customFields, attachments, onRefresh })
 
   return (
     <div className="pt-3 flex flex-col gap-4">
+      <EmailSyncLine client={client} clientId={clientId} onRefresh={onRefresh} />
       {(client.notes || client.howTheyWork) && (
         <div className="flex flex-col gap-3">
           {client.howTheyWork && (

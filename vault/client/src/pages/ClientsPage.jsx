@@ -150,7 +150,7 @@ function TagInput({ tags, onChange }) {
 
 const BLANK_FORM = {
   name: '', company: '', status: 'active', communicationPref: '',
-  howTheyWork: '', startDate: '', tags: [], notes: '', clientType: 'company',
+  howTheyWork: '', startDate: '', tags: [], notes: '', clientType: 'company', emailDomains: [],
 };
 
 function ClientModal({ client, onClose, onSaved }) {
@@ -164,6 +164,7 @@ function ClientModal({ client, onClose, onSaved }) {
     tags:              Array.isArray(client.tags) ? client.tags : (client.tags ? JSON.parse(client.tags) : []),
     notes:             client.notes || '',
     clientType:        client.clientType || 'company',
+    emailDomains:      Array.isArray(client.emailDomains) ? client.emailDomains : [],
   } : { ...BLANK_FORM });
 
   const [saving, setSaving] = useState(false);
@@ -178,11 +179,14 @@ function ClientModal({ client, onClose, onSaved }) {
     setError('');
     try {
       const payload = { ...form, tags: form.tags };
+      let out;
       if (client) {
-        await api.put(`/api/clients/${client.id}`, payload).then(r => r.json());
+        out = await api.put(`/api/clients/${client.id}`, payload).then(r => r.json());
+        if (out && out.error) throw new Error(out.error);
         addToast('Client updated');
       } else {
-        await api.post('/api/clients', payload).then(r => r.json());
+        out = await api.post('/api/clients', payload).then(r => r.json());
+        if (out && out.error) throw new Error(out.error);
         addToast('Client created');
       }
       onSaved();
@@ -284,6 +288,11 @@ function ClientModal({ client, onClose, onSaved }) {
 
           <Field label="Tags">
             <TagInput tags={form.tags} onChange={set('tags')} />
+          </Field>
+
+          <Field label="Email domains">
+            <TagInput tags={form.emailDomains} onChange={set('emailDomains')} />
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Email to or from anyone at these domains (for example wiwc.com.au) is logged to Activity from your Gmail, back to 1 July 2026. A contact's own email address is matched too. Use the company's domain, not gmail.com.</p>
           </Field>
 
           <Field label="Notes">

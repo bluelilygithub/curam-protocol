@@ -114,6 +114,8 @@ Two very different builds were hiding behind "wire Gmail sync":
 - **Small (chosen):** a "Save as activity" button on a search result → one `client_interactions` row, `source: 'gmail_sync'`. Not yet built.
 - **Large (explicitly rejected for this phase):** background polling/cron, dedup, retry — a separate project, not scoped here.
 
+**Update 2026-11-09:** the daily sync was built after all, small: one entry per Gmail thread, matched on contact addresses and client email domains, back to 1 July 2026. See `docs/crm-email-sync.md`. The "Save as activity" button was not built.
+
 Once built, Communications stops being a separate section — a synced email is a `source` filter on the Activity feed, same as everything else.
 
 ## 6. UI collapse (not yet done)
