@@ -143,6 +143,7 @@ function describeLoadError(err) {
   if (/private|DNS|Invalid URL|Only http/i.test(m)) return { status: 400, error: 'That address cannot be loaded. Check it is a public web address starting with http:// or https://.' };
   if (/busy/i.test(m)) return { status: 503, error: m };
   if (/not set up|too large/i.test(m)) return { status: 400, error: m };
+  if (/Connection dropped/i.test(m)) return { status: 502, error: 'That website cut the connection every time we tried (it turns away automatic visitors). Untick "builds itself with JavaScript" and try the normal load, or, if it is your site, allow automatic visitors in its security settings.' };
   if (/Server returned (202|401|403|406|429)/i.test(m)) return { status: 502, error: 'That website refused to give us the page (it turns away automatic visitors). If you have the page, open it in your browser, choose File, Save page as, and upload the .html file here instead. The "builds itself with JavaScript" option opens it in a real browser and sometimes gets in.' };
   const code = m.match(/Server returned (\d+)/i);
   if (code) return { status: 502, error: `The website answered with an error (${code[1]}), so the page could not be loaded.` };

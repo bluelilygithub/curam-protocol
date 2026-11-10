@@ -10,11 +10,22 @@ export const ZOOMS = [
   { id: '0.5', label: '50%' },
 ];
 
+/**
+ * The preview has no scripts, so anything a script library hides until it runs stays hidden for good. finestone.com.au's sections sit at
+ * opacity 0 waiting for AOS ("animate on scroll") to fade them in, so the phone view came out blank below the banner. This shows them in
+ * their finished state. Covers AOS, Owl Carousel (hidden until it starts), WOW/animate.css and Elementor's entrance animations.
+ */
+export const NO_SCRIPT_REVEAL_CSS = [
+  '[data-aos]{opacity:1!important;transform:none!important;visibility:visible!important}',
+  '.owl-carousel:not(.owl-loaded){display:block!important}',
+  '.wow,.elementor-invisible{visibility:visible!important;opacity:1!important}',
+].join('');
+
 /** The page as one self-contained document for an iframe: the page's own head and body (already cleaned by the server) plus its style files in order. */
 export function buildPreviewDoc({ headInnerHTML = '', bodyInnerHTML = '', cssFiles = [] } = {}) {
   // a style file must never be able to close its own <style> element and add markup
   const css = cssFiles.map((f) => String((f && f.css) || '')).join('\n').replace(/<\/style/gi, '<' + String.fromCharCode(92) + '/style');
-  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${headInnerHTML}<style>${css}</style></head><body>${bodyInnerHTML}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${headInnerHTML}<style>${css}</style><style>${NO_SCRIPT_REVEAL_CSS}</style></head><body>${bodyInnerHTML}</body></html>`;
 }
 
 /** Add or remove a device from the shown set. At most MAX_SCREENS; a full set refuses a new one (the caller says why). */

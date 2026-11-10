@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildPreviewDoc, toggleScreen, resolveScreens, cardLayout, MAX_SCREENS, DEFAULT_SELECTION } from './devicePreviewModel.mjs';
+import { buildPreviewDoc, NO_SCRIPT_REVEAL_CSS, toggleScreen, resolveScreens, cardLayout, MAX_SCREENS, DEFAULT_SELECTION } from './devicePreviewModel.mjs';
 import { deviceById, customScreen } from '../../utils/deviceCatalog.mjs';
 
 // document
@@ -10,6 +10,9 @@ assert.ok(doc.indexOf('a{color:red}') < doc.indexOf('b{color:blue}'), 'style fil
 assert.ok(doc.includes('<p>hi</p>'));
 assert.ok(!buildPreviewDoc({ cssFiles: [{ css: 'a{}</style><script>alert(1)</script>' }] }).includes('</style><script>'), 'a style file cannot close its own element');
 assert.ok(buildPreviewDoc().includes('<body></body>'), 'an empty page still builds');
+// content a script library hides until it runs (AOS on finestone.com.au) is shown, after the page's own styles so it wins
+assert.ok(NO_SCRIPT_REVEAL_CSS.includes('[data-aos]'));
+assert.ok(doc.indexOf('b{color:blue}') < doc.indexOf(NO_SCRIPT_REVEAL_CSS), 'the reveal comes after the page styles');
 
 // choosing devices
 let r = toggleScreen([], 'iphone-14');

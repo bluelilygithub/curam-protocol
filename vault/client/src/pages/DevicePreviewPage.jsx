@@ -37,7 +37,7 @@ export default function DevicePreviewPage() {
   const [url, setUrl] = useState('');
   const [render, setRender] = useState(false);
   const [renderAvailable, setRenderAvailable] = useState(false);
-  const [page, setPage] = useState(null);           // { doc, sourceUrl }
+  const [page, setPage] = useState(null);           // { doc, sourceUrl, flags }
   const [error, setError] = useState('');
   const [selection, setSelection] = useState(DEFAULT_SELECTION);
   const [customs, setCustoms] = useState([]);
@@ -103,7 +103,7 @@ export default function DevicePreviewPage() {
       const res = await api.post('/api/restyle/fetch-url', { url: address, render: !!render });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "We couldn't load that page.");
-      setPage({ doc: buildPreviewDoc(data), sourceUrl: data.sourceUrl || address });
+      setPage({ doc: buildPreviewDoc(data), sourceUrl: data.sourceUrl || address, flags: Array.isArray(data.flags) ? data.flags : [] });
     } catch (e) {
       setPage(null);
       setError(e.message);
@@ -248,6 +248,14 @@ export default function DevicePreviewPage() {
         {page && screens.length > 0 && (
           <div>
             <p className="text-xs mb-2 truncate" style={{ color: 'var(--color-muted)' }}>Showing {page.sourceUrl}</p>
+            {page.flags.length > 0 && (
+              <div role="status" className="rounded-lg border p-3 mb-3 text-xs space-y-1" style={{ borderColor: '#f59e0b', background: 'var(--color-surface)', color: 'var(--color-text)' }}>
+                <p className="font-semibold flex items-center gap-1.5"><span style={{ color: '#f59e0b', display: 'inline-flex' }}>{getIcon('alert-triangle', { size: 14 })}</span>Worth knowing about this preview</p>
+                <ul className="list-disc pl-5 space-y-0.5">
+                  {page.flags.map((f, i) => <li key={i}>{f}</li>)}
+                </ul>
+              </div>
+            )}
             <div className="flex gap-4 overflow-x-auto pb-4 items-start scroll-x-obvious">
               {screens.map((d) => {
                 const l = cardLayout(d, { zoom, landscape });

@@ -5,8 +5,8 @@
 const assert = require('assert');
 const { sanitizeEditsCss, sanitizePageCss, forStyleElement } = require('./sanitizeCss');
 const { buildSharedPage, SHARE_HEADERS } = require('./sharePage');
-const { loadPageFromUrl, applyMedia, sheetName } = require('./loadFromUrl');
-const { renderAvailable } = require('./renderPage');
+const { loadPageFromUrl, applyMedia, sheetName, sheetRank, chooseSheets, MAX_SHEETS } = require('./loadFromUrl');
+const { renderAvailable, CONNECTION_REFUSED, USER_AGENTS } = require('./renderPage');
 
 (async () => {
   // ---- the CSS the tool generates: only managed properties, plain rules, @media and the tool's own keyframes ----
@@ -123,6 +123,43 @@ const { renderAvailable } = require('./renderPage');
   assert.strictEqual(sheetName('https://x.com/a/b/site.css?v=3'), 'site.css');
   assert.strictEqual(sheetName('https://x.com/'), 'x.com');
   assert.strictEqual(typeof renderAvailable(), 'boolean');
+
+  // ---- a page with more style files than the limit keeps the site's own (theme) files, in the page's order ----
+  // finestone.com.au: 31 files, the theme's from the 13th on; the old first-12 rule kept only plugins and the page came out unstyled.
+  const fsPage = 'https://finestone.com.au/';
+  assert.strictEqual(sheetRank('https://finestone.com.au/wp-content/themes/bluelily/assets/css/layout.css', fsPage), 0);
+  assert.strictEqual(sheetRank('https://www.finestone.com.au/wp-content/themes/x/a.css', fsPage), 0);
+  assert.strictEqual(sheetRank('https://finestone.com.au/wp-content/plugins/woocommerce/a.css', fsPage), 1);
+  assert.strictEqual(sheetRank('https://finestone.com.au/wp-includes/css/dashicons.css', fsPage), 1);
+  assert.strictEqual(sheetRank('https://fonts.googleapis.com/css?family=X', fsPage), 2);
+  const many = [
+    ...Array.from({ length: 45 }, (_, i) => ({ href: `https://finestone.com.au/wp-content/plugins/p${i}/s.css` })),
+    { href: 'https://finestone.com.au/wp-content/themes/bluelily/assets/css/layout.css' },
+    { href: 'https://finestone.com.au/wp-content/themes/bluelily/assets/css/responsive.css' },
+  ];
+  const kept = chooseSheets(many, fsPage);
+  assert.strictEqual(kept.length, MAX_SHEETS);
+  assert.ok(kept.includes(45) && kept.includes(46), 'the theme files are kept');
+  assert.deepStrictEqual(kept, [...kept].sort((a, b) => a - b), 'still in the page order');
+  assert.ok(MAX_SHEETS >= 31, 'a 31-file WordPress page loads every file');
+
+  // a page with 31 linked files has every one fetched
+  const thirtyOne = Array.from({ length: 31 }, (_, i) => `<link rel="stylesheet" href="https://site.example/s${i}.css">`).join('');
+  const asked = [];
+  const all = await loadPageFromUrl('https://site.example/', {}, {
+    fetchHtml: async (url, o = {}) => {
+      if (o.asset) { asked.push(url); return { body: `.s{color:red}`, statusCode: 200 }; }
+      return { body: `<html><head>${thirtyOne}</head><body><p>Hi</p></body></html>`, statusCode: 200, finalUrl: url };
+    },
+  });
+  assert.strictEqual(asked.length, 31);
+  assert.strictEqual(all.cssFiles.length, 31);
+
+  // ---- the browser treats a dropped connection as a refusal and tries the next identity ----
+  assert.ok(CONNECTION_REFUSED.test('page.goto: net::ERR_HTTP2_PROTOCOL_ERROR at https://finestone.com.au/'));
+  assert.ok(CONNECTION_REFUSED.test('net::ERR_CONNECTION_RESET'));
+  assert.ok(!CONNECTION_REFUSED.test('page.goto: Timeout 30000ms exceeded.'));
+  assert.ok(USER_AGENTS.length >= 4);
 
   console.log('restyle server tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

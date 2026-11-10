@@ -27,7 +27,11 @@ const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
   'Mozilla/5.0 (compatible; VaultCSSTool/1.0)',
+  'curl/8.5.0',
 ];
+// The browser could not reach the page at all: some firewalls cut the connection for an identity they turn away instead of answering
+// (finestone.com.au drops "Chrome" with ERR_HTTP2_PROTOCOL_ERROR and lets "Firefox" in), so this is a refusal to retry, not the end.
+const CONNECTION_REFUSED = /net::ERR_(HTTP2_PROTOCOL_ERROR|CONNECTION_(CLOSED|RESET|REFUSED|ABORTED)|EMPTY_RESPONSE|SSL_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)/;
 
 let availableCache = null;
 let running = 0;
@@ -84,7 +88,13 @@ async function renderOnce(browser, userAgent, url) {
     });
 
     const page = await context.newPage();
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: RENDER_TIMEOUT_MS });
+    let response;
+    try {
+      response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: RENDER_TIMEOUT_MS });
+    } catch (err) {
+      if (CONNECTION_REFUSED.test(String(err && err.message))) return { status: 0, html: '', finalUrl: url, dropped: true };
+      throw err;
+    }
     const status = response ? response.status() : 0;
     if (status >= 400) return { status, html: '', finalUrl: page.url() };
     await page.waitForLoadState('networkidle', { timeout: SETTLE_TIMEOUT_MS }).catch(() => {});
@@ -118,14 +128,17 @@ async function renderPage(url) {
     const { chromium } = loadPlaywright();
     browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
     let lastStatus = 0;
+    let dropped = 0;
     for (const userAgent of USER_AGENTS) {
       const out = await renderOnce(browser, userAgent, url);
+      if (out.dropped) { dropped += 1; continue; }
       lastStatus = out.status || lastStatus;
       // refused, or sent to a "robot challenge" page: the next identity may be let in
       if (out.status >= 400 || BLOCKED_TITLE.test(titleOfHtml(out.html))) { lastStatus = lastStatus || 403; continue; }
       if (out.html.length > MAX_HTML_CHARS) throw new Error('That page is too large to load.');
       return { html: out.html, finalUrl: out.finalUrl };
     }
+    if (!lastStatus && dropped) throw new Error('Connection dropped: the website cut the browser off every time');
     throw new Error(`Server returned ${lastStatus || 403}`);
   } finally {
     if (browser) await browser.close().catch(() => {});
@@ -133,4 +146,4 @@ async function renderPage(url) {
   }
 }
 
-module.exports = { renderPage, renderAvailable };
+module.exports = { renderPage, renderAvailable, CONNECTION_REFUSED, USER_AGENTS };
