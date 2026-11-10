@@ -4043,6 +4043,8 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_html_audits_user_updated
       ON html_audits ("userId", "updatedAt" DESC)
   `);
+  // Page speed Actions tab: which actions are done, per device. { mobile: { <actionKey>: { done, doneAt, note } }, desktop: {...} }
+  await pool.query(`ALTER TABLE html_audits ADD COLUMN IF NOT EXISTS "actionsDone" JSONB NOT NULL DEFAULT '{}'`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gsc_tokens (

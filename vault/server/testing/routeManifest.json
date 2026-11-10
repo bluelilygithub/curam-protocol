@@ -2002,6 +2002,9 @@
   "POST /api/html/audits": {
    "class": "authed"
   },
+  "PUT /api/html/audits/:id/actions/:view": {
+   "class": "authed"
+  },
   "POST /api/inbound-mail": {
    "class": "public"
   },
@@ -3758,6 +3761,9 @@
    "class": "authed"
   },
   "POST /api/usage-tutor": {
+   "class": "authed"
+  },
+  "POST /api/page-speed-tutor": {
    "class": "authed"
   },
   "POST /api/web-extractor-tutor": {

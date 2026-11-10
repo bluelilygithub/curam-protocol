@@ -186,6 +186,7 @@ app.use('/api/expense-review', requireFeature('gmailIntel'), require('./routes/e
 app.use('/api/shelf-tokens', requireFeature('shelf'), require('./routes/quickIngest').tokensRouter);
 app.use('/api/shelf-inbox', requireFeature('clients'), require('./routes/quickIngest').inboxRouter);
 app.use('/api/usage-tutor', requireFeature('usage'), aiLimiter, require('./routes/usageTutor')); // the Usage & Cost guide chat (sees no spending, calls or settings)
+app.use('/api/page-speed-tutor', requireFeature('html'), aiLimiter, require('./routes/pageSpeedTutor')); // the Page speed guide chat (sees no address, score or report)
 app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 // aiLimiter applies to the whole router — clients.js now has an AI-cost

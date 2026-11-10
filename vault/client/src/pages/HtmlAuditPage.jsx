@@ -7,7 +7,16 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
+import EmptyState from '../components/EmptyState';
 import Dialog from '../components/Dialog';
+import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import PageSpeedTutorChat from './pageSpeed/PageSpeedTutorChat';
+import { HOW_IT_WORKS, GUIDE_TOOLS } from './pageSpeed/pageSpeedTools.mjs';
+import {
+  buildActions, actionsText, PRIORITY_GROUPS, CATEGORY_FILTERS,
+  METRIC_HELP, FIELD_HELP, FIELD_CATEGORY_HELP, SECTION_HELP,
+} from './pageSpeed/pageSpeedActions.mjs';
 
 const FIELD = {
   background: 'var(--color-bg)',
@@ -15,41 +24,370 @@ const FIELD = {
   color: 'var(--color-text)',
 };
 
-const TOOL_HELP = {
-  title: 'Page speed',
-  description: 'Runs a real Google PageSpeed Insights audit (mobile + desktop) against any public URL and turns the results into a ranked, developer-ready work order — not just raw scores.',
-  features: [
-    'Real Lighthouse data via Google\'s PageSpeed Insights API, run for mobile and desktop in parallel',
-    'Work order: P0–P2 tickets covering all four scored categories — Performance, Accessibility, SEO, and Best practices',
-    'Full lab metrics, opportunities with exact files/savings, failed checks with selectors and contrast ratios, and field data (CrUX) where available',
-    'Copyable developer brief — paste the whole report, or just the current view, straight to a developer',
-    'Every run is saved, so you can filter by website and see the score trend over time',
-  ],
-};
+// "Done" ticks used to live only in this browser (before they were saved on the run). Read once so old ticks move to the server.
+function legacyDoneKey(auditId, view) {
+  return `vault:pagespeed-done:${auditId}:${view}`;
+}
+function readLegacyDone(auditId, view) {
+  try {
+    const raw = localStorage.getItem(legacyDoneKey(auditId, view));
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((k) => typeof k === 'string') : [];
+  } catch { return []; }
+}
+function clearLegacyDone(auditId, view) {
+  try { localStorage.removeItem(legacyDoneKey(auditId, view)); } catch { /* ignore */ }
+}
 
-function HelpModal({ onClose }) {
+function fmtShortDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// A note on one action ("what was done"), saved when the box loses focus.
+function ActionNote({ value, onSave, done }) {
+  const [draft, setDraft] = useState(value || '');
+  useEffect(() => { setDraft(value || ''); }, [value]);
   return (
-    <Dialog raw onClose={onClose}
-        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
-        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
-        panelClassName="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
-        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{TOOL_HELP.title}</h3>
-          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+    <Tooltip text="Optional: say what was done (or what is in progress). Saved with the run and printed in the PDF report.">
+      <div>
+        <VoiceInput
+          value={draft}
+          onChange={setDraft}
+          onBlur={() => { if ((draft || '').trim() !== (value || '').trim()) onSave(draft); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          placeholder={done ? 'What was done? (optional)' : 'Add a note (optional)'}
+          label="Note on this action"
+          className="!py-1.5 !text-xs"
+        />
+      </div>
+    </Tooltip>
+  );
+}
+
+const PDF_DEFAULTS = { devices: ['mobile', 'desktop'], which: 'all', includeScores: true, includeDeveloper: false, title: '', preparedFor: '', preparedBy: '', summary: '' };
+
+function PdfReportDialog({ audit, onClose, onBuild }) {
+  const [opts, setOpts] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('vault:pagespeed-pdf-opts') || '{}');
+      return { ...PDF_DEFAULTS, preparedBy: saved.preparedBy || '', includeDeveloper: !!saved.includeDeveloper, which: saved.which || 'all' };
+    } catch { return { ...PDF_DEFAULTS }; }
+  });
+  const set = (k, v) => setOpts((o) => ({ ...o, [k]: v }));
+  const has = { mobile: !!audit?.report?.mobile, desktop: !!audit?.report?.desktop };
+  const devices = opts.devices.filter((d) => has[d]);
+  const toggleDevice = (d) => set('devices', opts.devices.includes(d) ? opts.devices.filter((x) => x !== d) : [...opts.devices, d]);
+  const radio = (name, value, label, tip) => (
+    <Tooltip key={value} text={tip}>
+      <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+        <input type="radio" name={name} checked={opts.which === value} onChange={() => set('which', value)} />
+        {label}
+      </label>
+    </Tooltip>
+  );
+  const build = () => {
+    try { localStorage.setItem('vault:pagespeed-pdf-opts', JSON.stringify({ preparedBy: opts.preparedBy, includeDeveloper: opts.includeDeveloper, which: opts.which })); } catch { /* ignore */ }
+    onBuild({ ...opts, devices });
+  };
+  return (
+    <Dialog
+      title="PDF report"
+      onClose={onClose}
+      size="lg"
+      footer={(
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onClose} className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+          <Tooltip text={devices.length ? 'Build the PDF and download it.' : 'Pick at least one device.'}>
+            <button
+              type="button"
+              disabled={!devices.length}
+              onClick={build}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}
+            >
+              Download PDF
+            </button>
+          </Tooltip>
         </div>
-        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP.description}</p>
-        <ul className="space-y-1.5">
-          {TOOL_HELP.features.map((f) => (
-            <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
-              <span style={{ color: 'var(--color-primary)', flexShrink: 0 }}>•</span>
-              {f}
-            </li>
+      )}
+    >
+      <div className="space-y-4" data-guide="pdf-report">
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+          A formatted report of this run to send to a client, a manager or a developer: scores, timings and the plain-English action list, with your ticks, done dates and notes.
+        </p>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Devices</p>
+          <div className="flex gap-4">
+            {['mobile', 'desktop'].map((d) => (
+              <Tooltip key={d} text={has[d] ? `Include the ${d} test.` : `This run has no ${d} result.`}>
+                <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: has[d] ? 'var(--color-text)' : 'var(--color-muted)' }}>
+                  <input type="checkbox" disabled={!has[d]} checked={has[d] && opts.devices.includes(d)} onChange={() => toggleDevice(d)} />
+                  {d === 'mobile' ? 'Mobile' : 'Desktop'}
+                </label>
+              </Tooltip>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Which actions</p>
+          <div className="flex flex-wrap gap-4">
+            {radio('which', 'all', 'All (ticked and not)', 'Every action, with a ticked box for the ones marked done. Good for a progress report.')}
+            {radio('which', 'outstanding', 'Still to do', 'Only actions not yet ticked. Good as a to-do list for a developer.')}
+            {radio('which', 'done', 'Done only', 'Only ticked actions, with their dates and notes. Good for showing a client what has been fixed.')}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <Tooltip text="Add the four scores, the lab timings and real-visitor data for each device, with a line on what each means.">
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="checkbox" checked={opts.includeScores} onChange={(e) => set('includeScores', e.target.checked)} />
+              Scores and timings
+            </label>
+          </Tooltip>
+          <Tooltip text="Add the technical version under each action (Google's wording, exact fix, files and page elements). Leave off for a client; turn on for a developer.">
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="checkbox" checked={opts.includeDeveloper} onChange={(e) => set('includeDeveloper', e.target.checked)} />
+              Developer detail
+            </label>
+          </Tooltip>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block space-y-1 sm:col-span-2">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Title (optional)</span>
+            <VoiceInput value={opts.title} onChange={(v) => set('title', v)} placeholder={`Page speed report: ${audit?.name || ''}`} label="Report title" />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Prepared for (optional)</span>
+            <VoiceInput value={opts.preparedFor} onChange={(v) => set('preparedFor', v)} placeholder="Client or business name" label="Prepared for" />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Prepared by (optional)</span>
+            <VoiceInput value={opts.preparedBy} onChange={(v) => set('preparedBy', v)} placeholder="Your name or business" label="Prepared by" />
+          </label>
+          <label className="block space-y-1 sm:col-span-2">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Summary at the top (optional)</span>
+            <VoiceInput type="textarea" append rows={3} value={opts.summary} onChange={(v) => set('summary', v)} placeholder="A few lines for the reader, e.g. what has been fixed since the last report." label="Report summary" />
+          </label>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function SectionTitle({ children, tip, small = false }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <p className={small ? 'text-xs font-semibold' : 'text-base font-semibold'} style={{ color: 'var(--color-text)' }}>{children}</p>
+      {tip ? (
+        <Tooltip text={tip}>
+          <span className="inline-flex cursor-help" style={{ color: 'var(--color-muted)' }} tabIndex={0} aria-label={`About ${children}`}>
+            <InfoGlyph />
+          </span>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
+}
+
+function InfoGlyph() {
+  const getIcon = useIcon();
+  return getIcon('info', { size: 13 });
+}
+
+function Badge({ children, tip, strong = false }) {
+  const el = (
+    <span
+      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap"
+      style={strong
+        ? { background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }
+        : { background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+    >
+      {children}
+    </span>
+  );
+  return tip ? <Tooltip text={tip}>{el}</Tooltip> : el;
+}
+
+function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote, onCopy, onPdf }) {
+  const done = useMemo(() => new Set(Object.entries(doneMap || {}).filter(([, v]) => v?.done).map(([k]) => k)), [doneMap]);
+  const getIcon = useIcon();
+  const [filter, setFilter] = useState('all');
+  const [hideDone, setHideDone] = useState(false);
+  const [openDetail, setOpenDetail] = useState(() => new Set());
+
+  if (!actions.length) {
+    return (
+      <EmptyState
+        icon="check"
+        title={`Nothing to fix on ${strategy}`}
+        body="Google found no failed checks or savings worth listing for this device. Run the test again after big site changes."
+      />
+    );
+  }
+
+  const counts = {};
+  for (const a of actions) counts[a.category] = (counts[a.category] || 0) + 1;
+  const doneCount = actions.filter((a) => done.has(a.key)).length;
+  const pct = Math.round((doneCount / actions.length) * 100);
+  const shown = actions.filter((a) => (filter === 'all' || a.category === filter) && (!hideDone || !done.has(a.key)));
+  const toggleDetail = (key) => setOpenDetail((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <SectionTitle tip="The findings from this test as a plain-English to-do list, most important first. The technical version for a developer is under each one.">
+              {actions.length} action{actions.length === 1 ? '' : 's'} for {strategy}
+            </SectionTitle>
+            <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              {actions.filter((a) => a.priority === 'P0').length} to fix first. Each says what is wrong, why it matters, what to do and who usually does it.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Tooltip text="Copy this to-do list as plain text (with your ticks) to paste into an email or a task.">
+              <button
+                type="button"
+                onClick={() => onCopy(actionsText(actions, { strategy, done }))}
+                className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity duration-200 hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Copy action list
+              </button>
+            </Tooltip>
+            <Tooltip text="Make a formatted PDF of this run (scores and actions with your ticks, dates and notes) to send to a client or developer.">
+              <button
+                type="button"
+                onClick={onPdf}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+                style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}
+              >
+                {getIcon('download', { size: 14 })}
+                PDF report
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+        <Tooltip text="How many of these actions are ticked as done. Ticks are saved with this run, so they show on any computer and in the PDF report. Run a new test to confirm a fix worked.">
+          <div className="space-y-1">
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-bg)' }} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Actions done">
+              <div className="h-full rounded-full transition-all duration-200" style={{ width: `${pct}%`, background: 'var(--color-primary)' }} />
+            </div>
+            <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{doneCount} of {actions.length} done</p>
+          </div>
+        </Tooltip>
+        <div className="flex flex-wrap items-center gap-1.5" data-guide="action-filter">
+          {CATEGORY_FILTERS.filter((c) => c.id === 'all' || counts[c.id]).map((c) => (
+            <Tooltip key={c.id} text={c.id === 'all' ? 'Show every action.' : `Show only the actions that improve the ${c.label} score.`}>
+              <button
+                type="button"
+                onClick={() => setFilter(c.id)}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium transition-opacity duration-200 hover:opacity-70"
+                style={filter === c.id
+                  ? { background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }
+                  : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {c.label} {c.id === 'all' ? actions.length : counts[c.id]}
+              </button>
+            </Tooltip>
           ))}
-        </ul>
-      </Dialog>
+          <Tooltip text="Hide the actions you have ticked as done.">
+            <label className="ml-auto flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+              <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />
+              Hide done
+            </label>
+          </Tooltip>
+        </div>
+      </div>
+
+      {shown.length === 0 && (
+        <EmptyState icon="check" title="Nothing left in this view" body="Every action here is done or filtered out. Change the filter or untick Hide done." />
+      )}
+
+      {PRIORITY_GROUPS.map((g) => {
+        const rows = shown.filter((a) => a.priority === g.id);
+        if (!rows.length) return null;
+        return (
+          <div key={g.id} className="space-y-2">
+            <SectionTitle tip={g.tip}>{g.label} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>({rows.length})</span></SectionTitle>
+            <ul className="grid gap-3 xl:grid-cols-2">
+              {rows.map((a, i) => {
+                const isDone = done.has(a.key);
+                const detailOpen = openDetail.has(a.key);
+                const first = g.id === shown[0]?.priority && i === 0;
+                return (
+                  <li
+                    key={a.key}
+                    className="rounded-xl border p-4 space-y-2 transition-opacity duration-200"
+                    style={{ borderColor: 'var(--color-border)', background: isDone ? 'var(--color-bg)' : 'var(--color-surface)' }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Tooltip text={isDone ? 'Untick: mark this as not done yet.' : 'Tick when this has been fixed. Saved with this run (with today\'s date) and shown in the PDF report; run a new test to confirm it worked.'}>
+                        <input
+                          type="checkbox"
+                          checked={isDone}
+                          onChange={() => onToggle(a.key, !isDone)}
+                          aria-label={`Mark "${a.title}" as done`}
+                          className="mt-1 shrink-0"
+                          data-guide={first ? 'action-done' : undefined}
+                        />
+                      </Tooltip>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isDone ? <Badge strong tip="Ticked as done on this date.">Done {fmtShortDate(doneMap?.[a.key]?.doneAt)}</Badge> : null}
+                          <Badge tip={`This affects the ${a.categoryLabel} score.`}>{a.categoryLabel}</Badge>
+                          {a.who ? <Badge tip="Who usually makes this change. A content editor can do it in the website editor; hosting means the web host or whoever set up the server.">{a.who}</Badge> : null}
+                          {a.effort ? <Badge tip="Rough size of the job for someone who knows the site. A guide, not a quote.">{a.effort}</Badge> : null}
+                          {a.alsoOther === true ? <Badge tip={`Google found this on the ${otherLabel} test too, so one fix helps both.`}>Also on {otherLabel}</Badge> : null}
+                          {a.alsoOther === false ? <Badge tip={`Only found on the ${strategy} test.`}>{strategy} only</Badge> : null}
+                        </div>
+                        <p className="text-sm font-semibold" style={{ color: isDone ? 'var(--color-muted)' : 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none' }}>{a.title}</p>
+                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}><strong style={{ color: 'var(--color-text)' }}>Why it matters: </strong>{a.why}</p>
+                        <p className="text-xs leading-relaxed rounded-lg p-2.5" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><strong>What to do: </strong>{a.how}</p>
+                        <div data-guide={first ? 'action-note' : undefined} style={{ opacity: 1 }}>
+                          <ActionNote value={doneMap?.[a.key]?.note || ''} done={isDone} onSave={(note) => onNote(a.key, note)} />
+                        </div>
+                        <Tooltip text="Show the technical version: Google's own wording, the exact fix and the files or page elements involved.">
+                          <button
+                            type="button"
+                            onClick={() => toggleDetail(a.key)}
+                            aria-expanded={detailOpen}
+                            className="inline-flex items-center gap-1 text-xs transition-opacity duration-200 hover:opacity-70"
+                            style={{ color: 'var(--color-primary)' }}
+                            data-guide={first ? 'developer-detail' : undefined}
+                          >
+                            {getIcon(detailOpen ? 'chevron-down' : 'chevron-right', { size: 12 })}
+                            For your developer
+                          </button>
+                        </Tooltip>
+                        {detailOpen && (
+                          <div className="space-y-1 pl-4 border-l" style={{ borderColor: 'var(--color-border)' }}>
+                            <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{a.technicalTitle}</p>
+                            {a.technicalAction ? <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{a.technicalAction}</p> : null}
+                            {a.evidence.length > 0 && (
+                              <ul className="pt-1 space-y-0.5">
+                                {a.evidence.map((ev) => (
+                                  <li key={ev} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>{ev}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -187,11 +525,12 @@ function itemText(it) {
   return bits.join(' · ');
 }
 
-function FindingList({ title, items }) {
+function FindingList({ title, items, tip }) {
   if (!items?.length) return null;
   return (
     <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-      <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+      <SectionTitle>{title}</SectionTitle>
+      {tip ? <p className="text-xs -mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{tip}</p> : null}
       <ul className="space-y-3">
         {items.map((o) => (
           <li
@@ -280,7 +619,9 @@ export default function HtmlAuditPage() {
   const [audit, setAudit] = useState(null);
   const [search, setSearch] = useState('');
   const [hostFilter, setHostFilter] = useState('');
-  const [showHelp, setShowHelp] = useState(false);
+  const info = useToolInfoModal('vault_pagespeed_info_seen');
+  const [tab, setTab] = useState('report');
+  const [showPdf, setShowPdf] = useState(false);
   const [sort, setSort] = useState(() => {
     try {
       const saved = localStorage.getItem('vault:htmlListSort');
@@ -411,24 +752,110 @@ export default function HtmlAuditPage() {
     }
   };
 
-  const copyBrief = async (text) => {
+  const copyBrief = async (text, what = 'Developer brief') => {
     try {
       await navigator.clipboard.writeText(text);
-      addToast('Developer brief copied', 'success');
+      addToast(`${what} copied`, 'success');
     } catch {
       addToast('Could not copy', 'error');
     }
   };
 
-  if (!canUse) return <Navigate to="/" replace />;
+  // Ticks and notes are saved on the run (audit.actionsDone[view]). The screen updates at once and goes back if the save fails.
+  const saveAction = useCallback(async (auditId, device, body) => {
+    const res = await api.put(`/api/html/audits/${auditId}/actions/${device}`, body);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save');
+    return data.actionsDone;
+  }, []);
+
+  const updateAction = async (key, change) => {
+    if (!audit?.id) return;
+    const auditId = audit.id;
+    const device = view;
+    const before = audit.actionsDone || {};
+    const prev = before[device]?.[key] || {};
+    const optimistic = {
+      ...prev,
+      ...('done' in change ? { done: change.done, doneAt: change.done ? (prev.doneAt || new Date().toISOString()) : null } : {}),
+      ...('note' in change ? { note: change.note } : {}),
+    };
+    setAudit((a) => (a && a.id === auditId ? { ...a, actionsDone: { ...before, [device]: { ...(before[device] || {}), [key]: optimistic } } } : a));
+    try {
+      const saved = await saveAction(auditId, device, { key, ...change });
+      setAudit((a) => (a && a.id === auditId ? { ...a, actionsDone: saved } : a));
+      if ('note' in change) addToast('Note saved', 'success');
+    } catch (err) {
+      setAudit((a) => (a && a.id === auditId ? { ...a, actionsDone: before } : a));
+      addToast(err.message, 'error');
+    }
+  };
+
+  // One-off: ticks made before they were saved on the run lived in this browser; move them up, then forget the local copy.
+  useEffect(() => {
+    if (!audit?.id) return;
+    const auditId = audit.id;
+    ['mobile', 'desktop'].forEach((device) => {
+      const local = readLegacyDone(auditId, device);
+      if (!local.length) return;
+      const onServer = audit.actionsDone?.[device] || {};
+      const todo = local.filter((k) => !onServer[k]?.done);
+      (async () => {
+        let latest = null;
+        for (const key of todo) {
+          try { latest = await saveAction(auditId, device, { key, done: true }); } catch { return; }
+        }
+        clearLegacyDone(auditId, device);
+        if (latest) setAudit((a) => (a && a.id === auditId ? { ...a, actionsDone: latest } : a));
+      })();
+    });
+  }, [audit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const buildPdf = async (options) => {
+    setShowPdf(false);
+    startProcessing('Building the PDF report…', 'Laying out the scores and actions.');
+    try {
+      const { downloadPageSpeedPdf } = await import('./pageSpeed/pageSpeedReportPdf');
+      await downloadPageSpeedPdf(audit, options);
+      addToast('PDF report downloaded', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not build the PDF', 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
 
   const pair = viewsOf(audit?.report);
   const active = view === 'desktop' ? (pair.desktop || pair.mobile) : (pair.mobile || pair.desktop);
+  const activeKey = active === pair.desktop ? 'desktop' : 'mobile';
+  const otherView = activeKey === 'desktop' ? pair.mobile : pair.desktop;
+  const actions = useMemo(() => (active ? buildActions(active, otherView) : []), [active, otherView]);
+
+  // The guide's Open buttons: go to the right screen / tab, then scroll to the part marked data-guide="<id>".
+  const openToolById = (guideId) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === guideId);
+    if (!target) return;
+    if (target.tool === 'new-run' && guideId === 'new-run' && id) navigate('/html');
+    if ((target.tool === 'report' || target.tool === 'actions') && !id) {
+      addToast('Open a saved run from the list on the left first (or run a new test).', 'info');
+      return;
+    }
+    if (target.tool === 'report' || target.tool === 'actions') setTab(target.tool);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-guide="${guideId}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  };
+
+  if (!canUse) return <Navigate to="/" replace />;
+
   const cats = active?.categories || {};
   const score = active ? Number(active.score) : (audit ? Number(audit.score) : null);
   const runError = audit?.report?.errors?.[view];
+  const currentTool = !id ? 'new-run' : tab;
 
   return (
+    <VoiceInputProvider lang="en-AU">
     <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
       <aside
         className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
@@ -439,14 +866,15 @@ export default function HtmlAuditPage() {
             {getIcon('gauge', { size: 16 })}
           </div>
           <h1 className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Page speed</h1>
-          <Tooltip text="What this tool does and its full feature list.">
+          <Tooltip text="How Page speed works: the scores, Mobile vs Desktop, the Report and Actions tabs, and what it cannot do.">
             <button
               type="button"
-              onClick={() => setShowHelp(true)}
-              className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity flex-shrink-0"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              onClick={info.open}
+              aria-label="How Page speed works"
+              className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0"
+              style={{ color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0 }}
             >
-              ?
+              {getIcon('info', { size: 16 })}
             </button>
           </Tooltip>
         </div>
@@ -511,7 +939,7 @@ export default function HtmlAuditPage() {
           </button>
         </Tooltip>
 
-        <ul className="space-y-0.5">
+        <ul className="space-y-0.5" data-guide="saved-runs">
           {filtered.length === 0 && (
             <li className="px-2 py-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>No runs yet</li>
           )}
@@ -564,17 +992,17 @@ export default function HtmlAuditPage() {
         </ul>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-4xl">
+      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-6xl">
         {id && !audit && (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading audit…</p>
         )}
 
         {!id && (
-          <section className="space-y-4">
+          <section className="space-y-4" data-guide="new-run">
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Page speed</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Runs Google Lighthouse on a public URL for <span className="font-medium" style={{ color: 'var(--color-text)' }}>mobile and desktop</span>, then stores a developer brief (opportunities, files, failed checks, docs links). This is lab performance, not the SEO crawl.
+                Tests a public web page with Google PageSpeed Insights on <span className="font-medium" style={{ color: 'var(--color-text)' }}>mobile and desktop</span>, then saves a <span className="font-medium" style={{ color: 'var(--color-text)' }}>Report</span> (scores, timings, every finding) and an <span className="font-medium" style={{ color: 'var(--color-text)' }}>Actions</span> list (what to fix, in plain English, most important first). One page at a time; for a whole-site crawl use the SEO tool. Not sure where to start? Press the round guide button at the bottom right.
               </p>
             </div>
             {hostFilter && trendPoints.length >= 2 && (
@@ -672,9 +1100,11 @@ export default function HtmlAuditPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2" data-guide="mobile-desktop">
               {['mobile', 'desktop'].map((s) => (
-                <Tooltip key={s} text={`Switch to the ${s} report for this run.`}>
+                <Tooltip key={s} text={s === 'mobile'
+                  ? 'Show the phone test: a mid-range phone on a slower mobile connection. Usually the lower score, and the one Google mostly ranks on. Both the Report and Actions tabs follow this.'
+                  : 'Show the desktop computer test: a fast connection and big screen. Both the Report and Actions tabs follow this.'}>
                   <button
                     type="button"
                     onClick={() => setView(s)}
@@ -689,8 +1119,9 @@ export default function HtmlAuditPage() {
                 </Tooltip>
               ))}
               {active?.developerBrief ? (
-                <Tooltip text="Copy the work order, metrics, and findings for the currently selected view (mobile or desktop) as plain text.">
+                <Tooltip text="Copy the technical report (developer work order, metrics and findings) for the device chosen (mobile or desktop) as plain text, to paste to a developer.">
                   <button
+                    data-guide="copy"
                     type="button"
                     onClick={() => copyBrief(active.developerBrief)}
                     className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
@@ -712,6 +1143,19 @@ export default function HtmlAuditPage() {
                   </button>
                 </Tooltip>
               ) : null}
+              {active ? (
+                <Tooltip text="Make a formatted PDF report of this run: scores, timings and the plain-English actions with your ticks, done dates and notes. Choose devices and what to include.">
+                  <button
+                    type="button"
+                    onClick={() => setShowPdf(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm border transition-opacity duration-200 hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {getIcon('download', { size: 14 })}
+                    PDF report
+                  </button>
+                </Tooltip>
+              ) : null}
             </div>
 
             {runError && !active ? (
@@ -719,14 +1163,54 @@ export default function HtmlAuditPage() {
             ) : null}
 
             {active && (
+              <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }} role="tablist" aria-label="Report or actions">
+                {[
+                  { id: 'report', label: 'Report', tip: `The scores, timings and every finding for the ${activeKey} test.` },
+                  { id: 'actions', label: `Actions${actions.length ? ` (${actions.length})` : ''}`, tip: `What to fix on ${activeKey}, in plain English, most important first, with who usually does it. Tick each off as it is done.` },
+                ].map((t) => (
+                  <Tooltip key={t.id} text={t.tip}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === t.id}
+                      onClick={() => setTab(t.id)}
+                      data-guide={t.id}
+                      className="px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-opacity duration-200 hover:opacity-70"
+                      style={{
+                        borderColor: tab === t.id ? 'var(--color-primary)' : 'transparent',
+                        color: tab === t.id ? 'var(--color-text)' : 'var(--color-muted)',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
+
+            {active && tab === 'actions' && (
+              <ActionsPanel
+                key={activeKey}
+                actions={actions}
+                strategy={activeKey}
+                otherLabel={activeKey === 'mobile' ? 'desktop' : 'mobile'}
+                doneMap={audit.actionsDone?.[activeKey] || {}}
+                onToggle={(key, isDone) => updateAction(key, { done: isDone })}
+                onNote={(key, note) => updateAction(key, { note })}
+                onCopy={(text) => copyBrief(text, 'Action list')}
+                onPdf={() => setShowPdf(true)}
+              />
+            )}
+
+            {active && tab === 'report' && (
               <>
-                {trendPoints.length >= 2 && <ScoreTrendChart points={trendPoints} />}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {trendPoints.length >= 2 && <div data-guide="trend"><ScoreTrendChart points={trendPoints} /></div>}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-guide="scores">
                   {[
-                    ['Performance', cats.performance, 'Loading speed and responsiveness — every low score here also becomes a work-order ticket below.'],
-                    ['Accessibility', cats.accessibility, 'How usable the page is with a screen reader, keyboard, or low vision — now covered in the work order, not just this number.'],
-                    ['Best practices', cats.bestPractices, 'General web-platform hygiene: HTTPS, no known-vulnerable libraries, no console errors, and more.'],
-                    ['Lighthouse SEO', cats.seo, 'Lighthouse\'s lab-based SEO checks (meta tags, crawlability basics) — for a full multi-page SEO crawl use the separate SEO tool.'],
+                    ['Performance', cats.performance, 'How fast the page appears and responds. Built mostly from the main-picture time, how much it jumps and how long it is too busy to respond. 90+ good, 50–89 needs work, under 50 poor. What to fix is on the Actions tab.'],
+                    ['Accessibility', cats.accessibility, 'How usable the page is for people using a screen reader, only a keyboard, or with poor eyesight (contrast, labels, alt text). 90+ good, 50–89 needs work, under 50 poor.'],
+                    ['Best practices', cats.bestPractices, 'General safety and quality: secure https, no browser errors, no outdated features, pictures shown at the right shape. 90+ good, 50–89 needs work, under 50 poor.'],
+                    ['Lighthouse SEO', cats.seo, 'Search engine basics on this one page: title, description, crawlable links, not blocked from Google. 90+ good. For a whole-site crawl use the separate SEO tool.'],
                   ].map(([label, n, tip]) => (
                     <Tooltip key={label} text={tip}>
                       <div
@@ -749,86 +1233,101 @@ export default function HtmlAuditPage() {
                   </p>
                 ) : null}
 
-                {(active.workOrder || []).length > 0 && (
-                  <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                    <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Work order</p>
-                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                      Ranked tickets for a developer, covering all four scored categories — not just Performance. Copy this report to paste the same list.
+                {actions.length > 0 && (
+                  <div className="rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                      <strong>{actions.length} thing{actions.length === 1 ? '' : 's'} to fix on {activeKey}</strong>
+                      <span style={{ color: 'var(--color-muted)' }}>, {actions.filter((a) => a.priority === 'P0').length} of them first. The Actions tab lists them in plain English.</span>
                     </p>
-                    <ul className="space-y-3">
-                      {active.workOrder.map((t) => (
-                        <li
-                          key={`${t.priority}-${t.title}`}
-                          className="rounded-xl border p-4 space-y-1"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Tooltip text="P0 = fix first (outright failure or biggest impact). P1 = important. P2 = worth doing.">
-                              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>{t.priority}</span>
+                    <Tooltip text="Open the plain-English to-do list for this device.">
+                      <button
+                        type="button"
+                        onClick={() => setTab('actions')}
+                        className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+                        style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}
+                      >
+                        See actions
+                      </button>
+                    </Tooltip>
+                  </div>
+                )}
+
+                <div className="grid gap-4 xl:grid-cols-2 items-start">
+                  {(active.metrics || []).length > 0 && (
+                    <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-guide="lab-metrics">
+                      <SectionTitle small tip={SECTION_HELP.labMetrics}>Lab metrics</SectionTitle>
+                      <ul className="space-y-1">
+                        {active.metrics.map((m) => (
+                          <li key={m.id}>
+                            <Tooltip text={METRIC_HELP[m.id] || m.title}>
+                              <div className="flex justify-between gap-3 text-xs cursor-help">
+                                <span style={{ color: 'var(--color-text)' }}>{m.title}</span>
+                                <span className="tabular-nums shrink-0" style={{ color: scoreTint(m.score == null ? null : Math.round(m.score * 100)) }}>{m.displayValue || '—'}</span>
+                              </div>
                             </Tooltip>
-                            {t.categoryLabel && (
-                              <span
-                                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider"
-                                style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
-                              >
-                                {t.categoryLabel}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.title}</p>
-                          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{t.action}</p>
-                          {(t.evidence || []).length > 0 && (
-                            <ul className="pt-1 space-y-0.5">
-                              {t.evidence.map((ev) => (
-                                <li key={ev} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>{ev}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-                {(active.fieldData || []).length > 0 && (
-                  <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Field data (Chrome UX Report)</p>
-                    <ul className="space-y-1">
-                      {active.fieldData.map((m) => (
-                        <li key={m.id} className="flex justify-between gap-3 text-xs">
-                          <span style={{ color: 'var(--color-text)' }}>{m.id.replace(/_/g, ' ')}</span>
-                          <span style={{ color: 'var(--color-muted)' }}>{m.category || '—'}{m.percentile != null ? ` · ${m.percentile}` : ''}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-guide="field-data">
+                    <SectionTitle small tip={SECTION_HELP.fieldData}>Field data (real visitors)</SectionTitle>
+                    {(active.fieldData || []).length > 0 ? (
+                      <ul className="space-y-1">
+                        {active.fieldData.map((m) => {
+                          const [label, help] = FIELD_HELP[m.id] || [m.id.replace(/_/g, ' ').toLowerCase(), ''];
+                          return (
+                            <li key={m.id}>
+                              <Tooltip text={`${help ? `${help} ` : ''}${FIELD_CATEGORY_HELP}`}>
+                                <div className="flex justify-between gap-3 text-xs cursor-help">
+                                  <span style={{ color: 'var(--color-text)' }}>{label}</span>
+                                  <span style={{ color: m.category === 'FAST' ? '#166534' : m.category === 'SLOW' ? '#ef4444' : m.category === 'AVERAGE' ? '#b45309' : 'var(--color-muted)' }}>
+                                    {m.category || '—'}{m.percentile != null ? ` · ${m.percentile}` : ''}
+                                  </span>
+                                </div>
+                              </Tooltip>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                        Google has no real-visitor data for this page yet. It needs enough Chrome visitors over the last 28 days; small or new sites often have none. The lab metrics still apply.
+                      </p>
+                    )}
                   </div>
-                )}
+                </div>
 
-                {(active.metrics || []).length > 0 && (
-                  <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Lab metrics</p>
-                    <ul className="space-y-1">
-                      {active.metrics.map((m) => (
-                        <li key={m.id} className="flex justify-between gap-3 text-xs">
-                          <span style={{ color: 'var(--color-text)' }}>{m.title}</span>
-                          <span className="tabular-nums shrink-0" style={{ color: scoreTint(m.score == null ? null : Math.round(m.score * 100)) }}>{m.displayValue || '—'}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <FindingList title="Opportunities" items={active.opportunities} />
-                <FindingList title="Diagnostics" items={active.diagnostics} />
-                <FindingList title="Failed checks" items={active.failedAudits} />
-                <FindingList title="Warnings" items={active.warnings} />
+                <div data-guide="findings" className="space-y-4">
+                  <FindingList title="Opportunities" items={active.opportunities} tip={SECTION_HELP.opportunities} />
+                  <FindingList title="Diagnostics" items={active.diagnostics} tip={SECTION_HELP.diagnostics} />
+                  <FindingList title="Failed checks" items={active.failedAudits} tip={SECTION_HELP.failedAudits} />
+                  <FindingList title="Warnings" items={active.warnings} tip={SECTION_HELP.warnings} />
+                </div>
               </>
             )}
           </section>
         )}
       </main>
 
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {info.show && (
+        <ToolInfoModal title="How Page speed works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Test how fast and healthy a public web page is, on a phone and on a computer, and get a plain-English list of what to fix. Hover anything for a short explanation. Not sure where to look? Press the round guide button at the bottom right and say what you want to do.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
+
+      {showPdf && audit && <PdfReportDialog audit={audit} onClose={() => setShowPdf(false)} onBuild={buildPdf} />}
+
+      <PageSpeedTutorChat currentTool={currentTool} onOpenTool={openToolById} />
     </div>
+    </VoiceInputProvider>
   );
 }

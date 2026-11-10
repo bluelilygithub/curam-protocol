@@ -6,6 +6,7 @@ const {
   getAudit,
   createAudit,
   deleteAudit,
+  setActionDone,
 } = require('../services/htmlAuditService');
 
 const router = express.Router();
@@ -29,6 +30,23 @@ router.post('/audits', async (req, res) => {
   } catch (err) {
     console.error('[html/audits POST]', err.message);
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Actions tab: tick / untick one action for one device, with an optional note of what was done. Body { key, done?, note? }.
+router.put('/audits/:id/actions/:view', async (req, res) => {
+  try {
+    const next = await setActionDone(req.user.id, Number(req.params.id), {
+      view: req.params.view,
+      key: req.body?.key,
+      done: req.body?.done,
+      note: req.body?.note,
+    });
+    if (!next) return res.status(404).json({ error: 'Not found' });
+    return res.json({ actionsDone: next });
+  } catch (err) {
+    console.error('[html/audits/:id/actions PUT]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Could not save' });
   }
 });
 
