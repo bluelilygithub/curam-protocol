@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { Document, Page, View, Text, StyleSheet, pdf, Link, Svg, Polyline } from '@react-pdf/renderer';
-import { buildActions, PRIORITY_GROUPS, METRIC_HELP, FIELD_HELP } from './pageSpeedActions.mjs';
+import { buildActions, PRIORITY_GROUPS, METRIC_HELP, FIELD_HELP, impactText, combinedText } from './pageSpeedActions.mjs';
 
 const PRIMARY = '#9B5B46';
 const TEXT = '#1F1A17';
@@ -52,6 +52,8 @@ const s = StyleSheet.create({
   cardBody: { flex: 1 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 3 },
   tag: { fontSize: 6.5, color: MUTED, borderWidth: 0.75, borderColor: BORDER, borderStyle: 'solid', borderRadius: 6, paddingVertical: 1.5, paddingHorizontal: 5, marginRight: 4, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
+  tagImpact: { fontSize: 6.5, color: GOOD, backgroundColor: '#DCFCE7', borderWidth: 0.75, borderColor: '#86EFAC', borderStyle: 'solid', borderRadius: 6, paddingVertical: 1.5, paddingHorizontal: 5, marginRight: 4, marginBottom: 2, fontFamily: 'Helvetica-Bold' },
+  impactBox: { fontSize: 8.5, backgroundColor: '#EEF7F0', paddingVertical: 5, paddingHorizontal: 8, borderRadius: 4, marginBottom: 6, lineHeight: 1.4 },
   tagDone: { fontSize: 6.5, color: '#FFFFFF', backgroundColor: GOOD, borderRadius: 6, paddingVertical: 1.5, paddingHorizontal: 5, marginRight: 4, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
   actionTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold', marginBottom: 3 },
   para: { fontSize: 8.3, lineHeight: 1.4, marginBottom: 2 },
@@ -170,6 +172,7 @@ function ActionCard({ a, state, includeDeveloper }) {
       <View style={s.cardBody}>
         <View style={s.tags}>
           {done ? <Text style={s.tagDone}>Done{state.doneAt ? ` ${t(fmtDate(state.doneAt))}` : ''}</Text> : null}
+          {a.impact ? <Text style={s.tagImpact}>{t(impactText(a.impact))}</Text> : null}
           <Text style={s.tag}>{t(a.categoryLabel)}</Text>
           {a.who ? <Text style={s.tag}>{t(a.who)}</Text> : null}
           {a.effort ? <Text style={s.tag}>{t(a.effort)}</Text> : null}
@@ -227,6 +230,15 @@ function DeviceSection({ device, view, other, doneMap, options, first }) {
       <View wrap={false} minPresenceAhead={160}>
         <Text style={s.h3}>Actions: {doneCount} of {all.length} done</Text>
         <View style={s.progressOuter}><View style={[s.progressInner, { width: `${pct}%` }]} /></View>
+        {(() => {
+          const line = combinedText(view, all.filter((a) => !isDone(a)));
+          return line ? (
+            <Text style={s.impactBox}>
+              <Text style={s.bold}>If the actions still to do are fixed, scores could become: </Text>{t(line)}.
+              <Text style={{ color: MUTED }}> Accessibility, Best practices and SEO points are Google's own arithmetic; Performance is an estimate from Google's predicted time savings.</Text>
+            </Text>
+          ) : null;
+        })()}
       </View>
       {options.which !== 'all' ? (
         <Text style={s.hint}>Showing {options.which === 'done' ? 'completed' : 'outstanding'} actions only ({shown.length}).</Text>

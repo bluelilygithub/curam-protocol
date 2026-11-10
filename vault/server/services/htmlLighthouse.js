@@ -78,6 +78,35 @@ function firstDocLink(s) {
   return m ? m[1] : '';
 }
 
+// The audit's weight in its category score (Lighthouse sets n/a and manual audits to 0 in the result). Used by the Actions tab to
+// work out how many points fixing it would add to Accessibility / Best practices / SEO.
+function weightForAudit(lr, auditId) {
+  for (const cat of Object.values(lr?.categories || {})) {
+    const ref = (cat.auditRefs || []).find((r) => r.id === auditId);
+    if (ref) return Number(ref.weight) || 0;
+  }
+  return 0;
+}
+
+function categoryWeights(lr) {
+  const out = {};
+  for (const [cid, cat] of Object.entries(lr?.categories || {})) {
+    out[cid] = (cat.auditRefs || []).reduce((n, r) => n + (Number(r.weight) || 0), 0);
+  }
+  return out;
+}
+
+// Lighthouse 11+ gives each opportunity/diagnostic its estimated saving per metric ({ LCP: ms, FCP: ms, TBT: ms, CLS: n }).
+function cleanMetricSavings(ms) {
+  if (!ms || typeof ms !== 'object') return null;
+  const out = {};
+  for (const k of ['FCP', 'LCP', 'TBT', 'CLS', 'INP']) {
+    const v = Number(ms[k]);
+    if (Number.isFinite(v) && v > 0) out[k] = k === 'CLS' ? Math.round(v * 1000) / 1000 : Math.round(v);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function categoryForAudit(lr, auditId) {
   const cats = lr?.categories || {};
   for (const [cid, cat] of Object.entries(cats)) {
@@ -368,6 +397,8 @@ function expandAudit(lr, a) {
     numericValue: a.numericValue,
     savingsMs: Math.round(Number(a.details?.overallSavingsMs) || 0),
     savingsBytes: Math.round(Number(a.details?.overallSavingsBytes) || 0),
+    metricSavings: cleanMetricSavings(a.metricSavings),
+    weight: weightForAudit(lr, a.id),
     items: tableRows(a.details),
   };
 }
@@ -515,6 +546,7 @@ function summarisePsi(data, strategy) {
     lighthouseVersion: lr.lighthouseVersion || '',
     environment: environment(lr),
     categories,
+    categoryWeights: categoryWeights(lr),
     metrics: METRIC_IDS.map((id) => pickAudit(lr, id)).filter(Boolean),
     fieldData: cruxMetrics(data),
     opportunities: opportunities(lr),

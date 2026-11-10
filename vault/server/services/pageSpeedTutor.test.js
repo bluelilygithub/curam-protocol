@@ -24,6 +24,8 @@ checkGuide({
     ['action-done', 'notes', /saved with the run/, 'ticks are saved on the run'],
     ['action-done', 'notes', /do not re-test/, 'ticks do not re-test'],
     ['pdf-report', 'does', /Still to do or Done only/, 'pdf filters are named'],
+    ['score-estimate', 'notes', /Performance \(marked ~\) is an estimate/, 'performance gains are estimates'],
+    ['score-estimate', 'notes', /Only runs made from/, 'old runs have no estimates'],
     ['pdf-report', 'notes', /not emailed/, 'pdf is downloaded, not emailed'],
   ],
   gaps: [/Fixing or changing the website/, /behind a login/, /whole site/, /schedule/, /Emailing the PDF/],

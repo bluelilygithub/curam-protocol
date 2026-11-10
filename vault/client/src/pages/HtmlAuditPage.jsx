@@ -13,6 +13,7 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import PageSpeedTutorChat from './pageSpeed/PageSpeedTutorChat';
 import { HOW_IT_WORKS, GUIDE_TOOLS } from './pageSpeed/pageSpeedTools.mjs';
+import { combinedImpact, pointsLabel, hasImpactData } from './pageSpeed/scoreImpact.mjs';
 import {
   buildActions, actionsText, PRIORITY_GROUPS, CATEGORY_FILTERS, humanEvidence, cleanLighthouseText,
   METRIC_HELP, FIELD_HELP, FIELD_CATEGORY_HELP, SECTION_HELP,
@@ -289,7 +290,44 @@ function DeveloperDetail({ a }) {
   );
 }
 
-function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote, onCopy, onPdf }) {
+const IMPACT_TIP = {
+  exact: 'How many points fixing this adds to that score. Accessibility, Best practices and SEO are a weighted pass/fail tally, so this is Google\'s own arithmetic. Run the test again after the fix to confirm.',
+  estimate: 'Estimated points this could add to the Performance score: Google\'s estimate of the time this fix saves, run back through Lighthouse\'s scoring formula. Speed scores also move a few points between runs, so treat it as a guide.',
+};
+
+function ImpactSummary({ view, actions, done }) {
+  const outstanding = actions.filter((a) => !done.has(a.key));
+  const all = combinedImpact(view, outstanding);
+  const first = combinedImpact(view, outstanding.filter((a) => a.priority === 'P0'));
+  const row = (c) => CATEGORY_FILTERS.filter((f) => c[f.id]).map((f) => (
+    <span key={f.id} className="inline-flex items-baseline gap-1 mr-4 whitespace-nowrap">
+      <span style={{ color: 'var(--color-muted)' }}>{f.label}</span>
+      <span className="font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{c[f.id].from}</span>
+      <span style={{ color: 'var(--color-muted)' }}>→</span>
+      <span className="font-semibold tabular-nums" style={{ color: '#166534' }}>{f.id === 'performance' ? '~' : ''}{c[f.id].to}</span>
+    </span>
+  ));
+  if (!hasImpactData(view)) {
+    return (
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        Score estimates (how many points each fix could add) appear on runs made from 10 Nov 2026. Run this page again to see them.
+      </p>
+    );
+  }
+  if (!Object.keys(all).length) return null;
+  return (
+    <Tooltip text="What the scores could become if the actions not yet ticked are fixed. Accessibility, Best practices and SEO are Google's own arithmetic; Performance (~) is an estimate, and overlapping fixes are counted conservatively. Run the test again to see the real result.">
+      <div className="rounded-xl p-3 space-y-1.5 text-xs" style={{ background: 'var(--color-bg)' }} data-guide="score-estimate">
+        {Object.keys(first).length > 0 && JSON.stringify(first) !== JSON.stringify(all) ? (
+          <p><strong style={{ color: 'var(--color-text)' }}>Fix first list only: </strong>{row(first)}</p>
+        ) : null}
+        <p><strong style={{ color: 'var(--color-text)' }}>Everything still to do: </strong>{row(all)}</p>
+      </div>
+    </Tooltip>
+  );
+}
+
+function ActionsPanel({ view, actions, strategy, otherLabel, doneMap, onToggle, onNote, onCopy, onPdf }) {
   const done = useMemo(() => new Set(Object.entries(doneMap || {}).filter(([, v]) => v?.done).map(([k]) => k)), [doneMap]);
   const getIcon = useIcon();
   const [filter, setFilter] = useState('all');
@@ -326,7 +364,7 @@ function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote
               {actions.length} action{actions.length === 1 ? '' : 's'} for {strategy}
             </SectionTitle>
             <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-              {actions.filter((a) => a.priority === 'P0').length} to fix first. Each says what is wrong, why it matters, what to do and who usually does it.
+              {actions.filter((a) => a.priority === 'P0').length} to fix first. Each says what is wrong, why it matters, what to do, who usually does it and how many points it could add.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -361,6 +399,7 @@ function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote
             <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{doneCount} of {actions.length} done</p>
           </div>
         </Tooltip>
+        <ImpactSummary view={view} actions={actions} done={done} />
         <div className="flex flex-wrap items-center gap-1.5" data-guide="action-filter">
           {CATEGORY_FILTERS.filter((c) => c.id === 'all' || counts[c.id]).map((c) => (
             <Tooltip key={c.id} text={c.id === 'all' ? 'Show every action.' : `Show only the actions that improve the ${c.label} score.`}>
@@ -394,7 +433,14 @@ function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote
         if (!rows.length) return null;
         return (
           <div key={g.id} className="space-y-2">
-            <SectionTitle tip={g.tip}>{g.label} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>({rows.length})</span></SectionTitle>
+            <SectionTitle tip={g.tip}>
+              {g.label} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>({rows.length})</span>
+              {(() => {
+                const c = combinedImpact(view, rows.filter((a) => !done.has(a.key)));
+                const bits = CATEGORY_FILTERS.filter((f) => c[f.id]).map((f) => `${f.id === 'performance' ? '~' : ''}+${Math.max(1, c[f.id].to - c[f.id].from)} ${f.label}`);
+                return bits.length ? <span className="text-xs font-normal ml-2" style={{ color: '#166534' }}>{bits.join(' · ')}</span> : null;
+              })()}
+            </SectionTitle>
             <ul className="grid gap-3 xl:grid-cols-2">
               {rows.map((a, i) => {
                 const isDone = done.has(a.key);
@@ -420,6 +466,17 @@ function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                           {isDone ? <Badge strong tip="Ticked as done on this date.">Done {fmtShortDate(doneMap?.[a.key]?.doneAt)}</Badge> : null}
+                          {a.impact ? (
+                            <Tooltip text={a.impact.exact ? IMPACT_TIP.exact : IMPACT_TIP.estimate}>
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                                style={{ background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }}
+                                data-guide={first ? 'score-estimate' : undefined}
+                              >
+                                {a.impact.exact ? '' : '~'}{pointsLabel(a.impact.points)} {CATEGORY_FILTERS.find((c) => c.id === a.impact.category)?.label || ''}
+                              </span>
+                            </Tooltip>
+                          ) : null}
                           <Badge tip={`This affects the ${a.categoryLabel} score.`}>{a.categoryLabel}</Badge>
                           {a.who ? <Badge tip="Who usually makes this change. A content editor can do it in the website editor; hosting means the web host or whoever set up the server.">{a.who}</Badge> : null}
                           {a.effort ? <Badge tip="Rough size of the job for someone who knows the site. A guide, not a quote.">{a.effort}</Badge> : null}
@@ -1273,6 +1330,7 @@ export default function HtmlAuditPage() {
             {active && tab === 'actions' && (
               <ActionsPanel
                 key={activeKey}
+                view={active}
                 actions={actions}
                 strategy={activeKey}
                 otherLabel={activeKey === 'mobile' ? 'desktop' : 'mobile'}

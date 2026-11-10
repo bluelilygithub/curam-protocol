@@ -36,6 +36,8 @@ export const CATEGORY_FILTERS = [
   { id: 'seo', label: 'SEO' },
 ];
 
+import { actionImpact, combinedImpact, pointsLabel } from './scoreImpact.mjs';
+
 // Plain-English help per Lighthouse audit id. plain = what is wrong, how = what to do, who/effort keys above.
 // why is optional (falls back to the category's reason).
 const H = (plain, how, who = 'dev', effort = 'medium', why = '') => ({ plain, how, who, effort, why });
@@ -374,6 +376,7 @@ export function buildActions(view, otherView = null) {
     const explanations = [...new Set(rawItems.map((it) => String(it?.explanation || '').trim()).filter(Boolean))];
     const flagged = explanations.slice(0, 3).map(explanationGroups).filter((g) => g.length);
     return {
+      impact: actionImpact(view, src, category || src?.category || ''),
       where,
       flagged,
       docsUrl: src?.docsUrl || '',
@@ -395,7 +398,28 @@ export function buildActions(view, otherView = null) {
       evidence: Array.isArray(t.evidence) ? t.evidence : [],
       alsoOther: otherKeys ? otherKeys.has(key) : null,
     };
-  });
+  })
+    // Within each priority, the biggest estimated gain first (actions with no estimate keep their order after those with one).
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => (PRIORITY_RANK[x.a.priority] - PRIORITY_RANK[y.a.priority])
+      || ((y.a.impact?.points ?? -1) - (x.a.impact?.points ?? -1))
+      || (x.i - y.i))
+    .map(({ a }) => a);
+}
+
+const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2 };
+
+/** One line for an action's estimated gain, e.g. "+6 Performance (estimate)". */
+export function impactText(impact) {
+  if (!impact) return '';
+  const label = CATEGORY_FILTERS.find((c) => c.id === impact.category)?.label || impact.category;
+  return `${pointsLabel(impact.points)} ${label}${impact.exact ? '' : ' (estimate)'}`;
+}
+
+/** "Performance 41 -> about 63, Accessibility 79 -> 88" for a set of actions. */
+export function combinedText(view, actions) {
+  const c = combinedImpact(view, actions);
+  return CATEGORY_FILTERS.filter((f) => c[f.id]).map((f) => `${f.label} ${c[f.id].from} -> ${f.id === 'performance' ? 'about ' : ''}${c[f.id].to}`).join(', ');
 }
 
 /** Plain-text list of the actions, for the Copy button on the Actions tab. */
@@ -406,7 +430,7 @@ export function actionsText(actions, { strategy, url, done = new Set() } = {}) {
     if (!rows.length) continue;
     lines.push(`## ${g.label}`);
     for (const a of rows) {
-      lines.push(`[${done.has(a.key) ? 'x' : ' '}] ${a.title} (${a.categoryLabel}${a.who ? `, ${a.who}` : ''})`);
+      lines.push(`[${done.has(a.key) ? 'x' : ' '}] ${a.title} (${a.categoryLabel}${a.who ? `, ${a.who}` : ''}${a.impact ? `, ${impactText(a.impact)}` : ''})`);
       lines.push(`    What to do: ${a.how}`);
       if (a.where?.length) {
         lines.push(`    Where on the page:`);
