@@ -100,7 +100,7 @@ export default function DevicePreviewPage() {
     setError('');
     startProcessing(render ? 'Opening the page in a browser…' : 'Loading the page…', render ? 'This can take half a minute.' : 'Fetching the page and its style files.');
     try {
-      const res = await api.post('/api/restyle/fetch-url', { url: address, render: !!render });
+      const res = await api.post('/api/restyle/fetch-url', { url: address, render: !!render, inlineCssImages: true });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "We couldn't load that page.");
       setPage({ doc: buildPreviewDoc(data), sourceUrl: data.sourceUrl || address, flags: Array.isArray(data.flags) ? data.flags : [] });

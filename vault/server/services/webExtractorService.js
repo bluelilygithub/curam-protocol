@@ -19,8 +19,11 @@ const BINARY_PROFILES = [
   { id: 'chrome+referer', headers: (origin) => ({ 'User-Agent': CHROME_UA, Accept: IMAGE_ACCEPT, Referer: origin }) },
   { id: 'firefox+referer', headers: (origin) => ({ 'User-Agent': FIREFOX_UA, Accept: IMAGE_ACCEPT, Referer: origin }) },
   { id: 'plain', headers: () => ({ 'User-Agent': 'Mozilla/5.0 (compatible; VaultCSSTool/1.0)', Accept: '*/*' }) },
+  { id: 'curl', headers: () => ({ 'User-Agent': 'curl/8.5.0', Accept: '*/*' }) },
 ];
-const REFUSED = /^Server returned (401|403|406|429)$/;
+// Refused: an error status, or a firewall that hangs up instead of answering (finestone.com.au drops every browser-like identity on its
+// pictures with "socket hang up" and answers curl), which is worth another identity too.
+const REFUSED = /^Server returned (401|403|406|429)$|socket hang up|ECONNRESET|EPROTO|close_notify/i;
 const winnerByHost = new Map(); // host -> profile id that last worked, so a page with 40 pictures does not repeat the refusals 40 times
 
 /** Binary-safe fetch for images — htmlFetch's fetchHtml decodes everything as utf8 text. Tries other identities when a site refuses one. */

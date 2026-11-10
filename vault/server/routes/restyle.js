@@ -14,7 +14,7 @@ const { getLogger } = require('../middleware/requestContext');
 const { sanitizeHtml } = require('../services/restyle/sanitizeHtml');
 const { processStylesheets } = require('../services/restyle/cssProcessor');
 const { requestAiEdit } = require('../services/restyle/aiEdit');
-const { inlineImagesInHtmlFragment, inlineImagesInCss } = require('../services/restyle/inlineImages');
+const { inlineImagesInHtmlFragment, inlineImagesInCss, newBudget } = require('../services/restyle/inlineImages');
 const { loadPageFromUrl } = require('../services/restyle/loadFromUrl');
 const { renderAvailable } = require('../services/restyle/renderPage');
 const { scrapePageCss } = require('../services/restyle/scrapeCss');
@@ -171,17 +171,42 @@ router.get('/capabilities', (req, res) => {
   res.json({ render: renderAvailable() });
 });
 
+/**
+ * Pictures inside a live page's linked style files (background-image and the like) as data: addresses, for a preview that shows the
+ * files as they are (Device preview). The Style editor does not ask for this: it sends the files through /process-css, which does it.
+ * Without it every such picture is blocked by Vault's Content-Security-Policy (finestone.com.au has 27). Fonts are left alone.
+ */
+async function inlineLinkedCssImages(cssFiles) {
+  const budget = newBudget();
+  let inlined = 0;
+  let failed = 0;
+  const files = [];
+  for (const f of cssFiles) {
+    const r = await inlineImagesInCss(f.css, undefined, { imagesOnly: true, budget });
+    inlined += r.inlinedCount; failed += r.failedCount;
+    files.push({ ...f, css: r.css });
+  }
+  return { files, inlined, failed };
+}
+
 router.post('/fetch-url', urlLimiter, async (req, res) => {
-  const { url, render } = req.body || {};
+  const { url, render, inlineCssImages } = req.body || {};
   if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: 'Type the address of the page first.' });
   if (render && !renderAvailable()) return res.status(400).json({ error: 'Loading pages that build themselves with JavaScript is not set up on this server.' });
   if (render && !renderAllowed(req.user.id)) return res.status(429).json({ error: `You can load ${RENDERS_PER_HOUR} pages that way an hour. Try the normal load, or wait a little.` });
   try {
     const loaded = await loadPageFromUrl(url.trim(), { render: !!render });
+    const extraFlags = [...loaded.flags];
+    let linkedCss = loaded.cssFiles;
+    if (inlineCssImages) {
+      const done = await inlineLinkedCssImages(linkedCss);
+      linkedCss = done.files;
+      if (done.failed) extraFlags.push(`${done.failed} background picture${done.failed === 1 ? '' : 's'} from the page's style files couldn't be loaded (blocked, too large or over the limit for one page), so ${done.failed === 1 ? 'it' : 'they'} may be missing from the preview.`);
+    }
     const prepared = await prepareHtml(loaded.html, {
       sourceHtml: loaded.rawHtml,
-      linkedCss: loaded.cssFiles,
-      extraFlags: loaded.flags,
+      linkedCss,
+      extraFlags,
       extraLog: [`Loaded ${loaded.finalUrl}${loaded.rendered ? ' in a browser (its scripts ran first)' : ''}.`],
     });
     res.json({ ...prepared, sourceUrl: loaded.finalUrl, rendered: loaded.rendered });

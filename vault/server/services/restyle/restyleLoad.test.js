@@ -7,6 +7,7 @@ const { sanitizeEditsCss, sanitizePageCss, forStyleElement } = require('./saniti
 const { buildSharedPage, SHARE_HEADERS } = require('./sharePage');
 const { loadPageFromUrl, applyMedia, sheetName, sheetRank, chooseSheets, MAX_SHEETS } = require('./loadFromUrl');
 const { renderAvailable, CONNECTION_REFUSED, USER_AGENTS } = require('./renderPage');
+const { FONT_URL_RE, newBudget, inlineImagesInCss } = require('./inlineImages');
 
 (async () => {
   // ---- the CSS the tool generates: only managed properties, plain rules, @media and the tool's own keyframes ----
@@ -160,6 +161,16 @@ const { renderAvailable, CONNECTION_REFUSED, USER_AGENTS } = require('./renderPa
   assert.ok(CONNECTION_REFUSED.test('net::ERR_CONNECTION_RESET'));
   assert.ok(!CONNECTION_REFUSED.test('page.goto: Timeout 30000ms exceeded.'));
   assert.ok(USER_AGENTS.length >= 4);
+
+  // ---- Device preview's background pictures: fonts are skipped, and a used-up allowance fetches nothing more ----
+  assert.ok(FONT_URL_RE.test('https://x.com/f/icofont.woff2?v=1') && FONT_URL_RE.test('https://x.com/f/icons.svg#icofont') && FONT_URL_RE.test('https://x.com/a.eot?#iefix'));
+  assert.ok(!FONT_URL_RE.test('https://x.com/img/bg.jpg') && !FONT_URL_RE.test('https://x.com/img/logo.svg'));
+  const spent = newBudget(); spent.images = 1e6;
+  const untouched = await inlineImagesInCss('a{background:url(https://x.example/bg.png)}', undefined, { imagesOnly: true, budget: spent });
+  assert.strictEqual(untouched.inlinedCount, 0);
+  assert.match(untouched.css, /https:\/\/x\.example\/bg\.png/);
+  const fontsOnly = await inlineImagesInCss('@font-face{src:url(https://x.example/a.woff2)}', undefined, { imagesOnly: true });
+  assert.strictEqual(fontsOnly.inlinedCount + fontsOnly.failedCount, 0, 'fonts are not fetched');
 
   console.log('restyle server tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

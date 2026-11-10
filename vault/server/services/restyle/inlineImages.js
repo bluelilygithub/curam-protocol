@@ -30,9 +30,17 @@
 const { JSDOM } = require('jsdom');
 const { fetchBinary } = require('../webExtractorService');
 
-const MAX_INLINE_IMAGE_BYTES = 2.5 * 1024 * 1024; // one picture bigger than this stays a link (counted as not loaded)
-const MAX_INLINE_TOTAL_BYTES = 12 * 1024 * 1024; // and a page's pictures together are held to this, so the response stays a sensible size
-const MAX_IMAGES = 40; // cap total fetches per call so a page with hundreds of images can't hang the request
+// Raised 2026-11-11 (were 2.5 MB, 12 MB, 40): finestone.com.au's banner is a 3.9 MB picture and its home page has 37 pictures and ~8 MB
+// of them, so the banner and the last few always stayed links, which Vault's Content-Security-Policy then blocks in the preview.
+const MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024; // one picture bigger than this stays a link (counted as not loaded)
+const MAX_INLINE_TOTAL_BYTES = 20 * 1024 * 1024; // and a page's pictures together are held to this, so the response stays a sensible size
+const MAX_IMAGES = 60; // cap total fetches per call so a page with hundreds of images can't hang the request
+// Font files in a style file's url(): left alone when only pictures are wanted (a font is listed in four or five formats, so inlining
+// every one would spend the budget on fonts).
+const FONT_URL_RE = /\.(woff2?|ttf|otf|eot)(\?|#|$)|\.svg#/i;
+
+/** A shared allowance for several calls, so a page's style files together keep to the same limits as one call. */
+function newBudget() { return { images: 0, bytes: 0 }; }
 const CSS_URL_RE = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
 
 /** Resolves a raw src/href/url(...) value to an absolute http(s) URL, or null if it can't be
@@ -52,16 +60,17 @@ async function toDataUri(url) {
   return `data:${type};base64,${buffer.toString('base64')}`;
 }
 
-async function fetchAllAsDataUris(urls) {
+async function fetchAllAsDataUris(urls, budget = newBudget()) {
   const urlToDataUri = new Map();
   let inlinedCount = 0;
   let failedCount = 0;
-  let totalBytes = 0;
-  await Promise.all(urls.slice(0, MAX_IMAGES).map(async (url) => {
+  const room = Math.max(0, MAX_IMAGES - budget.images);
+  budget.images += Math.min(room, urls.length);
+  await Promise.all(urls.slice(0, room).map(async (url) => {
     try {
       const uri = await toDataUri(url);
-      if (totalBytes + uri.length > MAX_INLINE_TOTAL_BYTES) throw new Error('Over the total');
-      totalBytes += uri.length;
+      if (budget.bytes + uri.length > MAX_INLINE_TOTAL_BYTES) throw new Error('Over the total');
+      budget.bytes += uri.length;
       urlToDataUri.set(url, uri);
       inlinedCount++;
     } catch {
@@ -151,15 +160,16 @@ async function inlineImagesInHtmlFragment(htmlFragment, baseUrl) {
  *   with no known origin.
  * @returns {Promise<{ css: string, inlinedCount: number, failedCount: number }>}
  */
-async function inlineImagesInCss(css, baseUrl) {
+async function inlineImagesInCss(css, baseUrl, { imagesOnly = false, budget } = {}) {
   const urls = [...new Set(
     [...(css || '').matchAll(CSS_URL_RE)]
       .map((m) => resolveUrl(m[2], baseUrl))
       .filter(Boolean)
+      .filter((u) => !imagesOnly || !FONT_URL_RE.test(u))
   )];
   if (!urls.length) return { css: css || '', inlinedCount: 0, failedCount: 0 };
-  const { urlToDataUri, inlinedCount, failedCount } = await fetchAllAsDataUris(urls);
+  const { urlToDataUri, inlinedCount, failedCount } = await fetchAllAsDataUris(urls, budget);
   return { css: rewriteCssText(css, urlToDataUri, baseUrl), inlinedCount, failedCount };
 }
 
-module.exports = { inlineImagesInHtmlFragment, inlineImagesInCss };
+module.exports = { inlineImagesInHtmlFragment, inlineImagesInCss, newBudget, FONT_URL_RE, MAX_INLINE_IMAGE_BYTES, MAX_IMAGES };
