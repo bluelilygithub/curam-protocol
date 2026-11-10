@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2e477a7b",
+   "fullHash": "2e477a7bfb454e6784f6e6717eee463f0c965323",
+   "committedAt": "2026-11-11T08:32:21+10:00",
+   "author": "mrb",
+   "subject": "Device preview: load every style file, show hidden content, retry dropped renders",
+   "filesChanged": 9,
+   "insertions": 118,
+   "deletions": 17,
+   "area": "Device preview",
+   "goal": "Make finestone.com.au (and pages like it) show properly in Device preview: it loaded unstyled, and the 'builds itself with JavaScript' option always said the site could not be opened.",
+   "whatChanged": "server/services/restyle/loadFromUrl.js: style file limit raised from 12 to 40 with an 8 MB total; when a page links more, sheetRank()/chooseSheets() keep the site's own (theme) files ahead of plugin, wp-includes and other-site files, fetched most important first and still applied in the page's order. finestone links 31 files with its theme's from the 13th on, so the old first-12 rule kept only WooCommerce/plugin CSS. server/services/restyle/renderPage.js: a dropped connection (net::ERR_HTTP2_PROTOCOL_ERROR, CONNECTION_CLOSED/RESET etc., CONNECTION_REFUSED regex) is now treated as a refusal and the next browser identity is tried; before, it ended the render on the first (Chrome) identity, which finestone cuts off. curl added as a fourth identity. server/routes/restyle.js: a plain message when every identity is cut off. client: DevicePreviewPage.jsx shows the loader's notes in a 'Worth knowing about this preview' box; devicePreviewModel.mjs adds NO_SCRIPT_REVEAL_CSS so content hidden by AOS, Owl Carousel, WOW and Elementor until their scripts run is shown (finestone's sections were opacity 0, blank below the banner on a phone). Tests in restyleLoad.test.js and devicePreviewModel.test.mjs; docs/restyle.md and docs/key-files.md updated.",
+   "filesImpacted": [
+    "vault/server/services/restyle/loadFromUrl.js",
+    "vault/server/services/restyle/renderPage.js",
+    "vault/server/services/restyle/restyleLoad.test.js",
+    "vault/server/routes/restyle.js",
+    "vault/client/src/pages/DevicePreviewPage.jsx",
+    "vault/client/src/pages/devicePreview/devicePreviewModel.mjs",
+    "vault/client/src/pages/devicePreview/devicePreviewModel.test.mjs",
+    "vault/docs/restyle.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "finestone now loads all 31 style files by both the normal load and the JavaScript render (checked from a local machine against the live site), and the preview is styled at phone and laptop width with every section visible. The Style editor's address load uses the same loader, so it gains the fuller styling and the render fix too.",
+   "concerns": "Checked from a home connection, not from Railway: the site's firewall may treat Railway's data-centre address differently, so the render could still be cut off there (the message now says so and points at the normal load). Loading up to 40 files makes big pages slower to load and the response larger (8 MB CSS cap). The 'Worth knowing' box and the full Device preview page were not seen in the running app (no local login session); the preview document itself was screenshotted. The reveal CSS forces AOS/Owl/WOW/Elementor-hidden content visible, so a carousel shows its slides stacked rather than one at a time."
+  },
+  {
    "commit": "43995183",
    "fullHash": "43995183587dd3c83a71cb7e2ab245bfa138ecb7",
    "committedAt": "2026-11-10T17:19:46+10:00",
