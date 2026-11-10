@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "43995183",
+   "fullHash": "43995183587dd3c83a71cb7e2ab245bfa138ecb7",
+   "committedAt": "2026-11-10T17:19:46+10:00",
+   "author": "mrb",
+   "subject": "Page speed: estimated score gain for each action",
+   "filesChanged": 10,
+   "insertions": 342,
+   "deletions": 6,
+   "area": "Page speed",
+   "goal": "Show the owner, before anything is fixed, roughly how many points each Page speed action would add to the score, so effort can go where the gain is.",
+   "whatChanged": "server/services/htmlLighthouse.js: each finding now stores its category weight (from the category's auditRefs) and Lighthouse's metricSavings (LCP/FCP/TBT/CLS), and each view stores categoryWeights (total weight per category). New client/src/pages/pageSpeed/scoreImpact.mjs (+ test): Lighthouse 10-12 log-normal scoring curves and weights for mobile and desktop; perfGain() takes a finding's savings off the lab timings and re-scores; checkGain() gives weight x (1 - score) / total x 100 for Accessibility, Best practices and SEO; combinedImpact() totals a set of actions (performance savings per timing: largest plus half of the rest, as fixes overlap; capped at 100). pageSpeedActions.mjs: buildActions() adds impact to each action and sorts each priority group by biggest gain; impactText()/combinedText() for Copy and PDF. HtmlAuditPage.jsx: green badge per action (~ marks a performance estimate) with a tooltip explaining exact vs estimate, a box at the top of the Actions tab with 'Fix first list only' and 'Everything still to do' as score from -> to (ticked actions left out), totals beside each group heading, and a 'run this page again' line for older runs. PDF report: the badge on each card and a 'scores could become' line per device. Guide chat catalogue gains 'Score estimates'; (i) box text and docs/html-agent.md updated.",
+   "filesImpacted": [
+    "vault/server/services/htmlLighthouse.js",
+    "vault/client/src/pages/pageSpeed/scoreImpact.mjs",
+    "vault/client/src/pages/pageSpeed/scoreImpact.test.mjs",
+    "vault/client/src/pages/pageSpeed/pageSpeedActions.mjs",
+    "vault/client/src/pages/pageSpeed/pageSpeedReportPdf.jsx",
+    "vault/client/src/pages/pageSpeed/pageSpeedTools.mjs",
+    "vault/client/src/pages/HtmlAuditPage.jsx",
+    "vault/server/services/pageSpeedTutor.js",
+    "vault/server/services/pageSpeedTutor.test.js",
+    "vault/docs/html-agent.md"
+   ],
+   "benefit": "The owner can see which fixes move the score most and what the scores could become once the list is done, on screen and in the client PDF.",
+   "concerns": "Only runs made after this deploy have estimates (older saved runs lack weights and savings; the page says to run again). Performance figures are estimates: they depend on Google's own predicted savings, overlap between fixes is handled by a rule of thumb, and lab scores vary a few points run to run. The scoring curves are Lighthouse 10-12's; if Google changes them the performance estimate drifts until updated. The formula was checked against Lighthouse's reference points and the screens/PDF seen on local dev with synthetic data, not yet against a live PageSpeed run, so the weights and metricSavings fields from the real API are assumed, not seen."
+  },
+  {
    "commit": "8107212a",
    "fullHash": "8107212ac4cee160adce2b365b36787f16876107",
    "committedAt": "2026-11-10T15:56:04+10:00",
