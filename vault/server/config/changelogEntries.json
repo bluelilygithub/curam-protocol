@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "dec87680",
+   "fullHash": "dec87680616eceefe7df1490ec5b225c8a361d89",
+   "committedAt": "2026-11-11T08:46:07+10:00",
+   "author": "mrb",
+   "subject": "Device preview: show every picture, including style-file backgrounds",
+   "filesChanged": 7,
+   "insertions": 69,
+   "deletions": 20,
+   "area": "Device preview",
+   "goal": "Stop pictures being blocked in Device preview (reported on finestone.com.au, including pictures served from Amazon S3).",
+   "whatChanged": "The preview can only show data: pictures (Vault's Content-Security-Policy), so every picture has to be fetched by the server and inlined. Three gaps fixed. server/services/webExtractorService.js: fetchBinary treats a hang-up (socket hang up, ECONNRESET, EPROTO) as a refusal and tries the next identity, with a curl identity added last; finestone's firewall hangs up on browser-like identities, so all 12 of its own pictures failed. server/services/restyle/inlineImages.js: limits raised to 5 MB a picture (was 2.5; the S3 banner is 3.9 MB), 20 MB in all (was 12) and 60 pictures (was 40); inlineImagesInCss takes imagesOnly (skips font files) and a shared budget (newBudget). server/routes/restyle.js: /fetch-url accepts inlineCssImages, which inlines pictures in the linked style files (inlineLinkedCssImages) and notes any that failed; client/src/pages/DevicePreviewPage.jsx sends it. Test added to restyleLoad.test.js; docs/restyle.md and docs/key-files.md updated, including why the console's 'Blocked script execution in about:srcdoc' line is harmless.",
+   "filesImpacted": [
+    "vault/server/services/webExtractorService.js",
+    "vault/server/services/restyle/inlineImages.js",
+    "vault/server/routes/restyle.js",
+    "vault/client/src/pages/DevicePreviewPage.jsx",
+    "vault/server/services/restyle/restyleLoad.test.js",
+    "vault/docs/restyle.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "On finestone.com.au all 44 page pictures and 20 of 22 style-file backgrounds now inline (the other 2 are files the page never shows), and a screenshot under Vault's picture rules showed all 41 images with no blocked-picture messages. Web Extractor and the Style editor get the retry-on-hang-up and the higher limits too.",
+   "concerns": "Bigger responses: finestone's /fetch-url answer is about 23 MB, because inlined pictures are base64, so a page loads slower on a slow connection and uses more server memory while it is built. Checked from a home connection, not from Railway, where the site's firewall may behave differently. Not seen in the running Vault app (no local login session); checked by running the same loader and preview code in a headless browser with the same picture policy. Font files are still not inlined, so icon fonts from sites that do not send CORS headers can still show as boxes."
+  },
+  {
    "commit": "2e477a7b",
    "fullHash": "2e477a7bfb454e6784f6e6717eee463f0c965323",
    "committedAt": "2026-11-11T08:32:21+10:00",
