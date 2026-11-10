@@ -177,13 +177,29 @@ function ActionCard({ a, state, includeDeveloper }) {
         <Text style={[s.actionTitle, done ? { color: MUTED } : {}]}>{t(a.title)}</Text>
         <Text style={s.paraMuted}><Text style={s.bold}>Why it matters: </Text>{t(a.why)}</Text>
         <Text style={s.para}><Text style={s.bold}>What to do: </Text>{t(a.how)}</Text>
+        {a.where.length > 0 ? (
+          <View style={{ marginTop: 3 }}>
+            <Text style={[s.para, s.bold]}>Where on the page ({a.where.length}):</Text>
+            {a.where.slice(0, 8).map((w, i) => (
+              <Text key={`${w.where}-${i}`} style={s.para}>
+                {'  - '}{t(w.where)}{w.detail ? <Text style={{ color: MUTED }}>{` - ${t(w.detail)}`}</Text> : null}
+              </Text>
+            ))}
+            {a.where.length > 8 ? <Text style={s.paraMuted}>{`  ... and ${a.where.length - 8} more`}</Text> : null}
+          </View>
+        ) : null}
         {state?.note ? <Text style={s.doneNote}><Text style={s.bold}>{done ? 'What was done: ' : 'Note: '}</Text>{t(state.note)}</Text> : null}
         {includeDeveloper ? (
           <View style={s.dev}>
-            <Text style={s.devTitle}>For your developer: {t(a.technicalTitle)}</Text>
-            {a.technicalAction && a.technicalAction !== a.how ? <Text style={s.devText}>{t(a.technicalAction).slice(0, 700)}</Text> : null}
-            {a.evidence.slice(0, 6).map((ev) => <Text key={ev} style={s.devText}>- {t(ev).slice(0, 220)}</Text>)}
-            {a.evidence.length > 6 ? <Text style={s.devText}>... and {a.evidence.length - 6} more</Text> : null}
+            <Text style={s.devTitle}>For your developer: {t(a.technicalTitleClean)}</Text>
+            {a.technicalActionClean && a.technicalActionClean !== a.how ? <Text style={s.devText}>{t(a.technicalActionClean).slice(0, 700)}</Text> : null}
+            {a.flagged.slice(0, 1).map((groups, gi) => groups.map((g) => (
+              <Text key={`${gi}-${g.heading}`} style={s.devText}>{t(g.heading)}: {t(g.points.join('; '))}</Text>
+            )))}
+            {a.where.filter((w) => w.code.length).slice(0, 6).map((w, i) => (
+              <Text key={`c-${i}`} style={[s.devText, { fontFamily: 'Courier', fontSize: 6.8 }]}>{`${i + 1}. ${t(w.code[0]).slice(0, 200)}`}</Text>
+            ))}
+            {a.docsUrl ? <Link src={a.docsUrl} style={[s.devText, { color: PRIMARY }]}>Google's guide to this check</Link> : null}
           </View>
         ) : null}
       </View>

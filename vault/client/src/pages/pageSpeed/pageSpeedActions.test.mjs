@@ -2,6 +2,7 @@
 import assert from 'assert';
 import {
   buildActions, auditIdFor, actionsText, ACTION_HELP, WHO, EFFORT, PRIORITY_GROUPS, CATEGORY_WHY, METRIC_HELP,
+  humanEvidence, explanationGroups, cleanLighthouseText,
 } from './pageSpeedActions.mjs';
 
 const mobile = {
@@ -53,5 +54,31 @@ const txt = actionsText(acts, { strategy: 'mobile', url: 'https://x.com', done: 
 assert.match(txt, /## Fix first/);
 assert.match(txt, /\[x\] The address bounces/);
 assert.match(txt, /## When there is time/);
+
+// raw Lighthouse evidence becomes plain words
+const expl = 'Fix all of the following:\n  Element is in tab order and does not have accessible text\n\nFix any of the following:\n  Element does not have text that is visible to screen readers\n  Element has no title attribute';
+let h = humanEvidence({ selector: 'div.container > div.row > div.col-lg-12 > a.logo', snippet: '<a class="logo" href="/">', explanation: expl });
+assert.strictEqual(h.where, 'Link "logo"');
+assert.match(h.detail, /header/);
+assert.ok(h.code[0].includes('a.logo'), 'selector kept for the developer');
+h = humanEvidence({ selector: 'div.row > div.col-lg-3 > div.footarea > a', snippet: '<a href="https://www.facebook.com/x">' });
+assert.strictEqual(h.where, 'Link inside "footarea"');
+assert.match(h.detail, /footer.*facebook\.com\/x/);
+h = humanEvidence({ url: 'https://www.x.com.au/wp-content/uploads/hero.jpg', wastedBytes: 340000 });
+assert.strictEqual(h.where, 'hero.jpg');
+assert.match(h.detail, /332 KB could be saved/);
+const g = explanationGroups(expl);
+assert.deepStrictEqual(g.map((x) => x.points.length), [1, 2], 'explanation split into all / any groups');
+assert.deepStrictEqual(explanationGroups(expl.replace(/\s+/g, ' ')).map((x) => x.points.length), [1, 2], 'works when newlines were lost');
+assert.strictEqual(cleanLighthouseText('Images need `[alt]` text. Learn how to add it.'), 'Images need alt text.');
+const withItems = buildActions({
+  failedAudits: [{ id: 'link-name', title: 'Links do not have a discernible name', docsUrl: 'https://d', items: [
+    { selector: 'a.logo', explanation: expl }, { selector: 'a.logo', explanation: expl }, { selector: 'nav > a.menu', explanation: expl }] }],
+  workOrder: [{ priority: 'P0', category: 'accessibility', title: 'Links do not have a discernible name', evidence: [] }],
+})[0];
+assert.strictEqual(withItems.where.length, 2, 'duplicate elements listed once');
+assert.strictEqual(withItems.flagged.length, 1, 'the same explanation is shown once, not per element');
+assert.strictEqual(withItems.docsUrl, 'https://d');
+assert.strictEqual(buildActions(mobile)[0].where.length, 1, 'old runs: evidence strings are still turned into plain words');
 
 console.log('pageSpeedActions tests passed');

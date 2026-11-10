@@ -14,7 +14,7 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import PageSpeedTutorChat from './pageSpeed/PageSpeedTutorChat';
 import { HOW_IT_WORKS, GUIDE_TOOLS } from './pageSpeed/pageSpeedTools.mjs';
 import {
-  buildActions, actionsText, PRIORITY_GROUPS, CATEGORY_FILTERS,
+  buildActions, actionsText, PRIORITY_GROUPS, CATEGORY_FILTERS, humanEvidence, cleanLighthouseText,
   METRIC_HELP, FIELD_HELP, FIELD_CATEGORY_HELP, SECTION_HELP,
 } from './pageSpeed/pageSpeedActions.mjs';
 
@@ -209,6 +209,86 @@ function Badge({ children, tip, strong = false }) {
   return tip ? <Tooltip text={tip}>{el}</Tooltip> : el;
 }
 
+// "Where on the page": each flagged element or file in plain words (Link "logo" · in the header · goes to /contact).
+function WhereList({ items }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, 5);
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+        Where on the page <span className="font-normal" style={{ color: 'var(--color-muted)' }}>({items.length})</span>
+      </p>
+      <ul className="space-y-1">
+        {shown.map((w, i) => (
+          <li key={`${w.where}-${i}`} className="flex items-start gap-2 text-xs leading-relaxed">
+            <span className="shrink-0 mt-1.5 w-1 h-1 rounded-full" style={{ background: 'var(--color-primary)' }} />
+            <span className="min-w-0 break-words">
+              <span style={{ color: 'var(--color-text)' }}>{w.where}</span>
+              {w.detail ? <span style={{ color: 'var(--color-muted)' }}> · {w.detail}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {items.length > 5 && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="text-xs transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+          {all ? 'Show fewer' : `Show all ${items.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// The technical half of an action, laid out for a developer: Google's wording once, why each item failed once (not repeated per
+// element), then each element with its code.
+function DeveloperDetail({ a }) {
+  const code = { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '11px' };
+  return (
+    <div className="space-y-3 pl-4 border-l" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="space-y-1">
+        <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{a.technicalTitleClean}</p>
+        {a.technicalActionClean ? <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{a.technicalActionClean}</p> : null}
+        {a.docsUrl ? (
+          <a href={a.docsUrl} target="_blank" rel="noreferrer" className="text-xs transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+            Google's guide to this check
+          </a>
+        ) : null}
+      </div>
+      {a.flagged.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Why Google flagged {a.where.length > 1 ? 'these' : 'this'}</p>
+          {a.flagged.map((groups, gi) => (
+            <div key={gi} className="space-y-1.5">
+              {groups.map((g) => (
+                <div key={g.heading}>
+                  <p className="text-[11px] font-medium" style={{ color: 'var(--color-muted)' }}>{g.heading}:</p>
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {g.points.map((p) => <li key={p} className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>{p}</li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {a.where.some((w) => w.code.length) && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Code to look for</p>
+          <ol className="space-y-2 list-decimal pl-5">
+            {a.where.filter((w) => w.code.length).map((w, i) => (
+              <li key={`${w.where}-${i}`} className="text-xs" style={{ color: 'var(--color-text)' }}>
+                <span>{w.where}{w.detail ? <span style={{ color: 'var(--color-muted)' }}> · {w.detail}</span> : null}</span>
+                {w.code.map((c) => (
+                  <code key={c} className="block mt-0.5 px-2 py-1 rounded break-all" style={{ ...code, background: 'var(--color-bg)', color: 'var(--color-muted)' }}>{c}</code>
+                ))}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote, onCopy, onPdf }) {
   const done = useMemo(() => new Set(Object.entries(doneMap || {}).filter(([, v]) => v?.done).map(([k]) => k)), [doneMap]);
   const getIcon = useIcon();
@@ -349,10 +429,11 @@ function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote
                         <p className="text-sm font-semibold" style={{ color: isDone ? 'var(--color-muted)' : 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none' }}>{a.title}</p>
                         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}><strong style={{ color: 'var(--color-text)' }}>Why it matters: </strong>{a.why}</p>
                         <p className="text-xs leading-relaxed rounded-lg p-2.5" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><strong>What to do: </strong>{a.how}</p>
+                        {a.where.length > 0 && <WhereList items={a.where} />}
                         <div data-guide={first ? 'action-note' : undefined} style={{ opacity: 1 }}>
                           <ActionNote value={doneMap?.[a.key]?.note || ''} done={isDone} onSave={(note) => onNote(a.key, note)} />
                         </div>
-                        <Tooltip text="Show the technical version: Google's own wording, the exact fix and the files or page elements involved.">
+                        <Tooltip text="Show the technical version: Google's own wording, why each item failed, and the exact code to find on the page.">
                           <button
                             type="button"
                             onClick={() => toggleDetail(a.key)}
@@ -365,19 +446,7 @@ function ActionsPanel({ actions, strategy, otherLabel, doneMap, onToggle, onNote
                             For your developer
                           </button>
                         </Tooltip>
-                        {detailOpen && (
-                          <div className="space-y-1 pl-4 border-l" style={{ borderColor: 'var(--color-border)' }}>
-                            <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{a.technicalTitle}</p>
-                            {a.technicalAction ? <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{a.technicalAction}</p> : null}
-                            {a.evidence.length > 0 && (
-                              <ul className="pt-1 space-y-0.5">
-                                {a.evidence.map((ev) => (
-                                  <li key={ev} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>{ev}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        )}
+                        {detailOpen && <DeveloperDetail a={a} />}
                       </div>
                     </div>
                   </li>
@@ -545,7 +614,7 @@ function FindingList({ title, items, tip }) {
               ) : null}
             </div>
             {o.description ? (
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{o.description}</p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{cleanLighthouseText(o.description)}</p>
             ) : null}
             {o.docsUrl ? (
               <a
@@ -559,12 +628,25 @@ function FindingList({ title, items, tip }) {
               </a>
             ) : null}
             {(o.items || []).length > 0 && (
-              <ul className="pt-1 space-y-0.5">
-                {o.items.map((it, i) => (
-                  <li key={`${o.id}-${i}`} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>
-                    {itemText(it)}
-                  </li>
-                ))}
+              <ul className="pt-1 space-y-1">
+                {o.items.map((it, i) => {
+                  const h = humanEvidence(it);
+                  return (
+                    <li key={`${o.id}-${i}`} className="flex items-start gap-2 text-xs leading-relaxed">
+                      <span className="shrink-0 mt-1.5 w-1 h-1 rounded-full" style={{ background: 'var(--color-primary)' }} />
+                      {h ? (
+                        <Tooltip text={h.code.join('\n') || itemText(it)}>
+                          <span className="min-w-0 break-words">
+                            <span style={{ color: 'var(--color-text)' }}>{h.where}</span>
+                            {h.detail ? <span style={{ color: 'var(--color-muted)' }}> · {h.detail}</span> : null}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="min-w-0 break-all" style={{ color: 'var(--color-text)' }}>{itemText(it)}</span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </li>

@@ -174,6 +174,178 @@ export function actionKey(ticket, view) {
   return auditIdFor(ticket, view) || String(ticket?.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 80);
 }
 
+// ---- turning Lighthouse's raw evidence into something a person can read ----
+
+const TAG_NAMES = {
+  a: 'Link', img: 'Picture', picture: 'Picture', svg: 'Icon', button: 'Button', input: 'Form field', select: 'Drop-down',
+  textarea: 'Text box', label: 'Form label', h1: 'Main heading', h2: 'Heading', h3: 'Heading', h4: 'Heading', h5: 'Heading', h6: 'Heading',
+  p: 'Text', span: 'Text', li: 'List item', ul: 'List', ol: 'List', iframe: 'Embedded frame', video: 'Video', nav: 'Menu',
+  header: 'Page header', footer: 'Footer', form: 'Form', table: 'Table', section: 'Section', div: 'Block', body: 'The whole page', html: 'The whole page',
+};
+
+// Words in a selector that say where on the page something is, most specific first.
+const AREAS = [
+  [/back-?to-?the-?top|backtotop|to-?top|scroll-?top/i, 'the back-to-top area'],
+  [/foot/i, 'the footer'],
+  [/logo/i, 'the header (logo)'],
+  [/header|topbar|top-bar|masthead/i, 'the header'],
+  [/nav|menu|hamburger/i, 'the menu'],
+  [/gallery|lightbox/i, 'a gallery'],
+  [/product|shop|cart/i, 'the products section'],
+  [/hero|banner|slider|carousel|slide/i, 'the banner / slider'],
+  [/sidebar|aside/i, 'the sidebar'],
+  [/form|contact|enquir/i, 'a form'],
+  [/social|facebook|instagram|twitter|linkedin|youtube/i, 'the social media links'],
+  [/card|box|tile/i, 'a content box'],
+];
+
+function humanWords(s) {
+  return String(s || '').replace(/[-_]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function parseSegment(seg) {
+  const s = String(seg || '').trim().replace(/:nth-[a-z-]+\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '');
+  const tag = (s.match(/^[a-z][a-z0-9]*/i) || [''])[0].toLowerCase();
+  const id = (s.match(/#([\w-]+)/) || [])[1] || '';
+  const classes = [...s.matchAll(/\.([\w-]+)/g)].map((m) => m[1]).filter((c) => !/^(col|row|container|d-|flex|wrap|inner|clearfix|w-|mb-|mt-|p-|m-)/i.test(c));
+  return { tag, id, classes };
+}
+
+function hrefFromSnippet(snippet) {
+  const m = String(snippet || '').match(/\bhref=["']([^"']+)["']/i);
+  if (!m) return '';
+  const h = m[1];
+  if (h === '#' || /^javascript:/i.test(h)) return '';
+  if (h.startsWith('#')) return `a spot on this page (${h})`;
+  try {
+    const u = new URL(h, 'https://x.invalid');
+    return u.host === 'x.invalid' ? `${u.pathname}${u.hash}` : `${u.host}${u.pathname === '/' ? '' : u.pathname}`;
+  } catch { return h.slice(0, 60); }
+}
+
+function fileLabel(url) {
+  try {
+    const u = new URL(url);
+    const last = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
+    return { name: last || u.host, host: u.host.replace(/^www\./, '') };
+  } catch { return { name: String(url).slice(0, 60), host: '' }; }
+}
+
+export function fmtBytes(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return '';
+  if (v >= 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(v / 1024))} KB`;
+}
+
+/** Plain description of one piece of evidence: { where, detail, code } — `code` is for the developer only. */
+export function humanEvidence(it) {
+  if (!it || typeof it !== 'object') return null;
+  const detail = [];
+  let where = '';
+  if (it.selector) {
+    const segs = String(it.selector).split('>').map(parseSegment);
+    const last = segs[segs.length - 1] || {};
+    const kind = TAG_NAMES[last.tag] || 'Element';
+    const ownName = last.id || last.classes[0] || '';
+    const label = String(it.label || '').trim();
+    const goodLabel = !!label && label !== it.selector && !/[.#>]/.test(label) && label.toLowerCase() !== last.tag;
+    let name = '';
+    if (goodLabel) name = `"${label.slice(0, 60)}"`;
+    else if (ownName) name = `"${humanWords(ownName)}"`;
+    else {
+      const parent = [...segs].reverse().slice(1).find((p) => p.id || p.classes.length);
+      if (parent) name = `inside "${humanWords(parent.id || parent.classes[0])}"`;
+    }
+    const area = (AREAS.find(([re]) => re.test(it.selector)) || [])[1];
+    where = [kind, name].filter(Boolean).join(' ');
+    if (area) detail.push(`in ${area}`);
+    const href = hrefFromSnippet(it.snippet);
+    if (href && last.tag === 'a') detail.push(`goes to ${href}`);
+  } else if (it.url) {
+    const f = fileLabel(it.url);
+    where = f.name;
+    if (f.host && f.name.replace(/^www\./, '') !== f.host) detail.push(f.host);
+  } else if (it.label || it.subpart) {
+    where = String(it.subpart || it.label);
+  } else if (it.snippet) {
+    where = String(it.snippet).slice(0, 80);
+  } else {
+    return null;
+  }
+  if (it.subpart && it.duration != null) detail.push(`${it.duration} ms`);
+  if (it.fg && it.bg) detail.push(`text ${it.fg} on ${it.bg}${it.contrastRatio != null ? `, contrast ${Number(it.contrastRatio).toFixed(1)} to 1 (needs 4.5)` : ''}`);
+  if (it.wastedBytes != null && it.wastedBytes > 0) detail.push(`${fmtBytes(it.wastedBytes)} could be saved${it.totalBytes ? ` of ${fmtBytes(it.totalBytes)}` : ''}`);
+  else if (it.totalBytes) detail.push(fmtBytes(it.totalBytes));
+  if (it.wastedMs != null && it.wastedMs > 0) detail.push(`${it.wastedMs} ms slower`);
+  const code = [it.selector, it.selector && it.url ? it.url : '', it.snippet && it.snippet !== it.selector ? it.snippet : '']
+    .filter(Boolean).map((c) => String(c).slice(0, 240));
+  return { where, detail: detail.join(' · '), code };
+}
+
+/** Fallback for work-order evidence that is only a pre-joined string ("selector · url · explanation"). */
+function evidenceStringToItem(line) {
+  const parts = String(line || '').split(' · ').map((p) => p.trim()).filter(Boolean)
+    .filter((p) => !/^Fix (all|any) of the following/i.test(p));
+  const out = {};
+  for (const p of parts) {
+    if (/^https?:\/\//i.test(p)) out.url = out.url || p;
+    else if (/bytes unused$/.test(p)) out.wastedBytes = Number(p.replace(/\D/g, ''));
+    else if (/ms wasted$/.test(p)) out.wastedMs = Number(p.replace(/\D/g, ''));
+    else if (!out.selector && /[>.#]|^[a-z][a-z0-9]*$/i.test(p) && !/\s{2,}/.test(p) && p.length < 300 && !/ /.test(p.replace(/ > /g, '>'))) out.selector = p;
+    else out.label = out.label || p;
+  }
+  return out;
+}
+
+/**
+ * Lighthouse's per-element explanation ("Fix all of the following: ... Fix any of the following: ...") as readable groups:
+ * [{ heading, points: [] }]. Returns [] when there is nothing useful.
+ */
+export function explanationGroups(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  const parts = raw.split(/(Fix (?:all|any) of the following:)/i).map((p) => p.trim()).filter(Boolean);
+  const groups = [];
+  let heading = '';
+  const STARTERS = /\s+(?=(?:Element |aria-|Document |Form element|Image |Link |The element|Required ARIA|ARIA |Heading |List |Page |Text |Background ))/;
+  for (const p of parts) {
+    if (/^Fix all of the following:/i.test(p)) { heading = 'All of these need fixing'; continue; }
+    if (/^Fix any of the following:/i.test(p)) { heading = 'Fixing any one of these is enough'; continue; }
+    let points = p.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+    if (points.length === 1) points = points[0].split(STARTERS).map((x) => x.trim()).filter(Boolean);
+    groups.push({ heading: heading || 'Why it was flagged', points: points.map((x) => x.replace(/\s+/g, ' ')) });
+    heading = '';
+  }
+  return groups;
+}
+
+/** Lighthouse's description without the dangling "Learn more ..." sentence and the [attr] code marks. */
+export function cleanLighthouseText(s) {
+  return String(s || '')
+    .replace(/`?\[([a-z-]+(?:\*)?)\]`?/gi, '$1')
+    .replace(/`/g, '')
+    .replace(/\s*(Learn (more|how|why)[^.]*\.?)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const SOURCE_ALIAS = { 'tag-manager': 'unused-javascript' };
+
+function sourceAudit(view, auditId, ticketTitle) {
+  const bags = [view?.failedAudits, view?.opportunities, view?.diagnostics, view?.warnings];
+  const id = SOURCE_ALIAS[auditId] || auditId;
+  for (const bag of bags) {
+    const hit = (bag || []).find((a) => a && (a.id === id || (/^lcp-/.test(id) && /lcp-(breakdown|discovery|phases)/.test(a.id || ''))));
+    if (hit) return hit;
+  }
+  for (const bag of bags) {
+    const hit = (bag || []).find((a) => a && a.title === ticketTitle);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /**
  * The Actions list for one view (mobile or desktop). `otherView` (the other device) is optional; when given each action says whether
  * it also shows up there.
@@ -185,7 +357,28 @@ export function buildActions(view, otherView = null) {
     const help = helpFor(auditId);
     const category = normCategory(t.category);
     const key = actionKey(t, view);
+    const src = sourceAudit(view, auditId, t.title);
+    const rawItems = src && Array.isArray(src.items) && src.items.length
+      ? src.items
+      : (Array.isArray(t.evidence) ? t.evidence : []).map(evidenceStringToItem);
+    const where = [];
+    const seenWhere = new Set();
+    for (const it of rawItems) {
+      const h = humanEvidence(it);
+      if (!h) continue;
+      const k = `${h.where}|${h.detail}|${h.code.join('|')}`;
+      if (seenWhere.has(k)) continue;
+      seenWhere.add(k);
+      where.push(h);
+    }
+    const explanations = [...new Set(rawItems.map((it) => String(it?.explanation || '').trim()).filter(Boolean))];
+    const flagged = explanations.slice(0, 3).map(explanationGroups).filter((g) => g.length);
     return {
+      where,
+      flagged,
+      docsUrl: src?.docsUrl || '',
+      technicalActionClean: cleanLighthouseText(t.action || ''),
+      technicalTitleClean: cleanLighthouseText(t.title || ''),
       key,
       auditId,
       priority: ['P0', 'P1', 'P2'].includes(t.priority) ? t.priority : 'P2',
@@ -215,6 +408,11 @@ export function actionsText(actions, { strategy, url, done = new Set() } = {}) {
     for (const a of rows) {
       lines.push(`[${done.has(a.key) ? 'x' : ' '}] ${a.title} (${a.categoryLabel}${a.who ? `, ${a.who}` : ''})`);
       lines.push(`    What to do: ${a.how}`);
+      if (a.where?.length) {
+        lines.push(`    Where on the page:`);
+        for (const w of a.where.slice(0, 10)) lines.push(`      - ${w.where}${w.detail ? ` (${w.detail})` : ''}`);
+        if (a.where.length > 10) lines.push(`      - and ${a.where.length - 10} more`);
+      }
       if (a.plainKnown && a.technicalTitle !== a.title) lines.push(`    Technical: ${a.technicalTitle}`);
     }
     lines.push('');
