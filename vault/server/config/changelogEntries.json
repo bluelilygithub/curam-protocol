@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8107212a",
+   "fullHash": "8107212ac4cee160adce2b365b36787f16876107",
+   "committedAt": "2026-11-10T15:56:04+10:00",
+   "author": "mrb",
+   "subject": "Page speed: plain-English \"Where on the page\" for each action",
+   "filesChanged": 4,
+   "insertions": 349,
+   "deletions": 26,
+   "area": "Page speed",
+   "goal": "Make the evidence under each Page speed action readable for a person: the owner said the raw developer detail (CSS selectors with the same long explanation repeated on every line) needed formatting for humans.",
+   "whatChanged": "client/src/pages/pageSpeed/pageSpeedActions.mjs: humanEvidence() turns each Lighthouse item into { where, detail, code }: element kind from the tag (Link, Picture, Button...), its name from visible label or class/id, the page area from words in the selector (header, menu, footer, gallery, products, banner, back-to-top...), where a link goes (from href), file name and host for file items, sizes in KB/MB and ms instead of raw bytes, contrast colours. explanationGroups() splits the axe 'Fix all / Fix any of the following' text into two short lists, shown once per action instead of on every line. cleanLighthouseText() drops the dangling 'Learn more/how...' sentence and [attr] code marks. buildActions() reads the structured items from the source audit (old runs fall back to parsing the stored evidence strings), dedupes them and adds where, flagged, docsUrl and cleaned technical text. HtmlAuditPage.jsx: a 'Where on the page' list on each action card (first five, Show all), the For your developer block rebuilt (Google's text once, guide link, Why Google flagged these, Code to look for with the selector and HTML in small code boxes), Report tab findings use the same plain lines with the code in a hover tip. Copy action list and the PDF report (pageSpeedReportPdf.jsx) include the locations; the PDF's developer detail lists the code once as a numbered list.",
+   "filesImpacted": [
+    "vault/client/src/pages/pageSpeed/pageSpeedActions.mjs",
+    "vault/client/src/pages/pageSpeed/pageSpeedActions.test.mjs",
+    "vault/client/src/pages/pageSpeed/pageSpeedReportPdf.jsx",
+    "vault/client/src/pages/HtmlAuditPage.jsx"
+   ],
+   "benefit": "An owner or client can see which links, pictures or files are affected and where on the page, without reading CSS selectors; the developer still gets the exact code, without the repeated boilerplate. Works on existing saved runs.",
+   "concerns": "Names come from the site's own class names, so a vaguely named element reads as e.g. Link inside \"footarea\" (the area and link target help). The area guess is keyword-based and can be wrong on unusual class names. Seen on screen and in the PDF on local dev with the owner's real evidence pasted into a test run, not against a fresh live PageSpeed result."
+  },
+  {
    "commit": "96e8e415",
    "fullHash": "96e8e415f4b5c2c8ab01171b9a0be7f328655d67",
    "committedAt": "2026-11-10T15:23:43+10:00",
