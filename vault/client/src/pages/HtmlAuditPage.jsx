@@ -18,6 +18,7 @@ import {
   buildActions, actionsText, PRIORITY_GROUPS, CATEGORY_FILTERS, humanEvidence, cleanLighthouseText,
   METRIC_HELP, FIELD_HELP, FIELD_CATEGORY_HELP, SECTION_HELP,
 } from './pageSpeed/pageSpeedActions.mjs';
+import { buildLlmBrief } from './pageSpeed/pageSpeedLlmBrief.mjs';
 
 const FIELD = {
   background: 'var(--color-bg)',
@@ -1257,21 +1258,21 @@ export default function HtmlAuditPage() {
                   </button>
                 </Tooltip>
               ))}
-              {active?.developerBrief ? (
-                <Tooltip text="Copy the technical report (developer work order, metrics and findings) for the device chosen (mobile or desktop) as plain text, to paste to a developer.">
+              {active ? (
+                <Tooltip text="Copy a ready-to-paste prompt for an AI assistant: this device's findings plus what to weigh up when planning improvements.">
                   <button
                     data-guide="copy"
                     type="button"
-                    onClick={() => copyBrief(active.developerBrief)}
+                    onClick={() => copyBrief(buildLlmBrief(active), 'AI brief')}
                     className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
-                    Copy this report
+                    Copy for AI
                   </button>
                 </Tooltip>
               ) : null}
               {audit?.report?.developerBrief ? (
-                <Tooltip text="Copy both the mobile and desktop reports together as plain text.">
+                <Tooltip text="Copy the raw technical brief for both mobile and desktop as plain text, to paste to a developer.">
                   <button
                     type="button"
                     onClick={() => copyBrief(audit.report.developerBrief)}

@@ -19,8 +19,8 @@ const CATALOG = [
     does: 'Two buttons above a saved run switch between the phone test and the computer test; each shows its performance score. Both the Report and the Actions tabs follow the one chosen.',
     notes: 'Mobile is tested as a mid-range phone on a slower connection, so it usually scores lower. Google mostly ranks on the mobile version, so fix mobile first.' },
   { id: 'copy', label: 'Copy buttons', group: 'Results',
-    does: 'Copy this report copies the technical report for the chosen device; Copy mobile + desktop copies both. On the Actions tab, Copy action list copies the plain-English to-do list with ticks. Paste them into an email to a developer.',
-    notes: 'They copy text only; nothing is sent from Vault.' },
+    does: 'Copy for AI copies a ready-to-paste prompt for an AI assistant: the findings for the chosen device plus what to weigh up when planning improvements. Copy mobile + desktop copies the technical report for both devices. On the Actions tab, Copy action list copies the plain-English to-do list with ticks.',
+    notes: 'They copy text only; nothing is sent from Vault. Treat the AI answer as a draft: check it against the site and your own context.' },
   { id: 'report', label: 'Report', group: 'Results',
     does: 'The first tab of a saved run: the four category scores, the progress chart, lab metrics, field data and the full findings, for mobile or desktop.',
     notes: 'Everything comes from one Google test, so scores can move a few points between runs.' },
@@ -59,7 +59,7 @@ const CATALOG = [
     notes: 'Use Done only to show a client what has been fixed, Still to do with Developer detail as a developer\'s to-do list. It is downloaded, not emailed; attach it to an email yourself.' },
   { id: 'developer-detail', label: 'For your developer', group: 'Results',
     does: 'Under each action, For your developer opens the technical version: Google\'s own title, the exact fix and the evidence (file addresses, page elements, colours and sizes).',
-    notes: 'Copy this report gives a developer the same detail for every action at once.' },
+    notes: 'The PDF\'s Developer detail option gives a developer the same detail for every action at once.' },
 ];
 
 const RULES = [

@@ -1653,11 +1653,16 @@ function UserGuidePage() {
           alert mechanism that was never actually wired up.
         </P>
 
-        <SubHeading>Page speed (Lighthouse)</SubHeading>
+        <SubHeading>Page speed</SubHeading>
         <P>
-          Runs Google's PageSpeed Insights for both mobile and desktop and turns the result into a prioritised
-          work order (P0–P2 tickets a developer can action), alongside category scores, lab metrics, and specific
-          failed checks with selectors. This is page-speed and technical quality, not SEO content strategy.
+          Runs Google's PageSpeed Insights for both mobile and desktop. The <strong>Report</strong> tab shows
+          category scores, lab metrics, real-visitor field data, and specific failed checks with selectors. The
+          <strong>Actions</strong> tab turns the result into a prioritised plain-English work order (Fix first /
+          Do next / When there is time) with who usually does each job, how big it is, and ticks and notes saved
+          on the run. Send a formatted <strong>PDF report</strong> to a client or manager, copy the raw developer
+          brief for both devices, copy the action list, or use <strong>Copy for AI</strong> to get a ready-to-paste
+          prompt: the chosen device's findings plus what an AI should weigh up when planning improvements. This is
+          page-speed and technical quality, not SEO content strategy.
         </P>
 
         <SubHeading>Web Extractor</SubHeading>

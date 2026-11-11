@@ -15,12 +15,13 @@ const CONFIG = {
   name: 'Page speed guide',
   shortName: 'guide',
   subtitle: 'Tell me what you want to check or fix',
-  intro: 'Hi! Tell me what you want to do in your own words: test a page, understand a score or a term like LCP, or work out what to fix first. I will show you which parts of Page speed to use and in what order. I cannot see your results.',
+  intro: 'Hi! Tell me what you want to do in your own words: test a page, understand a score or a term like LCP, work out what to fix first, or turn the report into a plan. I will show you which parts of Page speed to use and in what order. I cannot see your results.',
   starters: [
     'What should I fix first?',
     'Why is my mobile score lower than desktop?',
     'What does Largest Contentful Paint mean?',
     'How do I send this to my developer?',
+    'How do I get an AI to plan the fixes?',
   ],
   // Status colours are deliberately outside the theme (see client/DESIGN.md).
   verdicts: {
