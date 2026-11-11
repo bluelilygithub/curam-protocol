@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8dfb9a4f",
+   "fullHash": "8dfb9a4fd4bace02e85d3658fdfb0e5d8928b41b",
+   "committedAt": "2026-11-12T08:41:25+10:00",
+   "author": "mrb",
+   "subject": "Page speed: Copy for AI replaces the single-device report copy",
+   "filesChanged": 10,
+   "insertions": 269,
+   "deletions": 18,
+   "area": "Page speed",
+   "goal": "Make the least useful report output earn its place: the single-device Copy this report button only repeated Copy mobile + desktop, so it now gives an AI assistant a ready-to-paste improvement brief.",
+   "whatChanged": "The Report tab's single-device copy button is now Copy for AI and copies client/src/pages/pageSpeed/pageSpeedLlmBrief.mjs buildLlmBrief(active) instead of the raw developer brief. The prompt has two parts: a 15-point instruction on what to weigh up (real-visitor vs lab data, mobile first, impact x effort x risk, cause and verification, trade-offs, accessibility/WCAG, SEO intent, third parties, hosting, images and fonts, JavaScript, what not to change, measurement, uncertainty) and a required output shape (diagnosis, prioritised table, phased plan, measurement, open questions, do-not-bother list); then the chosen device's evidence: URL, device, date, Lighthouse version, four scores, lab metrics with explanations, Chrome UX Report field data, the P0/P1/P2 work order, opportunities, diagnostics, failed checks and warnings, with each item list capped at 10. Copy mobile + desktop still copies the raw brief for both devices and the PDF report is unchanged. Guide catalogue (server/services/pageSpeedTutor.js), the How Page speed works box (pageSpeedTools.mjs), the guide's intro and starters, the user guide and docs/features.md, docs/guide-chat.md and docs/html-agent.md updated. New test: node client/src/pages/pageSpeed/pageSpeedLlmBrief.test.mjs.",
+   "filesImpacted": [
+    "vault/client/src/pages/HtmlAuditPage.jsx",
+    "vault/client/src/pages/UserGuidePage.jsx",
+    "vault/client/src/pages/pageSpeed/PageSpeedTutorChat.jsx",
+    "vault/client/src/pages/pageSpeed/pageSpeedLlmBrief.mjs",
+    "vault/client/src/pages/pageSpeed/pageSpeedLlmBrief.test.mjs",
+    "vault/client/src/pages/pageSpeed/pageSpeedTools.mjs",
+    "vault/docs/features.md",
+    "vault/docs/guide-chat.md",
+    "vault/docs/html-agent.md",
+    "vault/server/services/pageSpeedTutor.js"
+   ],
+   "benefit": "One click gives an AI assistant the chosen device's evidence plus the questions to weigh up, so the reply can be a prioritised, costed plan rather than a restated Lighthouse list. The raw two-device brief, the action list and the PDF are unchanged, so no existing output was lost.",
+   "concerns": "The copied prompt is long (the instruction plus one device's findings, capped at 10 items per finding list), which may exceed a small model's context or cost more to process. The AI answer is a draft: it is not checked against the site, and field data only exists for busy sites. Copying makes no server call and runs no test, so it cannot confirm a fix."
+  },
+  {
    "commit": "dec87680",
    "fullHash": "dec87680616eceefe7df1490ec5b225c8a361d89",
    "committedAt": "2026-11-11T08:46:07+10:00",
