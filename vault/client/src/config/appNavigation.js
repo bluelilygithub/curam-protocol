@@ -85,6 +85,7 @@ export const APP_NAV_GROUPS = [
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
       { id: 'devicePreview', label: 'Device preview', path: '/device-preview', icon: 'smartphone', featureKey: 'restyle', aliases: 'responsive mobile phone tablet screen size ipad iphone' },
       { id: 'html', label: 'Page speed', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true, aliases: 'lighthouse pagespeed audit' },
+      { id: 'aiVisibility', label: 'AI Visibility', path: '/ai-visibility', icon: 'radar', featureKey: 'aiVisibility', matchPrefix: true, aliases: 'llm chatgpt gemini ai search aeo geo answer engine citation robots' },
       { id: 'webExtractor', label: 'Web Extractor', path: '/web-extractor', icon: 'scissors', featureKey: 'webExtractor' },
       { id: 'browserAgent', label: 'Browser Agent', path: '/browser-agent', icon: 'mouse-pointer', featureKey: 'browserAgent' },
     ],

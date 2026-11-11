@@ -4046,6 +4046,26 @@ async function initSchema() {
   // Page speed Actions tab: which actions are done, per device. { mobile: { <actionKey>: { done, doneAt, note } }, desktop: {...} }
   await pool.query(`ALTER TABLE html_audits ADD COLUMN IF NOT EXISTS "actionsDone" JSONB NOT NULL DEFAULT '{}'`);
 
+  // AI Visibility audits (docs/ai-visibility.md). The whole report lives in `report`;
+  // score/summary are copied out so the saved-run list does not need to parse every row.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ai_visibility_audits (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL DEFAULT 'Untitled',
+      url             TEXT NOT NULL,
+      score           INTEGER NOT NULL DEFAULT 0,
+      summary         TEXT NOT NULL DEFAULT '',
+      report          JSONB NOT NULL DEFAULT '{}',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_ai_visibility_audits_user_updated
+      ON ai_visibility_audits ("userId", "updatedAt" DESC)
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gsc_tokens (
       id             SERIAL PRIMARY KEY,

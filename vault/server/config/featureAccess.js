@@ -33,6 +33,9 @@ const FEATURE_ACCESS_DEFAULTS = {
   googleAds: true,
   seo: true,
   html: true,
+  // AI Visibility (docs/ai-visibility.md): new, costs search + model calls per run. Off
+  // until an admin switches it on (admins can always open it).
+  aiVisibility: false,
   searchConsole: true,
   // Translate and Guitar routes are not gated by requireFeature; the key lets the admin switch the menu entry off (client list parity)
   translate: true,
@@ -74,6 +77,7 @@ const FEATURE_LIFECYCLE = {
   cellarPlanner: 'preview',   // real-job validation and the rod fabricator's rack values are pending
   serpTracker: 'preview',     // built stage by stage; stage 1 only checks the DataForSEO balance, no rankings collected yet
   topicResearch: 'preview',   // built milestone by milestone; drafts, source check and suggestions not yet run against a real model
+  aiVisibility: 'preview',    // new: search + model answers per run, not yet run on Railway
   emailFollowUp: 'preview',   // not run against a real model or mailbox
   shelf: 'preview',           // Windows app: installer unsigned, no guide chat yet
   passwordVault: 'preview',   // new, holds logins: off until an admin switches it on

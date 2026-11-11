@@ -51,6 +51,7 @@ import GuitarPage from './pages/GuitarPage';
 import SeoPage from './pages/SeoPage';
 import SeoAuditPage from './pages/SeoAuditPage';
 import HtmlAuditPage from './pages/HtmlAuditPage';
+import AiVisibilityPage from './pages/AiVisibilityPage';
 import WebExtractorPage from './pages/WebExtractorPage';
 import BurnerMailPage from './pages/BurnerMailPage';
 import DnsLookupPage from './pages/DnsLookupPage';
@@ -235,6 +236,8 @@ function App() {
               <Route path="/serp-tracker" element={<SerpTrackerPage />} />
               <Route path="/html" element={<HtmlAuditPage />} />
               <Route path="/html/:id" element={<HtmlAuditPage />} />
+              <Route path="/ai-visibility" element={<AiVisibilityPage />} />
+              <Route path="/ai-visibility/:id" element={<AiVisibilityPage />} />
               <Route path="/web-extractor" element={<WebExtractorPage />} />
               <Route path="/fitness" element={<FitnessPage />} />
               <Route path="/browser-agent" element={<BrowserAgentPage />} />

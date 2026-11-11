@@ -1615,7 +1615,7 @@ function UserGuidePage() {
         {/* ── Website Tools (grouped) ── */}
         <SectionHeading id="website-tools">Website Tools</SectionHeading>
         <P>
-          Seven tools for anyone running or marketing a website live under Apps → Website. Several sound similar —
+          Several tools for anyone running or marketing a website live under Apps → Web &amp; SEO. Some sound similar —
           each one covers a distinct slice of the work, so check the short description below before assuming two
           tools overlap.
         </P>
@@ -1663,6 +1663,19 @@ function UserGuidePage() {
           brief for both devices, copy the action list, or use <strong>Copy for AI</strong> to get a ready-to-paste
           prompt: the chosen device's findings plus what an AI should weigh up when planning improvements. This is
           page-speed and technical quality, not SEO content strategy.
+        </P>
+
+        <SubHeading>AI Visibility</SubHeading>
+        <P>
+          Audits one public page for the way AI assistants find, read and quote it. It reads robots.txt properly and
+          checks each AI crawler separately (GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended and
+          others), naming the exact rule that blocks one. It compares the raw HTML with the same page rendered in a
+          browser to show how much of the offer only exists after JavaScript, validates JSON-LD entity by entity,
+          and then runs up to six buyer questions through live web search and a model answer. Each question reports
+          three separate results — found in the search results, named in the answer, linked in the answer — and the
+          key facts you supply (numbers are checked with their units) are matched against the answers. Copy the whole
+          report as Markdown or download it as a PDF. This is about AI answers and citations, not Google rankings
+          (that's SEO) or page speed (that's Page speed). It needs a connected text model and a search API key.
         </P>
 
         <SubHeading>Web Extractor</SubHeading>

@@ -29,6 +29,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   googleAds: true,
   seo: true,
   html: true,
+  aiVisibility: false, // keep in step with server/config/featureAccess.js
   searchConsole: true,
   translate: true,
   guitar: true,
@@ -56,6 +57,7 @@ export const FEATURE_LIFECYCLE = {
   cellarPlanner: 'preview',
   topicResearch: 'preview',
   serpTracker: 'preview',
+  aiVisibility: 'preview',
   emailFollowUp: 'preview',
   shelf: 'preview',
   passwordVault: 'preview',
@@ -80,6 +82,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'googleAds', label: 'Google Ads' },
       { key: 'domains', label: 'Domain' },
       { key: 'html', label: 'Page speed' },
+      { key: 'aiVisibility', label: 'AI Visibility' },
       { key: 'webExtractor', label: 'Web Extractor' },
     ],
   },
