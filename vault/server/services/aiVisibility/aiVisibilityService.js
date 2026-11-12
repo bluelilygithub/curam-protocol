@@ -16,7 +16,7 @@
  */
 
 const { pool } = require('../../db');
-const { fetchHtml, fetchDirect, htmlToText, extractTitle, decodeEntities, normaliseHttpUrl } = require('../htmlFetch');
+const { fetchHtml, fetchOnce, fetchDirect, htmlToText, extractTitle, decodeEntities, normaliseHttpUrl } = require('../htmlFetch');
 const { checkSsrf } = require('../../utils/safeFetch');
 const { getModelsForUser, getVaultModelsConfigForUser, pickTextModel, isNonTextModel } = require('../modelResolver');
 const { parseRobots, auditRobots } = require('./robots');
@@ -181,6 +181,43 @@ async function buildReadability(technical, finalUrl) {
   };
 }
 
+// Some hosts drop the first connection (a firewall, or an HTTP/2 quirk), and Node reports a bare
+// "socket hang up". The shared fetchHtml retries different identities only for thin responses, not for
+// errors, and other tools rely on its current behaviour, so the retry lives here: a couple of plain,
+// polite requests, then a sentence a person can act on instead of a raw technical error.
+const CONNECTION_DROPPED = /socket hang up|socket hung up|ECONNRESET|ECONNABORTED|EPIPE|EPROTO|close_notify|network socket disconnected/i;
+
+const PLAIN_IDENTITIES = [
+  { headers: {} },
+  {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
+  },
+];
+
+async function fetchPage(url) {
+  try {
+    return await fetchHtml(url);
+  } catch (err) {
+    if (!CONNECTION_DROPPED.test(String(err && err.message))) throw err;
+  }
+  for (const identity of PLAIN_IDENTITIES) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetchOnce(url, 5, 15000, identity.headers, {}, {
+        'User-Agent': identity.headers['User-Agent'] || 'Mozilla/5.0 (compatible; VaultAI/1.0)',
+        Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+      });
+      if (res && res.statusCode) return { ...res, via: res.via || 'direct' };
+    } catch { /* try the next identity */ }
+  }
+  const friendly = new Error('The site closed the connection before the page could be read. It may refuse automated visits; try again in a moment, or audit a different page on the same site.');
+  friendly.status = 502;
+  throw friendly;
+}
+
 async function runAudit(userId, input = {}) {
   const url = normaliseHttpUrl(input.url);
   const parsed = new URL(url);
@@ -190,7 +227,7 @@ async function runAudit(userId, input = {}) {
   const facts = normaliseList(input.facts, MAX_FACTS);
   const requestedQueries = normaliseList(input.queries, MAX_QUERIES);
 
-  const fetchResult = await fetchHtml(url);
+  const fetchResult = await fetchPage(url);
   const html = String(fetchResult.body || '');
   if (!html.trim()) {
     const err = new Error('The page returned no readable HTML.');

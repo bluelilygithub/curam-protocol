@@ -3766,6 +3766,9 @@
   "POST /api/page-speed-tutor": {
    "class": "authed"
   },
+  "POST /api/ai-visibility-tutor": {
+   "class": "authed"
+  },
   "POST /api/web-extractor-tutor": {
    "class": "authed"
   },

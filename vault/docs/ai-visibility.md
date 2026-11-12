@@ -6,7 +6,7 @@ An audit of one public page for the way AI assistants find, read and quote it. I
 
 ## What a run does
 
-1. **Fetches the page** with the shared SSRF-safe `htmlFetch` (no JavaScript, as an AI crawler that does not run scripts sees it).
+1. **Fetches the page** with the shared SSRF-safe `htmlFetch` (no JavaScript, as an AI crawler that does not run scripts sees it). If the host drops the first connection (a bare `socket hang up`), the audit retries twice with plain identities and then says plainly that the site closed the connection, rather than showing the raw Node error.
 2. **Fetches `/robots.txt`** from the same origin and parses it properly.
 3. **Renders the page in Chromium** (Playwright) and compares the readable content with the raw HTML.
 4. **Extracts and validates JSON-LD** entities.
@@ -91,9 +91,13 @@ Suggestions are ordered fail → improve → consider and each has a concrete "w
 - **Copy for AI** — the full report as Markdown (the same text the PDF renders, so they cannot drift).
 - **Download PDF** — rendered server-side with `pdf-lib`, standard fonts only.
 
+## Guide chat
+
+The round **AI Visibility guide** sits at the bottom right of `/ai-visibility` (`guideId` `ai-visibility`, `POST /api/ai-visibility-tutor`, flag `aiVisibility`, `aiLimiter`). It points at the page's real parts in order, or says plainly that something is not built: the start screen (New audit, Page URL, Name and Brand, Model, Buyer questions, Key facts, Run audit) and a saved report (scores and their five areas, Suggestions, Technical access and the AI-crawler table, Readability without JavaScript, Structured data, Simulated questions and citation checks, Key facts, Copy for AI, Download PDF). It sees no address, score or report, and it says an audit is a snapshot that cannot control what an AI assistant says. The shared tool list is `client/src/pages/aiVisibility/aiVisibilityTools.mjs`; `node server/services/aiVisibilityTutor.test.js` (with `guideTestKit.js`) fails if the guide and the page drift apart. See `docs/guide-chat.md`.
+
 ## API
 
-Mounted at `/api/ai-visibility` with `requireFeature('aiVisibility')`. `aiLimiter` sits on the `POST` only, so listing and downloading do not consume the AI budget.
+Mounted at `/api/ai-visibility` with `requireFeature('aiVisibility')`. `aiLimiter` sits on the `POST` only, so listing and downloading do not consume the AI budget. The guide chat is mounted separately at `/api/ai-visibility-tutor` behind the same flag and `aiLimiter`; it sees no address, score or report.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -114,5 +118,7 @@ Mounted at `/api/ai-visibility` with `requireFeature('aiVisibility')`. `aiLimite
 
 - `server/services/aiVisibility/robots.js`, `schema.js`, `facts.js`, `searchClient.js`, `render.js`, `queryAnalysis.js`, `scoring.js`, `markdown.js`, `pdf.js`, `aiVisibilityService.js`
 - `server/routes/aiVisibility.js`; mounted in `server/index.js`
-- `client/src/pages/AiVisibilityPage.jsx`
+- `server/services/aiVisibilityTutor.js`, `server/routes/aiVisibilityTutor.js` (the guide chat)
+- `client/src/pages/AiVisibilityPage.jsx`; guide wrapper `client/src/pages/aiVisibility/AiVisibilityTutorChat.jsx` and shared list `client/src/pages/aiVisibility/aiVisibilityTools.mjs`
 - `server/services/aiVisibility/aiVisibility.test.js` — `npm run test:ai-visibility` (pure modules only: no network, browser or database)
+- `server/services/aiVisibilityTutor.test.js` — `npm run test:ai-visibility-tutor` (guide catalogue vs page, with `guideTestKit.js`)

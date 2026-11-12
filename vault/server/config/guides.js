@@ -43,6 +43,7 @@ const GUIDES = {
   'serp-tracker': { name: 'SERP Tracker guide', endpoint: '/api/serp-tracker-tutor' },
   memory: { name: 'Memory guide', endpoint: '/api/memory-tutor' },
   'page-speed': { name: 'Page speed guide', endpoint: '/api/page-speed-tutor' },
+  'ai-visibility': { name: 'AI Visibility guide', endpoint: '/api/ai-visibility-tutor' },
 };
 
 module.exports = { GUIDES };

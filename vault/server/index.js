@@ -252,6 +252,7 @@ app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 // AI Visibility (docs/ai-visibility.md). Only the run itself costs model/search money,
 // so aiLimiter sits on the POST inside the route rather than on the whole router.
+app.use('/api/ai-visibility-tutor', requireFeature('aiVisibility'), aiLimiter, require('./routes/aiVisibilityTutor')); // the AI Visibility guide chat (sees no address, score or report)
 app.use('/api/ai-visibility', requireFeature('aiVisibility'), require('./routes/aiVisibility'));
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)

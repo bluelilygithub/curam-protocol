@@ -9,6 +9,8 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatRunDate } from '../utils/seoCampaignBrief';
 import Tooltip from '../components/Tooltip';
 import Dialog from '../components/Dialog';
+import AiVisibilityTutorChat from './aiVisibility/AiVisibilityTutorChat';
+import { GUIDE_TOOLS } from './aiVisibility/aiVisibilityTools.mjs';
 
 const TOOL_HELP = {
   title: 'AI Visibility',
@@ -312,6 +314,23 @@ export default function AiVisibilityPage() {
   const suggestions = report.suggestions || [];
   const score = audit ? Number(audit.score) : null;
 
+  // The guide's Open buttons: go to the right screen, then scroll to the part marked data-guide="<id>".
+  const openToolById = (guideId) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === guideId);
+    if (!target) return;
+    if (target.tool === 'new-audit') {
+      if (id) navigate('/ai-visibility');
+    } else if (target.tool !== 'saved-audits' && !id) {
+      addToast('Open a saved audit from the list on the left first (or run a new audit).', 'info');
+      return;
+    }
+    setTimeout(() => {
+      const el = document.querySelector(`[data-guide="${guideId}"]`)
+        || document.querySelector(`[data-guide="${target.tool}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  };
+
   if (!canUse) return <Navigate to="/" replace />;
 
   return (
@@ -380,7 +399,7 @@ export default function AiVisibilityPage() {
           </button>
         </Tooltip>
 
-        <ul className="space-y-0.5">
+        <ul className="space-y-0.5" data-guide="saved-audits">
           {filtered.length === 0 && (
             <li className="px-2 py-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>No audits yet</li>
           )}
@@ -454,7 +473,7 @@ export default function AiVisibilityPage() {
         )}
 
         {!id && (
-          <section className="space-y-4">
+          <section className="space-y-4" data-guide="new-audit">
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New AI visibility audit</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
@@ -502,7 +521,7 @@ export default function AiVisibilityPage() {
               </label>
             </div>
 
-            <label className="block space-y-1">
+            <label className="block space-y-1" data-guide="model">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Model for simulated answers</span>
               <Tooltip text="The connected text model that answers each question. The workspace default is used if left blank.">
                 <select
@@ -524,7 +543,7 @@ export default function AiVisibilityPage() {
               )}
             </label>
 
-            <label className="block space-y-1">
+            <label className="block space-y-1" data-guide="buyer-questions">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Buyer questions (optional)</span>
               <Tooltip text="One realistic question per line, up to 6. Leave blank to generate four from the page title, description and headings.">
                 <textarea
@@ -539,7 +558,7 @@ export default function AiVisibilityPage() {
               <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>One per line, up to 6. Blank = four generated from the page.</span>
             </label>
 
-            <label className="block space-y-1">
+            <label className="block space-y-1" data-guide="facts-input">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Key facts to check (optional)</span>
               <Tooltip text="Facts an answer should state accurately. Include units, because the check compares numbers with their units.">
                 <textarea
@@ -559,6 +578,7 @@ export default function AiVisibilityPage() {
                 <button
                   type="button"
                   onClick={handleCreate}
+                  data-guide="run-audit"
                   className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
                   style={{ background: 'var(--color-primary)' }}
                 >
@@ -603,6 +623,7 @@ export default function AiVisibilityPage() {
                   <button
                     type="button"
                     onClick={copyMarkdown}
+                    data-guide="copy"
                     className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
@@ -613,6 +634,7 @@ export default function AiVisibilityPage() {
                   <button
                     type="button"
                     onClick={downloadPdf}
+                    data-guide="pdf"
                     className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
@@ -640,7 +662,7 @@ export default function AiVisibilityPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2" data-guide="scores">
               {SCORE_AREAS.map((area) => {
                 const value = scores[area.key];
                 return (
@@ -658,13 +680,14 @@ export default function AiVisibilityPage() {
                 );
               })}
             </div>
-            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            <p className="text-[11px] leading-relaxed" data-guide="score-areas" style={{ color: 'var(--color-muted)' }}>
               {(scores.measured || []).length
                 ? `Measured: ${(scores.measured || []).join(', ')}. Areas that could not be measured are left out of the overall score rather than scored zero.`
                 : 'No area could be measured.'}
             </p>
 
             {suggestions.length > 0 && (
+              <div data-guide="suggestions">
               <Card
                 title="Suggestions"
                 subtitle="Ordered by severity: fixes first, then improvements, then optional ideas."
@@ -695,8 +718,10 @@ export default function AiVisibilityPage() {
                   ))}
                 </ul>
               </Card>
+              </div>
             )}
 
+            <div data-guide="technical">
             <Card
               title="Technical access"
               subtitle="What a crawler gets before any JavaScript runs, and which AI crawlers robots.txt allows."
@@ -719,7 +744,7 @@ export default function AiVisibilityPage() {
                 ))}
               </dl>
 
-              <div className="overflow-x-auto pt-1">
+              <div className="overflow-x-auto pt-1" data-guide="robots">
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr style={{ color: 'var(--color-muted)' }}>
@@ -748,7 +773,9 @@ export default function AiVisibilityPage() {
                 {(robots.sitemaps || []).length ? ` Sitemaps in robots.txt: ${robots.sitemaps.join(', ')}.` : ''}
               </p>
             </Card>
+            </div>
 
+            <div data-guide="readability">
             <Card
               title="Readability without JavaScript"
               subtitle="The same page fetched as a crawler (raw HTML) and rendered in a real browser, compared word for word."
@@ -789,7 +816,9 @@ export default function AiVisibilityPage() {
                 </div>
               )}
             </Card>
+            </div>
 
+            <div data-guide="schema">
             <Card
               title="Structured data"
               subtitle="JSON-LD entities checked one by one against the properties an answer engine needs."
@@ -842,7 +871,9 @@ export default function AiVisibilityPage() {
                 </div>
               )}
             </Card>
+            </div>
 
+            <div data-guide="questions">
             <Card
               title="Simulated questions"
               subtitle="Each question is searched live, then answered by the model from those results. Found in search, named in the answer and linked in the answer are separate verdicts."
@@ -876,7 +907,7 @@ export default function AiVisibilityPage() {
                       )}
 
                       {q.citation && (
-                        <div className="flex flex-wrap gap-2 text-[11px]">
+                        <div className="flex flex-wrap gap-2 text-[11px]" data-guide={i === 0 ? 'citation' : undefined}>
                           {[
                             { label: 'Named in answer', ok: q.citation.mentioned, extra: q.citation.brandMentioned ? 'brand' : q.citation.domainMentioned ? 'domain' : '' },
                             { label: 'Linked in answer', ok: q.citation.citedInAnswer, extra: (q.citation.urlsCited || []).join(', ') },
@@ -943,7 +974,9 @@ export default function AiVisibilityPage() {
                 </ul>
               )}
             </Card>
+            </div>
 
+            <div data-guide="facts">
             {facts.length > 0 && (
               <Card
                 title="Key facts across all answers"
@@ -971,11 +1004,13 @@ export default function AiVisibilityPage() {
                 </div>
               </Card>
             )}
+            </div>
           </section>
         )}
       </main>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      <AiVisibilityTutorChat currentTool={id ? 'scores' : 'new-audit'} onOpenTool={openToolById} />
     </div>
   );
 }
