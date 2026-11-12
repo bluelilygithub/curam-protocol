@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "fc0a0c85",
+   "fullHash": "fc0a0c854d25fa0f01963ecb3f437e75e5e3b54a",
+   "committedAt": "2026-11-12T10:07:22+10:00",
+   "author": "mrb",
+   "subject": "AI Visibility: guide chat and a friendly dropped-connection error",
+   "filesChanged": 15,
+   "insertions": 407,
+   "deletions": 16,
+   "area": "AI Visibility",
+   "goal": "Give AI Visibility the same round guide chat every other app page has, and stop a site that drops the first connection from surfacing a raw socket hang up error.",
+   "whatChanged": "New AI Visibility guide (the round button bottom right of /ai-visibility), built on the shared TutorChat component and guideCore/guideRouter like Page speed and Finance. server/services/aiVisibilityTutor.js holds the catalogue, rules, gaps and system prompt; server/routes/aiVisibilityTutor.js is mounted at /api/ai-visibility-tutor in server/index.js behind requireFeature('aiVisibility') and aiLimiter, registered in server/config/guides.js and classified authed in server/testing/routeManifest.json. It knows the start screen (New audit, Page URL, Name and Brand, Model, Buyer questions, Key facts, Run audit) and one saved report (overall score and its five areas, Suggestions, Technical access and the AI-crawler table, Readability without JavaScript, Structured data, Simulated questions with the separate found/named/linked citation verdicts, Key facts across answers, Copy for AI, Download PDF). It says it only audits and reports, checks one public page at a time, that key-fact matching is a heuristic, and that an audit is a snapshot it cannot control what an AI assistant says; it sees no address, score or report. client/src/pages/aiVisibility/aiVisibilityTools.mjs is the list the page and guide share; client/src/pages/aiVisibility/AiVisibilityTutorChat.jsx is the wrapper; AiVisibilityPage.jsx marks each part with data-guide, passes currentTool, and openToolById scrolls there (a report part needs a saved audit open, otherwise a toast says to open one). New test server/services/aiVisibilityTutor.test.js with guideTestKit and npm run test:ai-visibility-tutor. Separately, aiVisibilityService.js now wraps the page fetch in fetchPage: if the first fetch throws a dropped-connection error (socket hang up, ECONNRESET, EPIPE, EPROTO and similar), it retries twice with plain identities and then returns a friendly 502 saying the site closed the connection, instead of a raw Node message. The shared htmlFetch is unchanged because other tools depend on its current behaviour. Docs ai-visibility.md, guide-chat.md, features.md and key-files.md updated.",
+   "filesImpacted": [
+    "vault/client/src/pages/AiVisibilityPage.jsx",
+    "vault/client/src/pages/aiVisibility/AiVisibilityTutorChat.jsx",
+    "vault/client/src/pages/aiVisibility/aiVisibilityTools.mjs",
+    "vault/docs/ai-visibility.md",
+    "vault/docs/features.md",
+    "vault/docs/guide-chat.md",
+    "vault/docs/key-files.md",
+    "vault/package.json",
+    "vault/server/config/guides.js",
+    "vault/server/index.js",
+    "vault/server/routes/aiVisibilityTutor.js",
+    "vault/server/services/aiVisibility/aiVisibilityService.js",
+    "vault/server/services/aiVisibilityTutor.js",
+    "vault/server/services/aiVisibilityTutor.test.js",
+    "vault/server/testing/routeManifest.json"
+   ]
+  },
+  {
    "commit": "5d4fb5ae",
    "fullHash": "5d4fb5aec72cb7a8c1db2ab6175a673466fed18a",
    "committedAt": "2026-11-12T09:05:10+10:00",
