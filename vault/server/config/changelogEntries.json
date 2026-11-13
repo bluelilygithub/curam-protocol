@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "273148cd",
+   "fullHash": "273148cd8af612f6ce52bf34ba5157a47e438853",
+   "committedAt": "2026-11-13T14:12:12+10:00",
+   "author": "mrb",
+   "subject": "Build: Railway builds from the prebuilt base image (step 3 of 3)",
+   "filesChanged": 2,
+   "insertions": 11,
+   "deletions": 62,
+   "area": "Build and deploy",
+   "goal": "Finish moving the slow image layers off Railway, so a code-only deploy no longer rebuilds and re-pushes the whole ~2.3 GB image when Railway's build cache is empty.",
+   "whatChanged": "Dockerfile replaced by the short app image: FROM ghcr.io/bluelilygithub/curam-vault-base:latest, then npm install, COPY . . and npm run build. The base package was confirmed public (an anonymous pull of its manifest returns 200) and the first Base image workflow run on 0de96208 succeeded. docs/deploy-speed.md now says the slow layers live in Dockerfile.base and are built on GitHub.",
+   "filesImpacted": [
+    "Dockerfile",
+    "docs/deploy-speed.md"
+   ],
+   "benefit": "Deploys should only build and ship the npm install check and the code and Vite build layers; system packages, Python, Chromium and the planner installs come from the same stored base every time.",
+   "concerns": "The first deploy with this Dockerfile pulls the base image once, so it is slow. Not yet seen running on Railway: if the pull or build fails, revert this commit to go back to the old Dockerfile. The base is tagged latest, so a dependency change is live only after the GitHub workflow finishes (about 10-15 minutes); a deploy that starts earlier gets the root npm packages from its own npm install but the older base for system, Python and planner packages. The final image is still about 2.3 GB; this saves rebuilding and re-pushing it, not its size."
+  },
+  {
    "commit": "0ac982d0",
    "fullHash": "0ac982d08c8926bd1990636508922a7df276302c",
    "committedAt": "2026-11-13T13:50:32+10:00",
