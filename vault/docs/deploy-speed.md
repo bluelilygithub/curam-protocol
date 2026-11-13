@@ -35,6 +35,18 @@ So:
 - **7874897c (2026-11-01):** the Playwright Chromium download was moved above `COPY package*.json`, so a `package.json` edit no longer re-downloads the browser. `.dockerignore` was added. Its `Dockerfile` comment says why, in as many words: "even just adding a test script".
 - **2026-10-17:** CI "Wait for CI" was switched off on both Railway services because it added 10-30 minutes per deploy. Do not add it back (see the memory note on process overhead).
 
+## Prebuilt base image (in progress, 2026-11-13)
+
+A Railway build log on 2026-11-13 showed **no layer cached at all**: Railway's build cache had been emptied, so every layer was rebuilt, got a new digest, and the whole ~2.3 GB image was pushed and pulled again for a code-only change. Railway does not guarantee its cache.
+
+The fix moves the slow layers out of Railway:
+
+1. **Done:** `Dockerfile.base` (the same layers as the top of `Dockerfile`, up to the planner installs) is built by `.github/workflows/base-image.yml` and pushed to `ghcr.io/bluelilygithub/curam-vault-base:latest`. The workflow runs only when `Dockerfile.base`, a `package*.json` or a `requirements.txt` changes (or by hand from the Actions tab). Railway is not affected by this step.
+2. **Owner:** make the `curam-vault-base` package public on GitHub (or give Railway registry credentials), so Railway can pull it.
+3. **Not done yet:** replace `Dockerfile` with `Dockerfile.next` (`FROM` the base, then `npm install`, `COPY . .`, `npm run build`). The base layers then keep the same digests on every deploy, so the registry skips them even when Railway's cache is empty.
+
+If you change the top of `Dockerfile` before step 3, change `Dockerfile.base` the same way. After step 3, system packages, pip installs and planner installs belong in `Dockerfile.base` only.
+
 ## What is still open (nobody has done it; ask the owner first)
 
 - Layers 6 and 7 still sit **below** `COPY package*.json`, so a `package.json` edit still rebuilds them. Moving them above it makes a script-only edit cost only the root `npm install` and the build.

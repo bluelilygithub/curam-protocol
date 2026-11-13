@@ -1,0 +1,51 @@
+name: Base image
+
+# Builds the slow layers of the Vault image (vault/Dockerfile.base) and stores them in GitHub's container registry, so
+# Railway deploys never rebuild apt, pip, Chromium or npm installs. Runs only when a dependency file changes (or by hand:
+# Actions tab -> Base image -> Run workflow). Note: Railway's "Wait for CI" must stay OFF (see ci.yml) or a deploy would
+# wait for this build.
+
+on:
+  push:
+    branches: [version-7, staging]
+    paths:
+      - vault/Dockerfile.base
+      - vault/package.json
+      - vault/package-lock.json
+      - vault/requirements.txt
+      - vault/server/services/fonts/requirements.txt
+      - vault/server/services/pdfRedact/requirements.txt
+      - vault/room-planner/package*.json
+      - vault/garden-planner/package*.json
+      - vault/route-tracer/package*.json
+      - vault/cellar-planner/package*.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: base-image
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: vault
+          file: vault/Dockerfile.base
+          push: true
+          tags: ghcr.io/bluelilygithub/curam-vault-base:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
