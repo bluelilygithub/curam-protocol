@@ -30,6 +30,26 @@ export function enquiryBody(f: QuoteFields, d: QuoteDesign, honeypot = '', pdf =
   };
 }
 
+/** Where the website keeps its own record of the enquiry (WordPress's Enquiry log, beside the quote and contact forms): the site the planner is on. */
+export const SITE_LOG_PATH = '/wp-admin/admin-post.php';
+
+/** The fields the website's Enquiry log takes (inc/planner-enquiry.php in the WordPress theme). `vault` says whether Vault accepted the enquiry. */
+export function siteLogBody(f: QuoteFields, d: QuoteDesign, vault: 'ok' | 'failed', honeypot = ''): URLSearchParams {
+  return new URLSearchParams({
+    action: 'cw_planner_enquiry', name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), state: f.state, message: f.message.trim(),
+    code: d.code, summary: d.summary.slice(0, 400), bottles: Number.isFinite(d.bottles) ? String(d.bottles) : '', vault, cw_website: honeypot,
+  });
+}
+
+/**
+ * A copy of the enquiry for the website's own Enquiry log, sent after Vault has answered (either way, so the lead is kept even when Vault is down).
+ * Only when the planner is on the business's website, not when Vault itself serves it. Fire and forget: it never changes what the visitor sees.
+ */
+function copyToSite(fetchFn: typeof fetch, body: URLSearchParams): void {
+  if (typeof window === 'undefined' || apiBase() === window.location.origin) return;
+  try { void fetchFn(SITE_LOG_PATH, { method: 'POST', body, credentials: 'same-origin', keepalive: true }).catch(() => undefined); } catch { /* never let the copy break the form */ }
+}
+
 /** The design as plain text, for pasting into an email when the form could not be sent. */
 export const fallbackText = (d: QuoteDesign): string => `${d.summary}
 About ${d.bottles} bottles
@@ -87,6 +107,7 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, mak
       // text/plain is a "simple" request, so the browser makes no preflight round trip to Vault
       const r = await fetchFn(`${apiBase()}/api/cellar-lite/enquiry`, { method: 'POST', body: JSON.stringify(enquiryBody(f, design, trap, pdf)), headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, credentials: 'omit' });
       if (r.ok) {
+        copyToSite(fetchFn, siteLogBody(f, design, 'ok', trap));
         let j: { confirmation?: unknown } = {};
         try { j = (await r.json()) as { confirmation?: unknown }; } catch { /* an older Vault answers without it */ }
         setConfirmed(j.confirmation === true); setPhase('sent'); onSent?.(); return;
@@ -95,8 +116,10 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, mak
       try { const j = (await r.json()) as { error?: unknown }; if (typeof j.error === 'string') said = j.error; } catch { /* no body */ }
       // 400 is something to fix in the form; anything else is on our side
       if (r.status === 400 && said) { setShown({ field: '', text: said }); setPhase('form'); return; }
+      copyToSite(fetchFn, siteLogBody(f, design, 'failed', trap));
       setPhase('failed');
     } catch {
+      copyToSite(fetchFn, siteLogBody(f, design, 'failed', trap));
       setPhase('failed');
     }
   };

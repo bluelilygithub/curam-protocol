@@ -43,6 +43,12 @@ await ctx.route('https://curam-vault.up.railway.app/**', async (route) => {
   if (mode === 'bad') return route.fulfill({ status: 400, contentType: 'application/json', headers: cors, body: '{"error":"That email address does not look right."}' });
   return route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{"ok":true,"confirmation":true}' });
 });
+// the website's own Enquiry log (WordPress admin-post.php on the site the planner is served from)
+const siteLog = [];
+await ctx.route('http://localhost:8802/wp-admin/admin-post.php', async (route) => {
+  siteLog.push(Object.fromEntries(new URLSearchParams(route.request().postData() || '')));
+  return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+});
 await page.goto('http://localhost:8801/planner.html');
 const frame = page.frameLocator('#f');
 await frame.getByTestId('lite-quote').waitFor();
@@ -75,11 +81,14 @@ await frame.getByTestId('lite-quote-state').selectOption('VIC');
 await frame.getByTestId('lite-quote-send').click();
 await frame.getByTestId('lite-quote-failed').waitFor();
 check('when Vault cannot be reached the visitor is told, and the form stays filled', /still here/.test(await frame.getByTestId('lite-quote-failed').innerText()) && (await frame.getByTestId('lite-quote-name').inputValue()) === 'Sam Rivera');
+await page.waitForTimeout(300);
+check('the website still gets its copy for the Enquiry log, marked Vault failed', siteLog.length === 1 && siteLog[0].action === 'cw_planner_enquiry' && siteLog[0].vault === 'failed' && siteLog[0].email === 'sam@example.com', JSON.stringify(siteLog));
 // Vault refuses with a reason: shown
 mode = 'bad';
 await frame.getByTestId('lite-quote-send').click();
 await frame.getByTestId('lite-quote-error').waitFor();
 check('a refusal from Vault is shown in its own words', /does not look right/.test(await frame.getByTestId('lite-quote-error').innerText()));
+check('a form Vault refuses as wrong is not copied to the website', siteLog.length === 1);
 
 mode = 'ok';
 await frame.getByTestId('lite-quote-phone').fill('0412 345 678');
@@ -94,6 +103,9 @@ check('as text/plain (no preflight), with name, email, phone, state, the design,
 const pdfBytes = Buffer.from(body.pdf || '', 'base64');
 check('the plan PDF for the business goes with it (a real PDF, under 2 MB), and no price figure', pdfBytes.subarray(0, 5).toString() === '%PDF-' && pdfBytes.length > 5000 && pdfBytes.length < 2 * 1024 * 1024 && body.priceText === '' && !/Guide price/i.test(body.summary), `${pdfBytes.length} bytes, priceText "${body.priceText}"`);
 check('the visitor is offered no plan download', (await frame.getByTestId('lite-download').count()) === 0);
+await page.waitForTimeout(300);
+const logged = siteLog.at(-1) || {};
+check('the website gets its Enquiry log copy: name, email, phone, state, message, design, bottles, Vault ok, empty honeypot, no PDF', siteLog.length === 2 && logged.action === 'cw_planner_enquiry' && logged.vault === 'ok' && logged.name === 'Sam Rivera' && logged.email === 'sam@example.com' && logged.phone === '0412 345 678' && logged.state === 'VIC' && logged.message === 'After 5pm please.' && /^CL1\./.test(logged.code) && logged.bottles === '1120' && logged.cw_website === '' && !('pdf' in logged), JSON.stringify(logged).slice(0, 400));
 check('the page is still the planner page (nothing redirected)', /planner\.html/.test(page.url()));
 await frame.getByTestId('lite-quote-sent-close').click();
 check('closing returns to the design', (await frame.getByTestId('lite-quote-form').count()) === 0);
