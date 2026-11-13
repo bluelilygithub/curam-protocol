@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { runtimeConfig } = require('../config/runtime');
 const { getSettingForUser } = require('../utils/settingsLookup');
+const { providerError } = require('../services/aiVisibility/searchClient');
 
 const searchLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -80,7 +81,8 @@ router.get('/', searchLimiter, async (req, res) => {
         `https://api.search.brave.com/res/v1/web/search?q=${query}&count=5`,
         { 'Accept': 'application/json', 'X-Subscription-Token': apiKey }
       );
-      if (data.message) return res.status(500).json({ error: `Brave: ${data.message}` });
+      const braveErr = providerError('brave', data);
+      if (braveErr) return res.status(502).json({ error: braveErr });
       results = (data.web?.results || []).slice(0, 3).map(r => ({
         url: r.url,
         title: r.title || r.url,
@@ -115,7 +117,8 @@ router.get('/', searchLimiter, async (req, res) => {
         req2.write(body);
         req2.end();
       });
-      if (data.message) return res.status(500).json({ error: `Serper: ${data.message}` });
+      const serperErr = providerError('serper', data);
+      if (serperErr) return res.status(502).json({ error: serperErr });
       results = (data.organic || []).slice(0, 3).map(r => ({
         url: r.link,
         title: r.title || r.link,
@@ -127,7 +130,8 @@ router.get('/', searchLimiter, async (req, res) => {
       const data = await fetchJson(
         `https://serpapi.com/search.json?q=${query}&api_key=${apiKey}&num=5&engine=google&gl=us&hl=en`
       );
-      if (data.error) return res.status(500).json({ error: `SerpAPI: ${data.error}` });
+      const serpErr = providerError('serpapi', data);
+      if (serpErr) return res.status(502).json({ error: serpErr });
       results = (data.organic_results || []).slice(0, 3).map(r => ({
         url: r.link,
         title: r.title || r.link,

@@ -10,17 +10,28 @@
  */
 
 const WEIGHTS = {
-  technical: 25,
+  technical: 20,
   readability: 15,
-  schema: 20,
-  citation: 25,
-  accuracy: 15,
+  schema: 15,
+  discoverability: 15,
+  assistants: 25,
+  accuracy: 10,
+};
+
+const AREA_LABELS = {
+  technical: 'Technical access',
+  readability: 'No-JavaScript readability',
+  schema: 'Structured data',
+  discoverability: 'Search ranking',
+  assistants: 'Named by AI assistants',
+  accuracy: 'Key-fact accuracy',
 };
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
 
 function average(values) {
-  const nums = (values || []).map(Number).filter((n) => Number.isFinite(n));
+  // null/undefined mean "not measured" and must not count as zero.
+  const nums = (values || []).filter((v) => v != null && v !== '').map(Number).filter((n) => Number.isFinite(n));
   if (!nums.length) return null;
   return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
 }
@@ -62,14 +73,41 @@ function scoreReadability(js) {
   return 15;
 }
 
-function scoreCitations(queries) {
-  const list = (queries || []).filter((q) => q && q.citation);
-  return average(list.map((q) => q.citation.score));
+function scoreDiscoverability(queries) {
+  return average((queries || []).map((q) => q && q.discoverability));
+}
+
+/** Average over every assistant answer that came back; failed answers are left out. */
+function scoreAssistants(queries) {
+  const all = [];
+  for (const q of queries || []) for (const a of (q && q.assistants) || []) all.push(a.score);
+  return average(all.filter((v) => v != null));
 }
 
 function scoreAccuracy(queries) {
-  const list = (queries || []).filter((q) => q && q.factScore != null);
-  return average(list.map((q) => q.factScore));
+  const all = [];
+  for (const q of queries || []) for (const a of (q && q.assistants) || []) all.push(a.factScore);
+  return average(all.filter((v) => v != null));
+}
+
+/** Per assistant across all questions: asked, answered, named, cited, and the first errors. */
+function assistantTotals(queries) {
+  const map = new Map();
+  for (const q of queries || []) {
+    for (const a of (q && q.assistants) || []) {
+      const t = map.get(a.id) || { id: a.id, label: a.label, model: a.model, asked: 0, answered: 0, named: 0, cited: 0, errors: [] };
+      t.asked += 1;
+      if (a.score != null) {
+        t.answered += 1;
+        if (a.named) t.named += 1;
+        if (a.cited) t.cited += 1;
+      } else if (a.error && !t.errors.includes(a.error)) {
+        t.errors.push(a.error);
+      }
+      map.set(a.id, t);
+    }
+  }
+  return [...map.values()];
 }
 
 function overallScore(categories) {
@@ -85,11 +123,8 @@ function overallScore(categories) {
 }
 
 function buildSummary({ url, host, scores, technical, queries, facts }) {
-  const tested = (queries || []).length;
-  const answered = (queries || []).filter((q) => q.answer).length;
-  const cited = (queries || []).filter((q) => q.citation && q.citation.citedInAnswer).length;
-  const mentioned = (queries || []).filter((q) => q.citation && q.citation.mentioned).length;
-  const found = (queries || []).filter((q) => q.citation && q.citation.inSearchResults).length;
+  const searched = (queries || []).filter((q) => q.search && !q.search.error);
+  const ranked = searched.filter((q) => q.rank);
   const blocked = (technical && technical.robots && technical.robots.blocked) || [];
   const factsFound = (facts || []).filter((f) => f.present).length;
   const parts = [];
@@ -97,10 +132,14 @@ function buildSummary({ url, host, scores, technical, queries, facts }) {
   parts.push(`${host || url} scored ${scores.overall}/100 for AI visibility.`);
   if (blocked.length) parts.push(`${blocked.length} AI crawler${blocked.length === 1 ? ' is' : 's are'} blocked in robots.txt (${blocked.slice(0, 4).join(', ')}${blocked.length > 4 ? '…' : ''}).`);
   else parts.push('No AI crawlers are blocked in robots.txt.');
-  if (tested) {
-    parts.push(`Across ${tested} simulated question${tested === 1 ? '' : 's'}: found in search results ${found}/${tested}, mentioned in the answer ${mentioned}/${tested}, linked ${cited}/${tested}${answered < tested ? `, ${tested - answered} could not be answered` : ''}.`);
+  if (searched.length) {
+    parts.push(`In search results the site ranked in the top 10 for ${ranked.length} of ${searched.length} question${searched.length === 1 ? '' : 's'}.`);
   }
-  if ((facts || []).length) parts.push(`Key facts present in the answers: ${factsFound}/${facts.length}.`);
+  const totals = assistantTotals(queries).filter((t) => t.answered);
+  if (totals.length) {
+    parts.push(totals.map((t) => `${t.label} named it in ${t.named}/${t.answered} answers and cited the site in ${t.cited}/${t.answered}`).join('; ') + '.');
+  }
+  if ((facts || []).length) parts.push(`Key facts present in the assistants' answers: ${factsFound}/${facts.length}.`);
   return parts.join(' ');
 }
 
@@ -142,35 +181,56 @@ function buildSuggestions(report) {
   }
 
   const queries = report.queries || [];
-  const cited = queries.filter((q) => q.citation && q.citation.citedInAnswer).length;
-  const mentioned = queries.filter((q) => q.citation && q.citation.mentioned).length;
-  if (queries.length) {
-    if (cited === 0) {
-      add('fail', 'Citation', 'No simulated answer linked to the site', `None of the ${queries.length} answers quoted a ${report.host} URL.`, 'Publish a page that directly answers each question — a comparison, buying guide or specification page with the facts written out, not just product cards. That is the page an answer engine can cite.');
-    } else if (cited < Math.ceil(queries.length / 2)) {
-      add('warn', 'Citation', 'The site is linked in fewer than half the answers', `${cited} of ${queries.length} answers linked to ${report.host}.`, 'Strengthen the pages that answer the remaining questions, or add a section to the current page that addresses them directly.');
+  const searched = queries.filter((q) => q.search && !q.search.error);
+  if (searched.length && !searched.some((q) => q.rank)) {
+    add('warn', 'Search ranking', 'The site is not in the top 10 search results for any question', `${searched.length} question${searched.length === 1 ? ' was' : 's were'} searched (${searched[0].search.provider || 'search'}); ${report.host} did not appear in the first 10 results for any of them.`, 'AI assistants that search the web start from results like these. Publish a page that answers each question directly (a guide, comparison or specification page with the facts written out) and link to it from the home page.');
+  }
+
+  const totals = assistantTotals(queries);
+  const answered = totals.filter((t) => t.answered);
+  const namedAny = answered.some((t) => t.named);
+  const citedAny = answered.some((t) => t.cited);
+  if (answered.length) {
+    if (!namedAny) {
+      add('fail', 'AI assistants', 'No AI assistant named the business', `Asked: ${answered.map((t) => `${t.label} (${t.answered} answer${t.answered === 1 ? '' : 's'})`).join(', ')}. None named ${report.brand || report.host}.`, 'Make the brand, the offer and the location explicit in the page copy and in Organization/LocalBusiness markup, and get the business mentioned on sites these assistants already cite (directories, reviews, industry lists).');
     }
-    if (mentioned === 0) {
-      add('fail', 'Citation', 'The brand is never named in the answers', 'The model answered without naming the business or its domain.', 'Make the brand, the offer and the location explicit in the page copy and in Organization/LocalBusiness markup so an answer can name it confidently.');
+    if (!citedAny) {
+      add('fail', 'AI assistants', 'No AI assistant used a page from the site as a source', `None of the answers listed a ${report.host} page among its sources.`, 'Write a page that answers each question in plain text near the top, so an assistant searching the web finds it and can quote it.');
     }
+    for (const t of answered) {
+      if ((namedAny || citedAny) && t.named === 0 && t.cited === 0) {
+        add('warn', 'AI assistants', `${t.label} did not mention the site`, `${t.label} answered ${t.answered} question${t.answered === 1 ? '' : 's'} without naming the business or citing the site.`, 'Assistants search different indexes (Claude and Perplexity use their own web search, Gemini uses Google). Check the site is indexed in Bing and Google, and that robots.txt allows the crawler for this assistant.');
+      }
+    }
+  }
+  for (const t of totals) {
+    if (t.errors.length) {
+      add('warn', 'Setup', `${t.label} could not answer${t.answered ? ' every question' : ''}`, t.errors[0], 'Check the key and model for this assistant in Settings, then run the audit again. Questions it could not answer are left out of the score, not counted as zero.');
+    }
+  }
+  if (queries.length && !totals.length) {
+    add('info', 'Setup', 'No AI assistants were asked', 'No assistant was selected or connected, so only search ranking was checked.', 'Connect an Anthropic or Gemini model in Settings → Models (or add PERPLEXITY_API_KEY), then tick it on the new-audit screen.');
+  }
+  if (report.querySource === 'template') {
+    add('info', 'Setup', 'The questions were made from templates', report.queryGenerationError ? `The model could not write questions: ${report.queryGenerationError}` : 'No model was available to write questions from the page.', 'Run the audit again with three to six questions of your own: the questions a real customer would ask.');
   }
 
   for (const fact of report.facts || []) {
     if (fact.present) continue;
-    add('warn', 'Accuracy', `A key fact is missing from the answers: "${fact.statement}"`, fact.evidence ? `Closest text found: "${fact.evidence}"` : 'The fact was not stated in any answer.', 'Write this fact in plain text on the page (and in the product/service schema). Numbers with units are what an answer engine repeats.');
+    add('warn', 'Accuracy', `A key fact is missing from the answers: "${fact.statement}"`, fact.evidence ? `Closest text found: "${fact.evidence}"` : 'No assistant stated this fact.', 'Write this fact in plain text on the page (and in the product/service schema). Numbers with units are what an answer repeats.');
   }
 
-  if (!(report.facts || []).length) {
+  if (!(report.facts || []).length && answered.length) {
     add('info', 'Accuracy', 'No key facts were supplied', 'Without key facts the audit cannot check whether answers state them accurately.', 'Next run, add 3–5 facts with units (for example "±0.5°C stability", "10A standard plug", "6–9 week lead time").');
   }
 
   if (queries.some((q) => q.search && q.search.error)) {
     const first = queries.find((q) => q.search && q.search.error);
-    add('warn', 'Setup', 'Live search was unavailable for some questions', first.search.error, 'Add SEARCH_API_KEY (Brave, Serper or SerpAPI) in Settings or the environment so the audit can check real search discovery, not just the model answer.');
+    add('warn', 'Setup', 'Live search failed, so search ranking was not measured', first.search.error, 'Check SEARCH_API_KEY (Brave, Serper or SerpAPI) in Settings or the environment: the key may be invalid, out of credit or rate-limited.');
   }
 
   if (!queries.length) {
-    add('info', 'Setup', 'No questions were simulated', 'The audit ran the technical checks only.', 'Re-run with at least three buyer questions, or let the audit generate them from the page.');
+    add('info', 'Setup', 'No questions were run', 'The audit ran the technical checks only.', 'Re-run with at least three buyer questions, or let the audit generate them from the page.');
   }
 
   const order = { fail: 0, warn: 1, info: 2, pass: 3 };
@@ -179,36 +239,36 @@ function buildSuggestions(report) {
 
 /** Attach scores, summary and suggestions to a report object. Pure. */
 function scoreReport(report) {
+  const queries = report.queries || [];
   const technical = scoreTechnical(report.technical);
   const readability = scoreReadability(report.technical && report.technical.js);
   const schema = report.schema && typeof report.schema.score === 'number' ? clamp(report.schema.score) : null;
-  const citation = scoreCitations(report.queries);
-  const accuracy = scoreAccuracy(report.queries);
+  const discoverability = scoreDiscoverability(queries);
+  const assistants = scoreAssistants(queries);
+  const accuracy = scoreAccuracy(queries);
+  const areas = { technical, readability, schema, discoverability, assistants, accuracy };
 
   const scores = {
-    technical,
-    readability,
-    schema,
-    citation,
-    accuracy,
-    overall: overallScore({ technical, readability, schema, citation, accuracy }),
-    measured: Object.entries({ technical, readability, schema, citation, accuracy })
-      .filter(([, v]) => v != null)
-      .map(([k]) => k),
+    ...areas,
+    overall: overallScore(areas),
+    measured: Object.entries(areas).filter(([, v]) => v != null).map(([k]) => k),
   };
 
-  const next = { ...report, scores };
-  next.summary = buildSummary({ url: next.url, host: next.host, scores, technical: next.technical, queries: next.queries, facts: next.facts });
+  const next = { ...report, scores, assistantTotals: assistantTotals(queries) };
+  next.summary = buildSummary({ url: next.url, host: next.host, scores, technical: next.technical, queries, facts: next.facts });
   next.suggestions = buildSuggestions(next);
   return next;
 }
 
 module.exports = {
   WEIGHTS,
+  AREA_LABELS,
+  assistantTotals,
+  scoreDiscoverability,
+  scoreAssistants,
   average,
   scoreTechnical,
   scoreReadability,
-  scoreCitations,
   scoreAccuracy,
   overallScore,
   buildSummary,

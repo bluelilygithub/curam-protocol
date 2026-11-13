@@ -8,9 +8,14 @@
  *   2. fetch and parse robots.txt, then check the AI crawlers individually;
  *   3. render the page in Chromium and compare the readable content;
  *   4. validate JSON-LD entities;
- *   5. generate (or accept) buyer questions, run real search + a model answer for each;
- *   6. check citation/mention and the supplied key facts;
+ *   5. generate (or accept) buyer questions; for each, a ranking search plus real AI
+ *      assistants (Claude web search, Gemini with Google Search, Perplexity) that search
+ *      for themselves;
+ *   6. check named / cited per assistant and the supplied key facts;
  *   7. score, write suggestions, save the report.
+ *
+ * A run takes minutes, so it runs in the background: startAudit() saves a row marked
+ * 'running' and answers at once; the page polls the row until it is 'done' or 'failed'.
  *
  * Nothing here writes outside this module and its table.
  */
@@ -22,13 +27,18 @@ const { getModelsForUser, getVaultModelsConfigForUser, pickTextModel, isNonTextM
 const { parseRobots, auditRobots } = require('./robots');
 const { validateSchema } = require('./schema');
 const { renderPage } = require('./render');
-const { generateQueries, runQuery, hostOf } = require('./queryAnalysis');
+const { generateQueries, runQuery, hostOf, brandFromTitle } = require('./queryAnalysis');
+const { listAssistants } = require('./assistants');
 const { factCoverage } = require('./facts');
 const { scoreReport } = require('./scoring');
 const { buildMarkdown } = require('./markdown');
 
 const MAX_QUERIES = 6;
 const MAX_FACTS = 12;
+const REPORT_VERSION = 2;
+// A run normally takes one to four minutes. One still marked running after this long was
+// cut off (a restart or a crash) and is shown as failed.
+const STALE_RUN_MS = 20 * 60 * 1000;
 
 function parseJson(value, fallback) {
   if (value == null) return fallback;
@@ -66,12 +76,6 @@ function normaliseList(value, max) {
     .map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s*/, '').trim())
     .filter(Boolean)
     .slice(0, max);
-}
-
-function brandFromTitle(title, host) {
-  const first = String(title || '').split(/\s*[|–—:·]\s*/)[0].trim();
-  if (first && first.length <= 60) return first;
-  return String(host || '').split('.')[0] || '';
 }
 
 async function resolveModel(userId, requested) {
@@ -187,12 +191,15 @@ async function buildReadability(technical, finalUrl) {
 // polite requests, then a sentence a person can act on instead of a raw technical error.
 const CONNECTION_DROPPED = /socket hang up|socket hung up|ECONNRESET|ECONNABORTED|EPIPE|EPROTO|close_notify|network socket disconnected/i;
 
+// Plain identities only. An earlier version retried as Googlebot, which made the audit read
+// whatever a site serves Google rather than what an AI crawler or a visitor receives.
 const PLAIN_IDENTITIES = [
   { headers: {} },
   {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-AU,en;q=0.9',
     },
   },
 ];
@@ -218,15 +225,42 @@ async function fetchPage(url) {
   throw friendly;
 }
 
-async function runAudit(userId, input = {}) {
+function cleanInput(input = {}) {
+  const wanted = Array.isArray(input.assistants)
+    ? input.assistants.map((a) => String(a || '').trim()).filter(Boolean)
+    : null;
+  return {
+    url: String(input.url || '').trim(),
+    name: String(input.name || '').trim().slice(0, 120),
+    brand: String(input.brand || '').trim().slice(0, 120),
+    modelId: String(input.modelId || '').trim(),
+    queries: normaliseList(input.queries, MAX_QUERIES),
+    facts: normaliseList(input.facts, MAX_FACTS),
+    assistants: wanted,
+  };
+}
+
+async function setProgress(id, progress) {
+  await pool.query(
+    `UPDATE ai_visibility_audits SET progress=$2, "updatedAt"=NOW() WHERE id=$1 AND status='running'`,
+    [id, String(progress || '').slice(0, 300)],
+  );
+}
+
+/**
+ * The audit itself. `progress` is called with a plain sentence before each slow step so the
+ * page can show where the run is.
+ */
+async function performAudit(userId, input, { progress = async () => {} } = {}) {
   const url = normaliseHttpUrl(input.url);
   const parsed = new URL(url);
   await checkSsrf(parsed.hostname);
 
   const model = await resolveModel(userId, input.modelId);
-  const facts = normaliseList(input.facts, MAX_FACTS);
-  const requestedQueries = normaliseList(input.queries, MAX_QUERIES);
+  const facts = input.facts || [];
+  const requestedQueries = input.queries || [];
 
+  await progress('Fetching the page as a crawler would…');
   const fetchResult = await fetchPage(url);
   const html = String(fetchResult.body || '');
   if (!html.trim()) {
@@ -237,7 +271,9 @@ async function runAudit(userId, input = {}) {
 
   const finalUrl = fetchResult.finalUrl || url;
   const host = hostOf(finalUrl);
+  await progress('Reading robots.txt…');
   const technical = buildTechnical({ fetchResult, html, robotsFetch: await fetchRobots(finalUrl) });
+  await progress('Rendering the page in a browser to compare with the raw HTML…');
   technical.js = await buildReadability(technical, finalUrl);
   delete technical.rawText;
 
@@ -246,12 +282,13 @@ async function runAudit(userId, input = {}) {
   // large; keep the report row small.
   delete schema.blocks;
 
-  const brand = String(input.brand || '').trim() || brandFromTitle(technical.meta.title, host);
+  const brand = input.brand || brandFromTitle(technical.meta.title, host);
 
   let queries = requestedQueries;
   let querySource = 'user';
   let queryGenerationError = '';
   if (!queries.length) {
+    await progress('Writing buyer questions from the page…');
     const generated = await generateQueries({
       url: finalUrl,
       title: technical.meta.title,
@@ -261,30 +298,44 @@ async function runAudit(userId, input = {}) {
       modelId: model,
     });
     queries = generated.queries;
-    querySource = 'generated';
+    querySource = generated.source === 'model' ? 'generated' : 'template';
     queryGenerationError = generated.error || '';
   }
 
+  const assistantList = await listAssistants(userId);
+  const available = assistantList.filter((a) => a.available);
+  const chosen = Array.isArray(input.assistants)
+    ? available.filter((a) => input.assistants.includes(a.id))
+    : available;
+  const names = chosen.map((a) => a.label.split(' ')[0]).join(', ');
+
   const queryResults = [];
-  for (const query of queries) {
-    // Sequential on purpose: search providers and models rate-limit, and the audit is a
-    // single deliberate run, not a bulk job.
+  for (let i = 0; i < queries.length; i += 1) {
+    // Questions run one after another; within a question the assistants run in parallel
+    // because they are different providers.
     // eslint-disable-next-line no-await-in-loop
-    const result = await runQuery({ query, domain: host, brand, facts, modelId: model, userId });
+    await progress(`Question ${i + 1} of ${queries.length}: searching${names ? ` and asking ${names}` : ''}…`);
+    // eslint-disable-next-line no-await-in-loop
+    const result = await runQuery({ query: queries[i], domain: host, brand, facts, assistants: chosen, userId });
     result.source = querySource;
     queryResults.push(result);
   }
 
-  const answers = queryResults.map((q) => q.answer).filter(Boolean);
-  const coverage = factCoverage(facts, answers);
+  // Facts are checked against the assistants' own answers only, never against other sites'
+  // search snippets.
+  const answers = [];
+  for (const q of queryResults) for (const a of q.assistants) if (a.score != null) answers.push(a.answer);
+  const coverage = answers.length ? factCoverage(facts, answers) : [];
 
   const report = scoreReport({
-    version: 1,
+    version: REPORT_VERSION,
     url,
     finalUrl,
     host,
     brand,
     model,
+    assistantsAsked: chosen.map((a) => ({ id: a.id, label: a.label, model: a.model })),
+    assistantsUnavailable: assistantList.filter((a) => !a.available).map((a) => ({ id: a.id, label: a.label, reason: a.reason })),
     auditedAt: new Date().toISOString(),
     querySource,
     queryGenerationError,
@@ -292,20 +343,78 @@ async function runAudit(userId, input = {}) {
     schema,
     queries: queryResults,
     facts: coverage,
+    input,
   });
+  return { report, finalUrl, title: technical.meta.title };
+}
 
-  const name = String(input.name || '').trim() || technical.meta.title.trim() || host || url;
-  const { rows } = await pool.query(
-    `INSERT INTO ai_visibility_audits ("userId", name, url, score, summary, report)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [userId, name.slice(0, 120), finalUrl, report.scores.overall, report.summary, JSON.stringify(report)],
+async function runInBackground(userId, id, input) {
+  const started = Date.now();
+  try {
+    const { report, finalUrl, title } = await performAudit(userId, input, { progress: (p) => setProgress(id, p) });
+    const name = input.name || String(title || '').trim() || hostOf(finalUrl) || finalUrl;
+    await pool.query(
+      `UPDATE ai_visibility_audits
+          SET name=$3, url=$4, score=$5, summary=$6, report=$7, status='done', progress='', error='', "updatedAt"=NOW()
+        WHERE id=$1 AND "userId"=$2`,
+      [id, userId, name.slice(0, 120), finalUrl, report.scores.overall, report.summary, JSON.stringify(report)],
+    );
+    console.log(`[ai-visibility] audit ${id} done in ${Math.round((Date.now() - started) / 1000)}s`);
+  } catch (err) {
+    console.error(`[ai-visibility] audit ${id} failed after ${Math.round((Date.now() - started) / 1000)}s:`, err.message);
+    await pool.query(
+      `UPDATE ai_visibility_audits SET status='failed', progress='', error=$3, "updatedAt"=NOW()
+        WHERE id=$1 AND "userId"=$2`,
+      [id, userId, String(err.message || 'The audit failed.').slice(0, 500)],
+    ).catch(() => {});
+  }
+}
+
+/**
+ * Start an audit in the background. Checks that can fail fast (address, private network,
+ * model choice, one run at a time) happen here so the person sees the error straight away;
+ * the slow work runs after the response has been sent and the page polls the saved row.
+ */
+async function startAudit(userId, rawInput = {}) {
+  const input = cleanInput(rawInput);
+  const url = normaliseHttpUrl(input.url);
+  await checkSsrf(new URL(url).hostname);
+  await resolveModel(userId, input.modelId);
+
+  const { rows: running } = await pool.query(
+    `SELECT id FROM ai_visibility_audits
+      WHERE "userId"=$1 AND status='running' AND "updatedAt" > NOW() - INTERVAL '20 minutes'
+      LIMIT 1`,
+    [userId],
   );
-  return rowToAudit(rows[0]);
+  if (running.length) {
+    const err = new Error('An audit is already running. Wait for it to finish, then start the next one.');
+    err.status = 409;
+    err.auditId = running[0].id;
+    throw err;
+  }
+
+  const name = input.name || hostOf(url) || url;
+  const { rows } = await pool.query(
+    `INSERT INTO ai_visibility_audits ("userId", name, url, score, summary, report, status, progress)
+     VALUES ($1, $2, $3, 0, '', $4, 'running', 'Starting…')
+     RETURNING *`,
+    [userId, name.slice(0, 120), url, JSON.stringify({ version: REPORT_VERSION, input })],
+  );
+  const row = rows[0];
+  setImmediate(() => { runInBackground(userId, row.id, { ...input, url }); });
+  return rowToAudit(row);
 }
 
 function rowToAudit(row) {
   const report = parseJson(row.report, {});
+  let status = row.status || 'done';
+  let error = row.error || '';
+  const updated = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+  if (status === 'running' && updated && Date.now() - updated > STALE_RUN_MS) {
+    status = 'failed';
+    error = error || 'The audit stopped before it finished (the server may have restarted). Run it again.';
+  }
   return {
     id: row.id,
     name: row.name,
@@ -313,6 +422,9 @@ function rowToAudit(row) {
     hostname: hostOf(row.url),
     score: Number(row.score),
     summary: row.summary || report.summary || '',
+    status,
+    progress: status === 'running' ? (row.progress || '') : '',
+    error: status === 'failed' ? error : '',
     report,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -321,10 +433,10 @@ function rowToAudit(row) {
 
 async function listAudits(userId) {
   const { rows } = await pool.query(
-    `SELECT id, name, url, score, summary, "createdAt", "updatedAt"
+    `SELECT id, name, url, score, summary, status, progress, error, "createdAt", "updatedAt"
        FROM ai_visibility_audits
       WHERE "userId"=$1
-      ORDER BY "updatedAt" DESC
+      ORDER BY "createdAt" DESC
       LIMIT 80`,
     [userId],
   );
@@ -355,7 +467,10 @@ function markdownFor(audit) {
 module.exports = {
   MAX_QUERIES,
   MAX_FACTS,
-  runAudit,
+  REPORT_VERSION,
+  startAudit,
+  performAudit,
+  cleanInput,
   listAudits,
   getAudit,
   deleteAudit,

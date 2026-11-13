@@ -6,14 +6,16 @@ An audit of one public page for the way AI assistants find, read and quote it. I
 
 ## What a run does
 
-1. **Fetches the page** with the shared SSRF-safe `htmlFetch` (no JavaScript, as an AI crawler that does not run scripts sees it). If the host drops the first connection (a bare `socket hang up`), the audit retries twice with plain identities and then says plainly that the site closed the connection, rather than showing the raw Node error.
+1. **Fetches the page** with the shared SSRF-safe `htmlFetch` (no JavaScript, as an AI crawler that does not run scripts sees it). If the host drops the first connection (a bare `socket hang up`), the audit retries twice with plain identities (no header, then an ordinary browser; never Googlebot, which would read what a site serves Google) and then says plainly that the site closed the connection.
 2. **Fetches `/robots.txt`** from the same origin and parses it properly.
 3. **Renders the page in Chromium** (Playwright) and compares the readable content with the raw HTML.
 4. **Extracts and validates JSON-LD** entities.
-5. **Generates or accepts buyer questions**, then for each one: real web search → a model answer grounded in those results → citation checks and key-fact checks.
+5. **Generates or accepts buyer questions**, then for each one: a ranking search (top 10) and the question put to each ticked **real AI assistant**, which searches the web itself. Named / used-as-source verdicts per assistant, and key facts checked against the assistants' answers.
 6. **Scores**, writes suggestions, and saves the report.
 
-A run is sequential on purpose: search providers and models rate-limit, and this is a single deliberate audit, not a bulk job. Expect roughly 10–60 seconds plus one model call per question.
+**Runs in the background (since 2026-11-13).** A run takes one to four minutes, longer than the gateway keeps a request open, so `POST /audits` validates the address and model, saves a row with `status='running'` and answers 202 at once. The work continues in the server process and writes the current step to `progress`; the page polls `GET /audits/:id` every 3 seconds and shows it. On success the row becomes `done`; on an error `failed` with `error` and a **Run again** button (the inputs are saved in `report.input`). One running audit per person (409 otherwise). A run cannot survive a restart: rows still `running` at boot are marked failed in `db.js`, and a row not updated for 20 minutes is shown as failed. Railway log lines: `[ai-visibility] audit <id> done in <n>s` / `failed after <n>s`.
+
+Questions run one after another; within a question the search and the assistants run in parallel (different providers, separate rate limits).
 
 ## robots.txt
 
@@ -52,48 +54,52 @@ Required properties are checked directly on the entity (so an Organization with 
 
 A half-filled block is treated as worse than none, because it teaches the model the wrong thing; each missing required property produces its own finding.
 
-## Simulated questions
+## Buyer questions, search ranking and real AI assistants (report version 2)
 
-If no questions are supplied, four are generated from the page title, description and headings by the chosen text model. If the model is unavailable, a template fallback still produces usable queries, so an audit never fails just because query generation did.
+If no questions are supplied, four are generated from the page title, description and headings by the chosen text model. If the model is unavailable, plain template questions are used (the subject is the part of the title that describes the offer, so "Curam-Ai Protocol | Systematised AI…" gives "systematised ai… in Australia", not "best Curam"), and the report flags them and suggests writing real ones.
 
 For each question:
 
-1. **Search** — the existing search key (`SEARCH_API_KEY`, Brave/Serper/SerpAPI) returns up to five results. `DISABLE_WEB_SEARCH` wins, and a missing key is recorded on the query rather than failing the run.
-2. **Answer** — the configured text model answers from those results only, citing full URLs. Search results are labelled untrusted data in the prompt.
-3. **Three separate verdicts**:
-   - **found in search** — the site's host appears in the search results, and at what position;
-   - **named in the answer** — the brand or domain appears in the answer text;
-   - **linked in the answer** — a URL on the site's host is cited.
+1. **Search ranking** — one search with the existing key (`SEARCH_API_KEY`, Brave/Serper/SerpAPI), top 10. Ranking score: #1 100, top 3 85, top 5 70, top 10 50, not found 0. A subdomain of the site counts. Provider errors are detected in each provider's own shape (Brave's `{type:"ErrorResponse", error:{detail}}`, Serper's `message`, SerpAPI's `error`, any HTTP 4xx/5xx) by `providerError()` in `searchClient.js`; a failed search leaves ranking **unmeasured** and adds a Setup suggestion with the provider's message. (Before this fix an invalid key or used-up quota read as "zero results" and the audit reported the site as not found. The chat `@search` route had the same bug and now uses the same check.)
+2. **Real AI assistants** (`assistants.js`), each searching the web itself:
+   - **Claude** — Anthropic web search tool (`web_search_20250305`, up to 3 searches, user location AU). Model: the workspace default if it is an Anthropic model, else the first Anthropic model in `vault_models`. Sources: the answer's citations first, then the search results it saw.
+   - **Gemini** — grounded with Google Search (`tools: [{ googleSearch: {} }]`). Model: the `gemini` tier. Its sources are Google redirect addresses whose title is the source domain, so the site is matched by that title.
+   - **Perplexity** — Sonar API, only when `PERPLEXITY_API_KEY` is set (environment or Settings). Model: setting `ai_visibility_perplexity_model`, default `sonar` (not in `vault_models`, so it is a setting rather than a hardcoded choice). **Never run against the real API yet.**
 
-   These are kept separate because they are different failures. A site can rank and still not be named; it can be named without a link. The query's citation score is 40 for appearing in search (+20 at #1, +15 in the top 3, +8 in the top 10), +30 for being named, +30 for being linked.
+   The new-audit screen shows each as a tick box (`GET /assistants`), greyed out with the reason when not connected. Per assistant: **named** (the brand, the brand without a legal suffix, its first two words, or the domain label, matched as whole words with a space, hyphen or nothing between them, so "Curam AI", "Curam-AI" and "CuramAI" all count and a page name such as "Home" never does) and **used the site as a source** (a site page among its sources or linked in its answer). 50 points each. An assistant that errors or times out (120 s) is recorded and **left out** of the score.
+
+Answers vary between runs, accounts and locations; the report says this is a sample, not a guarantee.
+
+Version 1 reports (before 2026-11-13) had the configured model "answer" from the top five search results only, so being named depended almost entirely on ranking in those five. They still open and render as before, labelled as the earlier version.
 
 ### Key facts
 
-The optional key-fact list is checked against each answer (and the search snippets). Matching is a **documented heuristic, not entailment**: every number must be present with a compatible unit, and at least 60% of the distinctive words must appear. Units are compared as families (`°C`/celsius, `A`/amp, `weeks`/wk, `%`/percent, …), and a range needs both ends. It is designed to catch "0.5 amps" for "0.5°C" and "6 months" for "6 weeks", not to prove meaning. The report says so.
+The optional key-fact list is checked against each assistant's answer only (never against other sites' search snippets). Matching is a **documented heuristic, not entailment**: every number must be present with a compatible unit, and at least 60% of the distinctive words must appear. Units are compared as families (`°C`/celsius, `A`/amp, `weeks`/wk, `%`/percent, …), and a range needs both ends. It is designed to catch "0.5 amps" for "0.5°C" and "6 months" for "6 weeks", not to prove meaning. The report says so.
 
 ## Scores
 
 | Area | Weight | Source |
 | --- | --- | --- |
-| Technical access | 25 | HTTP status, indexability (robots meta / X-Robots-Tag), title, description, language, blocked AI crawlers |
+| Technical access | 20 | HTTP status, indexability (robots meta / X-Robots-Tag), title, description, language, blocked AI crawlers |
 | No-JavaScript readability | 15 | raw-vs-rendered word ratio |
-| Structured data | 20 | JSON-LD entity completeness |
-| Citation in answers | 25 | average query citation score |
-| Key-fact accuracy | 15 | average share of supplied facts present |
+| Structured data | 15 | JSON-LD entity completeness |
+| Search ranking | 15 | average ranking score over questions whose search worked |
+| Named by AI assistants | 25 | average named/source score over every assistant answer that came back |
+| Key-fact accuracy | 10 | average share of supplied facts present per assistant answer |
 
-An area that could not be measured (no browser, no search key, no facts) is **left out and the remaining weights are rescaled**. A missing measurement is not a failure, and the report lists which areas were measured.
+An area that could not be measured (no browser, failed search, no assistant answered, no facts) is **left out and the remaining weights are rescaled**; a null is never averaged in as zero. A missing measurement is not a failure, and the report lists which areas were measured.
 
 Suggestions are ordered fail → improve → consider and each has a concrete "what to do".
 
 ## Output
 
-- **On-page report** — scores, suggestions, robots table, readability comparison, schema table and findings, each question with its three verdicts, answer, facts and the results given to the model.
+- **On-page report** — scores, suggestions, robots table, readability comparison, schema table and findings, each question with its search ranking and one box per assistant (verdicts, facts, answer and sources).
 - **Copy for AI** — the full report as Markdown (the same text the PDF renders, so they cannot drift).
 - **Download PDF** — rendered server-side with `pdf-lib`, standard fonts only.
 
 ## Guide chat
 
-The round **AI Visibility guide** sits at the bottom right of `/ai-visibility` (`guideId` `ai-visibility`, `POST /api/ai-visibility-tutor`, flag `aiVisibility`, `aiLimiter`). It points at the page's real parts in order, or says plainly that something is not built: the start screen (New audit, Page URL, Name and Brand, Model, Buyer questions, Key facts, Run audit) and a saved report (scores and their five areas, Suggestions, Technical access and the AI-crawler table, Readability without JavaScript, Structured data, Simulated questions and citation checks, Key facts, Copy for AI, Download PDF). It sees no address, score or report, and it says an audit is a snapshot that cannot control what an AI assistant says. The shared tool list is `client/src/pages/aiVisibility/aiVisibilityTools.mjs`; `node server/services/aiVisibilityTutor.test.js` (with `guideTestKit.js`) fails if the guide and the page drift apart. See `docs/guide-chat.md`.
+The round **AI Visibility guide** sits at the bottom right of `/ai-visibility` (`guideId` `ai-visibility`, `POST /api/ai-visibility-tutor`, flag `aiVisibility`, `aiLimiter`). It points at the page's real parts in order, or says plainly that something is not built: the start screen (New audit, Page URL, Name and Brand, AI assistants to ask, Model, Buyer questions, Key facts, Run audit) and a saved report (scores and their six areas, Suggestions, Technical access and the AI-crawler table, Readability without JavaScript, Structured data, Buyer questions and AI assistants with the assistant checks, Key facts, Copy for AI, Download PDF). It sees no address, score or report, and it says an audit is a snapshot that cannot control what an AI assistant says. The shared tool list is `client/src/pages/aiVisibility/aiVisibilityTools.mjs`; `node server/services/aiVisibilityTutor.test.js` (with `guideTestKit.js`) fails if the guide and the page drift apart. See `docs/guide-chat.md`.
 
 ## API
 
@@ -101,22 +107,27 @@ Mounted at `/api/ai-visibility` with `requireFeature('aiVisibility')`. `aiLimite
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/audits` | saved runs for the signed-in person |
-| `POST` | `/audits` | run an audit (`url`, optional `name`, `brand`, `queries`, `facts`, `modelId`) |
-| `GET` | `/audits/:id` | one saved report |
+| `GET` | `/assistants` | which assistants this person can ask, with model and the reason when unavailable |
+| `GET` | `/audits` | saved runs for the signed-in person (with `status`) |
+| `POST` | `/audits` | start an audit in the background (`url`, optional `name`, `brand`, `queries`, `facts`, `modelId`, `assistants` ids); 202 with the running row, 409 with `auditId` if one is already running |
+| `GET` | `/audits/:id` | one saved report, or its `status` / `progress` / `error` while running or after a failure |
 | `DELETE` | `/audits/:id` | delete a run |
 | `GET` | `/audits/:id/markdown` | `{ markdown }` for Copy for AI |
 | `GET` | `/audits/:id/pdf` | PDF download |
 
 ## Setup
 
-- A connected **text** model (Anthropic, Gemini, DeepSeek or Ollama in `vault_models`). Without one, the technical checks still run and the questions are recorded as unanswered.
-- `SEARCH_API_KEY` (Brave, Serper or SerpAPI), in the environment or Settings. Without it, discovery checks are recorded as unavailable.
+- For the assistants: an Anthropic model in `vault_models` plus `ANTHROPIC_API_KEY` (Claude), a Gemini model plus `GEMINI_API_KEY` (Gemini), and optionally `PERPLEXITY_API_KEY` (Perplexity). Any one is enough; none means only search ranking is checked.
+- A connected **text** model writes the questions when none are supplied; without one, template questions are used.
+- `SEARCH_API_KEY` (Brave, Serper or SerpAPI), in the environment or Settings. Without it (or when it is invalid or out of credit), search ranking is unmeasured and the report says why.
 - Chromium/Playwright (already installed in the Docker image). Without it, readability is unmeasured.
+
+**Cost per audit** (four questions, all three assistants): 4 searches on the search key, plus per question one Claude call with up to 3 web searches (Anthropic bills web searches per search on top of tokens), one grounded Gemini call and one Perplexity call. A few cents to tens of cents depending on models; untick assistants to spend less.
 
 ## Files and tests
 
-- `server/services/aiVisibility/robots.js`, `schema.js`, `facts.js`, `searchClient.js`, `render.js`, `queryAnalysis.js`, `scoring.js`, `markdown.js`, `pdf.js`, `aiVisibilityService.js`
+- `server/services/aiVisibility/robots.js`, `schema.js`, `facts.js`, `searchClient.js`, `render.js`, `assistants.js`, `queryAnalysis.js`, `scoring.js`, `markdown.js`, `pdf.js`, `aiVisibilityService.js`
+- Table columns `status`, `progress`, `error` added in `server/db.js` (2026-11-13)
 - `server/routes/aiVisibility.js`; mounted in `server/index.js`
 - `server/services/aiVisibilityTutor.js`, `server/routes/aiVisibilityTutor.js` (the guide chat)
 - `client/src/pages/AiVisibilityPage.jsx`; guide wrapper `client/src/pages/aiVisibility/AiVisibilityTutorChat.jsx` and shared list `client/src/pages/aiVisibility/aiVisibilityTools.mjs`

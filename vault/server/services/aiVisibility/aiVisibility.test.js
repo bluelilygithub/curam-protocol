@@ -2,7 +2,8 @@
 /**
  * AI Visibility: the pure parts of the audit, with no network, browser or database.
  * robots.txt grouping/matching, JSON-LD entity validation, key-fact matching, the
- * weighted score (including unmeasured areas) and the Markdown report.
+ * weighted score (including unmeasured areas), search-error detection, brand and host
+ * matching, the assistant verdicts and response readers, and the Markdown report.
  *
  * Run: node server/services/aiVisibility/aiVisibility.test.js
  */
@@ -12,7 +13,10 @@ const assert = require('assert');
 const { parseRobots, checkBot, auditRobots, pathMatches, AI_BOTS } = require('./robots');
 const { extractJsonLd, validateSchema, checkEntity } = require('./schema');
 const { matchFact, factCoverage, extractNumbers } = require('./facts');
-const { scoreReport, overallScore, scoreReadability } = require('./scoring');
+const { scoreReport, overallScore, scoreReadability, WEIGHTS } = require('./scoring');
+const { providerError } = require('./searchClient');
+const { brandVariants, brandNamed, brandFromTitle, hostMatches, rankOf, rankScore, fallbackQueries, assistantVerdict } = require('./queryAnalysis');
+const { readClaudeContent, readGeminiGrounding, readPerplexity, friendlyError } = require('./assistants');
 const { buildMarkdown } = require('./markdown');
 
 function test(name, fn) {
@@ -209,8 +213,8 @@ test('scoring: unmeasured areas are left out and the weights rescaled', () => {
   const scored = scoreReport(baseReport({ schema: { score: null, findings: [] } }));
   assert.strictEqual(scored.scores.schema, null);
   assert.deepStrictEqual(scored.scores.measured.sort(), ['readability', 'technical'].sort());
-  assert.strictEqual(scored.scores.overall, Math.round((scored.scores.technical * 25 + scored.scores.readability * 15) / 40));
-  assert.strictEqual(overallScore({ technical: null, readability: null, schema: null, citation: null, accuracy: null }), 0);
+  assert.strictEqual(scored.scores.overall, Math.round((scored.scores.technical * WEIGHTS.technical + scored.scores.readability * WEIGHTS.readability) / (WEIGHTS.technical + WEIGHTS.readability)));
+  assert.strictEqual(overallScore({ technical: null, readability: null, schema: null, discoverability: null, assistants: null, accuracy: null }), 0);
 });
 
 test('scoring: readability rewards server-rendered content and penalises JS-only pages', () => {
@@ -238,71 +242,204 @@ test('scoring: a blocked crawler and a noindex page produce fail suggestions', (
   assert.ok(scored.scores.technical < 100);
 });
 
-test('scoring: citation and mention are separate outcomes in the summary', () => {
+function assistant(id, overrides = {}) {
+  return { id, label: id === 'claude' ? 'Claude (web search)' : 'Gemini (Google Search)', model: `${id}-model`, answer: 'An answer.', sources: [], error: '', named: false, cited: false, score: 0, facts: [], factScore: null, ...overrides };
+}
+
+test('scoring: search ranking and each assistant are separate outcomes', () => {
   const report = baseReport({
     queries: [
       {
         query: 'best cellar cooler',
-        answer: 'The Curam cabinet is a good choice.',
-        citation: { inSearchResults: true, domainRank: 1, mentioned: true, brandMentioned: true, domainMentioned: false, citedInAnswer: false, urlsCited: [], score: 60 },
-        factScore: 50,
-        search: { results: [{ url: 'https://curam.example', title: 'Curam' }], error: '' },
+        search: { provider: 'brave', results: [{ url: 'https://curam.example' }], error: '' },
+        rank: 1,
+        discoverability: 100,
+        assistants: [
+          assistant('claude', { named: true, cited: true, score: 100, factScore: 100 }),
+          assistant('gemini', { named: true, cited: false, score: 50, factScore: 0 }),
+        ],
       },
       {
         query: 'cellar cooling guide',
-        answer: 'No source answers this.',
-        citation: { inSearchResults: false, domainRank: null, mentioned: false, brandMentioned: false, domainMentioned: false, citedInAnswer: false, urlsCited: [], score: 0 },
-        factScore: null,
-        search: { results: [], error: '' },
+        search: { provider: 'brave', results: [{ url: 'https://other.example' }], error: '' },
+        rank: null,
+        discoverability: 0,
+        assistants: [
+          assistant('claude', { score: 0 }),
+          assistant('gemini', { score: null, answer: '', error: 'GEMINI_API_KEY is not set.' }),
+        ],
       },
     ],
   });
   const scored = scoreReport(report);
-  assert.ok(scored.summary.includes('mentioned in the answer 1/2'));
-  assert.ok(scored.summary.includes('linked 0/2'));
-  assert.ok(scored.suggestions.some((s) => s.severity === 'fail' && /No simulated answer linked/.test(s.title)));
-  assert.strictEqual(scored.scores.citation, 30);
+  assert.strictEqual(scored.scores.discoverability, 50);
+  assert.strictEqual(scored.scores.assistants, 50, 'the failed Gemini answer is left out, not counted as zero');
   assert.strictEqual(scored.scores.accuracy, 50);
+  assert.ok(scored.summary.includes('top 10 for 1 of 2'));
+  assert.ok(scored.summary.includes('Claude (web search) named it in 1/2 answers and cited the site in 1/2'));
+  assert.ok(scored.suggestions.some((s) => s.area === 'Setup' && /Gemini/.test(s.title)), 'an assistant error is a setup issue');
+  assert.ok(!scored.suggestions.some((s) => /No AI assistant named/.test(s.title)));
 });
 
-test('scoring: a missing search key is reported as a setup issue, not a site failure', () => {
+test('scoring: failed searches leave ranking unmeasured and say why', () => {
   const report = baseReport({
     queries: [{
       query: 'q',
-      answer: '',
-      citation: null,
-      factScore: null,
-      search: { results: [], error: 'Search API key not configured' },
+      search: { provider: '', results: [], error: 'Brave: The provided API key is invalid. (HTTP 422)' },
+      rank: null,
+      discoverability: null,
+      assistants: [],
     }],
   });
   const scored = scoreReport(report);
-  assert.ok(scored.suggestions.some((s) => s.area === 'Setup' && /Live search/.test(s.title)));
+  assert.strictEqual(scored.scores.discoverability, null, 'a failed search is not "not found"');
+  assert.ok(!scored.suggestions.some((s) => /not in the top 10/.test(s.title)));
+  const setup = scored.suggestions.find((s) => s.area === 'Setup' && /Live search failed/.test(s.title));
+  assert.ok(setup && /API key is invalid/.test(setup.detail));
+});
+
+test('scoring: nobody naming the business is a fail; template questions are flagged', () => {
+  const scored = scoreReport(baseReport({
+    querySource: 'template',
+    queries: [{
+      query: 'q',
+      search: { provider: 'brave', results: [], error: '' },
+      rank: null,
+      discoverability: 0,
+      assistants: [assistant('claude', { score: 0 })],
+    }],
+  }));
+  assert.ok(scored.suggestions.some((s) => s.severity === 'fail' && /No AI assistant named/.test(s.title)));
+  assert.ok(scored.suggestions.some((s) => s.severity === 'fail' && /as a source/.test(s.title)));
+  assert.ok(scored.suggestions.some((s) => /made from templates/.test(s.title)));
+});
+
+// ---------------------------------------------------------------- search errors
+
+test('search: provider error shapes are errors, not empty results', () => {
+  assert.strictEqual(providerError('brave', { type: 'ErrorResponse', error: { detail: 'The provided API key is invalid.' } }, 422), 'Brave: The provided API key is invalid. (HTTP 422)');
+  assert.strictEqual(providerError('brave', { type: 'ErrorResponse', error: { code: 'RATE_LIMITED' } }, 429), 'Brave: RATE_LIMITED (HTTP 429)');
+  assert.strictEqual(providerError('serper', { message: 'Not enough credits' }, 400), 'Serper: Not enough credits (HTTP 400)');
+  assert.strictEqual(providerError('serpapi', { error: 'Invalid API key.' }), 'SerpAPI: Invalid API key.');
+  assert.strictEqual(providerError('brave', {}, 500), 'Brave: HTTP 500');
+  assert.strictEqual(providerError('brave', { web: { results: [] } }, 200), '', 'a real empty result is not an error');
+});
+
+// ---------------------------------------------------------------- brand, host, questions
+
+test('brand: variants catch the ways an answer names a business', () => {
+  const v = brandVariants('Curam-Ai Protocol™', 'curam-ai.com.au');
+  assert.ok(brandNamed('I would look at Curam AI for this.', v), 'Curam AI');
+  assert.ok(brandNamed('CuramAI offers a protocol', v), 'CuramAI');
+  assert.ok(brandNamed('see curam-ai.com.au', v), 'domain label');
+  assert.ok(!brandNamed('A curated list of tools.', v), 'a word that only starts the same does not count');
+  assert.ok(!brandNamed('Welcome home', brandVariants('Home', 'acme.com.au')), 'a page name is not a brand');
+  assert.ok(brandNamed('Acme sells these.', brandVariants('Home', 'acme.com.au')), 'falls back to the domain label');
+  assert.ok(brandNamed('Ask Bluegum about it', brandVariants('Bluegum Pty Ltd', 'bluegum.com.au')));
+});
+
+test('brand: brandFromTitle skips page names and the trademark sign', () => {
+  assert.strictEqual(brandFromTitle('Curam-Ai Protocol™ | Systematised AI', 'curam-ai.com.au'), 'Curam-Ai Protocol');
+  assert.strictEqual(brandFromTitle('Home | Acme Cellars', 'acme.com.au'), 'acme');
+  assert.strictEqual(brandFromTitle('Acme - Wine cellars', 'acme.com.au'), 'Acme');
+});
+
+test('host: subdomains of the site count, look-alikes do not', () => {
+  assert.ok(hostMatches('shop.curam.example', 'curam.example'));
+  assert.ok(hostMatches('www.curam.example', 'curam.example'));
+  assert.ok(!hostMatches('notcuram.example', 'curam.example'));
+  assert.strictEqual(rankOf([{ url: 'https://a.example' }, { url: 'https://blog.curam.example/x' }], 'curam.example'), 2);
+  assert.strictEqual(rankScore(1), 100);
+  assert.strictEqual(rankScore(7), 50);
+  assert.strictEqual(rankScore(null), 0);
+});
+
+test('questions: templates keep a hyphenated brand and describe the offer', () => {
+  const q = fallbackQueries({ title: 'Curam-Ai Protocol™ | Systematised AI Implementation for Professional Services', brand: 'Curam-Ai Protocol', host: 'curam-ai.com.au' });
+  assert.strictEqual(q.length, 4);
+  assert.ok(q[0].startsWith('systematised ai implementation for professional services'), q[0]);
+  assert.ok(!q.some((x) => /\bbest curam\b|who sells/.test(x)), q.join(' / '));
+});
+
+test('assistants: named and cited are judged per assistant', () => {
+  const variants = brandVariants('Curam', 'curam.example');
+  const v = assistantVerdict({ id: 'claude', answer: 'Curam is one option.', sources: [{ url: 'https://other.example/a' }, { url: 'https://www.curam.example/guide' }] }, { domain: 'curam.example', variants });
+  assert.strictEqual(v.named, true);
+  assert.strictEqual(v.cited, true);
+  assert.strictEqual(v.score, 100);
+  const g = assistantVerdict({ id: 'gemini', answer: 'Several firms do this.', sources: [{ url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc', domain: 'curam.example' }] }, { domain: 'curam.example', variants });
+  assert.strictEqual(g.named, false);
+  assert.strictEqual(g.cited, true, 'a Gemini source is matched by its domain title');
+  assert.strictEqual(g.score, 50);
+  const failed = assistantVerdict({ id: 'perplexity', answer: '', sources: [], error: 'timed out' }, { domain: 'curam.example', variants });
+  assert.strictEqual(failed.score, null, 'a failed assistant is unmeasured');
+});
+
+test('assistants: response readers pull answers and sources', () => {
+  const c = readClaudeContent([
+    { type: 'server_tool_use', name: 'web_search' },
+    { type: 'web_search_tool_result', content: [{ type: 'web_search_result', url: 'https://a.example', title: 'A' }] },
+    { type: 'text', text: 'Curam is ', citations: [{ url: 'https://curam.example', title: 'Curam' }] },
+    { type: 'text', text: 'good.' },
+  ]);
+  assert.strictEqual(c.text, 'Curam is good.');
+  assert.deepStrictEqual(c.cited.map((s) => s.url), ['https://curam.example']);
+  assert.deepStrictEqual(c.seen.map((s) => s.url), ['https://a.example']);
+  const g = readGeminiGrounding({ candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: 'https://redirect', title: 'curam.example' } }] } }] });
+  assert.strictEqual(g[0].domain, 'curam.example');
+  const p = readPerplexity({ choices: [{ message: { content: 'Answer' } }], citations: ['https://curam.example/x'] });
+  assert.strictEqual(p.answer, 'Answer');
+  assert.strictEqual(p.sources[0].url, 'https://curam.example/x');
+});
+
+test('assistants: provider errors are shortened to a readable reason', () => {
+  assert.strictEqual(friendlyError(new Error('401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_1"}')), '401: invalid x-api-key');
+  assert.strictEqual(friendlyError(new Error('[GoogleGenerativeAI Error]: Error fetching from https://x/models/g:generateContent: [400 Bad Request] API key not valid. Please pass a valid API key. [{"@type":"x"}]')), '400: API key not valid. Please pass a valid API key.');
+  assert.strictEqual(friendlyError(new Error('Perplexity request timed out.')), 'Perplexity request timed out.');
 });
 
 // ---------------------------------------------------------------- Markdown
 
-test('markdown: the report has every section and escapes table cells', () => {
+test('markdown: a version 2 report shows ranking and each assistant', () => {
   const scored = scoreReport(baseReport({
+    version: 2,
+    assistantsAsked: [{ id: 'claude', label: 'Claude (web search)', model: 'claude-x' }],
+    queries: [{
+      query: 'best cellar cooler',
+      source: 'user',
+      search: { provider: 'brave', results: [{ url: 'https://curam.example/a', title: 'Coolers | Curam' }], error: '' },
+      rank: 1,
+      discoverability: 100,
+      assistants: [assistant('claude', { answer: 'Curam holds ±0.5°C.', named: true, namedAs: 'curam', cited: true, citedUrls: ['https://curam.example/a'], score: 100, sources: [{ url: 'https://curam.example/a', title: 'Coolers' }] }),
+        assistant('gemini', { answer: '', score: null, error: 'GEMINI_API_KEY is not set.' })],
+    }],
+    facts: [{ statement: '±0.5°C | stability', present: true, answersFound: 1, evidence: 'holds ±0.5°C' }],
+  }));
+  const md = buildMarkdown(scored, { createdAt: '2026-11-13T00:00:00Z' });
+  for (const s of ['**AI assistants asked:** Claude (web search) (claude-x)', '| Search ranking | 100/100 |', '| Named by AI assistants |', '## 4. Buyer questions', '#### Claude (web search)', 'Named the business: yes', 'position 1', 'Could not answer: GEMINI_API_KEY is not set.', '\\|']) {
+    assert.ok(md.includes(s), `missing "${s}"`);
+  }
+  assert.ok(!md.includes('Citation in answers'));
+});
+
+test('markdown: an earlier (version 1) saved report still renders as it did', () => {
+  const md = buildMarkdown({
+    url: 'https://curam.example',
+    host: 'curam.example',
+    scores: { overall: 60, technical: 90, readability: 100, schema: 50, citation: 30, accuracy: null, measured: ['technical'] },
     queries: [{
       query: 'best cellar cooler',
       source: 'generated',
       model: 'claude-x',
-      answer: 'The Curam cabinet holds ±0.5°C.\nIt is quiet.',
+      answer: 'The Curam cabinet.',
       citation: { inSearchResults: true, domainRank: 2, mentioned: true, brandMentioned: true, domainMentioned: false, citedInAnswer: true, urlsCited: ['https://curam.example/a'], otherUrls: [], score: 85 },
-      factScore: 100,
-      facts: [{ statement: '±0.5°C stability', present: true, confidence: 1, evidence: 'holds ±0.5°C' }],
-      search: { provider: 'brave', results: [{ url: 'https://curam.example/a', title: 'Coolers | Curam', snippet: 'stable' }], error: '' },
+      facts: [],
+      search: { provider: 'brave', results: [{ url: 'https://curam.example/a', title: 'Coolers' }], error: '' },
     }],
-    facts: [{ statement: '±0.5°C | stability', present: true, answersFound: 1, evidence: 'holds ±0.5°C' }],
-  }));
-  const md = buildMarkdown(scored, { createdAt: '2026-11-01T00:00:00Z' });
-  for (const heading of ['# AI Visibility report', '## Scores', '## Suggestions', '## 1. Technical access', '### robots.txt and AI crawlers', '## 2. Readability without JavaScript', '## 3. Structured data', '## 4. Simulated questions', '## 5. Key facts across all answers']) {
-    assert.ok(md.includes(heading), `missing "${heading}"`);
+  });
+  for (const s of ['## 4. Simulated questions', '| Citation in answers | 30/100 |', 'Linked in the answer: yes', 'https://curam.example/a']) {
+    assert.ok(md.includes(s), `missing "${s}"`);
   }
-  assert.ok(md.includes('| Area | Score |'));
-  assert.ok(md.includes('GPTBot'), 'the crawler table lists GPTBot even when nothing is blocked');
-  assert.ok(md.includes('\\|'), 'a pipe in a fact does not break the table');
-  assert.ok(md.includes('https://curam.example/a'), 'cited URL appears');
 });
 
 test('markdown: a sparse report still renders', () => {

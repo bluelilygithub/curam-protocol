@@ -18,8 +18,10 @@ checkGuide({
   facts: [
     ['new-audit', 'notes', /public/, 'only public pages can be audited'],
     ['saved-audits', 'does', /Search audits filters/, 'the saved list is searchable'],
-    ['run-audit', 'does', /one live search and one model answer/, 'each question gets a search and an answer'],
+    ['run-audit', 'does', /one live search for each buyer question/, 'each question gets a search and the assistants'],
+    ['assistants', 'does', /searches the web itself/, 'the assistants search for themselves'],
     ['model', 'notes', /technical checks still run/, 'the audit still runs without a model'],
+    ['model', 'does', /does not choose the assistants/, 'the model is not the assistant'],
     ['buyer-questions', 'does', /generates four/, 'blank questions are generated'],
     ['facts-input', 'notes', /Include the units/, 'facts need units'],
     ['scores', 'notes', /left out rather than scored zero/, 'unmeasured areas are not zero'],

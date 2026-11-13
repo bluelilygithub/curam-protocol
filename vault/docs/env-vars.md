@@ -44,6 +44,7 @@ Moved out of CLAUDE.md.
 | `GITHUB_TOKEN` | Font Customizer — optional, raises the Google Fonts repo license-check lookup from 60/hr to 5000/hr |
 | `CELLAR_LITE_FRAME_ANCESTORS` | Cellar Planner lite (`/cellar-lite/`, public static page) — origins allowed to embed it in an iframe, space-separated (e.g. `https://www.example.com.au`). Unset = only Vault can frame it. Invalid entries ignored. `server/routes/cellarLiteRouter.js` |
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |
+| `PERPLEXITY_API_KEY` | AI Visibility — optional: adds Perplexity (Sonar API) as one of the real assistants each buyer question is put to. Also accepted as a Settings key. Model from setting `ai_visibility_perplexity_model` (default `sonar`). Off until set |
 | `GSC_REDIRECT_URI` | Search Console OAuth callback (default `{APP_URL}/api/gsc/callback`) |
 | `SENTRY_DSN` | Error tracking — unset disables Sentry entirely (no-op). See **`docs/observability.md`** |
 | `SENTRY_AUTH_TOKEN` | Admin dashboard Sentry overview panel (read-only issues/stats pull). Unset = panel links out to Sentry instead of showing data. |

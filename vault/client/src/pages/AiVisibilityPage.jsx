@@ -4,7 +4,6 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
-import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatRunDate } from '../utils/seoCampaignBrief';
 import Tooltip from '../components/Tooltip';
@@ -19,8 +18,10 @@ const TOOL_HELP = {
     'robots.txt read properly, per AI crawler: GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended and the rest, with the exact rule that decides each one',
     'Readability without JavaScript: the raw HTML compared with the same page rendered in a real browser, so a JavaScript-only offer is visible as a finding',
     'JSON-LD checked entity by entity (Organization, LocalBusiness, Product, FAQPage, Article…), including the properties an answer engine needs',
-    'Simulated buyer questions: real web search results, then a model answer, then three separate verdicts — found in search, named in the answer, linked in the answer',
-    'Key-fact accuracy: the numbers and distinctive terms you supply (with units) are checked against the answers',
+    'Search ranking: each buyer question is searched live and the site\'s position in the top 10 is recorded',
+    'Real AI assistants: each question is put to Claude (web search), Gemini (Google Search) and Perplexity where connected; each searches for itself, and the report says whether it named the business and whether it used the site as a source',
+    'Key-fact accuracy: the numbers and distinctive terms you supply (with units) are checked against the assistants\' answers',
+    'Runs in the background: you can leave the page and come back',
     'Copy the full report as Markdown, or download it as a PDF',
   ],
 };
@@ -68,9 +69,122 @@ const SCORE_AREAS = [
   { key: 'technical', label: 'Technical access', tip: 'HTTP status, indexability, titles/description/language and robots.txt blocks.' },
   { key: 'readability', label: 'No-JS readability', tip: 'How much of the page an AI crawler sees without running JavaScript.' },
   { key: 'schema', label: 'Structured data', tip: 'JSON-LD entities and the properties answer engines need.' },
-  { key: 'citation', label: 'Citation in answers', tip: 'How often the site is found in search, named in the answer, and linked.' },
-  { key: 'accuracy', label: 'Key-fact accuracy', tip: 'Whether the answers state the facts you supplied.' },
+  { key: 'discoverability', label: 'Search ranking', tip: 'Where the site ranks in a live web search for each question (top 10).' },
+  { key: 'assistants', label: 'Named by AI assistants', tip: 'How often real AI assistants named the business and used the site as a source.' },
+  { key: 'accuracy', label: 'Key-fact accuracy', tip: 'Whether the assistants\' answers state the facts you supplied.' },
 ];
+
+// Audits saved before 2026-11-13 (report version 1) had one simulated "citation" area.
+const LEGACY_SCORE_AREAS = [
+  ...SCORE_AREAS.slice(0, 3),
+  { key: 'citation', label: 'Citation in answers', tip: 'Earlier version: a model answered from the top five search results only.' },
+  SCORE_AREAS[5],
+];
+
+const POLL_MS = 3000;
+
+function YesNo({ ok, label, extra }) {
+  return (
+    <span
+      className="px-2 py-0.5 rounded-full border"
+      style={{ borderColor: 'var(--color-border)', color: ok ? '#166534' : '#b45309', background: 'var(--color-surface)' }}
+    >
+      {label}: {ok ? 'yes' : 'no'}{extra ? ` (${extra})` : ''}
+    </span>
+  );
+}
+
+// One buyer question in a version 2 report: the ranking search, then each assistant.
+function QuestionResult({ q, index }) {
+  const search = q.search || {};
+  return (
+    <li className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{index + 1}. {q.query}</p>
+        <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          {q.source === 'generated' ? 'generated from the page' : q.source === 'template' ? 'template question' : 'supplied'}
+        </span>
+      </div>
+
+      {search.error ? (
+        <p className="text-xs" style={{ color: '#b45309' }}>Search ranking not measured: {search.error}</p>
+      ) : (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Search ranking ({search.provider || 'search'}, top {(search.results || []).length}):{' '}
+          <span style={{ color: q.rank ? '#166534' : '#b45309' }}>{q.rank ? `position ${q.rank}` : 'not in these results'}</span>
+        </p>
+      )}
+
+      <div className="grid xl:grid-cols-2 gap-3" data-guide={index === 0 ? 'citation' : undefined}>
+        {(q.assistants || []).map((a) => (
+          <div key={a.id} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+              {a.label}{a.model ? <span style={{ color: 'var(--color-muted)' }}> · {a.model}</span> : null}
+            </p>
+            {a.score == null ? (
+              <p className="text-xs" style={{ color: '#b45309' }}>Could not answer: {String(a.error || 'no answer').replace(/[.\s]+$/, '')}. Left out of the score.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <YesNo ok={a.named} label="Named the business" extra={a.named ? a.namedAs : ''} />
+                  <YesNo ok={a.cited} label="Used the site as a source" />
+                </div>
+                {(a.facts || []).length > 0 && (
+                  <ul className="space-y-0.5 text-[11px]">
+                    {a.facts.map((f, fi) => (
+                      <li key={`${f.statement}-${fi}`} style={{ color: f.present ? '#166534' : '#b45309' }}>
+                        {f.present ? 'Present' : 'Missing'}: {f.statement}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <details>
+                  <summary className="text-[11px] cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
+                    Answer and {(a.sources || []).length} source{(a.sources || []).length === 1 ? '' : 's'}
+                  </summary>
+                  <blockquote className="mt-2 text-xs leading-relaxed whitespace-pre-wrap border-l-2 pl-3" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-text)' }}>
+                    {a.answer}
+                  </blockquote>
+                  {(a.sources || []).length > 0 && (
+                    <ul className="mt-2 space-y-1 text-[11px]">
+                      {a.sources.map((s) => (
+                        <li key={s.url || s.title} className="truncate">
+                          <a href={s.url} target="_blank" rel="noreferrer" className="hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+                            {s.title || s.url}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
+              </>
+            )}
+          </div>
+        ))}
+        {(q.assistants || []).length === 0 && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No AI assistants were asked.</p>
+        )}
+      </div>
+
+      {(search.results || []).length > 0 && (
+        <details>
+          <summary className="text-[11px] cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
+            Top search results
+          </summary>
+          <ol className="mt-1 space-y-1 text-[11px] list-decimal pl-5">
+            {search.results.map((r) => (
+              <li key={r.url} className="truncate">
+                <a href={r.url} target="_blank" rel="noreferrer" className="hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+                  {r.title || r.url}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+    </li>
+  );
+}
 
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return String(url || ''); }
@@ -140,7 +254,6 @@ export default function AiVisibilityPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
   const addToast = useToastStore((s) => s.addToast);
-  const { startProcessing, stopProcessing } = useProcessingStore();
 
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.aiVisibility !== false;
@@ -164,6 +277,9 @@ export default function AiVisibilityPage() {
   const [factsText, setFactsText] = useState('');
   const [models, setModels] = useState([]);
   const [defaultModel, setDefaultModel] = useState('');
+  const [assistantOptions, setAssistantOptions] = useState([]);
+  const [chosenAssistants, setChosenAssistants] = useState([]);
+  const [starting, setStarting] = useState(false);
 
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -201,25 +317,61 @@ export default function AiVisibilityPage() {
   }, [canUse]);
 
   useEffect(() => {
+    if (!canUse) return;
+    api.get('/api/ai-visibility/assistants')
+      .then((r) => r.json())
+      .then((list) => {
+        const rows = Array.isArray(list) ? list : [];
+        setAssistantOptions(rows);
+        setChosenAssistants(rows.filter((a) => a.available).map((a) => a.id));
+      })
+      .catch(() => {});
+  }, [canUse]);
+
+  // Load the open audit; while it is running, poll until it is done or failed.
+  useEffect(() => {
     if (!canUse || !id) {
       setAudit(null);
       return undefined;
     }
     let cancelled = false;
-    api.get(`/api/ai-visibility/audits/${id}`)
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Not found');
-        if (!cancelled) setAudit(data);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          addToast(err.message, 'error');
-          navigate('/ai-visibility');
-        }
-      });
-    return () => { cancelled = true; };
-  }, [canUse, id, addToast, navigate]);
+    let timer = null;
+    let misses = 0;
+    let wasRunning = false;
+    const load = () => {
+      api.get(`/api/ai-visibility/audits/${id}`)
+        .then(async (res) => {
+          const data = await res.json();
+          if (res.status === 404) throw Object.assign(new Error(data.error || 'Not found'), { fatal: true });
+          if (!res.ok) throw new Error(data.error || 'Could not load the audit');
+          if (cancelled) return;
+          misses = 0;
+          setAudit(data);
+          if (data.status === 'running') {
+            wasRunning = true;
+            timer = setTimeout(load, POLL_MS);
+          } else if (wasRunning) {
+            loadList().catch(() => {});
+            if (data.status === 'done') addToast(`Audit finished: ${data.score}/100`, 'success');
+            else addToast('The audit failed. The reason is shown on the page.', 'error');
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          if (err.fatal) {
+            addToast(err.message, 'error');
+            navigate('/ai-visibility');
+            return;
+          }
+          // A missed check while running is not fatal: try again a few times.
+          misses += 1;
+          if (wasRunning && misses < 10) timer = setTimeout(load, POLL_MS * 2);
+          else addToast(err.message, 'error');
+        });
+    };
+    load();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [canUse, id, addToast, navigate, loadList]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -229,39 +381,63 @@ export default function AiVisibilityPage() {
     return sortAudits(rows, sort);
   }, [audits, search, sort]);
 
+  // Starts the audit on the server and opens it; the report page shows progress while it runs.
+  const startAudit = async (body) => {
+    setStarting(true);
+    try {
+      const res = await api.post('/api/ai-visibility/audits', body);
+      const data = await res.json();
+      if (res.status === 409 && data.auditId) {
+        addToast(data.error, 'info');
+        navigate(`/ai-visibility/${data.auditId}`);
+        return false;
+      }
+      if (!res.ok) throw new Error(data.error || 'Could not start the audit');
+      await loadList().catch(() => {});
+      navigate(`/ai-visibility/${data.id}`);
+      return true;
+    } catch (err) {
+      addToast(err.message, 'error');
+      return false;
+    } finally {
+      setStarting(false);
+    }
+  };
+
   const handleCreate = async () => {
     if (!url.trim()) {
       addToast('Paste a website URL', 'error');
       return;
     }
-    startProcessing(
-      'Auditing AI visibility…',
-      'robots.txt, no-JavaScript readability, structured data, live search and model answers. This can take a minute or two.',
-    );
-    try {
-      const res = await api.post('/api/ai-visibility/audits', {
-        url: url.trim(),
-        name: name.trim() || undefined,
-        brand: brand.trim() || undefined,
-        modelId: modelId || undefined,
-        queries: queriesText,
-        facts: factsText,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Audit failed');
+    const ok = await startAudit({
+      url: url.trim(),
+      name: name.trim() || undefined,
+      brand: brand.trim() || undefined,
+      modelId: modelId || undefined,
+      queries: queriesText,
+      facts: factsText,
+      assistants: chosenAssistants,
+    });
+    if (ok) {
       setUrl('');
       setName('');
       setBrand('');
       setQueriesText('');
       setFactsText('');
-      await loadList();
-      addToast(`Audit scored ${data.score}`, 'success');
-      navigate(`/ai-visibility/${data.id}`);
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      stopProcessing();
     }
+  };
+
+  const runAgain = () => {
+    const input = audit?.report?.input;
+    if (!input?.url) {
+      navigate('/ai-visibility');
+      return;
+    }
+    startAudit({ ...input, url: input.url });
+  };
+
+  const toggleAssistant = (aid) => {
+    setChosenAssistants((prev) => (prev.includes(aid) ? prev.filter((x) => x !== aid) : [...prev, aid]));
   };
 
   const handleDelete = async (auditId) => {
@@ -313,6 +489,9 @@ export default function AiVisibilityPage() {
   const facts = report.facts || [];
   const suggestions = report.suggestions || [];
   const score = audit ? Number(audit.score) : null;
+  const isV2 = Number(report.version) >= 2;
+  const scoreAreas = isV2 ? SCORE_AREAS : LEGACY_SCORE_AREAS;
+  const status = audit?.status || 'done';
 
   // The guide's Open buttons: go to the right screen, then scroll to the part marked data-guide="<id>".
   const openToolById = (guideId) => {
@@ -442,7 +621,7 @@ export default function AiVisibilityPage() {
                       <span className="block truncate">{a.name}</span>
                       <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
                         {[
-                          a.score != null ? String(a.score) : null,
+                          a.status === 'running' ? 'running…' : a.status === 'failed' ? 'failed' : (a.score != null ? String(a.score) : null),
                           formatRunDate(a.createdAt) || null,
                           a.hostname || hostOf(a.url),
                         ].filter(Boolean).join(' · ')}
@@ -467,7 +646,7 @@ export default function AiVisibilityPage() {
         </ul>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-4xl">
+      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-[1700px]">
         {id && !audit && (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading audit…</p>
         )}
@@ -509,11 +688,11 @@ export default function AiVisibilityPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Brand (optional)</span>
-                <Tooltip text="How the business is named in answers. Used to check whether a simulated answer names it.">
+                <Tooltip text="How customers name the business. Used to check whether an AI assistant's answer names it. Short forms and the web address are checked too.">
                   <input
                     value={brand}
                     onChange={(e) => setBrand(e.target.value)}
-                    placeholder="Defaults to the first part of the title"
+                    placeholder="Defaults to the title, or the web address"
                     className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                     style={FIELD}
                   />
@@ -521,9 +700,37 @@ export default function AiVisibilityPage() {
               </label>
             </div>
 
+            <fieldset className="space-y-1" data-guide="assistants">
+              <legend className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>AI assistants to ask</legend>
+              <div className="flex flex-wrap gap-2">
+                {assistantOptions.map((a) => (
+                  <Tooltip key={a.id} text={a.available ? `Put each question to ${a.label}${a.model ? ` (${a.model})` : ''}. It searches the web itself, like a real user's assistant.` : a.reason}>
+                    <label
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+                      style={{ ...FIELD, opacity: a.available ? 1 : 0.55, cursor: a.available ? 'pointer' : 'not-allowed' }}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={!a.available}
+                        checked={a.available && chosenAssistants.includes(a.id)}
+                        onChange={() => toggleAssistant(a.id)}
+                      />
+                      <span>{a.label}</span>
+                      {a.model ? <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{a.model}</span> : null}
+                    </label>
+                  </Tooltip>
+                ))}
+              </div>
+              <span className="block text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                {assistantOptions.some((a) => !a.available)
+                  ? `Not connected: ${assistantOptions.filter((a) => !a.available).map((a) => `${a.label.split(' ')[0]} (${a.reason})`).join(' ')}`
+                  : 'Each ticked assistant answers every question with its own web search.'}
+              </span>
+            </fieldset>
+
             <label className="block space-y-1" data-guide="model">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Model for simulated answers</span>
-              <Tooltip text="The connected text model that answers each question. The workspace default is used if left blank.">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Model that writes the questions</span>
+              <Tooltip text="Used only to write buyer questions from the page when you leave the questions box blank. The workspace default is used if left blank.">
                 <select
                   value={modelId}
                   onChange={(e) => setModelId(e.target.value)}
@@ -538,7 +745,7 @@ export default function AiVisibilityPage() {
               </Tooltip>
               {models.length === 0 && (
                 <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                  No connected text model was found in Settings → Models. The audit can still run its technical checks, but no answers will be generated.
+                  No connected text model was found in Settings → Models. Questions will be made from simple templates; write your own below for a better result.
                 </span>
               )}
             </label>
@@ -574,25 +781,83 @@ export default function AiVisibilityPage() {
             </label>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Tooltip text="Fetch the page, run the technical checks, then search and answer each question.">
+              <Tooltip text="Fetch the page, run the technical checks, then search each question and put it to the ticked AI assistants. Runs in the background.">
                 <button
                   type="button"
                   onClick={handleCreate}
+                  disabled={starting}
                   data-guide="run-audit"
-                  className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-                  style={{ background: 'var(--color-primary)' }}
+                  className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-70 disabled:opacity-50"
+                  style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}
                 >
-                  Run audit
+                  {starting ? 'Starting…' : 'Run audit'}
                 </button>
               </Tooltip>
               <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                Uses one live search per question plus one model call each. Saved runs can be reopened, copied or downloaded.
+                Takes one to four minutes and runs in the background, so you can leave this page. Each question uses one search plus one paid call per ticked assistant.
               </span>
             </div>
           </section>
         )}
 
-        {id && audit && (
+        {id && audit && status !== 'done' && (
+          <section className="space-y-4" data-guide="scores">
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{audit.name}</h2>
+              <p className="text-xs break-all" style={{ color: 'var(--color-muted)' }}>{audit.url}</p>
+            </div>
+            {status === 'running' ? (
+              <div className="rounded-2xl border p-5 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} role="status" aria-live="polite">
+                <div className="flex items-center gap-3">
+                  <span className="inline-block w-4 h-4 rounded-full border-2 animate-spin motion-reduce:animate-none" style={{ borderColor: 'var(--color-border)', borderTopColor: 'var(--color-primary)' }} />
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Audit running</p>
+                </div>
+                <p className="text-sm" style={{ color: 'var(--color-text)' }}>{audit.progress || 'Working…'}</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                  This usually takes one to four minutes. It runs on the server, so you can leave this page and come back: the report opens here when it is ready.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p className="text-sm font-medium" style={{ color: '#ef4444' }}>The audit did not finish</p>
+                <p className="text-sm" style={{ color: 'var(--color-text)' }}>{audit.error || 'Unknown error.'}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Tooltip text="Start the same audit again with the same address, questions, facts and assistants.">
+                    <button
+                      type="button"
+                      onClick={runAgain}
+                      disabled={starting}
+                      className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70 disabled:opacity-50"
+                      style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}
+                    >
+                      Run again
+                    </button>
+                  </Tooltip>
+                  {deleteConfirm ? (
+                    <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Delete?
+                      <button type="button" onClick={() => handleDelete(id)} className="transition-opacity hover:opacity-70" style={{ color: '#ef4444' }}>Yes</button>
+                      <button type="button" onClick={() => setDeleteConfirm(false)} className="transition-opacity hover:opacity-70">No</button>
+                    </span>
+                  ) : (
+                    <Tooltip text="Delete this failed audit.">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(true)}
+                        className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                      >
+                        Delete
+                      </button>
+                    </Tooltip>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {id && audit && status === 'done' && (
           <section className="space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
@@ -662,8 +927,8 @@ export default function AiVisibilityPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2" data-guide="scores">
-              {SCORE_AREAS.map((area) => {
+            <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 ${isV2 ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`} data-guide="scores">
+              {scoreAreas.map((area) => {
                 const value = scores[area.key];
                 return (
                   <Tooltip key={area.key} text={area.tip}>
@@ -682,7 +947,7 @@ export default function AiVisibilityPage() {
             </div>
             <p className="text-[11px] leading-relaxed" data-guide="score-areas" style={{ color: 'var(--color-muted)' }}>
               {(scores.measured || []).length
-                ? `Measured: ${(scores.measured || []).join(', ')}. Areas that could not be measured are left out of the overall score rather than scored zero.`
+                ? `Measured: ${(scores.measured || []).map((k) => scoreAreas.find((a) => a.key === k)?.label || k).join(', ')}. Areas that could not be measured are left out of the overall score rather than scored zero.`
                 : 'No area could be measured.'}
             </p>
 
@@ -874,9 +1139,23 @@ export default function AiVisibilityPage() {
             </div>
 
             <div data-guide="questions">
+            {isV2 ? (
+              <Card
+                title="Buyer questions and AI assistants"
+                subtitle="Each question is searched once for ranking, then put to real AI assistants that search the web themselves. For each assistant: did it name the business, and did it use the site as a source? Answers vary between runs, so treat this as a sample."
+              >
+                {queries.length === 0 ? (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No questions were run.</p>
+                ) : (
+                  <ul className="space-y-4">
+                    {queries.map((q, i) => <QuestionResult key={`${q.query}-${i}`} q={q} index={i} />)}
+                  </ul>
+                )}
+              </Card>
+            ) : (
             <Card
-              title="Simulated questions"
-              subtitle="Each question is searched live, then answered by the model from those results. Found in search, named in the answer and linked in the answer are separate verdicts."
+              title="Simulated questions (earlier version)"
+              subtitle="This audit was run with the earlier version: a model answered each question from the top five search results only. Run the audit again for checks against real AI assistants."
             >
               {queries.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No questions were run.</p>
@@ -974,12 +1253,13 @@ export default function AiVisibilityPage() {
                 </ul>
               )}
             </Card>
+            )}
             </div>
 
             <div data-guide="facts">
             {facts.length > 0 && (
               <Card
-                title="Key facts across all answers"
+                title={isV2 ? "Key facts across the assistants' answers" : 'Key facts across all answers'}
                 subtitle="Fact matching is a heuristic: numbers (with their units) and distinctive words, not meaning. Use it to re-read the answer, not as proof."
               >
                 <div className="overflow-x-auto">

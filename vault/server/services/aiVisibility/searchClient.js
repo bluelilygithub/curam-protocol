@@ -14,6 +14,34 @@ const https = require('https');
 const { runtimeConfig } = require('../../config/runtime');
 const { getSettingForUser } = require('../../utils/settingsLookup');
 
+// The HTTP status rides along on a non-enumerable property so callers can tell an error
+// response from an empty result list.
+function withStatus(data, statusCode) {
+  const out = data && typeof data === 'object' ? data : {};
+  Object.defineProperty(out, '__status', { value: statusCode, enumerable: false });
+  return out;
+}
+
+/**
+ * The error a search provider reported, or '' when the response is usable. Providers report
+ * errors in different shapes, and an unrecognised error used to read as "no results", which
+ * made an audit say the site was not found when the search had actually failed (for example
+ * Brave's {type:"ErrorResponse", error:{detail}} for an invalid key or a used-up quota).
+ */
+function providerError(provider, data, statusCode) {
+  const d = data && typeof data === 'object' ? data : {};
+  const name = provider === 'brave' ? 'Brave' : provider === 'serper' ? 'Serper' : 'SerpAPI';
+  const errObj = d.error && typeof d.error === 'object' ? d.error : null;
+  const detail = (errObj && (errObj.detail || errObj.message || errObj.code))
+    || (typeof d.error === 'string' ? d.error : '')
+    || d.message
+    || (d.type === 'ErrorResponse' ? 'error response' : '');
+  const status = Number(statusCode) || 0;
+  if (detail) return `${name}: ${detail}${status >= 400 ? ` (HTTP ${status})` : ''}`;
+  if (status >= 400) return `${name}: HTTP ${status}`;
+  return '';
+}
+
 function fetchJson(url, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
@@ -23,7 +51,12 @@ function fetchJson(url, extraHeaders = {}) {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
-        try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { reject(new Error('Invalid JSON from search API')); }
+        let data;
+        try { data = JSON.parse(Buffer.concat(chunks).toString()); } catch {
+          reject(new Error(`Invalid JSON from search API (HTTP ${res.statusCode})`));
+          return;
+        }
+        resolve(withStatus(data, res.statusCode));
       });
       res.on('error', reject);
     });
@@ -49,7 +82,12 @@ function postJson(hostname, path, headers, body, timeoutMs = 12000) {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
-        try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { reject(new Error('Invalid JSON from search API')); }
+        let data;
+        try { data = JSON.parse(Buffer.concat(chunks).toString()); } catch {
+          reject(new Error(`Invalid JSON from search API (HTTP ${res.statusCode})`));
+          return;
+        }
+        resolve(withStatus(data, res.statusCode));
       });
       res.on('error', reject);
     });
@@ -107,7 +145,8 @@ async function searchWeb(query, { userId, limit = 5 } = {}) {
       `https://api.search.brave.com/res/v1/web/search?q=${encoded}&count=${take}`,
       { 'X-Subscription-Token': apiKey },
     );
-    if (data.message) throw new Error(`Brave: ${data.message}`);
+    const err = providerError('brave', data, data.__status);
+    if (err) throw new Error(err);
     results = (data.web?.results || []).slice(0, take).map((r) => ({
       url: r.url,
       title: r.title || r.url,
@@ -115,7 +154,8 @@ async function searchWeb(query, { userId, limit = 5 } = {}) {
     }));
   } else if (provider === 'serper') {
     const data = await postJson('google.serper.dev', '/search', { 'X-API-KEY': apiKey }, { q, num: take });
-    if (data.message) throw new Error(`Serper: ${data.message}`);
+    const err = providerError('serper', data, data.__status);
+    if (err) throw new Error(err);
     results = (data.organic || []).slice(0, take).map((r) => ({
       url: r.link,
       title: r.title || r.link,
@@ -125,7 +165,8 @@ async function searchWeb(query, { userId, limit = 5 } = {}) {
     const data = await fetchJson(
       `https://serpapi.com/search.json?q=${encoded}&api_key=${encodeURIComponent(apiKey)}&num=${take}&engine=google&gl=au&hl=en`,
     );
-    if (data.error) throw new Error(`SerpAPI: ${data.error}`);
+    const err = providerError('serpapi', data, data.__status);
+    if (err) throw new Error(err);
     results = (data.organic_results || []).slice(0, take).map((r) => ({
       url: r.link,
       title: r.title || r.link,
@@ -136,4 +177,4 @@ async function searchWeb(query, { userId, limit = 5 } = {}) {
   return { provider, query: q, results };
 }
 
-module.exports = { searchWeb, resolveCredentials };
+module.exports = { searchWeb, resolveCredentials, providerError };

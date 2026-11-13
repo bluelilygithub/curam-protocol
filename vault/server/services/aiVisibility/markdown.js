@@ -137,6 +137,55 @@ function querySection(query, index) {
   return lines.join('\n');
 }
 
+/** Version 2: a ranking search, then each real assistant's answer and sources. */
+function questionSection(query, index) {
+  const lines = [];
+  lines.push(`### ${index + 1}. ${query.query}`);
+  lines.push('');
+  const src = query.source === 'generated' ? 'generated from the page' : query.source === 'template' ? 'template (no model was available)' : 'supplied';
+  lines.push(`Source: ${src}`);
+  lines.push('');
+
+  const search = query.search || {};
+  if (search.error) {
+    lines.push(`**Search ranking:** not measured — ${search.error}`);
+  } else {
+    const n = (search.results || []).length;
+    lines.push(`**Search ranking (${search.provider || 'search'}, top ${n}):** ${query.rank ? `position ${query.rank}` : 'not in these results'}.`);
+  }
+  lines.push('');
+
+  for (const a of query.assistants || []) {
+    lines.push(`#### ${a.label}${a.model ? ` · ${a.model}` : ''}`);
+    lines.push('');
+    if (a.score == null) {
+      lines.push(`_Could not answer: ${a.error || 'no answer'}_ (left out of the score)`);
+      lines.push('');
+      continue;
+    }
+    lines.push(`- Named the business: ${a.named ? `yes (${a.namedAs})` : 'no'}`);
+    lines.push(`- Used the site as a source: ${a.cited ? `yes (${(a.citedUrls || []).join(', ')})` : 'no'}`);
+    if ((a.facts || []).length) {
+      for (const f of a.facts) lines.push(`- Fact ${f.present ? 'present' : 'missing'}: ${f.statement}`);
+    }
+    lines.push('');
+    lines.push('> ' + String(a.answer || '').split(/\r?\n/).join('\n> '));
+    lines.push('');
+    if ((a.sources || []).length) {
+      lines.push('Sources it used:');
+      for (const s of a.sources.slice(0, 10)) lines.push(`- ${s.title ? `[${s.title}](${s.url})` : s.url}`);
+      lines.push('');
+    }
+  }
+
+  if ((search.results || []).length) {
+    lines.push('**Top search results**');
+    search.results.forEach((r, i) => lines.push(`${i + 1}. [${r.title || r.url}](${r.url})`));
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 function buildMarkdown(report, meta = {}) {
   const r = report || {};
   const scores = r.scores || {};
@@ -147,7 +196,14 @@ function buildMarkdown(report, meta = {}) {
   lines.push(`- **Site:** ${r.url || meta.url || ''}`);
   if (r.brand) lines.push(`- **Brand:** ${r.brand}`);
   lines.push(`- **Run:** ${fmtDate(r.auditedAt || meta.createdAt)}`);
-  if (r.model) lines.push(`- **Model used for answers:** ${r.model}`);
+  const v2 = Number(r.version) >= 2;
+  if (v2) {
+    const asked = (r.assistantsAsked || []).map((a) => `${a.label}${a.model ? ` (${a.model})` : ''}`);
+    lines.push(`- **AI assistants asked:** ${asked.length ? asked.join(', ') : 'none'}`);
+    if (r.model) lines.push(`- **Model that wrote the questions:** ${r.model}`);
+  } else if (r.model) {
+    lines.push(`- **Model used for answers:** ${r.model}`);
+  }
   lines.push(`- **Overall score:** **${scores.overall == null ? '—' : `${scores.overall}/100`}**`);
   lines.push('');
   lines.push(r.summary || '');
@@ -160,11 +216,17 @@ function buildMarkdown(report, meta = {}) {
   lines.push(scoreLine('Technical access', scores.technical));
   lines.push(scoreLine('No-JavaScript readability', scores.readability));
   lines.push(scoreLine('Structured data', scores.schema));
-  lines.push(scoreLine('Citation in answers', scores.citation));
+  if (v2) {
+    lines.push(scoreLine('Search ranking', scores.discoverability));
+    lines.push(scoreLine('Named by AI assistants', scores.assistants));
+  } else {
+    lines.push(scoreLine('Citation in answers', scores.citation));
+  }
   lines.push(scoreLine('Key-fact accuracy', scores.accuracy));
   lines.push('');
   if (scores.measured && scores.measured.length) {
-    lines.push(`Measured: ${scores.measured.join(', ')}. Unmeasured areas are left out of the overall score rather than scored zero.`);
+    const names = { technical: 'Technical access', readability: 'No-JavaScript readability', schema: 'Structured data', discoverability: 'Search ranking', assistants: 'Named by AI assistants', citation: 'Citation in answers', accuracy: 'Key-fact accuracy' };
+    lines.push(`Measured: ${scores.measured.map((k) => names[k] || k).join(', ')}. Unmeasured areas are left out of the overall score rather than scored zero.`);
     lines.push('');
   }
 
@@ -221,13 +283,17 @@ function buildMarkdown(report, meta = {}) {
   lines.push(schemaSection(r.schema));
   lines.push('');
 
-  lines.push('## 4. Simulated questions');
+  lines.push(v2 ? '## 4. Buyer questions: search ranking and AI assistants' : '## 4. Simulated questions');
   lines.push('');
+  if (v2) {
+    lines.push('Each question was searched once for ranking, then put to real AI assistants that search the web themselves. Answers vary between runs, accounts and locations, so treat this as a sample, not a guarantee.');
+    lines.push('');
+  }
   if (!(r.queries || []).length) {
     lines.push('_No questions were run._');
   } else {
     (r.queries || []).forEach((q, i) => {
-      lines.push(querySection(q, i));
+      lines.push(q.assistants ? questionSection(q, i) : querySection(q, i));
     });
   }
   lines.push('');

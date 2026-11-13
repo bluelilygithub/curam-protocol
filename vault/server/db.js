@@ -4065,6 +4065,18 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_ai_visibility_audits_user_updated
       ON ai_visibility_audits ("userId", "updatedAt" DESC)
   `);
+  // Audits run in the background (2026-11-13): status is running/done/failed, progress is the
+  // current step for the page to show, error is why a run failed. Existing rows are 'done'.
+  await pool.query(`ALTER TABLE ai_visibility_audits ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'done'`);
+  await pool.query(`ALTER TABLE ai_visibility_audits ADD COLUMN IF NOT EXISTS progress TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE ai_visibility_audits ADD COLUMN IF NOT EXISTS error TEXT NOT NULL DEFAULT ''`);
+  // A run cannot survive a restart (it lives in the server process), so any still marked
+  // running at boot was cut off.
+  await pool.query(`
+    UPDATE ai_visibility_audits
+       SET status='failed', progress='', error='The server restarted while this audit was running. Run it again.'
+     WHERE status='running'
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gsc_tokens (
