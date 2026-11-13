@@ -24,6 +24,10 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 
 ---
 
+## Start screen: "What do you want to do?" (2026-11-13)
+
+Video Tools opens on a list of jobs, the same screen Graphics has (shared `client/src/components/JobStart.jsx`). `tool` is `'start'` there; it is a view, not a tool. Each card (post on social media, promo from photos, captions on a talking video, fix the sound, brand a video, highlight reel, GIF and cover picture, create a new clip) opens the first tool of the job and shows the step bar above it: the steps in order, the current one marked, one line on what to do, and a link to the next step (the file travels with **Use in another tool** on the result, or by downloading and loading it). **Back to all jobs** sits at the top of every tool, and the **What do you want to do?** button at the top of the tool list does the same. The shared upload box is hidden on the job screen. "Next time, open on the tool I used last instead of this screen" skips it (`localStorage` keys `vault_videos_open_on_last`, `vault_videos_last_tool`). `/videos?tool=<id>` still opens that tool directly. Jobs are data in `client/src/pages/videos/videoGoals.mjs`; `node client/src/pages/videos/videoGoals.test.mjs` fails if a step names a tool that is not in `TOOL_GROUPS` or is a link to another page (Add music).
+
 ## Sidebar groups
 
 The menu is arranged by **what you are doing**, in rough workflow order (reorganised 2026-10-15: it had grown by adding tools where it was convenient, which scattered the audio tools across three groups). The group list is `TOOL_GROUPS` in `VideosPage.jsx`; the tutor's catalogue files each tool under the same heading, and a test fails if the two disagree.

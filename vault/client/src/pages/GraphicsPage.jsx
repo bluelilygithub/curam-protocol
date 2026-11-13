@@ -10,6 +10,7 @@ import { GraphicsContext } from './graphics/GraphicsContext';
 import { TOOL_COMPONENTS } from './graphics/toolRegistry';
 import { BeforeAfter, readFileAsDataUrl } from './graphics/shared';
 import { GoalStart, GoalBar } from './graphics/GoalStart';
+import { BackToJobs, stepIndex } from '../components/JobStart';
 import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
 import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.mjs';
 import Dialog from '../components/Dialog';
@@ -814,6 +815,7 @@ export default function GraphicsPage() {
 
               {/* ── Main panel ────────────────────────────────────────────────── */}
               <main className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl">
+                {mode !== 'start' && <BackToJobs onBack={backToStart} toolLabel={labelFor(mode)} goal={stepIndex(goal, mode) >= 0 ? goal : null} />}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                 <p className="text-sm min-w-0 flex-1" style={{ color: 'var(--color-muted)' }}>
                   {mode === 'generate' && 'Generate local article and story support images from a prompt.'}
@@ -875,7 +877,7 @@ export default function GraphicsPage() {
 
 
             {mode === 'start' && <GoalStart onPick={startGoal} labelFor={labelFor} openOnLast={openOnLast} onToggleOpenOnLast={toggleOpenOnLast} />}
-            <GoalBar goal={goal} mode={mode} onStep={openToolById} onLeave={backToStart} labelFor={labelFor} />
+            <GoalBar goal={goal} mode={mode} onStep={openToolById} labelFor={labelFor} />
 
             {renderTools()}
 

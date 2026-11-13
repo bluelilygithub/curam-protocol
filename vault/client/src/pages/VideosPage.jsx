@@ -28,6 +28,8 @@ import AnimatedCaptionOptions, { ANIMATED_CAPTION_DEFAULTS } from './videos/Anim
 import { parseClock, formatClock } from './videos/clock.mjs';
 import { describeFit } from './videos/replaceCheck.mjs';
 import Dialog from '../components/Dialog';
+import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
+import { VIDEO_GOALS } from './videos/videoGoals.mjs';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -490,6 +492,23 @@ const TOOL_GROUPS = [
     ],
   },
 ];
+
+// "Open on the tool I used last" instead of the job screen: off unless ticked on the job screen (same as Graphics).
+const OPEN_ON_LAST_KEY = 'vault_videos_open_on_last';
+const LAST_TOOL_KEY = 'vault_videos_last_tool';
+const readLocal = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const writeLocal = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window: it just will not be remembered */ } };
+const ALL_TOOLS = TOOL_GROUPS.flatMap((g) => g.tools);
+const toolLabel = (id) => ALL_TOOLS.find((t) => t.id === id)?.label || id;
+function initialTool() {
+  if (readLocal(OPEN_ON_LAST_KEY) !== '1') return 'start';
+  const last = readLocal(LAST_TOOL_KEY);
+  return ALL_TOOLS.some((t) => t.id === last && !t.link) ? last : 'start';
+}
+function initialGroup() {
+  const t = initialTool();
+  return t === 'start' ? 'make' : (TOOL_GROUPS.find((g) => g.tools.some((x) => x.id === t))?.id || 'make');
+}
 
 const CTA_DEFAULTS = {
   headline: '', subline: '', buttonText: '', url: '', durationSec: 4,
@@ -1030,8 +1049,14 @@ export default function VideosPage() {
   const canUse = isAdmin || featureAccess.videos !== false;
 
   const [status, setStatus] = useState(null);
-  const [openGroup, setOpenGroup] = useState('make');
-  const [tool, setTool] = useState('generate');
+  const [openGroup, setOpenGroup] = useState(initialGroup);
+  // 'start' is the "What do you want to do?" job screen (not a tool); every other value is a tool id from TOOL_GROUPS.
+  const [tool, setTool] = useState(initialTool);
+  const [goal, setGoal] = useState(null); // the job picked on the job screen (videos/videoGoals.mjs)
+  const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
+  useEffect(() => { if (openOnLast && tool !== 'start') writeLocal(LAST_TOOL_KEY, tool); }, [tool, openOnLast]);
+  const toggleOpenOnLast = (on) => { setOpenOnLast(on); writeLocal(OPEN_ON_LAST_KEY, on ? '1' : '0'); };
+  const backToStart = () => { setGoal(null); setTool('start'); };
   const [search, setSearch] = useState('');
   const [helpTool, setHelpTool] = useState(null);
   const [providerInfoOpen, setProviderInfoOpen] = useState(false);
@@ -2632,6 +2657,7 @@ export default function VideosPage() {
     setOpenGroup(group.id);
     setTool(id);
   }, [openMusicWith, sourceFile, navigate]);
+  const startGoal = (g) => { setGoal(g); openToolById(g.steps[0].tool); };
 
   // /videos?tool=clip opens that tool (used when the Music tutor points here).
   const [searchParams] = useSearchParams();
@@ -2784,7 +2810,7 @@ export default function VideosPage() {
         {videoInfo.show && (
           <ToolInfoModal title="How Video Tools Works" onClose={videoInfo.close}>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              A video and audio toolkit. The list on the left is arranged by what you are doing; hover over any item for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the tutor what you want to make.
+              A video and audio toolkit. It opens on "What do you want to do?": pick a job (post on social media, add captions, fix the sound and so on) and it opens the right tools one step at a time; "Back to all jobs" at the top of any tool returns there. The list on the left is arranged by what you are doing; hover over any item for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the tutor what you want to make.
             </p>
             <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
               <p style={{ color: 'var(--color-text)' }}><strong>Make</strong> a new video: Generate clip (from a written description, optionally starting from a picture), or Slideshow (your pictures with music, captions and transitions).</p>
@@ -2802,6 +2828,22 @@ export default function VideosPage() {
             </p>
           </ToolInfoModal>
         )}
+
+        <Tooltip text="Go back to the list of jobs (post on social media, add captions, fix the sound and so on).">
+          <button
+            type="button"
+            onClick={backToStart}
+            className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+            style={{
+              borderColor: tool === 'start' ? 'var(--color-primary)' : 'var(--color-border)',
+              color: tool === 'start' ? 'var(--color-primary)' : 'var(--color-text)',
+              background: 'var(--color-bg)',
+            }}
+          >
+            {getIcon('layout-grid', { size: 13 })}
+            What do you want to do?
+          </button>
+        </Tooltip>
 
         <Tooltip text="Filter the tool list below by name or description.">
           <input
@@ -2850,7 +2892,21 @@ export default function VideosPage() {
         ))}
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl">
+      <main className={`flex-1 overflow-y-auto p-6 space-y-4 ${tool === 'start' ? 'max-w-5xl' : 'max-w-2xl'}`}>
+        {tool !== 'start' && <BackToJobs onBack={backToStart} toolLabel={toolLabel(tool)} goal={stepIndex(goal, tool) >= 0 ? goal : null} />}
+        {tool === 'start' && (
+          <JobStart
+            goals={VIDEO_GOALS}
+            appName="Video Tools"
+            tourId="videos-goals"
+            intro="Pick a job and Video Tools opens the tools for it, one step at a time. Or browse every tool in the list on the left, or ask the guide (graduation-cap button, bottom right)."
+            onPick={startGoal}
+            labelFor={toolLabel}
+            openOnLast={openOnLast}
+            onToggleOpenOnLast={toggleOpenOnLast}
+          />
+        )}
+        <JobBar goal={goal} mode={tool} onStep={openToolById} labelFor={toolLabel} carry={<>press <em>Use in another tool</em> on the result (or download it and load it), then go to</>} />
         {resumable && (
           <div className="rounded-xl border p-3 text-xs flex flex-wrap items-center gap-2" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-text)' }} role="status">
             <span className="flex-1 min-w-[12rem]">
@@ -3387,7 +3443,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'start' && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -3396,7 +3452,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'start' && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' || tool === 'replace-section' || tool === 'title-card' ? clipVideoRef : undefined}
