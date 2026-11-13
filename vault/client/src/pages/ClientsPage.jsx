@@ -133,6 +133,7 @@ function TagInput({ tags, onChange }) {
       <input
         type="text"
         value={input}
+        onBlur={add} // text typed and left (for example by pressing Save) still counts, not only text followed by Enter
         onChange={e => setInput(e.target.value)}
         onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); }
