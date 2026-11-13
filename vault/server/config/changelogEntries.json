@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0ac982d0",
+   "fullHash": "0ac982d08c8926bd1990636508922a7df276302c",
+   "committedAt": "2026-11-13T13:50:32+10:00",
+   "author": "mrb",
+   "subject": "Build: prebuilt base image on GitHub (step 1 of 3)",
+   "filesChanged": 3,
+   "insertions": 127,
+   "deletions": 0,
+   "area": "Build and deploy",
+   "goal": "Stop code-only deploys from rebuilding and re-pushing the whole ~2.3 GB image. The Railway build log on 2026-11-13 showed no cached layer at all: Railway's build cache had been emptied, so every layer was rebuilt with a new digest and the full image was uploaded and pulled again.",
+   "whatChanged": "Added vault/Dockerfile.base with the slow layers (system packages, pip installs, Playwright Chromium, the root npm install, the four planner installs), identical to the top of the current Dockerfile. Added .github/workflows/base-image.yml, which builds it and pushes ghcr.io/bluelilygithub/curam-vault-base:latest when Dockerfile.base, a package*.json or a requirements.txt changes on staging or version-7, or when run by hand. docs/deploy-speed.md explains the three steps. Railway still builds from Dockerfile, so deploys are unchanged by this commit.",
+   "filesImpacted": [
+    ".github/workflows/base-image.yml",
+    "Dockerfile.base",
+    "docs/deploy-speed.md"
+   ],
+   "benefit": "Once steps 2 and 3 are done, every deploy starts from the same stored base image, so its layers keep their digests and are skipped even when Railway's cache is empty; a deploy then only builds and ships the code and Vite build layer.",
+   "concerns": "No benefit yet: the owner must make the curam-vault-base package public (or give Railway registry credentials), then Dockerfile must be switched to FROM the base. The first workflow run has not been seen to succeed. Until step 3, any change to the top of Dockerfile must be copied to Dockerfile.base. After step 3, a dependency change makes GitHub rebuild the base (about 10-15 minutes); a deploy that starts before then still works through its own npm install but is slower and may use the older base for system and Python packages."
+  },
+  {
    "commit": "026a23a5",
    "fullHash": "026a23a5b973be9f0d7453961d864e3e6f8cd3e9",
    "committedAt": "2026-11-13T13:39:53+10:00",
