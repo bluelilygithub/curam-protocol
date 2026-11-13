@@ -190,6 +190,16 @@ function checkEntity(node) {
     missingRequired.push('offers (or review/aggregateRating)');
   }
 
+  // A business that delivers or works on site may have no premises to visit. Google expects
+  // an address on LocalBusiness, but areaServed describes a service-area business honestly,
+  // so a missing address is not a failure when areaServed is there, and otherwise it is a
+  // choice for the owner (add the address, or describe the area served), not a hard fix.
+  let addressChoice = false;
+  if (primary.rule === REQUIRED.localbusiness && missingRequired.includes('address')) {
+    missingRequired.splice(missingRequired.indexOf('address'), 1);
+    addressChoice = !hasDeep(node, 'areaServed');
+  }
+
   return {
     type: primary.type,
     types,
@@ -197,6 +207,8 @@ function checkEntity(node) {
     required,
     missingRequired,
     missingRecommended,
+    addressChoice,
+    serviceArea: primary.rule === REQUIRED.localbusiness && !hasValue(node, 'address') && hasDeep(node, 'areaServed'),
     ok: missingRequired.length === 0,
     checked: true,
   };
@@ -210,6 +222,7 @@ function schemaScore(entities, errors, blockCount) {
     if (!entity.checked) continue;
     score -= Math.min(60, entity.missingRequired.length * 25);
     score -= Math.min(20, entity.missingRecommended.length * 4);
+    if (entity.addressChoice) score -= 10;
   }
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -256,6 +269,14 @@ function buildFindings({ blocks, entities, errors, types }) {
         recommendation: `Add ${entity.missingRequired.join(', ')} to the ${entity.label} JSON-LD.`,
       });
     }
+    if (entity.addressChoice) {
+      findings.push({
+        severity: 'warn',
+        title: `${entity.label} has no address or area served`,
+        detail: 'Google expects LocalBusiness to have either a street address customers can visit, or, for a business that delivers or works on site, the area it serves.',
+        recommendation: 'If customers can visit a showroom or office, add its address (streetAddress, addressLocality, addressRegion, postalCode, addressCountry). If you deliver or work on site with no premises to visit, add areaServed (for example "Australia" or a list of states) instead; the business can also be described as an Organization.',
+      });
+    }
     if (entity.missingRecommended.length) {
       findings.push({
         severity: 'warn',
@@ -287,6 +308,25 @@ function buildFindings({ blocks, entities, errors, types }) {
   return findings;
 }
 
+/**
+ * For the report table: checked entities one per row; entities with no rule (Country,
+ * City, Question, Answer…) folded into one row per type with a count, so a page listing
+ * seven service cities does not produce fourteen "Not checked" rows. Pure.
+ */
+function collapseUnchecked(entities) {
+  const out = [];
+  const byLabel = new Map();
+  for (const e of entities) {
+    if (e.checked) { out.push({ ...e, count: 1 }); continue; }
+    const existing = byLabel.get(e.label);
+    if (existing) { existing.count += 1; continue; }
+    const row = { ...e, count: 1 };
+    byLabel.set(e.label, row);
+    out.push(row);
+  }
+  return out;
+}
+
 function validateSchema(html) {
   const { blocks, nodes, errors } = extractJsonLd(html);
   const entities = nodes.map(checkEntity);
@@ -296,7 +336,7 @@ function validateSchema(html) {
     blockCount: blocks.length,
     blocks,
     types,
-    entities,
+    entities: collapseUnchecked(entities),
     errors,
     findings,
     score: schemaScore(entities, errors, blocks.length),
@@ -308,5 +348,6 @@ module.exports = {
   extractJsonLd,
   validateSchema,
   checkEntity,
+  collapseUnchecked,
   schemaScore,
 };

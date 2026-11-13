@@ -142,7 +142,10 @@ async function searchWeb(query, { userId, limit = 5 } = {}) {
 
   if (provider === 'brave') {
     const data = await fetchJson(
-      `https://api.search.brave.com/res/v1/web/search?q=${encoded}&count=${take}`,
+      // Australian results: Vault's audits are for Australian businesses, and without a
+      // country Brave answers from the US index (2026-11-13: a wiwc.com.au audit got five
+      // American sellers). SerpAPI already sends gl=au; Serper gets gl/hl below.
+      `https://api.search.brave.com/res/v1/web/search?q=${encoded}&count=${take}&country=AU&search_lang=en`,
       { 'X-Subscription-Token': apiKey },
     );
     const err = providerError('brave', data, data.__status);
@@ -153,7 +156,7 @@ async function searchWeb(query, { userId, limit = 5 } = {}) {
       snippet: r.description || '',
     }));
   } else if (provider === 'serper') {
-    const data = await postJson('google.serper.dev', '/search', { 'X-API-KEY': apiKey }, { q, num: take });
+    const data = await postJson('google.serper.dev', '/search', { 'X-API-KEY': apiKey }, { q, num: take, gl: 'au', hl: 'en' });
     const err = providerError('serper', data, data.__status);
     if (err) throw new Error(err);
     results = (data.organic || []).slice(0, take).map((r) => ({

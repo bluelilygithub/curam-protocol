@@ -18,7 +18,6 @@
 const { chromium } = require('playwright');
 const { checkSsrf } = require('../../utils/safeFetch');
 
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 const GOTO_TIMEOUT_MS = 20000;
 const SETTLE_MS = 1200;
 const TOTAL_BUDGET_MS = 45000;
@@ -33,6 +32,17 @@ function getBrowser() {
     browserPromise.then((b) => b.on('disconnected', () => { browserPromise = null; })).catch(() => { browserPromise = null; });
   }
   return browserPromise;
+}
+
+/**
+ * A desktop Chrome identity carrying the real Chromium version. A fixed older version
+ * ("Chrome/124" while the browser was 149) does not match what the browser itself sends,
+ * and some firewalls drop such connections: wiwc.com.au answered it with
+ * net::ERR_HTTP2_PROTOCOL_ERROR (2026-11-13) and loaded normally with the matching version.
+ */
+function userAgentFor(browser) {
+  const version = String((browser && browser.version && browser.version()) || '').trim() || '124.0.0.0';
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Safari/537.36`;
 }
 
 function scheduleIdleClose() {
@@ -112,7 +122,7 @@ async function renderWithBudget(url, timeoutMs) {
   const browser = await getBrowser();
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
-    userAgent: CHROME_UA,
+    userAgent: userAgentFor(browser),
     locale: 'en-AU',
     javaScriptEnabled: true,
     serviceWorkers: 'block',
@@ -161,6 +171,9 @@ async function renderPage(url, { timeoutMs = GOTO_TIMEOUT_MS } = {}) {
           timer = setTimeout(() => reject(new Error(`Rendering timed out after ${Math.round(budget / 1000)}s`)), budget);
         }),
       ]);
+    } catch (err) {
+      // Playwright appends a multi-line call log; the report needs the first line only.
+      throw new Error(String((err && err.message) || err).split('\n')[0]);
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -170,4 +183,4 @@ async function renderPage(url, { timeoutMs = GOTO_TIMEOUT_MS } = {}) {
   }
 }
 
-module.exports = { renderPage, closeBrowser };
+module.exports = { renderPage, closeBrowser, userAgentFor };

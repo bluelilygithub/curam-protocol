@@ -99,7 +99,14 @@ async function fetchRobots(finalUrl) {
   try { origin = new URL(finalUrl).origin; } catch { return { found: false, statusCode: 0, url: '', error: 'Could not build the robots.txt address.' }; }
   const robotsUrl = `${origin}/robots.txt`;
   try {
-    const res = await fetchDirect(robotsUrl, 3, 10000);
+    // robots.txt is written for automated visitors, so ask as one (see HONEST_HEADERS); fall
+    // back to the shared fetcher if the honest request itself errors.
+    let res;
+    try {
+      res = await fetchOnce(robotsUrl, 3, 10000, {}, {}, HONEST_HEADERS);
+    } catch {
+      res = await fetchDirect(robotsUrl, 3, 10000);
+    }
     const body = String(res.body || '');
     const found = res.statusCode >= 200 && res.statusCode < 300 && body.trim().length > 0;
     return {
@@ -191,18 +198,16 @@ async function buildReadability(technical, finalUrl) {
 // polite requests, then a sentence a person can act on instead of a raw technical error.
 const CONNECTION_DROPPED = /socket hang up|socket hung up|ECONNRESET|ECONNABORTED|EPIPE|EPROTO|close_notify|network socket disconnected/i;
 
-// Plain identities only. An earlier version retried as Googlebot, which made the audit read
-// whatever a site serves Google rather than what an AI crawler or a visitor receives.
-const PLAIN_IDENTITIES = [
-  { headers: {} },
-  {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-AU,en;q=0.9',
-    },
-  },
-];
+// The retry identifies honestly as an automated visitor, with no "Mozilla" prefix. Some
+// firewalls drop any non-browser client that calls itself Mozilla/Chrome (wiwc.com.au,
+// 2026-11-13: the shared fetcher's Chrome identity and "Mozilla/5.0 (compatible; VaultAI)"
+// were both cut off, "VaultAI/1.0" was served). Earlier versions retried as Googlebot, then as
+// a fake Chrome; both read what the site serves someone else.
+const HONEST_HEADERS = {
+  'User-Agent': 'VaultAI/1.0 (AI visibility audit)',
+  Accept: 'text/html,application/xhtml+xml,text/plain,*/*;q=0.8',
+  'Accept-Language': 'en-AU,en;q=0.9',
+};
 
 async function fetchPage(url) {
   try {
@@ -210,15 +215,12 @@ async function fetchPage(url) {
   } catch (err) {
     if (!CONNECTION_DROPPED.test(String(err && err.message))) throw err;
   }
-  for (const identity of PLAIN_IDENTITIES) {
+  for (let i = 0; i < 2; i += 1) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      const res = await fetchOnce(url, 5, 15000, identity.headers, {}, {
-        'User-Agent': identity.headers['User-Agent'] || 'Mozilla/5.0 (compatible; VaultAI/1.0)',
-        Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
-      });
-      if (res && res.statusCode) return { ...res, via: res.via || 'direct' };
-    } catch { /* try the next identity */ }
+      const res = await fetchOnce(url, 5, 15000, {}, {}, HONEST_HEADERS);
+      if (res && res.statusCode) return { ...res, via: 'direct (VaultAI identity)' };
+    } catch { /* try once more */ }
   }
   const friendly = new Error('The site closed the connection before the page could be read. It may refuse automated visits; try again in a moment, or audit a different page on the same site.');
   friendly.status = 502;

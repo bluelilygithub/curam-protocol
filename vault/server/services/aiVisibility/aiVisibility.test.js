@@ -17,6 +17,7 @@ const { scoreReport, overallScore, scoreReadability, WEIGHTS } = require('./scor
 const { providerError } = require('./searchClient');
 const { brandVariants, brandNamed, brandFromTitle, hostMatches, rankOf, rankScore, fallbackQueries, assistantVerdict } = require('./queryAnalysis');
 const { readClaudeContent, readGeminiGrounding, readPerplexity, friendlyError } = require('./assistants');
+const { userAgentFor } = require('./render');
 const { buildMarkdown } = require('./markdown');
 
 function test(name, fn) {
@@ -123,7 +124,38 @@ test('schema: a Product without an offer is not complete', () => {
 test('schema: LocalBusiness subtypes use the LocalBusiness rules', () => {
   const entity = checkEntity({ '@type': 'LiquorStore', name: 'Cellar', telephone: '123' });
   assert.strictEqual(entity.label, 'LocalBusiness');
-  assert.deepStrictEqual(entity.missingRequired, ['address']);
+  assert.deepStrictEqual(entity.missingRequired, [], 'a missing address is a choice, not a hard failure');
+  assert.strictEqual(entity.addressChoice, true);
+});
+
+test('schema: a service-area business with areaServed needs no street address', () => {
+  const html = `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [{
+      '@type': 'HomeAndConstructionBusiness',
+      name: 'Walk-In Wine Cabinets Australia',
+      telephone: '1300',
+      url: 'https://wiwc.com.au',
+      image: 'x.jpg',
+      areaServed: [{ '@type': 'Country', name: 'Australia' }, { '@type': 'City', name: 'Sydney' }, { '@type': 'City', name: 'Melbourne' }, { '@type': 'City', name: 'Perth' }],
+    }],
+  })}</script>`;
+  const result = validateSchema(html);
+  const lb = result.entities.find((e) => e.label === 'LocalBusiness');
+  assert.strictEqual(lb.addressChoice, false);
+  assert.strictEqual(lb.serviceArea, true);
+  assert.ok(!result.findings.some((f) => /address/.test(f.title)), 'no address finding when areaServed is given');
+  const city = result.entities.find((e) => e.label === 'City');
+  assert.strictEqual(city.count, 3, 'repeated unchecked entities fold into one row');
+  assert.strictEqual(result.entities.filter((e) => e.label === 'City').length, 1);
+});
+
+test('schema: no address and no areaServed is a warning offering both options', () => {
+  const result = validateSchema(`<script type="application/ld+json">${JSON.stringify({ '@type': 'LocalBusiness', name: 'Shop' })}</script>`);
+  const f = result.findings.find((x) => /no address or area served/.test(x.title));
+  assert.ok(f && f.severity === 'warn');
+  assert.ok(/areaServed/.test(f.recommendation) && /streetAddress/.test(f.recommendation));
+  assert.ok(!result.findings.some((x) => x.severity === 'fail' && /address/.test(x.detail)));
 });
 
 test('schema: an invalid block is reported and does not stop the rest', () => {
@@ -336,6 +368,27 @@ test('brand: variants catch the ways an answer names a business', () => {
   assert.ok(!brandNamed('Welcome home', brandVariants('Home', 'acme.com.au')), 'a page name is not a brand');
   assert.ok(brandNamed('Acme sells these.', brandVariants('Home', 'acme.com.au')), 'falls back to the domain label');
   assert.ok(brandNamed('Ask Bluegum about it', brandVariants('Bluegum Pty Ltd', 'bluegum.com.au')));
+});
+
+test('brand: a descriptive brand is not "named" by its product words (wiwc, 2026-11-13)', () => {
+  const question = 'I need a walk in wine cabinet or fridge for my penthouse to protect my expensive wine collection';
+  const v = brandVariants('Walk-In Wine Cabinets Australia', 'wiwc.com.au', question);
+  assert.ok(!brandNamed('For a penthouse, a walk-in wine cabinet or a walk-in room is best.', v), 'product words are not the brand');
+  assert.ok(!brandNamed('Several walk in wine cabinets suit this.', v), 'plural product words are not the brand');
+  assert.ok(brandNamed('Walk-In Wine Cabinets Australia delivers these nationwide.', v), 'the full name counts');
+  assert.ok(brandNamed('Try WIWC for a self-contained unit.', v), 'the domain label counts');
+  assert.ok(!v.some((w) => w.join(' ') === 'walk in'), 'no two-word short form');
+});
+
+test('brand: variants the question itself contains are dropped', () => {
+  const v = brandVariants('Cellar Cooling', 'acme.com.au', 'what is the best cellar cooling unit');
+  assert.ok(!brandNamed('Cellar cooling units vary.', v));
+  assert.ok(brandNamed('Acme makes them.', v));
+});
+
+test('render: the browser identity carries the real Chromium version, not a fixed one', () => {
+  assert.ok(userAgentFor({ version: () => '149.0.7827.55' }).includes('Chrome/149.0.7827.55 '));
+  assert.ok(userAgentFor(null).includes('Chrome/'), 'falls back when the version is unknown');
 });
 
 test('brand: brandFromTitle skips page names and the trademark sign', () => {

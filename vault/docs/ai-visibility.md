@@ -6,9 +6,9 @@ An audit of one public page for the way AI assistants find, read and quote it. I
 
 ## What a run does
 
-1. **Fetches the page** with the shared SSRF-safe `htmlFetch` (no JavaScript, as an AI crawler that does not run scripts sees it). If the host drops the first connection (a bare `socket hang up`), the audit retries twice with plain identities (no header, then an ordinary browser; never Googlebot, which would read what a site serves Google) and then says plainly that the site closed the connection.
-2. **Fetches `/robots.txt`** from the same origin and parses it properly.
-3. **Renders the page in Chromium** (Playwright) and compares the readable content with the raw HTML.
+1. **Fetches the page** with the shared SSRF-safe `htmlFetch` (no JavaScript, as an AI crawler that does not run scripts sees it). If the host drops the connection (a bare `socket hang up`), the audit retries twice as `VaultAI/1.0 (AI visibility audit)` and then says plainly that the site closed the connection. The retry deliberately has no "Mozilla" prefix: some firewalls drop any non-browser client that calls itself Mozilla/Chrome (wiwc.com.au, 2026-11-13: the shared fetcher's Chrome identity and "Mozilla/5.0 (compatible; VaultAI)" were cut off, "VaultAI/1.0" was served). Never Googlebot or a fake browser.
+2. **Fetches `/robots.txt`** from the same origin with the same honest identity (falling back to the shared fetcher) and parses it properly. If it cannot be fetched at all, the report says "could not be read" and that the crawler table assumes no rules, instead of "not found".
+3. **Renders the page in Chromium** (Playwright) and compares the readable content with the raw HTML. The browser's user agent carries the real Chromium version (`userAgentFor()` in `render.js`): a fixed older version (Chrome/124 on Chromium 149) made wiwc.com.au's firewall answer `net::ERR_HTTP2_PROTOCOL_ERROR`.
 4. **Extracts and validates JSON-LD** entities.
 5. **Generates or accepts buyer questions**, then for each one: a ranking search (top 10) and the question put to each ticked **real AI assistant**, which searches the web itself. Named / used-as-source verdicts per assistant, and key facts checked against the assistants' answers.
 6. **Scores**, writes suggestions, and saves the report.
@@ -54,19 +54,23 @@ Required properties are checked directly on the entity (so an Organization with 
 
 A half-filled block is treated as worse than none, because it teaches the model the wrong thing; each missing required property produces its own finding.
 
+**LocalBusiness address** (2026-11-13): a business that delivers or works on site may have no premises to visit. With `areaServed` present, a missing address is fine (the table says "Complete (area served, no street address)"). With neither, it is a warning that offers both options (add the street address, or add `areaServed` / describe the business as an Organization), not a hard failure.
+
+**Table rows**: entities with no rule (Country, City, Question, Answer…) are folded into one row per type with a count (`collapseUnchecked`), so a page listing seven service cities does not produce a long run of "Not checked" rows.
+
 ## Buyer questions, search ranking and real AI assistants (report version 2)
 
 If no questions are supplied, four are generated from the page title, description and headings by the chosen text model. If the model is unavailable, plain template questions are used (the subject is the part of the title that describes the offer, so "Curam-Ai Protocol | Systematised AI…" gives "systematised ai… in Australia", not "best Curam"), and the report flags them and suggests writing real ones.
 
 For each question:
 
-1. **Search ranking** — one search with the existing key (`SEARCH_API_KEY`, Brave/Serper/SerpAPI), top 10. Ranking score: #1 100, top 3 85, top 5 70, top 10 50, not found 0. A subdomain of the site counts. Provider errors are detected in each provider's own shape (Brave's `{type:"ErrorResponse", error:{detail}}`, Serper's `message`, SerpAPI's `error`, any HTTP 4xx/5xx) by `providerError()` in `searchClient.js`; a failed search leaves ranking **unmeasured** and adds a Setup suggestion with the provider's message. (Before this fix an invalid key or used-up quota read as "zero results" and the audit reported the site as not found. The chat `@search` route had the same bug and now uses the same check.)
+1. **Search ranking** — one search with the existing key (`SEARCH_API_KEY`, Brave/Serper/SerpAPI), top 10, **Australian results** (Brave `country=AU`, Serper `gl=au`, SerpAPI `gl=au`; before 2026-11-13 Brave and Serper returned US results). Ranking score: #1 100, top 3 85, top 5 70, top 10 50, not found 0. A subdomain of the site counts. Provider errors are detected in each provider's own shape (Brave's `{type:"ErrorResponse", error:{detail}}`, Serper's `message`, SerpAPI's `error`, any HTTP 4xx/5xx) by `providerError()` in `searchClient.js`; a failed search leaves ranking **unmeasured** and adds a Setup suggestion with the provider's message. (Before this fix an invalid key or used-up quota read as "zero results" and the audit reported the site as not found. The chat `@search` route had the same bug and now uses the same check.)
 2. **Real AI assistants** (`assistants.js`), each searching the web itself:
    - **Claude** — Anthropic web search tool (`web_search_20250305`, up to 3 searches, user location AU). Model: the workspace default if it is an Anthropic model, else the first Anthropic model in `vault_models`. Sources: the answer's citations first, then the search results it saw.
    - **Gemini** — grounded with Google Search (`tools: [{ googleSearch: {} }]`). Model: the `gemini` tier. Its sources are Google redirect addresses whose title is the source domain, so the site is matched by that title.
    - **Perplexity** — Sonar API, only when `PERPLEXITY_API_KEY` is set (environment or Settings). Model: setting `ai_visibility_perplexity_model`, default `sonar` (not in `vault_models`, so it is a setting rather than a hardcoded choice). **Never run against the real API yet.**
 
-   The new-audit screen shows each as a tick box (`GET /assistants`), greyed out with the reason when not connected. Per assistant: **named** (the brand, the brand without a legal suffix, its first two words, or the domain label, matched as whole words with a space, hyphen or nothing between them, so "Curam AI", "Curam-AI" and "CuramAI" all count and a page name such as "Home" never does) and **used the site as a source** (a site page among its sources or linked in its answer). 50 points each. An assistant that errors or times out (120 s) is recorded and **left out** of the score.
+   The new-audit screen shows each as a tick box (`GET /assistants`), greyed out with the reason when not connected. Per assistant: **named** (the brand, the brand without a legal suffix such as Pty Ltd, or the domain label, matched as whole words with a space, hyphen or nothing between them, so "Curam AI", "Curam-AI" and "CuramAI" all count and a page name such as "Home" never does; a variant the question itself contains is dropped, plurals ignored, so a descriptive brand like "Walk-In Wine Cabinets Australia" is not "named" by an answer about walk-in wine cabinets, while "wiwc" and the full name still count) and **used the site as a source** (a site page among its sources or linked in its answer). 50 points each. An assistant that errors or times out (120 s) is recorded and **left out** of the score.
 
 Answers vary between runs, accounts and locations; the report says this is a sample, not a guarantee.
 

@@ -1000,7 +1000,11 @@ export default function AiVisibilityPage() {
                   ['Robots meta', meta.robots || 'none'],
                   ['Language', meta.lang || 'missing'],
                   ['Canonical', meta.canonical || 'none'],
-                  ['robots.txt', robots.found ? `${robots.statusCode || 200} · ${robots.url}` : `not found${robots.statusCode ? ` (HTTP ${robots.statusCode})` : ''}`],
+                  ['robots.txt', robots.found
+                    ? `${robots.statusCode || 200} · ${robots.url}`
+                    : !robots.statusCode && robots.error
+                      ? `could not be read (${robots.error}); the crawler table assumes no rules`
+                      : `not found${robots.statusCode ? ` (HTTP ${robots.statusCode})` : ''}`],
                 ].map(([label, value]) => (
                   <div key={label} className="min-w-0">
                     <dt className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{label}</dt>
@@ -1114,9 +1118,16 @@ export default function AiVisibilityPage() {
                         <tbody>
                           {schema.entities.map((e, i) => (
                             <tr key={`${e.label}-${i}`} className="align-top border-t" style={{ borderColor: 'var(--color-border)' }}>
-                              <td className="py-1.5 pr-3 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>{e.label}</td>
-                              <td className="py-1.5 pr-3" style={{ color: e.missingRequired?.length ? '#ef4444' : 'var(--color-muted)' }}>
-                                {!e.checked ? 'Not checked' : e.missingRequired?.length ? `Missing: ${e.missingRequired.join(', ')}` : 'Complete'}
+                              <td className="py-1.5 pr-3 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                                {e.label}{Number(e.count) > 1 ? <span style={{ color: 'var(--color-muted)' }}> ×{e.count}</span> : null}
+                              </td>
+                              <td className="py-1.5 pr-3" style={{ color: e.missingRequired?.length ? '#ef4444' : e.addressChoice ? '#b45309' : 'var(--color-muted)' }}>
+                                {!e.checked
+                                  ? 'Not checked'
+                                  : [
+                                    e.missingRequired?.length ? `Missing: ${e.missingRequired.join(', ')}` : null,
+                                    e.addressChoice ? 'No address or area served' : null,
+                                  ].filter(Boolean).join('; ') || (e.serviceArea ? 'Complete (area served, no street address)' : 'Complete')}
                               </td>
                               <td className="py-1.5" style={{ color: 'var(--color-muted)' }}>
                                 {e.missingRecommended?.length ? e.missingRecommended.join(', ') : '—'}

@@ -48,7 +48,9 @@ function extractUrls(text) {
 
 // A page title's first segment is often a page name, not a business name.
 const GENERIC_TITLES = new Set(['home', 'homepage', 'home page', 'welcome', 'index', 'shop', 'store', 'about', 'about us', 'contact', 'contact us', 'products', 'services', 'blog', 'news']);
-const LEGAL_SUFFIXES = /\b(pty\.?\s*ltd\.?|pty|ltd\.?|limited|inc\.?|llc|co\.?|corp\.?|group|australia|au)\s*$/i;
+// Legal suffixes only. Place words such as "Australia" stay: in a descriptive name like
+// "Walk-In Wine Cabinets Australia" they are what keeps it from being a generic phrase.
+const LEGAL_SUFFIXES = /\b(pty\.?\s*ltd\.?|pty|ltd\.?|limited|inc\.?|llc|corp\.?)\s*$/i;
 
 function tokens(value) {
   return normalise(String(value || '').replace(/[™®©]/g, ' '))
@@ -58,13 +60,25 @@ function tokens(value) {
     .filter(Boolean);
 }
 
+/** Words with a trailing plural "s" dropped, so "cabinet" and "cabinets" compare equal. */
+function singular(words) {
+  return words.map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)).join(' ');
+}
+
 /**
- * Ways an answer might name the business: the brand as written, without a legal suffix,
- * its first two words, and the domain label ("curam-ai" → "curam ai"). Each variant is a
- * list of words; a match allows a space, hyphen or nothing between them ("Curam AI",
- * "Curam-AI", "CuramAI"). Single short words are dropped because they match too much.
+ * Ways an answer might name the business: the brand as written, the brand without a legal
+ * suffix (Pty Ltd, Inc…), and the domain label ("curam-ai" → "curam ai", "wiwc"). Each
+ * variant is a list of words; a match allows a space, hyphen or nothing between them
+ * ("Curam AI", "Curam-AI", "CuramAI").
+ *
+ * Variants that would match ordinary words are dropped: very short ones, page names such as
+ * "Home", and any variant the question itself contains. A descriptive brand such as
+ * "Walk-In Wine Cabinets Australia" asked about "a walk in wine cabinet" must not count as
+ * "named" just because the answer repeats the product words. (Before 2026-11-13 the first
+ * two words were also a variant, which made "walk in" count as naming wiwc.)
  */
-function brandVariants(brand, domain) {
+function brandVariants(brand, domain, question = '') {
+  const q = ` ${singular(tokens(question))} `;
   const out = [];
   const add = (words) => {
     const w = words.filter(Boolean);
@@ -72,6 +86,7 @@ function brandVariants(brand, domain) {
     const joined = w.join('');
     if (joined.length < 4) return;
     if (w.length === 1 && GENERIC_TITLES.has(w[0])) return;
+    if (question && q.includes(` ${singular(w)} `)) return;
     const key = w.join(' ');
     if (!out.some((v) => v.join(' ') === key)) out.push(w);
   };
@@ -79,7 +94,6 @@ function brandVariants(brand, domain) {
   if (b.length) {
     add(b);
     add(tokens(String(brand || '').replace(/[™®©]/g, '').replace(LEGAL_SUFFIXES, '')));
-    if (b.length > 2) add(b.slice(0, 2));
   }
   const label = String(domain || '').replace(/^www\./i, '').split('.')[0] || '';
   add(tokens(label.replace(/-/g, ' ')));
@@ -244,7 +258,7 @@ function average(values) {
  * providers, so they do not share a rate limit). Failures are recorded, never thrown.
  */
 async function runQuery({ query, domain, brand, facts, assistants, userId }) {
-  const variants = brandVariants(brand, domain);
+  const variants = brandVariants(brand, domain, query);
   const base = {
     query,
     search: { provider: '', results: [], error: '' },

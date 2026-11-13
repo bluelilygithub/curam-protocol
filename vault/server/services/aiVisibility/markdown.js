@@ -52,6 +52,19 @@ function readabilitySection(js) {
   ].join('\n');
 }
 
+function entityLabel(e) {
+  return `${e.label}${Number(e.count) > 1 ? ` ×${e.count}` : ''}`;
+}
+
+function entityRequired(e) {
+  if (!e.checked) return 'Not checked';
+  const parts = [];
+  if ((e.missingRequired || []).length) parts.push(`Missing: ${e.missingRequired.join(', ')}`);
+  if (e.addressChoice) parts.push('No address or area served');
+  if (!parts.length) return e.serviceArea ? 'Complete (area served, no street address)' : 'Complete';
+  return parts.join('; ');
+}
+
 function schemaSection(schema) {
   if (!schema) return '_Not measured._';
   const types = Array.isArray(schema.types) ? schema.types : [];
@@ -70,11 +83,7 @@ function schemaSection(schema) {
     lines.push('| Entity | Required properties | Useful properties missing |');
     lines.push('| --- | --- | --- |');
     for (const e of entities) {
-      const required = e.checked
-        ? (e.missingRequired.length ? `Missing: ${e.missingRequired.join(', ')}` : 'Complete')
-        : 'Not checked';
-      const recommended = e.missingRecommended.length ? e.missingRecommended.join(', ') : '—';
-      lines.push(`| ${cell(e.label)} | ${cell(required)} | ${cell(recommended)} |`);
+      lines.push(`| ${cell(entityLabel(e))} | ${cell(entityRequired(e))} | ${cell(e.missingRecommended.length ? e.missingRecommended.join(', ') : '—')} |`);
     }
     lines.push('');
   }
@@ -267,7 +276,10 @@ function buildMarkdown(report, meta = {}) {
   lines.push(robotsTable(r.technical && r.technical.robots));
   lines.push('');
   if (r.technical && r.technical.robots && !r.technical.robots.found) {
-    lines.push(`No usable robots.txt was found${r.technical.robots.statusCode ? ` (HTTP ${r.technical.robots.statusCode})` : ''}. With no file, every crawler is allowed by default.`);
+    const rb = r.technical.robots;
+    lines.push(!rb.statusCode && rb.error
+      ? `robots.txt could not be read (${rb.error}). The table above assumes no rules, which may not be true: open ${rb.url || '/robots.txt'} in a browser to check.`
+      : `No usable robots.txt was found${rb.statusCode ? ` (HTTP ${rb.statusCode})` : ''}. With no file, every crawler is allowed by default.`);
     lines.push('');
   }
   lines.push('> Google-Extended does not control Google Search; it controls Gemini/Vertex training. Blocking GPTBot does not remove a page from Google search results.');
