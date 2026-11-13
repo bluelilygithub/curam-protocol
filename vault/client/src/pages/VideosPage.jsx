@@ -30,6 +30,7 @@ import { describeFit } from './videos/replaceCheck.mjs';
 import Dialog from '../components/Dialog';
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
 import { VIDEO_GOALS } from './videos/videoGoals.mjs';
+import RemoveSwearing from './videos/RemoveSwearing';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -216,6 +217,20 @@ const TOOL_HELP = {
       'Same file type with no re-compression by default, so there is no quality loss',
     ],
   },
+  'clean-language': {
+    title: 'Remove swearing',
+    what: 'Bleep or silence the swear words in a video or an audio file, and get a clean transcript. Or mask the swear words in a transcript you already have.',
+    features: [
+      'Give it a video, an audio file, a transcript (plain text or SRT), or a recording together with its transcript',
+      'The recording is listened to word by word (AI, a small cost per run) so each bleep lands on the word, not its neighbours',
+      'Bleep (a short beep over the word) or Silence; the picture is copied untouched',
+      'In the transcript, swear words become f***, [bleep], or are left out',
+      'Strong swearing and slurs are always caught; tick "Also milder words" for damn, hell, crap, bloody and similar',
+      'Add your own words to catch (end with * for any ending), and words never to catch, such as a name',
+      'With your own transcript, its wording is kept, and any swear word in it that was not clearly heard is listed so you can check it',
+      'A transcript on its own is cleaned straight away, free',
+    ],
+  },
   'transcribe-audio': {
     title: 'Audio → transcript',
     what: 'Turn a recording (MP3, M4A, WAV and similar) into written text you can edit, copy or download.',
@@ -393,6 +408,7 @@ const TOOL_TIPS = {
   convert: 'Re-save a video as a standard MP4 and make the file smaller. You choose the quality and an optional maximum width.',
   'extract-audio': 'Pull the soundtrack out of a video and save it as an MP3 file.',
   'isolate-voice': 'Take the spoken words out of an audio recording that has background music, and get a voice-only file.',
+  'clean-language': 'Bleep or silence the swear words in a video or audio file, and mask them in its transcript. Or clean a transcript on its own.',
   'transcribe-audio': 'Turn speech in an audio or video file into written text you can edit. Also times a script you wrote, so it can be used as captions.',
   audio: "Remove a video's sound, or swap it for an audio file of your own.",
   normalize: "Even out the loudness of a video's sound in one click, so it is not too quiet or too loud.",
@@ -466,6 +482,7 @@ const TOOL_GROUPS = [
       { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
       { id: 'isolate-voice', label: 'Isolate voice', desc: 'Pull the speech out from under background music' },
       { id: 'transcribe-audio', label: 'Audio → transcript', desc: 'MP3 or other audio in, editable text out' },
+      { id: 'clean-language', label: 'Remove swearing', desc: 'Bleep or silence swear words; clean a transcript' },
       { id: 'trim-audio', label: 'Trim audio', desc: 'Keep a part of an MP3, or cut a part out' },
       { id: 'mix-audio', label: 'Mix audio', desc: 'Voice + background music → one audio file' },
       { id: 'add-music', label: 'Add music', desc: 'Opens Music — generate or use your own track', link: '/music' },
@@ -1068,6 +1085,7 @@ export default function VideosPage() {
   const thumbBlobRef = useRef(null);
   const [resultForTool, setResultForTool] = useState(null);
   const [resultName, setResultName] = useState('output.mp4');
+  const [jobDetails, setJobDetails] = useState(null); // { forTool, details }: the small JSON a background job returns beside its file
   const [probe, setProbe] = useState(null);
 
   // Generate
@@ -1801,7 +1819,7 @@ export default function VideosPage() {
         }
         if (job.status === 'cancelled') { forgetJob(); addToast('Cancelled', 'info'); return; }
         if (job.status === 'error') { forgetJob(); throw fatal(job.error || 'The job failed.'); }
-        if (job.status === 'done') break;
+        if (job.status === 'done') { setJobDetails(job.details ? { forTool, details: job.details } : null); break; }
         startProcessing(
           label,
           job.status === 'queued'
@@ -3443,7 +3461,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'start' && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'start' && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'clean-language' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -3452,7 +3470,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'start' && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'start' && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'clean-language' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'title-card' && !tcOnVideo) && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' || tool === 'replace-section' || tool === 'title-card' ? clipVideoRef : undefined}
@@ -3854,6 +3872,21 @@ export default function VideosPage() {
                 </div>
               </div>
             )}
+          </section>
+        )}
+
+        {tool === 'clean-language' && (
+          <section className="space-y-3">
+            <ToolHeader id="clean-language" label="Remove swearing" onHelp={setHelpTool} getIcon={getIcon} />
+            <RemoveSwearing
+              ffmpegOk={ffmpegOk}
+              aiOk={Boolean(status?.isolateVoice?.ai)}
+              runJob={runJobVideo}
+              jobDetails={jobDetails?.forTool === 'clean-language' && resultForTool === 'clean-language' ? jobDetails.details : null}
+              resultUrl={resultForTool === 'clean-language' ? resultBlob : null}
+              resultName={resultName}
+              onUseResult={useResultAsSource}
+            />
           </section>
         )}
 

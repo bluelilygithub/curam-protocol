@@ -96,6 +96,7 @@ function getJobStatus(id, userId) {
     label: j.label,
     elapsedSec: Math.round(((j.finishedAt || Date.now()) - j.startedAt) / 1000),
     fileName: j.result?.fileName || null,
+    details: j.status === 'done' ? (j.result?.details || null) : null, // small JSON some tools return beside the file (Remove swearing)
   };
 }
 

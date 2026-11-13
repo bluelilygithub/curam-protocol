@@ -51,6 +51,16 @@ export const VIDEO_GOALS = [
     ],
   },
   {
+    id: 'clean',
+    title: 'Remove the swearing',
+    blurb: 'Bleep the swear words and get a clean transcript.',
+    icon: 'mic-off',
+    steps: [
+      { tool: 'clean-language', note: 'Bleep or silence each swear word; keep the clean transcript.' },
+      { tool: 'caption-studio', note: 'Burn the clean captions in, if you want them on screen.' },
+    ],
+  },
+  {
     id: 'brand',
     title: 'Brand a video',
     blurb: 'Your logo on it, an opening title, a closing message.',

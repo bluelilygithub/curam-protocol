@@ -225,6 +225,8 @@ module.exports = {
   isolateWithModel,
   remember,
   recall,
+  uploadForModel,
+  fetchInputProps,
   DEFAULT_MODEL,
   DEFAULT_MODELS,
 };

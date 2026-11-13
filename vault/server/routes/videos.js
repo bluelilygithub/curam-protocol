@@ -50,6 +50,7 @@ const {
 const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = require('../services/srtUtils');
 const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const voiceIsolation = require('../services/voiceIsolation');
+const cleanLanguage = require('../services/cleanLanguage');
 const audioMix = require('../services/audioMix');
 const { getVoiceProvider, normalizeSpeech, MAX_TEXT_CHARS } = require('../services/voiceProviders');
 const { speakToWav } = require('../services/voiceover');
@@ -1631,6 +1632,94 @@ router.post('/transcribe-audio', upload.single('audio'), ffmpegRoute('transcribe
 
   res.json(out);
 }));
+
+// "Remove swearing": bleep or silence swear words in a video or audio file (word times from Whisper on Replicate), and mask them
+// in a transcript. Service: server/services/cleanLanguage.js. The transcript-only route needs no AI and costs nothing.
+function cleanLanguageOptions(body = {}) {
+  return {
+    mild: body.mild === '1' || body.mild === true,
+    extra: String(body.extra || '').slice(0, 2000),
+    allow: String(body.allow || '').slice(0, 2000),
+    style: ['mask', 'bleep', 'remove'].includes(body.style) ? body.style : 'mask',
+  };
+}
+
+router.post('/clean-language/text', (req, res) => {
+  const text = String(req.body?.text || '');
+  if (!text.trim()) return res.status(400).json({ error: 'Paste or load a transcript first.' });
+  if (text.length > 500000) return res.status(400).json({ error: 'That transcript is too long. Split it into parts.' });
+  const r = cleanLanguage.cleanTranscript(text, cleanLanguageOptions(req.body));
+  res.json({ text: r.text, format: r.format, found: r.found });
+});
+
+router.post('/clean-language', aiLimiter, upload.single('media'), async (req, res) => {
+  try {
+    if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose a video or audio file first.' });
+    if (!process.env.REPLICATE_API_TOKEN) return res.status(503).json({ error: 'Remove swearing is not set up on this server (REPLICATE_API_TOKEN is missing). You can still clean a transcript on its own.' });
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    const opts = cleanLanguageOptions(req.body);
+    const mode = req.body?.mode === 'mute' ? 'mute' : 'bleep';
+    const ownTranscript = String(req.body?.transcript || '').slice(0, 500000);
+    const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
+    const inExt = AUDIO_EXTS.has(ext) ? ext : '.mp4';
+    const base = path.basename(String(req.file.originalname || 'media'), path.extname(String(req.file.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'media';
+    const log = (m) => getLogger().info(`[videos/clean-language] ${m}`);
+
+    const jobId = startBackgroundJob(req.user.id, 'clean-language', (signal) => withTempDir(async (dir) => {
+      const inputPath = path.join(dir, `in${inExt}`);
+      await fs.writeFile(inputPath, req.file.buffer);
+      const info = await probeVideo(inputPath);
+      if (!info.hasAudio) { const e = new Error('That file has no sound to clean.'); e.status = 400; throw e; }
+      const hasVideo = Boolean(info.width && info.height && info.codec && !/^(mjpeg|png)$/i.test(info.codec));
+
+      const speechPath = path.join(dir, 'speech.mp3');
+      await toSpeechMp3(inputPath, speechPath);
+      let words;
+      try {
+        ({ words } = await cleanLanguage.transcribeWords({ audio: await fs.readFile(speechPath), log }));
+      } catch (err) {
+        getLogger().warn({ failures: err.failures }, `[videos/clean-language] ${(err.failures || []).join(' || ') || err.message}`);
+        throw err;
+      }
+      const hits = cleanLanguage.findSwearWords(words, opts);
+      const windows = cleanLanguage.bleepWindows(hits, { durationSec: info.duration || Infinity });
+      const outExt = hasVideo ? '.mp4' : '.mp3';
+      const outPath = path.join(dir, `clean${outExt}`);
+      await execFileAsync(FFMPEG, cleanLanguage.cleanArgs({ inputPath, outputPath: outPath, windows, mode, hasVideo }), 30 * 60 * 1000, { signal });
+
+      // The transcript to give back: theirs if they gave one (its wording), otherwise what was heard, as timed captions.
+      const heard = cleanLanguage.cleanSrt(cleanLanguage.wordsToSrt(words), opts);
+      const theirs = ownTranscript.trim() ? cleanLanguage.cleanTranscript(ownTranscript, opts) : null;
+      // Swear words in their transcript that were not heard in the recording, so could not be bleeped.
+      const heardSet = new Set(hits.map((h) => cleanLanguage.normalizeWord(h.word)));
+      const notHeard = theirs ? [...new Set(theirs.found.map(cleanLanguage.normalizeWord))].filter((w) => !heardSet.has(w)) : [];
+      log(`${words.length} words, ${hits.length} bleeped (${mode}), ${notHeard.length} in their transcript not heard`);
+      return {
+        buffer: await readOutputFile(outPath),
+        fileName: `${base}-clean${outExt}`,
+        mime: hasVideo ? 'video/mp4' : 'audio/mpeg',
+        details: {
+          mode,
+          bleeped: hits.map((h) => ({ word: h.word.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''), start: Math.round(h.start * 10) / 10 })),
+          transcript: theirs ? theirs.text : heard.text,
+          transcriptFormat: theirs ? theirs.format : 'srt',
+          transcriptSource: theirs ? 'yours' : 'heard',
+          notHeard,
+          isVideo: hasVideo,
+        },
+      };
+    }), {
+      describeError: (err) => (err.failures || err.status === 400 ? err.message : describeVideoError(err).message),
+      onError: (err) => getLogger().error({ err }, `[videos/clean-language] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: log,
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    getLogger().error({ err }, '[videos/clean-language] start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
 
 // "Audio -> video with the transcript on it": a flat-colour video the length of the audio, captions burned along the
 // bottom in the chosen font/size/colour/background. Same caption look as Caption studio (shared captionStyleFromBody).
