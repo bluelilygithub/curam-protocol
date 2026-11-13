@@ -2,6 +2,46 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "699245cd",
+   "fullHash": "699245cd864702fe955f7e840d785bba905f46ad",
+   "committedAt": "2026-11-13T15:12:51+10:00",
+   "author": "mrb",
+   "subject": "Clients: a typed tag counts when you leave the box, not only on Enter",
+   "filesChanged": 2,
+   "insertions": 2,
+   "deletions": 0,
+   "area": "Clients",
+   "goal": "A tag typed into a client's tag box was lost unless Enter or a comma followed it, for example when the person typed it and pressed Save.",
+   "whatChanged": "The TagInput on the Clients list (client/src/pages/ClientsPage.jsx) and on the client page (client/src/pages/ClientDetailPage.jsx) now adds the typed text when the box loses focus, as well as on Enter or a comma.",
+   "filesImpacted": [
+    "client/src/pages/ClientsPage.jsx",
+    "client/src/pages/ClientDetailPage.jsx"
+   ],
+   "benefit": "Typed tags are kept when the person moves straight to Save.",
+   "concerns": "Written outside this session and committed as found; not tried in a browser here. Clicking away from the box now always turns leftover text into a tag, which may surprise someone who typed part of a tag and meant to abandon it (they can remove it with its x)."
+  },
+  {
+   "commit": "9208fea8",
+   "fullHash": "9208fea82206051a395472277d6b08ca1d60b77a",
+   "committedAt": "2026-11-13T15:12:51+10:00",
+   "author": "mrb",
+   "subject": "Cellar lite: copy each enquiry to the website's Enquiry log",
+   "filesChanged": 4,
+   "insertions": 38,
+   "deletions": 1,
+   "area": "Cellar Planner",
+   "goal": "Keep every planner enquiry in the website's own Enquiry log (WordPress, beside its quote and contact forms), including when Vault is down, so no lead is lost.",
+   "whatChanged": "cellar-planner/src/lite/QuoteForm.tsx: after Vault answers, copyToSite posts siteLogBody (name, email, phone, state, message, design code and summary, bottles, vault=ok|failed, honeypot) to /wp-admin/admin-post.php with action cw_planner_enquiry on the site the planner is on, fire and forget. Not sent when Vault refuses the form as wrong (400) or when Vault itself serves the planner; no PDF. scripts/e2e-lite-quote.mjs checks the copy, its fields, the failed-Vault copy and no copy on a 400. docs/cellar-planner.md documents the flow and the WordPress side (inc/planner-enquiry.php in the curam-wines theme), the zip contents, and the SiteGround static-cache behaviour seen on 2026-11-11. cellar-planner/.gitignore now ignores the cellar-lite-upload/ build folder.",
+   "filesImpacted": [
+    "cellar-planner/src/lite/QuoteForm.tsx",
+    "cellar-planner/scripts/e2e-lite-quote.mjs",
+    "cellar-planner/.gitignore",
+    "docs/cellar-planner.md"
+   ],
+   "benefit": "Planner leads appear in the website's Enquiry log with whether Vault accepted them, and survive a Vault outage.",
+   "concerns": "Written outside this session and committed as found. The type check and the 705 Cellar Planner unit tests pass; the e2e-lite-quote browser test was not run here (it needs the planner dev servers). The copy only reaches the website once a new dist-lite build is uploaded there (the docs note the live site served an old bundle on 2026-11-11). The WordPress handler lives in the theme repo, not here."
+  },
+  {
    "commit": "85bfb185",
    "fullHash": "85bfb185234aaa43e1d3286123745a4f06387335",
    "committedAt": "2026-11-13T15:05:17+10:00",
