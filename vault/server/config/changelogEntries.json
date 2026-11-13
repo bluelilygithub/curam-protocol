@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "ad8ccf95",
+   "fullHash": "ad8ccf95b4798bca49efe8b26ce7b7c570abdb9d",
+   "committedAt": "2026-11-13T14:18:18+10:00",
+   "author": "mrb",
+   "subject": "Docs: deploy rules for the split build (base image on GitHub)",
+   "filesChanged": 7,
+   "insertions": 46,
+   "deletions": 49,
+   "area": "Build and deploy",
+   "goal": "Make the written deploy rules match the new split build, so future sessions do not put slow installs back into the Railway Dockerfile or re-propose the fix.",
+   "whatChanged": "CLAUDE.md DEPLOY SPEED now opens with how the build is split, adds Dockerfile.base to the files to check before a push and to the git log to read before any build change, says system, pip and planner installs go in Dockerfile.base only, and says to check the GitHub \"Base image\" run before calling a dependency change live. docs/deploy-speed.md was rewritten around the two images: what the base contains and when it rebuilds, what Railway runs per deploy, what a dependency change costs, the done list (now including 0ac982d0 and 273148cd), what is still open, and what a healthy build log looks like. Tool docs that said \"the Dockerfile\" installs ffmpeg, qpdf, poppler or PyMuPDF now name Dockerfile.base (features.md, video-tools.md, finance.md, email-follow-up.md, pdf-agent.md).",
+   "filesImpacted": [
+    "CLAUDE.md",
+    "docs/deploy-speed.md",
+    "docs/features.md",
+    "docs/video-tools.md",
+    "docs/finance.md",
+    "docs/email-follow-up.md",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "The rules every session reads now describe the build as it is, so a new system package or dependency change goes in the right file and its cost is explained before a push.",
+   "concerns": "Documentation only. The split build itself (273148cd) had not yet been seen deploying on Railway when this was written. docs/contract-review-spec.md still says \"the Dockerfile\" in its history notes; left as a record of what was done then."
+  },
+  {
    "commit": "273148cd",
    "fullHash": "273148cd8af612f6ce52bf34ba5157a47e438853",
    "committedAt": "2026-11-13T14:12:12+10:00",
