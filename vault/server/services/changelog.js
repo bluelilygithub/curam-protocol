@@ -15,6 +15,7 @@ async function seedChangelog() {
   if (!fs.existsSync(SEED_FILE)) return 0;
   const { entries } = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
   let added = 0;
+  let corrected = 0;
   for (const e of Array.isArray(entries) ? entries : []) {
     if (!e || !e.commit || !e.committedAt || !e.subject) continue;
     const r = await pool.query(
@@ -26,9 +27,34 @@ async function seedChangelog() {
         e.filesChanged ?? null, e.insertions ?? null, e.deletions ?? null]
     );
     added += r.rowCount || 0;
+    if (!r.rowCount && e.replacesText) corrected += await applyCorrection(e);
   }
   if (added) console.log(`[changelog] added ${added} entr${added === 1 ? 'y' : 'ies'}`);
+  if (corrected) console.log(`[changelog] corrected ${corrected} entr${corrected === 1 ? 'y' : 'ies'}`);
   return added;
+}
+
+// Text fields a correction may change.
+const CORRECTABLE = { goal: 'goal', whatChanged: '"whatChanged"', benefit: 'benefit', concerns: 'concerns' };
+
+/**
+ * Correct an entry already in the table. `e.replacesText` holds the old wording of each field being corrected; the row is
+ * updated only where it still holds exactly that wording, so an edit made in the database is never overwritten.
+ */
+async function applyCorrection(e) {
+  const sets = [];
+  const wheres = [];
+  const params = [e.commit];
+  for (const [field, oldText] of Object.entries(e.replacesText || {})) {
+    if (!CORRECTABLE[field] || typeof oldText !== 'string' || typeof e[field] !== 'string') continue;
+    params.push(e[field]);
+    sets.push(`${CORRECTABLE[field]} = $${params.length}`);
+    params.push(oldText);
+    wheres.push(`${CORRECTABLE[field]} = $${params.length}`);
+  }
+  if (!sets.length) return 0;
+  const r = await pool.query(`UPDATE changelog_entries SET ${sets.join(', ')} WHERE commit = $1 AND ${wheres.join(' AND ')}`, params);
+  return r.rowCount || 0;
 }
 
 /** Every entry, newest first. */

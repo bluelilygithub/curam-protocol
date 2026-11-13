@@ -19,7 +19,9 @@ This is mandatory, not optional. It is also written in `CLAUDE.md` ("CHANGELOG â
 
 ## Adding entries
 
-Ask Claude to "add changelog entries for the latest commits" (or just let it do so as part of the rule above). It appends objects to the top of the `entries` array in the JSON file (fields: `commit` short hash, `fullHash`, `committedAt`, `author`, `subject`, `area`, `goal`, `whatChanged`, `filesImpacted` list, `benefit`, `concerns`, `filesChanged`, `insertions`, `deletions`) and the next deploy adds them. The changelog commit itself is one more commit to describe later. Nothing writes entries automatically yet; that could be a later step (for example a script run after each push).
+Ask Claude to "add changelog entries for the latest commits" (or just let it do so as part of the rule above). It appends objects to the top of the `entries` array in the JSON file (fields: `commit` short hash, `fullHash`, `committedAt`, `author`, `subject`, `area`, `goal`, `whatChanged`, `filesImpacted` list, `benefit`, `concerns`, `filesChanged`, `insertions`, `deletions`) and the next deploy adds them. The changelog commit itself is one more commit to describe later.
+
+**Correcting an entry that is already live.** Editing its text in the JSON file alone does nothing, because the row already exists. Change the field and add `replacesText` with the old wording of each corrected field, for example `"replacesText": { "concerns": "<the old text, exactly>" }`. On boot, `applyCorrection` in `server/services/changelog.js` updates the row only where it still holds exactly that old text, so an edit made in the database is kept. Fields that can be corrected: `goal`, `whatChanged`, `benefit`, `concerns`. A database that never had the row simply inserts the corrected text. Nothing writes entries automatically yet; that could be a later step (for example a script run after each push).
 
 ## Pieces
 

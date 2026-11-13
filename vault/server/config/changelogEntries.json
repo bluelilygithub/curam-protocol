@@ -42,7 +42,10 @@
     "docs/deploy-speed.md"
    ],
    "benefit": "Deploys should only build and ship the npm install check and the code and Vite build layers; system packages, Python, Chromium and the planner installs come from the same stored base every time.",
-   "concerns": "The first deploy with this Dockerfile pulls the base image once, so it is slow. Not yet seen running on Railway: if the pull or build fails, revert this commit to go back to the old Dockerfile. The base is tagged latest, so a dependency change is live only after the GitHub workflow finishes (about 10-15 minutes); a deploy that starts earlier gets the root npm packages from its own npm install but the older base for system, Python and planner packages. The final image is still about 2.3 GB; this saves rebuilding and re-pushing it, not its size."
+   "concerns": "The first deploy with this Dockerfile pulled the base image once and took about 7 minutes on staging (GitHub deployment status: success, 04:12 to 04:19 UTC on 2026-11-13); later deploys have not been timed yet. The base is tagged latest, so a dependency change is live only after the GitHub workflow finishes (about 10-15 minutes); a deploy that starts earlier gets the root npm packages from its own npm install but the older base for system, Python and planner packages. The final image is still about 2.3 GB; this saves rebuilding and re-pushing it, not its size.",
+   "replacesText": {
+    "concerns": "The first deploy with this Dockerfile pulls the base image once, so it is slow. Not yet seen running on Railway: if the pull or build fails, revert this commit to go back to the old Dockerfile. The base is tagged latest, so a dependency change is live only after the GitHub workflow finishes (about 10-15 minutes); a deploy that starts earlier gets the root npm packages from its own npm install but the older base for system, Python and planner packages. The final image is still about 2.3 GB; this saves rebuilding and re-pushing it, not its size."
+   }
   },
   {
    "commit": "0ac982d0",
@@ -61,8 +64,12 @@
     "Dockerfile.base",
     "docs/deploy-speed.md"
    ],
-   "benefit": "Once steps 2 and 3 are done, every deploy starts from the same stored base image, so its layers keep their digests and are skipped even when Railway's cache is empty; a deploy then only builds and ships the code and Vite build layer.",
-   "concerns": "No benefit yet: the owner must make the curam-vault-base package public (or give Railway registry credentials), then Dockerfile must be switched to FROM the base. The first workflow run has not been seen to succeed. Until step 3, any change to the top of Dockerfile must be copied to Dockerfile.base. After step 3, a dependency change makes GitHub rebuild the base (about 10-15 minutes); a deploy that starts before then still works through its own npm install but is slower and may use the older base for system and Python packages."
+   "benefit": "With steps 2 and 3 done the same day (package made public, Dockerfile switched in 273148cd), every deploy starts from the same stored base image, so its layers keep their digests and are skipped even when Railway's cache is empty; a deploy only builds and ships the code and Vite build layer.",
+   "concerns": "This commit on its own changed nothing about deploys; the benefit came with 273148cd. The first workflow run (on 0de96208) succeeded. A change to system, Python or planner packages now goes in Dockerfile.base, and a dependency change makes GitHub rebuild the base (about 10-15 minutes) before it is fully live.",
+   "replacesText": {
+    "benefit": "Once steps 2 and 3 are done, every deploy starts from the same stored base image, so its layers keep their digests and are skipped even when Railway's cache is empty; a deploy then only builds and ships the code and Vite build layer.",
+    "concerns": "No benefit yet: the owner must make the curam-vault-base package public (or give Railway registry credentials), then Dockerfile must be switched to FROM the base. The first workflow run has not been seen to succeed. Until step 3, any change to the top of Dockerfile must be copied to Dockerfile.base. After step 3, a dependency change makes GitHub rebuild the base (about 10-15 minutes); a deploy that starts before then still works through its own npm install but is slower and may use the older base for system and Python packages."
+   }
   },
   {
    "commit": "026a23a5",
