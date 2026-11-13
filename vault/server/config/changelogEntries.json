@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "026a23a5",
+   "fullHash": "026a23a5b973be9f0d7453961d864e3e6f8cd3e9",
+   "committedAt": "2026-11-13T13:39:53+10:00",
+   "author": "mrb",
+   "subject": "AI Visibility: AU search, honest fetch identity, fewer false positives",
+   "filesChanged": 9,
+   "insertions": 203,
+   "deletions": 50,
+   "area": "AI Visibility",
+   "goal": "Fix five problems seen in a real wiwc.com.au report: US search results for an Australian business, a browser check that failed with ERR_HTTP2_PROTOCOL_ERROR, the descriptive brand \"Walk-In Wine Cabinets Australia\" matching any answer about walk-in wine cabinets, a LocalBusiness with areaServed flagged as a Fix for missing address, and many repeated \"Not checked\" schema rows. Testing also showed robots.txt reported as missing when it exists.",
+   "whatChanged": "searchClient.js: Brave adds country=AU&search_lang=en, Serper sends gl au / hl en. render.js: the hardcoded Chrome 124 user agent is gone; userAgentFor() uses the real Chromium version, because wiwc's firewall drops a browser whose user agent does not match it. aiVisibilityService.js: when the page or robots.txt fetch is refused, it retries with an honest \"VaultAI/1.0 (AI visibility audit)\" identity; robots.txt failures say \"could not be read\" instead of \"not found\" (markdown.js and the page). queryAnalysis.js: legal suffixes no longer strip words like Australia or Group, the two-word short form is dropped, and any brand variant that appears in the question itself (plural-insensitive) is ignored. schema.js: a LocalBusiness with areaServed needs no street address and is shown as complete (service area); with neither, a warning offers both options and costs 10 points; unchecked entities fold into one row per type with a count (Country x7). Tests and docs/ai-visibility.md updated.",
+   "filesImpacted": [
+    "server/services/aiVisibility/searchClient.js",
+    "server/services/aiVisibility/render.js",
+    "server/services/aiVisibility/aiVisibilityService.js",
+    "server/services/aiVisibility/queryAnalysis.js",
+    "server/services/aiVisibility/schema.js",
+    "server/services/aiVisibility/markdown.js",
+    "server/services/aiVisibility/aiVisibility.test.js",
+    "client/src/pages/AiVisibilityPage.jsx",
+    "docs/ai-visibility.md"
+   ],
+   "benefit": "Australian businesses are ranked against Australian results, sites behind strict firewalls (like wiwc) can now be rendered and their robots.txt read, descriptive brand names no longer give false \"named\" results, service-area businesses are not told to publish a street address, and the schema table is short enough to read. On wiwc locally: render works (about 650 words), robots.txt read (only /wp-admin/ blocked), structured data 88 instead of 63.",
+   "concerns": "The Australian search settings were not checked against a live search: the local Brave and Serper keys are invalid. Assistant answers are still unverified for the same reason. The honest VaultAI fallback means some sites will see a non-browser visitor and may block it. Dropping brand variants that appear in the question can miss a real mention when the brand name is the question's own words; the full brand and domain label still count. When search and assistants cannot run, the overall score covers only technical areas and can look high (95 on wiwc locally). wiwc's firewall may also block real AI crawlers whose user agents contain \"Mozilla\"; not tested."
+  },
+  {
    "commit": "176717d4",
    "fullHash": "176717d43835fb451cb0904d5e380976298f78e0",
    "committedAt": "2026-11-13T10:32:44+10:00",
