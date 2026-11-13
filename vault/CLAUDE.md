@@ -10,9 +10,12 @@ Detail lives in `docs/`. This file holds the rules; follow the pointers when you
 
 **Full rules and the layer table: [`docs/deploy-speed.md`](docs/deploy-speed.md). Read it first.** Deploys should take about 2-3 minutes. The owner measures you by how fast changes go live.
 
-1. **NEVER edit `package.json` or `package-lock.json` just to add or rename a test script.** One edit re-runs the root `npm install`, both pip installs and all four planner installs, and pushes gigabytes of image layers. Run new tests with `node path/to/file.test.js`. If a `package.json` change is unavoidable, tell the owner first, in plain words, that the deploy will be slow, and batch every such change into one commit.
-2. **NEVER diagnose, propose or change anything about deploys, builds or the `Dockerfile` without first reading `docs/deploy-speed.md` and running `git log --oneline -- Dockerfile .dockerignore`.** This has been fixed twice already (72aac7cc, 7874897c). Re-proposing it from the `Dockerfile` alone wastes the owner's time. It happened on 2026-11-02.
-3. **Before every push, run `git diff --stat origin/<branch>..HEAD`.** If `package.json`, `package-lock.json`, `Dockerfile` or any `requirements.txt` is in it, say "this push will be a slow deploy, because ..." BEFORE pushing.
+The build is split (since 2026-11-13): GitHub builds the slow layers from `Dockerfile.base` into `ghcr.io/bluelilygithub/curam-vault-base` (workflow `.github/workflows/base-image.yml`, runs only on dependency changes); Railway's `Dockerfile` starts `FROM` that image and only runs `npm install`, `COPY . .` and `npm run build`.
+
+1. **NEVER edit `package.json` or `package-lock.json` just to add or rename a test script.** One edit makes GitHub rebuild the whole base image (10-15 minutes) before the change is fully live. Run new tests with `node path/to/file.test.js`. If a `package.json` change is unavoidable, tell the owner first, in plain words, that the deploy will be slow, and batch every such change into one commit.
+2. **NEVER diagnose, propose or change anything about deploys, builds or a Dockerfile without first reading `docs/deploy-speed.md` and running `git log --oneline -- Dockerfile Dockerfile.base .dockerignore`.** This has been fixed three times already (72aac7cc, 7874897c, 273148cd). Re-proposing it from the `Dockerfile` alone wastes the owner's time. It happened on 2026-11-02.
+3. **System packages, pip installs and planner installs go in `Dockerfile.base`, never in `Dockerfile`.** Never switch Railway back to building everything itself.
+4. **Before every push, run `git diff --stat origin/<branch>..HEAD`.** If `package.json`, `package-lock.json`, `Dockerfile`, `Dockerfile.base` or any `requirements.txt` is in it, say "this push will be a slow deploy, because ..." BEFORE pushing. For a dependency change, check the GitHub Actions "Base image" run succeeded before saying it is live.
 
 ---
 

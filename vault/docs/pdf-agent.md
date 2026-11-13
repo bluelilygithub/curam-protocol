@@ -151,7 +151,7 @@ Both tabs page through whichever PDF has more pages; a page missing from the sho
 
 ## Password Protect / Remove Password (`protect` / `unprotect`)
 
-`pdf-lib` cannot write encrypted PDFs — confirmed against its README/issue tracker, there is no encryption-on-save support in the library. This is the one PDF Tools feature that needs a native binary beyond LibreOffice: **qpdf**, installed in the Dockerfile the same way as `ffmpeg`/`libreoffice`. `server/services/pdfCrypto.js` follows `officeConvert.js`'s exact pattern — write the input to a temp file, `execFile` the binary, read the temp output file back, clean up the temp dir either way, ENOENT-friendly error if qpdf isn't on the server image.
+`pdf-lib` cannot write encrypted PDFs — confirmed against its README/issue tracker, there is no encryption-on-save support in the library. This is the one PDF Tools feature that needs a native binary beyond LibreOffice: **qpdf**, installed in `Dockerfile.base` the same way as `ffmpeg`/`libreoffice`. `server/services/pdfCrypto.js` follows `officeConvert.js`'s exact pattern — write the input to a temp file, `execFile` the binary, read the temp output file back, clean up the temp dir either way, ENOENT-friendly error if qpdf isn't on the server image.
 
 `protectPdf()` runs `qpdf --encrypt <userPassword> <ownerPassword> 256 --print=... --extract=... --modify=... -- in.pdf out.pdf` (AES-256; owner password defaults to the user password if not given separately). `unprotectPdf()` runs `qpdf --decrypt --password=<password> in.pdf out.pdf`; a qpdf failure whose stderr mentions the password is surfaced as a clear "Incorrect password." 400, not a generic 500.
 

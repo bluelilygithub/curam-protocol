@@ -221,7 +221,7 @@ POST /api/videos/library/:id/captions  `srtText` or `srt` file + style fields + 
 | `LOCAL_WHISPER_COMMAND` | whisper binary (default `whisper-cli`) |
 | `LOCAL_WHISPER_MODEL` | Path to ggml model for local transcribe |
 
-**Railway:** `ffmpeg` is installed in the Vault Dockerfile. Redeploy after merging so clip/convert tools work in production.
+**Railway:** `ffmpeg` is installed in `Dockerfile.base` (the base image built on GitHub; see `docs/deploy-speed.md`). Redeploy after merging so clip/convert tools work in production.
 
 ---
 
