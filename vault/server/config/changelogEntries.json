@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "339cb9e4",
+   "fullHash": "339cb9e4b7642566c523e3e77d952451a518c001",
+   "committedAt": "2026-11-13T14:25:54+10:00",
+   "author": "mrb",
+   "subject": "Changelog: correct live entries on boot; fix base-image entries",
+   "filesChanged": 3,
+   "insertions": 39,
+   "deletions": 4,
+   "area": "Changelog",
+   "goal": "Let a changelog entry that is already in the database be corrected. Rows are never overwritten on boot, so the base-image entries kept wording that was out of date the same day (0ac982d0 said there was no benefit yet; 273148cd said it had not been seen on Railway).",
+   "whatChanged": "server/services/changelog.js: an entry in changelogEntries.json can carry replacesText, the old wording of each corrected field (goal, whatChanged, benefit, concerns). On boot, applyCorrection updates the row only where it still holds exactly that old text, so an edit made in the database is kept; a database without the row inserts the corrected text as before. The 0ac982d0 and 273148cd entries were corrected this way (273148cd now records the staging deploy succeeding in about 7 minutes). docs/changelog.md explains how to correct an entry.",
+   "filesImpacted": [
+    "server/services/changelog.js",
+    "server/config/changelogEntries.json",
+    "docs/changelog.md"
+   ],
+   "benefit": "Out-of-date changelog text can be fixed by a normal commit, without database access, on staging and production alike.",
+   "concerns": "Checked with a fake database (fresh insert, correction of the old text, hand-edited row left alone), not against real Postgres; the first real run is the next boot on staging. This commit was given a \"Changelog:\" subject by mistake although it changes code, so it has its own entry. Old wording has to be copied exactly or the correction silently does nothing."
+  },
+  {
    "commit": "ad8ccf95",
    "fullHash": "ad8ccf95b4798bca49efe8b26ce7b7c570abdb9d",
    "committedAt": "2026-11-13T14:18:18+10:00",
