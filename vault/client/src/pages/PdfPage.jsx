@@ -13,6 +13,8 @@ import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import Dialog from '../components/Dialog';
+import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
+import { PDF_GOALS } from './pdf/pdfGoals.mjs';
 
 // ─── Fonts available in the field designer, grouped for the picker ─────────────
 // pdf-lib's 14 built-in "standard" PDF fonts only — no fetching, no embedding,
@@ -502,6 +504,19 @@ const MODE_GROUPS = [
   { label: 'Analyse',  ids: ['metadata', 'fileinfo', 'compare']     },
 ];
 
+// "Open on the tool I used last" instead of the job screen: off unless ticked on the job screen (same as Video Tools).
+const OPEN_ON_LAST_KEY = 'vault_pdf_open_on_last';
+const LAST_TOOL_KEY = 'vault_pdf_last_tool';
+const readLocal = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const writeLocal = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window: it just will not be remembered */ } };
+const modeLabel = (id) => MODES.find((m) => m.id === id)?.label || id;
+// 'start' is the "What do you want to do?" job screen (not a tool); every other value is a tool id from MODES.
+function initialMode() {
+  if (readLocal(OPEN_ON_LAST_KEY) !== '1') return 'start';
+  const last = readLocal(LAST_TOOL_KEY);
+  return MODES.some((m) => m.id === last) ? last : 'start';
+}
+
 // ─── Utilities ─────────────────────────────────────────────────────────────────
 
 export function formatBytes(bytes) {
@@ -900,8 +915,13 @@ export default function PdfPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Sidebar state
-  const [mode, setMode] = useState('merge');
-  const [openGroup, setOpenGroup] = useState('Organise');
+  const [mode, setMode] = useState(initialMode);
+  const [openGroup, setOpenGroup] = useState(() => MODE_GROUPS.find((g) => g.ids.includes(mode))?.label || 'Organise');
+  const [goal, setGoal] = useState(null); // the job picked on the job screen (pdf/pdfGoals.mjs)
+  const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
+  useEffect(() => { if (openOnLast && mode !== 'start') writeLocal(LAST_TOOL_KEY, mode); }, [mode, openOnLast]);
+  const toggleOpenOnLast = (on) => { setOpenOnLast(on); writeLocal(OPEN_ON_LAST_KEY, on ? '1' : '0'); };
+  const backToStart = () => { setGoal(null); setMode('start'); };
   const [toolSearch, setToolSearch] = useState('');
   const [helpTool, setHelpTool] = useState(null);
   const [resultModal, setResultModal] = useState(null); // { dataUrl, filename, meta }
@@ -3021,6 +3041,7 @@ export default function PdfPage() {
     setOpenGroup(group.label);
     setMode(id);
   };
+  const startGoal = (g) => { setGoal(g); openToolById(g.steps[0].tool); };
 
   // "Tell it what to do": the server turns the words into validated setting values; this puts them into each tool's form.
   const applyVoiceValues = (toolId, v) => {
@@ -3087,7 +3108,7 @@ export default function PdfPage() {
           {pdfInfo.show && (
             <ToolInfoModal title="How PDF Tools Works" onClose={pdfInfo.close}>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                31 tools, all stateless: a file goes in, a file comes back, and nothing is kept on the server. The list on the left is arranged by what you are doing; hover over any item for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do.
+                31 tools, all stateless: a file goes in, a file comes back, and nothing is kept on the server. It opens on "What do you want to do?": pick a job (tidy a scan, fill and sign a form, put documents into one and so on) and it opens the right tools one step at a time; "Back to all jobs" at the top of any tool returns there. The list on the left is arranged by what you are doing; hover over any item for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do.
               </p>
               <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 <p style={{ color: 'var(--color-text)' }}><strong>Organise</strong> — Merge, Split (real page-range syntax, <code>1-3,5,7-9</code>), Rotate, Organize Pages (reorder, delete, reverse, insert, extract), Remove Blank Pages, Pages per Sheet.</p>
@@ -3098,6 +3119,22 @@ export default function PdfPage() {
               </div>
             </ToolInfoModal>
           )}
+
+          <Tooltip text="Go back to the list of jobs (tidy a scan, fill and sign a form, put documents into one and so on).">
+            <button
+              type="button"
+              onClick={backToStart}
+              className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+              style={{
+                borderColor: mode === 'start' ? 'var(--color-primary)' : 'var(--color-border)',
+                color: mode === 'start' ? 'var(--color-primary)' : 'var(--color-text)',
+                background: 'var(--color-bg)',
+              }}
+            >
+              {getIcon('layout-grid', { size: 13 })}
+              What do you want to do?
+            </button>
+          </Tooltip>
 
           <Tooltip text="Filter the tool list below by name or description. Press / to jump here.">
             <input
@@ -3167,6 +3204,21 @@ export default function PdfPage() {
               <button type="button" onClick={() => setSeedBanner('')} className="underline transition-opacity duration-200 hover:opacity-70">Dismiss</button>
             </div>
           )}
+
+          {mode !== 'start' && <BackToJobs onBack={backToStart} toolLabel={modeLabel(mode)} goal={stepIndex(goal, mode) >= 0 ? goal : null} />}
+          {mode === 'start' && (
+            <JobStart
+              goals={PDF_GOALS}
+              appName="PDF Tools"
+              tourId="pdf-goals"
+              intro="Pick a job and PDF Tools opens the tools for it, one step at a time. Or browse every tool in the list on the left, or ask the guide (graduation-cap button, bottom right)."
+              onPick={startGoal}
+              labelFor={modeLabel}
+              openOnLast={openOnLast}
+              onToggleOpenOnLast={toggleOpenOnLast}
+            />
+          )}
+          <JobBar goal={goal} mode={mode} onStep={openToolById} labelFor={modeLabel} carry={<>pick the next tool under <em>Continue with…</em> in the result window (or download the result and load it), then go to</>} />
 
           {mode === 'pdf2img' && <PageToImageTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'extractimages' && <ExtractImagesTool getIcon={getIcon} onHelp={setHelpTool} />}
