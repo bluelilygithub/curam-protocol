@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "e7e411ec",
+   "fullHash": "e7e411ec826c64d1005b8f0cf1b77c01c9006297",
+   "committedAt": "2026-11-16T09:13:03+10:00",
+   "author": "mrb",
+   "subject": "PDF to Word: keep lost spaces and outlined headings",
+   "filesChanged": 1,
+   "insertions": 133,
+   "deletions": 1,
+   "area": "PDF Tools",
+   "goal": "Stop words running together in converted Word files, and stop headings disappearing from LibreOffice-made PDFs.",
+   "whatChanged": "pdf2docx text extraction is wrapped. Spans that are only spaces are attached to their neighbour, because pdf2docx dropped them and Chrome/LibreOffice often put the space between words in its own span (text alternates between two subsets of one font). Invisible text covered by letter-sized filled shapes (LibreOffice exports some headings as outlines plus invisible text) is kept and given the shapes colour; invisible OCR text over a scanned image is still dropped.",
+   "filesImpacted": [
+    "server/services/pdfToWord/pdf_to_docx.py"
+   ],
+   "benefit": "On the 14 test PDFs, share of PDF words that come through intact in Word: Kogan bill 62% to 99.4%, LibreOffice press kit 93.6% to 100% (headings like Fact sheet & specifications and Press release are back, in red), Chrome press kit 98.5% to 100%. No file got worse; page counts unchanged. Checked by rendering in Word locally.",
+   "concerns": "Rescued outlined headings come out in the right colour but not bold. The LibreOffice press kit still gets an empty page 2 (pre-existing pdf2docx issue). Wraps a private pdf2docx method; if a future pdf2docx renames it the repair is skipped with a note, not a failure. Not yet tested on the Railway server."
+  },
+  {
    "commit": "9dde7ea3",
    "fullHash": "9dde7ea31a91df97a219997cc41e7b33ce05b318",
    "committedAt": "2026-11-16T08:58:50+10:00",
