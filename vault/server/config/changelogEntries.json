@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "74640a33",
+   "fullHash": "74640a33dee35452b6510b4adc5852de7399e995",
+   "committedAt": "2026-11-15T12:38:31+10:00",
+   "author": "mrb",
+   "subject": "PDF Tools: \"What do you want to do?\" job screen with use cases",
+   "filesChanged": 4,
+   "insertions": 216,
+   "deletions": 4,
+   "area": "PDF Tools",
+   "goal": "Give PDF Tools the same use-case home screen as Video Tools, so people pick a job (tidy a scan, fill and sign a form, put documents into one) instead of hunting through 31 tools.",
+   "whatChanged": "client/src/pages/PdfPage.jsx now opens on the shared job screen (components/JobStart.jsx) with a 'What do you want to do?' sidebar button, 'Back to all jobs' above every tool, the step bar while a job is under way, and an 'open on the tool I used last' option (localStorage vault_pdf_open_on_last / vault_pdf_last_tool). The 11 jobs are data in client/src/pages/pdf/pdfGoals.mjs; pdfGoals.test.mjs checks every step is a real tool in MODES, every icon is in iconMap.js and notes are short. ?tool= deep links still open the tool directly. The (i) box and docs/key-files.md mention the screen.",
+   "filesImpacted": [
+    "client/src/pages/PdfPage.jsx",
+    "client/src/pages/pdf/pdfGoals.mjs",
+    "client/src/pages/pdf/pdfGoals.test.mjs",
+    "docs/key-files.md"
+   ],
+   "benefit": "New users see what PDF Tools is for in plain words and are walked through multi-tool jobs one step at a time, matching Video Tools and Graphics.",
+   "concerns": "Seen working on the local app (job screen, opening a job, step bar, back to jobs; no page errors), but no job was run end to end with real files. The Word-based jobs need a manual download, edit and upload between steps. The PDF guide chat does not know about the jobs yet. People used to landing on Merge now land on the job screen unless they tick the open-on-last option."
+  },
+  {
    "commit": "699245cd",
    "fullHash": "699245cd864702fe955f7e840d785bba905f46ad",
    "committedAt": "2026-11-13T15:12:51+10:00",
