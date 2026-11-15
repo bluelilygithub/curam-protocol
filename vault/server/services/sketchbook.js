@@ -300,6 +300,23 @@ async function duplicate(db, userId, id) {
   return rows[0];
 }
 
+/** The picture and the social pack redraws of one sketch (the pack route only; the editor never loads the redraws). */
+async function getForPack(db, userId, id) {
+  const { rows } = await db.query('SELECT id, title, style, "penColor", image, width, height, "packRedraws" FROM sketches WHERE id = $1 AND "userId" = $2', [id, userId]);
+  if (!rows[0]) throw new SketchError('That sketch was not found.', 404);
+  return rows[0];
+}
+
+/** Keep one paid redraw for a social size. One statement, so two redraws of different sizes at once never overwrite each other. */
+async function saveRedraw(db, userId, id, sizeId, { image, from }) {
+  const img = checkImage(image);
+  const { rowCount } = await db.query(
+    `UPDATE sketches SET "packRedraws" = (COALESCE(NULLIF("packRedraws", ''), '{}')::jsonb || jsonb_build_object($3::text, $4::jsonb))::text
+      WHERE id = $1 AND "userId" = $2`,
+    [id, userId, String(sizeId), JSON.stringify({ image: img, at: new Date().toISOString(), from: String(from || '') })]);
+  if (!rowCount) throw new SketchError('That sketch was not found.', 404);
+}
+
 /** A title from the first words of the description, for a new sketch the person did not name. */
 function titleFromDescription(description) {
   const all = stripControl(description).replace(/\s+/g, ' ').trim().split(' ');
@@ -311,7 +328,7 @@ function titleFromDescription(description) {
 }
 
 module.exports = {
-  list, linkedNotes, get, getVersion, create, applyChange, restoreVersion, rename, duplicate, checkRoom,
+  list, linkedNotes, get, getVersion, create, applyChange, restoreVersion, rename, duplicate, checkRoom, getForPack, saveRedraw,
   buildDrawPrompt, buildChangePrompt, restyleInstruction, styleWords, titleFromDescription,
   cleanTitle, cleanDescription, cleanInstruction, checkStyle, checkPenColor, checkAspect, checkImage, checkThumbnail,
   parseVersions, summariseVersions, pushVersion,

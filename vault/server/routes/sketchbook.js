@@ -10,6 +10,8 @@
 //   GET    /api/sketchbook/:id                     one sketch with its picture and a summary of earlier pictures
 //   POST   /api/sketchbook/:id/change              change the same picture  { instruction?, style?, penColor?, baseUpdatedAt? }  (paid)
 //   GET    /api/sketchbook/:id/notes               the person's notes that link back to the sketch (made by To Notes)
+//   POST   /api/sketchbook/:id/pack                social media pack  { sizes: [{ id, mode }], zip? }  (free: crop or fit, made here)
+//   POST   /api/sketchbook/:id/pack/:size/redraw   redraw the sketch for one social size's shape  (paid)
 //   GET    /api/sketchbook/:id/versions/:vid       one earlier picture
 //   POST   /api/sketchbook/:id/versions/:vid/restore  put an earlier picture back  { baseUpdatedAt? }
 //   PUT    /api/sketchbook/:id                     rename  { title }
@@ -21,6 +23,7 @@ const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const sketches = require('../services/sketchbook');
 const engine = require('../services/sketchbookEngine');
+const pack = require('../services/sketchbookPack');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { makePaidGuard, spentLast24h, dailyCapUsd } = require('../middleware/graphicsLimits');
 
@@ -73,6 +76,8 @@ router.get('/options', (req, res) => {
     penColors: sketches.PEN_COLOR_IDS.map((id) => ({ id, label: sketches.PEN_COLORS[id].label, hex: sketches.PEN_COLORS[id].hex })),
     aspects: Object.entries(sketches.ASPECTS).map(([id, a]) => ({ id, label: a.label, width: a.width, height: a.height })),
     versionsKept: sketches.MAX_VERSIONS,
+    packSizes: pack.PACK_SIZES,
+    packModes: pack.MODE_IDS.map((id) => ({ id, label: pack.MODES[id] })),
   });
 });
 
@@ -143,6 +148,70 @@ router.post('/:id/change', aiLimiter, paidGuard, async (req, res) => {
   } catch (err) { fail(res, err, 'change'); }
 });
 
+// Social media pack: every ticked size made from the sketch (crop or fit, or a stored redraw). Free and quick (sharp on a 1024px picture),
+// so it sits behind no spend guard. With zip: true the answer is one ZIP instead of the pictures, so the page does not carry them twice.
+router.post('/:id/pack', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const asked = Array.isArray(b.sizes) ? b.sizes : [];
+    const seen = new Set();
+    const wanted = [];
+    for (const s of asked) {
+      const sid = String((s && s.id) || '');
+      if (!pack.sizeById(sid) || seen.has(sid)) continue;
+      seen.add(sid);
+      wanted.push({ id: sid, mode: pack.checkMode(s.mode) });
+    }
+    if (!wanted.length) throw new sketches.SketchError('Tick at least one size first.');
+    const row = await sketches.getForPack(pool, req.user.id, idOf(req));
+    const redraws = pack.parseRedraws(row.packRedraws);
+    const made = [];
+    for (const w of wanted) {
+      // eslint-disable-next-line no-await-in-loop
+      made.push(await pack.makeSize({ sketch: row, sizeId: w.id, mode: w.mode, redraws }));
+    }
+    if (b.zip) {
+      const archiver = require('archiver');
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      const chunks = [];
+      archive.on('data', (c) => chunks.push(c));
+      const done = new Promise((resolve, reject) => { archive.on('end', resolve); archive.on('error', reject); });
+      made.forEach((m) => archive.append(m.buf, { name: m.item.fileName }));
+      await archive.finalize();
+      await done;
+      const zip = Buffer.concat(chunks);
+      return res.json({ count: made.length, bytes: zip.length, fileName: `${pack.slug(row.title)}-social-pack.zip`, zipDataUrl: `data:application/zip;base64,${zip.toString('base64')}` });
+    }
+    return res.json({ items: made.map((m) => ({ ...m.item, imageDataUrl: `data:image/jpeg;base64,${m.buf.toString('base64')}` })) });
+  } catch (err) { fail(res, err, 'pack'); }
+});
+
+// Redraw the sketch for one size's shape: the sketch is put on white paper of that shape and the edit model extends the scene into the
+// white. One paid image request, the same guard and usage log as Change it. The redraw is kept on the sketch (one per size; a new redraw
+// replaces the old one) and the pack uses it from then on.
+router.post('/:id/pack/:size/redraw', aiLimiter, paidGuard, async (req, res) => {
+  try {
+    const sizeId = String(req.params.size || '');
+    if (!pack.sizeById(sizeId)) throw new sketches.SketchError('That size is not in the pack.');
+    const row = await sketches.getForPack(pool, req.user.id, idOf(req));
+    const prompt = pack.buildRedrawPrompt({ styleWords: sketches.styleWords(row.style, row.penColor), sizeId });
+    const padded = await pack.padForRedraw(row.image, sizeId);
+    let made;
+    try { made = await engine.change({ userId: req.user.id, prompt, imageDataUrl: padded }); }
+    catch (err) { if (err && err.code === 'CONTENT_RESTRICTED') throw err; throw serviceFailure(err, 'pack redraw'); }
+    try {
+      const image = await pack.shapeRedraw(made.imageDataUrl, sizeId);
+      await sketches.saveRedraw(pool, req.user.id, row.id, sizeId, { image, from: pack.imageKey(row.image) });
+      const fresh = await sketches.getForPack(pool, req.user.id, row.id);
+      const m = await pack.makeSize({ sketch: fresh, sizeId, mode: 'redrawn', redraws: pack.parseRedraws(fresh.packRedraws) });
+      return res.json({ item: { ...m.item, imageDataUrl: `data:image/jpeg;base64,${m.buf.toString('base64')}` }, costUsd: made.costUsd });
+    } catch (err) {
+      if (err instanceof sketches.SketchError) throw err;
+      throw notSavedFailure(err, 'pack redraw');
+    }
+  } catch (err) { fail(res, err, 'pack redraw'); }
+});
+
 router.post('/:id/duplicate', async (req, res) => {
   try {
     res.status(201).json({ sketch: await sketches.duplicate(pool, req.user.id, idOf(req)) });
@@ -189,6 +258,8 @@ router.delete('/:id', async (req, res) => {
     const { rows } = await db.query('SELECT * FROM sketches WHERE id = $1 AND "userId" = $2 FOR UPDATE', [idOf(req), req.user.id]);
     if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That sketch was not found.' }); }
     const s = rows[0];
+    // the social pack redraws can be remade; they are left out when keeping them would make the sketch too big for the bin
+    if (JSON.stringify(s).length > BIN_MAX_BYTES * 0.9) s.packRedraws = '{}';
     const binId = await bin.moveToBin(db, {
       userId: req.user.id, type: BIN_TYPE, id: s.id, title: s.title,
       detail: s.changeCount ? `${s.changeCount} change${s.changeCount === 1 ? '' : 's'}` : 'cartoon',

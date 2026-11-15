@@ -32,6 +32,7 @@ export const HOW_IT_WORKS = [
   ['Change it', 'Open a sketch and say what to change ("make the dog bigger, add rain"). The same picture is changed, not a new one drawn. The picture it replaces is kept under Earlier pictures (the last 6), and Put back brings one back, with its look.'],
   ['Notes', 'The To Notes button makes a new note with the picture inside it and a link back to the sketch. Once a sketch is in a note, the same button becomes Go to note (or In 2 notes, with a list) and takes you straight there, and the sketch card in the list shows In a note too. From the note, the link goes back to the sketch. Put in another note makes a fresh note with the picture as it is now.'],
   ['Save and copy', 'Save a sketch as PNG, JPG or WebP, or copy the picture to paste into an email or document. For an SVG, a PDF or a print file, save a PNG and open it in Graphics.'],
+  ['Social media pack', 'Inside a sketch, Social media pack makes it at every social size (Instagram, Facebook, LinkedIn, X, YouTube, Pinterest) with a preview of each, and Download ZIP saves them all. Each size is cropped or kept whole with white margins, for free; Redraw for this shape has the AI extend the scene to fit a size where neither looks right (one paid AI picture, kept with the sketch).'],
   ['Cost', 'Each picture or change is one paid AI image request (about 2 to 3 cents), shown before you press the button. It shares the daily limit for AI pictures with Graphics.'],
   ['Private', 'Your sketches are yours alone. Nobody else can see them. A deleted sketch waits 30 days in the recycle bin in Settings, and an Undo button appears straight away.'],
   ['Not included yet', 'Drawing or painting by hand on the picture, several pictures in a row (a comic strip), keeping the same character across pictures, and sending a sketch into Graphics in one click (save a PNG and open it there for now).'],
@@ -52,5 +53,6 @@ export const GUIDE_TOOLS = [
   { id: 'relook', label: 'Redraw in another look, or colour it in', tool: 'editor' },
   { id: 'earlier', label: 'Earlier pictures', tool: 'editor' },
   { id: 'save', label: 'Save or copy the picture', tool: 'editor' },
+  { id: 'social-pack', label: 'Social media pack', tool: 'editor' },
   { id: 'to-notes', label: 'To Notes', tool: 'editor' },
 ];

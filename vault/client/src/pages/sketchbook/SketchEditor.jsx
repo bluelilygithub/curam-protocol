@@ -8,6 +8,7 @@ import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import LookPicker from './LookPicker';
+import SocialPack from './SocialPack';
 import { useSketchOptions, useSketchCost } from './useSketchOptions';
 import { saveSketchToNotes } from './saveSketchToNotes.mjs';
 import { EXPORT_FORMATS, convertPicture, saveBlob, fileBase, versionLabel, lookLabel, costText, when } from './sketchbookLogic.mjs';
@@ -35,6 +36,8 @@ export default function SketchEditor({ id }) {
   const [renaming, setRenaming] = useState(null); // the draft name while renaming
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [preview, setPreview] = useState(null); // { vid, note, image } an earlier picture being looked at
+  const [packOpen, setPackOpen] = useState(false); // the social media pack, full width under the picture
+  const packRef = useRef(null);
   const busyRef = useRef(false);
   // Notes: the person's notes that link back to this sketch (made by To Notes). The note's own text is the record, so the button always
   // reflects what is true now: none -> "To Notes", one -> "Go to note", several -> "In N notes" with a list.
@@ -75,6 +78,12 @@ export default function SketchEditor({ id }) {
     } catch { /* the button then just offers To Notes */ }
   }, [id]);
   useEffect(() => { loadLinkedNotes(); }, [loadLinkedNotes]);
+
+  useEffect(() => {
+    if (!packOpen || !packRef.current) return;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    packRef.current.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  }, [packOpen]);
 
   const openNote = (noteId) => navigate(`/notes?note=${noteId}`);
 
@@ -323,6 +332,9 @@ export default function SketchEditor({ id }) {
               <Tooltip text="Copy the picture so you can paste it into an email, a document or a chat.">
                 <button type="button" className={BTN} style={BTN_STYLE} onClick={copyPicture}>{getIcon('copy', { size: 13 })} Copy picture</button>
               </Tooltip>
+              <Tooltip text="Make this sketch at every social media size (Instagram, Facebook, LinkedIn, X, YouTube, Pinterest), see each one and download them as one ZIP.">
+                <button type="button" className={BTN} style={BTN_STYLE} aria-expanded={packOpen} onClick={() => setPackOpen((v) => !v)} data-tour="sketchbook-pack-button">{getIcon('share-2', { size: 13 })} Social media pack</button>
+              </Tooltip>
               <div className="relative" data-tour="sketchbook-notes">
                 <Tooltip text={linkedNotes.length === 0
                   ? 'Put this sketch in a new note: the picture is attached and shown inside the note, with a link back to the sketch.'
@@ -413,6 +425,12 @@ export default function SketchEditor({ id }) {
           )}
         </div>
       </div>
+
+      {packOpen && options && (
+        <div ref={packRef} className="scroll-mt-4">
+          <SocialPack sketch={sketch} options={options} cost={cost} refreshCost={refreshCost} run={run} working={working} onClose={() => setPackOpen(false)} />
+        </div>
+      )}
     </div>
   );
 }

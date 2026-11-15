@@ -60,6 +60,22 @@ export function costText(cost) {
   return `${price}. $${cost.remainingUsd.toFixed(2)} of today's $${cost.capUsd.toFixed(2)} limit left.`;
 }
 
+/** The line under one size of the social media pack: how it was made, in plain words. */
+export function packNote(item) {
+  if (!item) return '';
+  if (item.used === 'redrawn') return item.redraw && item.redraw.stale ? 'Redrawn from an earlier picture of this sketch. Redraw again to match the current one.' : 'Redrawn by the AI for this shape.';
+  if (item.used === 'fit') return item.sameShape ? 'The whole picture.' : 'The whole picture, with white margins.';
+  if (item.sameShape) return 'The whole picture (same shape).';
+  return `A crop that keeps ${item.keptPercent}% of the picture.`;
+}
+
+/** The price of one pack redraw, for the sentence at the top of the pack: "about $0.03 each", "free on this computer". */
+export function redrawCostText(cost) {
+  if (cost && cost.local) return 'free on this computer';
+  if (cost && Number.isFinite(cost.usd)) return `about $${cost.usd.toFixed(3).replace(/0$/, '')} each, from the daily limit for AI pictures`;
+  return 'one paid AI picture each';
+}
+
 /** Browser only: the picture re-encoded as another format and returned as a Blob. JPG gets a white background. */
 export function convertPicture(dataUrl, format, quality = 0.92) {
   return new Promise((resolve, reject) => {

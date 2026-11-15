@@ -1274,6 +1274,8 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sketches_user ON sketches ("userId", "updatedAt" DESC)`);
+    // Social media pack: paid AI redraws of a sketch for one social size each, JSON text { [sizeId]: { image, at, from } } (services/sketchbookPack.js).
+    await client.query(`ALTER TABLE sketches ADD COLUMN IF NOT EXISTS "packRedraws" TEXT NOT NULL DEFAULT '{}'`);
     // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
     // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
     await client.query(`

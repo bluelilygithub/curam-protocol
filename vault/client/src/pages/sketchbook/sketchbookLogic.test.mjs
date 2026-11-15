@@ -1,6 +1,6 @@
 // Run: node client/src/pages/sketchbook/sketchbookLogic.test.mjs
 import assert from 'node:assert/strict';
-import { filterSketches, when, fileBase, versionLabel, lookLabel, costText, EXPORT_FORMATS } from './sketchbookLogic.mjs';
+import { filterSketches, when, fileBase, versionLabel, lookLabel, costText, EXPORT_FORMATS, packNote, redrawCostText } from './sketchbookLogic.mjs';
 
 const items = [
   { id: 1, title: 'Dog chasing a ball', description: 'a brown dog in a park' },
@@ -37,4 +37,15 @@ assert.match(costText({ usd: 0.03, capUsd: 5, remainingUsd: 0 }), /limit for AI 
 assert.match(costText({ usd: 0.03, capUsd: null, remainingUsd: null }), /About \$0\.03 for this picture\.$/);
 
 assert.deepEqual(EXPORT_FORMATS.map((f) => f.id), ['png', 'jpg', 'webp']);
+
+// social media pack wording
+assert.equal(packNote(null), '');
+assert.equal(packNote({ used: 'crop-smart', keptPercent: 75 }), 'A crop that keeps 75% of the picture.');
+assert.equal(packNote({ used: 'crop-top', keptPercent: 99, sameShape: true }), 'The whole picture (same shape).');
+assert.equal(packNote({ used: 'fit' }), 'The whole picture, with white margins.');
+assert.match(packNote({ used: 'redrawn', redraw: { stale: false } }), /Redrawn by the AI/);
+assert.match(packNote({ used: 'redrawn', redraw: { stale: true } }), /earlier picture/);
+assert.equal(redrawCostText({ local: true }), 'free on this computer');
+assert.match(redrawCostText({ usd: 0.03 }), /^about \$0\.03 each/);
+assert.equal(redrawCostText(null), 'one paid AI picture each');
 console.log('sketchbookLogic: all passed');

@@ -730,6 +730,12 @@
   "GET /api/sketchbook/:id/notes": {
    "class": "authed"
   },
+  "POST /api/sketchbook/:id/pack": {
+   "class": "authed"
+  },
+  "POST /api/sketchbook/:id/pack/:size/redraw": {
+   "class": "authed"
+  },
   "GET /api/sketchbook/:id/versions/:vid": {
    "class": "authed"
   },

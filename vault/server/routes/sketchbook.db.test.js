@@ -6,7 +6,8 @@
 //   - a change keeps the replaced picture as an earlier version (newest first, at most 6), a version can be put back and that can be undone;
 //   - a save from a stale tab is refused (409) and nothing is overwritten; an empty description, unknown style and unknown pen colour are refused;
 //   - a restricted idea and an image-service failure give plain messages and save nothing; the sketch limit is checked before drawing;
-//   - delete goes to the recycle bin and Undo brings the sketch back with its earlier pictures.
+//   - delete goes to the recycle bin and Undo brings the sketch back with its earlier pictures;
+//   - the social media pack: exact sizes, free crop/fit, ZIP, a paid redraw kept per size and marked once the picture changes.
 const assert = require('node:assert/strict');
 const express = require('express');
 const sharp = require('sharp');
@@ -217,6 +218,60 @@ const pic = async (rgb) => `data:image/png;base64,${(await sharp({ create: { wid
     assert.equal(r.body.sketch.title, 'Dog and ball (copy)');
     const copyId = r.body.sketch.id;
     assert.deepEqual((await call(A, 'GET', `/${copyId}`)).body.sketch.versions, [], 'a copy starts with no history');
+
+    // ---- social media pack: free crop/fit sizes, a paid redraw kept per size, never another person's ----
+    {
+      r = await call(A, 'GET', '/options');
+      assert.equal(r.body.packSizes.length, 10);
+      assert.ok(r.body.packModes.some((m) => m.id === 'fit'));
+      const drawnBefore = asked.length;
+      r = await call(A, 'POST', `/${s1.id}/pack`, { sizes: [{ id: 'instagram-post' }, { id: 'instagram-story', mode: 'crop-top' }, { id: 'nope' }, { id: 'instagram-post' }] });
+      assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+      assert.deepEqual(r.body.items.map((i) => i.id), ['instagram-post', 'instagram-story'], 'unknown and repeated sizes are dropped');
+      const post = r.body.items[0];
+      assert.equal(post.width, 1080); assert.equal(post.height, 1080);
+      assert.match(post.imageDataUrl, /^data:image\/jpeg;base64,/);
+      const m = await sharp(Buffer.from(post.imageDataUrl.split(',')[1], 'base64')).metadata();
+      assert.equal(m.width, 1080); assert.equal(m.height, 1080);
+      assert.equal(r.body.items[1].used, 'crop-top');
+      assert.equal(asked.length, drawnBefore, 'the free pack draws (and charges) nothing');
+      assert.equal((await call(A, 'POST', `/${s1.id}/pack`, { sizes: [] })).status, 400);
+      assert.equal((await call(B, 'POST', `/${s1.id}/pack`, { sizes: [{ id: 'instagram-post' }] })).status, 404);
+      r = await call(A, 'POST', `/${s1.id}/pack`, { sizes: [{ id: 'instagram-post' }, { id: 'linkedin-banner' }], zip: true });
+      assert.equal(r.status, 200);
+      assert.equal(r.body.count, 2);
+      assert.match(r.body.zipDataUrl, /^data:application\/zip;base64,UEsD/);
+      assert.equal(r.body.items, undefined, 'the ZIP answer does not carry the pictures twice');
+
+      // redraw: paid, sent on white paper of the size's shape, kept, and used by Auto from then on
+      assert.equal((await call(B, 'POST', `/${s1.id}/pack/linkedin-banner/redraw`)).status, 404);
+      assert.equal((await call(A, 'POST', `/${s1.id}/pack/nope/redraw`)).status, 400);
+      assert.equal(asked.length, drawnBefore, 'a refused redraw draws nothing');
+      colour = { r: 250, g: 200, b: 0 };
+      r = await call(A, 'POST', `/${s1.id}/pack/linkedin-banner/redraw`);
+      assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+      assert.equal(r.body.item.used, 'redrawn');
+      assert.equal(r.body.item.redraw.stale, false);
+      assert.equal(r.body.costUsd, 0.03);
+      const sent = asked[asked.length - 1];
+      assert.equal(sent.kind, 'change');
+      assert.match(sent.prompt, /wider sheet with blank white space/);
+      const sentMeta = await sharp(Buffer.from(sent.imageDataUrl.split(',')[1], 'base64')).metadata();
+      assert.equal(sentMeta.width, 1024); assert.equal(sentMeta.height, 256, 'the sketch is padded to the banner shape before it is sent');
+      r = await call(A, 'POST', `/${s1.id}/pack`, { sizes: [{ id: 'linkedin-banner' }] });
+      assert.equal(r.body.items[0].used, 'redrawn', 'Auto uses a redraw made from the current picture');
+      assert.equal((await call(A, 'GET', `/${s1.id}`)).body.sketch.packRedraws, undefined, 'the editor never loads the redraws');
+      // after the picture changes the redraw is marked as made from an earlier picture and Auto stops using it
+      const oldImage = (await call(A, 'GET', `/${s1.id}`)).body.sketch.image;
+      await pool.query('UPDATE sketches SET image = $1 WHERE id = $2', [await pic({ r: 1, g: 2, b: 3 }), s1.id]); // as a change would (without counting one)
+      r = await call(A, 'POST', `/${s1.id}/pack`, { sizes: [{ id: 'linkedin-banner' }, { id: 'facebook-cover', mode: 'redrawn' }] });
+      assert.equal(r.body.items[0].used, 'fit');
+      assert.equal(r.body.items[0].redraw.stale, true);
+      assert.equal(r.body.items[1].used, 'fit', 'asking for a redraw that does not exist falls back');
+      r = await call(A, 'POST', `/${s1.id}/pack`, { sizes: [{ id: 'linkedin-banner', mode: 'redrawn' }] });
+      assert.equal(r.body.items[0].used, 'redrawn', 'an older redraw can still be chosen by hand');
+      await pool.query('UPDATE sketches SET image = $1 WHERE id = $2', [oldImage, s1.id]);
+    }
 
     // ---- the two-way link with Notes: the note's own text is the record ----
     {
