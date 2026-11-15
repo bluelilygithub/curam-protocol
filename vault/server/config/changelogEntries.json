@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "e18fdb5c",
+   "fullHash": "e18fdb5ca4926ebebe78e868e3b79eb5a6171b5d",
+   "committedAt": "2026-11-15T13:28:24+10:00",
+   "author": "mrb",
+   "subject": "PDF Tools: PDF to Word with pdf2docx instead of LibreOffice",
+   "filesChanged": 5,
+   "insertions": 128,
+   "deletions": 6,
+   "area": "PDF Tools",
+   "goal": "PDF → Word turned a 7-page PDF into a one-page Word file: LibreOffice's PDF import puts every line in a positioned text box and its .docx export stacks all pages onto page 1.",
+   "whatChanged": "New server/services/pdfToWord (pdf_to_docx.py run with python3, wrapped by pdfToDocx() in index.js). POST /api/pdf/pdf-to-office (server/routes/pdf.js) now converts docx through pdf2docx, and odt as pdf2docx then LibreOffice docx → odt; .txt still uses LibreOffice. If pdf2docx is not installed yet it falls back to LibreOffice and logs a warning. Document Redaction's PDF intake (documentRedaction/ingestNormalize.js) uses pdf2docx and falls back to plain extracted text, as it effectively did before the 26b825f0 LibreOffice fix. server/services/pdfRedact/requirements.txt adds pdf2docx>=0.5.8, opencv-python-headless>=4.5,<4.12 and numpy<2.",
+   "filesImpacted": [
+    "server/services/pdfToWord/index.js",
+    "server/services/pdfToWord/pdf_to_docx.py",
+    "server/routes/pdf.js",
+    "server/services/documentRedaction/ingestNormalize.js",
+    "server/services/pdfRedact/requirements.txt"
+   ],
+   "benefit": "A PDF comes out as a Word file with one page per PDF page, real paragraphs and tables, instead of every page stacked on page 1.",
+   "concerns": "Slow deploy: the requirements change rebuilds the base image on GitHub (about 10-15 minutes), and pdf2docx only works on live after the deploy that follows the rebuild; until then PDF → Word still gives the stacked LibreOffice output. Tested on Windows (Python 3.14, latest pdf2docx) with a generated 7-page PDF with a table: 7 Word pages, the table as a real table, no text boxes. Not tested on the Linux base image (Python 3.11, opencv pinned below 4.12 so numpy stays 1.x for librosa); if pip cannot satisfy numpy<2 the base build fails and the Actions tab will show it. Adds roughly 60 MB to the image (OpenCV). Scanned PDFs have no text and still need OCR first. Both branches push the same base tag, so two base runs start."
+  },
+  {
    "commit": "26b825f0",
    "fullHash": "26b825f01fafd2e7371ed09895ccff3dccf00949",
    "committedAt": "2026-11-15T12:54:44+10:00",
