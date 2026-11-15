@@ -16,14 +16,14 @@ Repairs on top of plain pdf2docx (found on a Chrome-printed press kit, 2026-11-1
    text; pdf2docx drops invisible text and does not draw the shapes. Invisible text covered by letter-sized filled
    shapes is kept, in the shapes' colour. OCR text over a scan sits on an image, so it is still dropped.
 
-1. Sliced text. pdf2docx guesses "stream tables" from text laid out side by side. A running footer with text at
-   both ends ("NEAL PRICE ... | Page 1 of 6") plus horizontal rules made it turn the bottom half of a page into a
-   2-column table, cutting every body line in half (the right half landed in a narrow cell or was lost). After
-   parsing, any page where a stream table cell boundary cuts through a PDF text span is re-parsed: first with that
-   page's running header/footer text removed, then, if still sliced, with stream tables off for that page only.
-   The same retry runs when a stream table reaches into the running header/footer (on the press kit that swallowed
-   a photo; on a 13-page questionnaire it added 9 near-empty pages). Removed header/footer text is put back as the
-   page's real Word header/footer, so nothing is lost.
+1. Running headers/footers. Text in the top/bottom 8% of a page that repeats on other pages (digits ignored) is
+   removed before pdf2docx parses, and put back as that page's Word header/footer in floating frames at the PDF
+   position (frames take no body space). In the body it did damage: pdf2docx turned a footer with text at both
+   ends ("NEAL PRICE ... | Page 1 of 6") into a 2-column table that cut body lines in half and swallowed a photo,
+   added 9 near-empty pages to a 13-page questionnaire, and, because Word lays the body out slightly taller than
+   the PDF, pushed a lone footer line onto an extra empty page.
+   Sliced text. If a guessed "stream table" still cuts through a PDF text span, that page is re-parsed with
+   stream tables off.
 
 2. Nameless fonts. Chrome/Skia prints web fonts as Type3 fonts with no name, so the .docx asked Word for a font
    called "Type3 (14 0 R)" and Word substituted its default serif everywhere. Each such font is classified from its
@@ -182,17 +182,11 @@ def _page_stream_tables(page):
             yield from _stream_tables(column)
 
 
-def _slices_text(page, fitz_page, band_lines=()):
-    """True when a stream table on this parsed page has cell boundaries running through a PDF text span, or
-    reaches into the page's running header/footer (that is how the footer drags body content into a table; on the
-    press kit it also swallowed a photo)."""
+def _slices_text(page, fitz_page):
+    """True when a stream table on this parsed page has cell boundaries running through a PDF text span."""
     tables = list(_page_stream_tables(page))
     if not tables:
         return False
-    for t in tables:
-        for x0, y0, x1, y1 in (l['bbox'] for l in band_lines):
-            if min(x1, t.bbox.x1) - max(x0, t.bbox.x0) > 0 and min(y1, t.bbox.y1) - max(y0, t.bbox.y0) > 0:
-                return True
     spans = [s['bbox'] for b in fitz_page.get_text('dict')['blocks'] for l in b.get('lines', [])
              for s in l['spans'] if s['text'].strip()]
     for t in tables:
@@ -233,35 +227,36 @@ def _swap_pages(target, source, ids):
         target.pages._instances[i] = source.pages[i]
 
 
-def _repair_sliced_pages(Converter, src, tmp_pdf, cv, settings):
-    """Re-parse pages whose text a stream table sliced. Returns (footer_fixed_ids, no_stream_ids, bands); the
-    caller puts the removed header/footer text of footer_fixed pages back as real Word headers/footers."""
+def _strip_running_text(src, tmp_pdf):
+    """Remove running header/footer text from every page before pdf2docx sees it. Returns (pdf path to parse,
+    bands). In the page body that text does damage: pdf2docx turns a footer with text at both ends into a table
+    that slices body lines and swallows photos, and because Word lays the body out slightly taller than the PDF,
+    the footer line alone often spills onto an extra, empty page. The text is put back by _add_running_text."""
     import fitz  # PyMuPDF
-    bands = _running_band_lines(cv.fitz_doc)
-    bad = [p.id for p in cv.pages if p.finalized and _slices_text(p, cv.fitz_doc[p.id], bands.get(p.id, ()))]
-    if not bad:
-        return [], [], bands
-    fixed = []
-    retry = [i for i in bad if bands.get(i)]
-    if retry:
-        doc = fitz.open(src)
-        for i in retry:
+    doc = fitz.open(src)
+    try:
+        bands = _running_band_lines(doc)
+        if not bands:
+            return src, {}
+        for i, lines in bands.items():
             page = doc[i]
-            for line in bands[i]:
+            for line in lines:
                 page.add_redact_annot(fitz.Rect(line['bbox']))
             page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE, graphics=fitz.PDF_REDACT_LINE_ART_NONE)
         doc.save(tmp_pdf)
+        return tmp_pdf, bands
+    finally:
         doc.close()
-        alt = Converter(tmp_pdf)
-        alt.parse(pages=retry, **settings)
-        fixed = [i for i in retry if not _slices_text(alt.pages[i], alt.fitz_doc[i])]
-        _swap_pages(cv, alt, fixed)
-    still = [i for i in bad if i not in fixed]
-    if still:
-        alt = Converter(src)
-        alt.parse(pages=still, **dict(settings, parse_stream_table=False))
-        _swap_pages(cv, alt, still)
-    return fixed, still, bands
+
+
+def _repair_sliced_pages(Converter, parse_src, cv, settings):
+    """Re-parse, with stream tables off, any page whose text a stream table still slices. Returns those page ids."""
+    bad = [p.id for p in cv.pages if p.finalized and _slices_text(p, cv.fitz_doc[p.id])]
+    if bad:
+        alt = Converter(parse_src)
+        alt.parse(pages=bad, **dict(settings, parse_stream_table=False))
+        _swap_pages(cv, alt, bad)
+    return bad
 
 
 def _add_running_text(docx_path, page_ids, bands, fonts, page_rects):
@@ -625,35 +620,44 @@ def main():
         logging.disable(logging.WARNING)  # pdf2docx logs every page to stderr
         if not _patch_lost_spaces():
             notes.append('space repair unavailable in this pdf2docx version')
-        cv = Converter(src)
+        import fitz  # PyMuPDF
+        orig = fitz.open(src)
         try:
-            pages = len(cv.fitz_doc)
+            pages = len(orig)
+            page_rects = [(p.rect.width, p.rect.height) for p in orig]
+            fonts, fills = {}, {}
+            try:
+                fonts = _classify_fonts(orig)
+            except Exception as e:
+                notes.append(f'font detection skipped: {str(e)[:200]}')
+            try:
+                fills = _light_text_fills(orig)
+            except Exception as e:
+                notes.append(f'cell fill detection skipped: {str(e)[:200]}')
+        finally:
+            orig.close()
+        parse_src, bands = src, {}
+        try:
+            parse_src, bands = _strip_running_text(src, dst + '.tmp.pdf')
+        except Exception as e:  # best-effort; convert the untouched PDF
+            notes.append(f'header/footer split skipped: {str(e)[:200]}')
+        cv = Converter(parse_src)
+        no_stream = []
+        try:
             settings = cv.default_settings
             settings.update(multi_processing=False)
             cv.parse(**settings)
-            fixed, no_stream, bands = [], [], {}
             try:
-                fixed, no_stream, bands = _repair_sliced_pages(Converter, src, dst + '.tmp.pdf', cv, settings)
+                no_stream = _repair_sliced_pages(Converter, parse_src, cv, settings)
             except Exception as e:  # repairs are best-effort; the plain conversion still stands
                 notes.append(f'table repair skipped: {str(e)[:200]}')
             cv.make_docx(dst, **settings)
-            fonts = {}
-            try:
-                fonts = _classify_fonts(cv.fitz_doc)
-            except Exception as e:
-                notes.append(f'font detection skipped: {str(e)[:200]}')
-            fills = {}
-            try:
-                fills = _light_text_fills(cv.fitz_doc)
-            except Exception as e:
-                notes.append(f'cell fill detection skipped: {str(e)[:200]}')
-            page_rects = [(p.rect.width, p.rect.height) for p in cv.fitz_doc]
         finally:
             cv.close()
         runs = cells = running = 0
-        if fixed:
+        if bands:
             try:
-                running = _add_running_text(dst, set(fixed), bands, fonts, page_rects)
+                running = _add_running_text(dst, set(bands), bands, fonts, page_rects)
             except Exception as e:
                 notes.append(f'header/footer restore skipped: {str(e)[:200]}')
         try:
@@ -665,7 +669,7 @@ def main():
         except Exception as e:
             notes.append(f'cell fill fix skipped: {str(e)[:200]}')
         print(json.dumps({"ok": True, "pages": pages,
-                          "footerRetryPages": [i + 1 for i in fixed], "noStreamTablePages": [i + 1 for i in no_stream],
+                          "noStreamTablePages": [i + 1 for i in no_stream],
                           "fontsReplaced": {k: v['name'] for k, v in fonts.items()}, "fontRuns": runs,
                           "cellsShaded": cells, "headerFooterPages": running, "notes": notes}))
         return 0
