@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "26b825f0",
+   "fullHash": "26b825f01fafd2e7371ed09895ccff3dccf00949",
+   "committedAt": "2026-11-15T12:54:44+10:00",
+   "author": "mrb",
+   "subject": "PDF Tools: PDF to Word opens the PDF in Writer, not Draw",
+   "filesChanged": 1,
+   "insertions": 28,
+   "deletions": 3,
+   "area": "PDF Tools",
+   "goal": "Fix PDF → Word, which failed with 'libreoffice: no .docx output | soffice: no .docx output | ...'.",
+   "whatChanged": "server/services/officeConvert.js: LibreOffice opens a PDF in Draw by default, and Draw cannot export to Word or text, so the conversion exited without a file. For a PDF going to docx, doc, odt, rtf or txt, libreConvert now passes --infilter=writer_pdf_import and names the export filter (e.g. 'docx:MS Word 2007 XML'), via a new exported libreArgs(). Other conversions (Office → PDF) are unchanged. When LibreOffice runs but writes nothing, the error now includes its own output and the loop stops after the first binary that ran instead of trying the same LibreOffice five times.",
+   "filesImpacted": [
+    "server/services/officeConvert.js"
+   ],
+   "benefit": "PDF → Word in PDF Tools, and Document Redaction's PDF intake (ingestNormalize.js), should produce a .docx again.",
+   "concerns": "Not tested against a real LibreOffice before pushing (the owner chose to test on live). Writer's PDF import lays text out in positioned boxes, so the Word file is editable but may look boxy and is not a clean reflowed document. Relies on the PDF import filter being in the base image's LibreOffice install."
+  },
+  {
    "commit": "74640a33",
    "fullHash": "74640a33dee35452b6510b4adc5852de7399e995",
    "committedAt": "2026-11-15T12:38:31+10:00",
