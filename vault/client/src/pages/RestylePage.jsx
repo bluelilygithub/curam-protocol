@@ -14,6 +14,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import RestyleTutorChat from './restyle/RestyleTutorChat';
 import { RESTYLE_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './restyle/restyleTools.mjs';
+import { RESTYLE_GOALS } from './restyle/restyleGoals.mjs';
+import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
 import {
   PLAIN, MEDIA_OPTIONS, DEVICES, previewScreen, setProps, clearSelector, removeProp, generateCss, changeRows, changeReport, tokenRef, uniqueTokenName, toHex,
 } from './restyle/editModel.mjs';
@@ -51,6 +53,20 @@ const clip = (text, n = 48) => (text.length > n ? `${text.slice(0, n)}…` : tex
 
 const mediaQueryOf = (id) => MEDIA_OPTIONS.find((m) => m.id === id)?.query || '';
 
+// "Open on the tool I used last" instead of the job screen: off unless ticked on the job screen (same as Video Tools and PDF Tools).
+const OPEN_ON_LAST_KEY = 'vault_restyle_open_on_last';
+const LAST_TOOL_KEY = 'vault_restyle_last_tool';
+const readLocal = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const writeLocal = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window: it just will not be remembered */ } };
+const toolLabel = (id) => RESTYLE_TOOLS.find((t) => t.id === id)?.label || id;
+// 'start' is the "What do you want to do?" job screen (not a tool); every other value is a tool id from RESTYLE_TOOLS.
+function initialTool() {
+  if (readLocal(OPEN_ON_LAST_KEY) !== '1') return 'start';
+  const last = readLocal(LAST_TOOL_KEY);
+  return RESTYLE_TOOLS.some((t) => t.id === last) ? last : 'start';
+}
+const SETUP_TOOLS = ['page', 'styles'];
+
 /** What a property was before the change, read from the preview, for the "was" in the change list. */
 function wasValue(cs, prop) {
   if (prop === 'padding') return cs.paddingTop;
@@ -86,7 +102,15 @@ export default function RestylePage() {
     api.get('/api/restyle/capabilities').then((r) => r.json()).then((d) => setRenderAvailable(!!d?.render)).catch(() => {});
   }, []);
 
-  const [tool, setTool] = useState('page');
+  const [tool, setTool] = useState(initialTool);
+  const [goal, setGoalState] = useState(null); // the job picked on the job screen (restyle/restyleGoals.mjs)
+  const goalRef = useRef(null);
+  const setGoal = (g) => { goalRef.current = g; setGoalState(g); };
+  const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
+  useEffect(() => { if (openOnLast && tool !== 'start') writeLocal(LAST_TOOL_KEY, tool); }, [tool, openOnLast]);
+  const toggleOpenOnLast = (on) => { setOpenOnLast(on); writeLocal(OPEN_ON_LAST_KEY, on ? '1' : '0'); };
+  const backToStart = () => { setGoal(null); setTool('start'); };
+  const startGoal = (g) => { setGoal(g); setTool(g.steps[0].tool); };
 
   // ---------- The page ----------
   const sanitizedRef = useRef({ head: '', body: '' });
@@ -356,9 +380,17 @@ export default function RestylePage() {
     }
   }, [renderIframe]);
 
-  // Once the preview is built, or something in it is clicked, move on from the set-up tools to the editing ones.
-  useEffect(() => { if (previewBuilt) setTool((t) => (t === 'page' || t === 'styles' ? 'ask' : t)); }, [previewBuilt]);
-  useEffect(() => { if (hasSelection) setTool((t) => (t === 'page' || t === 'styles' ? 'ask' : t)); }, [hasSelection]);
+  // Once the preview is built, or something in it is clicked, move on from the set-up tools to the editing ones: to the job's next
+  // step when a job is under way, otherwise to Ask in plain English.
+  const afterSetup = useCallback((t) => {
+    if (!SETUP_TOOLS.includes(t)) return t;
+    const g = goalRef.current;
+    const at = stepIndex(g, t);
+    if (at < 0) return 'ask';
+    return g.steps.slice(at + 1).find((s) => !SETUP_TOOLS.includes(s.tool))?.tool || t;
+  }, []);
+  useEffect(() => { if (previewBuilt) setTool(afterSetup); }, [previewBuilt, afterSetup]);
+  useEffect(() => { if (hasSelection) setTool(afterSetup); }, [hasSelection, afterSetup]);
 
   // ---------- Bringing a page in ----------
   /** Takes what the server returns for a page (upload, paste, live address) and makes it the page being worked on. */
@@ -1004,10 +1036,42 @@ export default function RestylePage() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;700&family=Merriweather:wght@400;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
       <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
-        <ToolSidebar title="Style editor" icon="palette" groups={menu} current={tool} onSelect={setTool} onInfo={info.open} infoTip="How this tool works, and what it cannot do." />
+        <ToolSidebar title="Style editor" icon="palette" groups={menu} current={tool} onSelect={setTool} onInfo={info.open} infoTip="How this tool works, and what it cannot do.">
+          <Tooltip text="Go back to the list of jobs (give a page a new look, put your brand on it, fix it for phones and so on).">
+            <button
+              type="button"
+              onClick={backToStart}
+              className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity duration-200 hover:opacity-70"
+              style={{
+                borderColor: tool === 'start' ? 'var(--color-primary)' : 'var(--color-border)',
+                color: tool === 'start' ? 'var(--color-primary)' : 'var(--color-text)',
+                background: 'var(--color-bg)',
+              }}
+            >
+              {getIcon('layout-grid', { size: 13 })}
+              What do you want to do?
+            </button>
+          </Tooltip>
+        </ToolSidebar>
 
         <div className="flex-1 min-w-0 p-4 sm:p-5 flex flex-col gap-3" style={{ background: 'var(--color-bg)' }}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          {tool === 'start' && (
+            <div className="w-full max-w-6xl">
+              <JobStart
+                goals={RESTYLE_GOALS}
+                appName="the Style editor"
+                tourId="restyle-goals"
+                intro="Pick a job and the Style editor opens the tools for it, one step at a time. Your page and your changes stay loaded as you move between steps. Or browse every tool in the list on the left, or ask the guide (round button, bottom right)."
+                onPick={startGoal}
+                labelFor={toolLabel}
+                openOnLast={openOnLast}
+                onToggleOpenOnLast={toggleOpenOnLast}
+              />
+            </div>
+          )}
+          {tool !== 'start' && <BackToJobs onBack={backToStart} toolLabel={null} goal={null} />}
+          <JobBar goal={goal} mode={tool} onStep={setTool} labelFor={toolLabel} carry={<>go to</>} />
+          <div className="flex flex-wrap items-start justify-between gap-3" style={tool === 'start' ? { display: 'none' } : undefined}>
             <div className="min-w-0">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{currentTool?.label}</h2>
               <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
@@ -1035,7 +1099,7 @@ export default function RestylePage() {
               empty={htmlLoaded ? 'Nothing to show for this one yet.' : 'Load a page first (Your page), then read its source here.'}
             />
           )}
-          <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0" style={tool === 'source' ? { display: 'none' } : undefined}>
+          <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0" style={tool === 'source' || tool === 'start' ? { display: 'none' } : undefined}>
             <div className="lg:w-80 shrink-0 rounded-xl border p-4 overflow-y-auto" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100dvh - 11rem)' }}>
               {renderPanel()}
             </div>
