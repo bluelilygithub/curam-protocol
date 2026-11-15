@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "9dde7ea3",
+   "fullHash": "9dde7ea31a91df97a219997cc41e7b33ce05b318",
+   "committedAt": "2026-11-16T08:58:50+10:00",
+   "author": "mrb",
+   "subject": "PDF to Word: keep header/footer text, stop false cell fills",
+   "filesChanged": 1,
+   "insertions": 196,
+   "deletions": 33,
+   "area": "PDF Tools",
+   "goal": "Make the two earlier PDF to Word repairs safe on PDFs other than the press kit, after a 14-PDF test showed they dropped header/footer text and painted cells wrongly.",
+   "whatChanged": "Header/footer lines removed by the footer repair are now put back as each page Word header/footer, as floating frames at their PDF position so they take no body space; duplicate overprinted lines are skipped. The cell-fill repair now only applies when the dark shape covers the whole text, is about the width of the cell and the height of its row, contains no image or other shape (thin dividers allowed), and the cell holds no nested table.",
+   "filesImpacted": [
+    "server/services/pdfToWord/pdf_to_docx.py"
+   ],
+   "benefit": "On 14 test PDFs (press kits, invoices, brochures, guides, bills) the new version keeps as many of the PDF words as plain pdf2docx on every file. Page counts: press kit 6 (PDF 6, was 7), questionnaire 14 (PDF 13, was 22), TPG invoice 4 (PDF 4, was 5); the others are unchanged. Checked by rendering every result in Word locally.",
+   "concerns": "Pre-existing pdf2docx limits remain: words run together on some Chrome and LibreOffice PDFs, an empty page on one LibreOffice file, odd background blocks, invisible numbers in small circles. Repaired pages are parsed twice, so a 4-page invoice took 32s instead of 22s (limit 180s). Header/footer frames are positioned absolutely, so editing the page size in Word will not move them. Not yet tested on the Railway server."
+  },
+  {
    "commit": "251f31d8",
    "fullHash": "251f31d8100420ecd17ee332da899d4711d59c07",
    "committedAt": "2026-11-15T20:05:16+10:00",
