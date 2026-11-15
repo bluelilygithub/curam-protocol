@@ -24,6 +24,28 @@ const LIBRE_BINS = [
   '/usr/lib/libreoffice/program/soffice',
 ].filter(Boolean);
 
+// A PDF opens in Draw by default, and Draw has no Word/text export: LibreOffice exits 0 and writes nothing
+// ("no .docx output"). For text targets, open the PDF with Writer's PDF import and name the export filter.
+const PDF_TEXT_TARGETS = {
+  docx: 'docx:MS Word 2007 XML',
+  doc: 'doc:MS Word 97',
+  odt: 'odt:writer8',
+  rtf: 'rtf:Rich Text Format',
+  txt: 'txt:Text (encoded):UTF8',
+};
+
+/** LibreOffice arguments for one conversion (exported for tests). */
+function libreArgs(sourceExt, fmt, inFile, outDir) {
+  const viaWriter = sourceExt === '.pdf' && PDF_TEXT_TARGETS[fmt];
+  return [
+    '--headless',
+    ...(viaWriter ? ['--infilter=writer_pdf_import'] : []),
+    '--convert-to', viaWriter || fmt,
+    '--outdir', outDir,
+    inFile,
+  ];
+}
+
 /**
  * Convert an Office/PDF buffer to another format via LibreOffice headless.
  * @param {Buffer} inputBuf
@@ -48,9 +70,9 @@ async function libreConvert(inputBuf, ext, targetFmt) {
   try {
     for (const bin of LIBRE_BINS) {
       try {
-        await execFileAsync(
+        const { stdout, stderr } = await execFileAsync(
           bin,
-          ['--headless', '--convert-to', fmt, '--outdir', tmpDir, inFile],
+          libreArgs(sourceExt, fmt, inFile, tmpDir),
           { timeout: 90_000 },
         );
         const outFile = path.join(tmpDir, `input.${fmt}`);
@@ -61,7 +83,9 @@ async function libreConvert(inputBuf, ext, targetFmt) {
         const files = await fsp.readdir(tmpDir);
         const match = files.find((f) => f.toLowerCase().endsWith(`.${fmt}`) && f !== path.basename(inFile));
         if (match) return await fsp.readFile(path.join(tmpDir, match));
-        errors.push(`${bin}: no .${fmt} output`);
+        const said = `${stderr || ''} ${stdout || ''}`.replace(/\s+/g, ' ').trim().slice(0, 300);
+        errors.push(`${bin}: no .${fmt} output${said ? ` (${said})` : ''}`);
+        break; // the binary ran; the others are the same LibreOffice and would fail the same way
       } catch (err) {
         const code = err.code ? ` (${err.code})` : '';
         errors.push(`${bin}${code}: ${err.message || err}`);
@@ -82,5 +106,6 @@ async function libreConvert(inputBuf, ext, targetFmt) {
 
 module.exports = {
   libreConvert,
+  libreArgs,
   LIBRE_BINS,
 };
