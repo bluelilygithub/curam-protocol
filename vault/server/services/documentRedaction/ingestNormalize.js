@@ -7,6 +7,7 @@
 
 const JSZip = require('jszip');
 const { libreConvert } = require('../officeConvert');
+const { pdfToDocx } = require('../pdfToWord');
 
 /** Extensions accepted at upload (lowercase, with dot). */
 const ACCEPTED_EXTENSIONS = [
@@ -193,15 +194,16 @@ async function normalizeUploadToDocx({ buffer, filename, mimetype }) {
   }
 
   if (ext === '.pdf') {
-    // Prefer the same LibreOffice PDF→Word path as PDF Tools for better layout.
+    // Same PDF→Word converter as PDF Tools (pdf2docx). LibreOffice is not used for PDFs: it stacks every page
+    // onto page 1. If pdf2docx fails, fall back to plain extracted text below.
     try {
-      const docxBuffer = await libreConvert(buffer, '.pdf', 'docx');
+      const docxBuffer = await pdfToDocx(buffer);
       return {
         docxBuffer,
         sourceExt: ext,
         converted: true,
         conversionNote:
-          'Converted PDF → .docx via LibreOffice (same engine as PDF Tools → PDF → Word).',
+          'Converted PDF → .docx with pdf2docx (same engine as PDF Tools → PDF → Word).',
         originalFilename,
       };
     } catch (libreErr) {
@@ -210,7 +212,7 @@ async function normalizeUploadToDocx({ buffer, filename, mimetype }) {
         text = await extractPdfTextFromBuffer(buffer);
       } catch (err) {
         const e = new Error(
-          `Could not convert PDF. LibreOffice: ${libreErr.message}. Text extract: ${err.message}. `
+          `Could not convert PDF. pdf2docx: ${libreErr.message}. Text extract: ${err.message}. `
           + 'Tip: open PDF Tools → PDF → Word, then upload the .docx here.',
         );
         e.status = 400;
@@ -218,7 +220,7 @@ async function normalizeUploadToDocx({ buffer, filename, mimetype }) {
       }
       if (!text.trim()) {
         const err = new Error(
-          'PDF has no extractable text and LibreOffice conversion failed. '
+          'PDF has no extractable text and the PDF→Word conversion failed. '
           + 'Use PDF Tools → PDF → Word for a layout-preserving .docx, then upload that.',
         );
         err.status = 400;

@@ -11,6 +11,7 @@ const path = require('path');
 const { google } = require('googleapis');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { libreConvert } = require('../services/officeConvert');
+const { pdfToDocx } = require('../services/pdfToWord');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { getLogger } = require('../middleware/requestContext');
 const { interpretPdfVoiceCommand } = require('../services/pdfVoiceCommand');
@@ -822,7 +823,22 @@ router.post('/pdf-to-office', async (req, res) => {
     const allowed = { docx: 'docx', odt: 'odt', txt: 'txt' };
     const fmt = allowed[format] || 'docx';
     const inputBuf = Buffer.from(dataUrl.split(',')[1], 'base64');
-    const outBuf = await libreConvert(inputBuf, '.pdf', fmt);
+    // Word and ODT go through pdf2docx (real pages, paragraphs, tables). LibreOffice's PDF import stacks every
+    // page onto page 1, so it is only the fallback while the base image does not have pdf2docx yet, and for .txt.
+    let outBuf;
+    if (fmt === 'txt') {
+      outBuf = await libreConvert(inputBuf, '.pdf', 'txt');
+    } else {
+      let docx;
+      try {
+        docx = await pdfToDocx(inputBuf);
+      } catch (err) {
+        if (err.code !== 'PDF2DOCX_MISSING') throw err;
+        console.warn('PDF pdf-to-office: pdf2docx missing, falling back to LibreOffice:', err.message);
+        docx = await libreConvert(inputBuf, '.pdf', 'docx');
+      }
+      outBuf = fmt === 'odt' ? await libreConvert(docx, '.docx', 'odt') : docx;
+    }
     const mimes = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', txt: 'text/plain' };
     res.json({ dataUrl: `data:${mimes[fmt]};base64,${outBuf.toString('base64')}`, format: fmt });
   } catch (err) {

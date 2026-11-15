@@ -1,1 +1,7 @@
 pymupdf>=1.24.0
+# PDF Tools → PDF → Word and Document Redaction's PDF intake (server/services/pdfToWord/pdf_to_docx.py).
+# Lives in this file because Dockerfile.base already copies it (a new requirements file would need a Dockerfile.base edit).
+pdf2docx>=0.5.8
+# pdf2docx pulls in OpenCV; 4.12+ requires numpy 2, which would replace the numpy 1.26.4 librosa needs (root requirements.txt).
+opencv-python-headless>=4.5,<4.12
+numpy<2
