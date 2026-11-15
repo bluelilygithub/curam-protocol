@@ -18,6 +18,10 @@ Two repairs on top of plain pdf2docx (found on a Chrome-printed press kit, 2026-
 2. Nameless fonts. Chrome/Skia prints web fonts as Type3 fonts with no name, so the .docx asked Word for a font
    called "Type3 (14 0 R)" and Word substituted its default serif everywhere. Each such font is classified from its
    rendered glyphs ('l' / 'I'): serif feet -> Georgia, else Arial; thick stem -> bold; slanted stem -> italic.
+
+3. Invisible header text. The press kit's table header is two dark-red rectangles; pdf2docx shaded the first cell
+   and dropped the second, leaving "DETAILS" white on white. A table cell with only light text and no shading gets
+   the fill of the dark shape found behind that text in the PDF.
 """
 import json
 import re
@@ -207,6 +211,115 @@ def _fix_fonts(docx_path, fonts):
     return changed
 
 
+# ── 3. Light text that lost its cell background ──────────────────────────────
+
+def _luma(rgb):
+    r, g, b = rgb
+    return 0.299 * r + 0.587 * g + 0.114 * b  # 0..1
+
+
+def _hex_luma(h):
+    try:
+        return _luma(tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)))
+    except Exception:
+        return None
+
+
+def _light_text_fills(doc):
+    """{span text: fill hex} for light-coloured PDF text sitting on a dark filled shape (e.g. a table header bar)."""
+    out = {}
+    for page in doc:
+        spans = []
+        for b in page.get_text('dict')['blocks']:
+            for l in b.get('lines', []):
+                for s in l['spans']:
+                    c = s['color']
+                    rgb = (((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255)
+                    if s['text'].strip() and _luma(rgb) > 0.85:
+                        spans.append((s['text'].strip(), s['bbox']))
+        if not spans:
+            continue
+        fills = [(d['rect'], d['fill']) for d in page.get_drawings()
+                 if d.get('fill') and _luma(d['fill'][:3]) < 0.6 and d['rect'].width > 2 and d['rect'].height > 2]
+        for text, (x0, y0, x1, y1) in spans:
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+            under = [(f.width * f.height, fill) for f, fill in fills if f.x0 <= cx <= f.x1 and f.y0 <= cy <= f.y1]
+            if under:
+                fill = min(under, key=lambda u: u[0])[1]
+                out.setdefault(text, '%02x%02x%02x' % tuple(round(v * 255) for v in fill[:3]))
+    return out
+
+
+_NO_FILL = {'', 'auto', 'ffffff', 'none'}
+
+
+def _near(a, b, tol=3):
+    """Same colour give or take rounding (pdf2docx writes 8b2d2a where PyMuPDF's floats round to 8c2d2b)."""
+    try:
+        return all(abs(int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) <= tol for i in (0, 2, 4))
+    except ValueError:
+        return False
+
+
+def _set_cell_fill(tc, fill, qn):
+    tcpr = tc.find(qn('w:tcPr'))
+    if tcpr is None:
+        tcpr = tc.makeelement(qn('w:tcPr'), {})
+        tc.insert(0, tcpr)
+    shd = tcpr.find(qn('w:shd'))
+    if shd is None:
+        shd = tcpr.makeelement(qn('w:shd'), {})
+        # schema order: ... tcBorders, shd, noWrap, tcMar, textDirection, tcFitText, vAlign, hideMark
+        later_tags = {qn(t) for t in ('w:noWrap', 'w:tcMar', 'w:textDirection', 'w:tcFitText', 'w:vAlign', 'w:hideMark')}
+        later = next((el for el in tcpr if el.tag in later_tags), None)
+        if later is not None:
+            later.addprevious(shd)
+        else:
+            tcpr.append(shd)
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), fill)
+
+
+def _fix_invisible_cells(docx_path, fills):
+    """Give a table cell back its background when it holds only light text and has no shading, using the fill
+    found behind that text in the PDF (pdf2docx drops the second of two adjacent filled header cells, leaving
+    white text on white). A cell with no text of its own that only wraps a shaded nested table (pdf2docx nests
+    the first header cell in a narrower table) gets that fill too, so the bar has no white gap.
+    Only fills found behind light text in the PDF are used. Returns how many cells were shaded."""
+    if not fills:
+        return 0
+    from docx import Document
+    from docx.oxml.ns import qn
+    known = {f.lower() for f in fills.values()}
+    d = Document(docx_path)
+    fixed = 0
+    for tc in list(d.element.body.iter(qn('w:tc'))):
+        shd = tc.find(qn('w:tcPr') + '/' + qn('w:shd'))
+        if shd is not None and (shd.get(qn('w:fill')) or '').lower() not in _NO_FILL:
+            continue
+        runs = [r for p in tc.findall(qn('w:p')) for r in p.findall(qn('w:r'))]  # own runs, not nested tables
+        texts = [''.join(t.text or '' for t in r.findall(qn('w:t'))).strip() for r in runs]
+        text = ''.join(texts)
+        if not text:
+            if tc.findall(qn('w:tbl')):
+                inner = {(s.get(qn('w:fill')) or '').lower() for s in tc.iter(qn('w:shd'))} - _NO_FILL
+                if len(inner) == 1 and any(_near(next(iter(inner)), k) for k in known):
+                    _set_cell_fill(tc, next(iter(inner)), qn)
+                    fixed += 1
+            continue
+        colours = [r.find(qn('w:rPr') + '/' + qn('w:color')) for r, t in zip(runs, texts) if t]
+        if any(c is None or (_hex_luma(c.get(qn('w:val')) or '') or 0) <= 0.85 for c in colours):
+            continue
+        fill = fills.get(text) or next((f for t, f in fills.items() if t in text), None)
+        if fill:
+            _set_cell_fill(tc, fill, qn)
+            fixed += 1
+    if fixed:
+        d.save(docx_path)
+    return fixed
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -240,16 +353,26 @@ def main():
                 fonts = _classify_fonts(cv.fitz_doc)
             except Exception as e:
                 notes.append(f'font detection skipped: {str(e)[:200]}')
+            fills = {}
+            try:
+                fills = _light_text_fills(cv.fitz_doc)
+            except Exception as e:
+                notes.append(f'cell fill detection skipped: {str(e)[:200]}')
         finally:
             cv.close()
-        runs = 0
+        runs = cells = 0
         try:
             runs = _fix_fonts(dst, fonts)
         except Exception as e:
             notes.append(f'font fix skipped: {str(e)[:200]}')
+        try:
+            cells = _fix_invisible_cells(dst, fills)
+        except Exception as e:
+            notes.append(f'cell fill fix skipped: {str(e)[:200]}')
         print(json.dumps({"ok": True, "pages": pages,
                           "footerRetryPages": [i + 1 for i in fixed], "noStreamTablePages": [i + 1 for i in no_stream],
-                          "fontsReplaced": {k: v['name'] for k, v in fonts.items()}, "fontRuns": runs, "notes": notes}))
+                          "fontsReplaced": {k: v['name'] for k, v in fonts.items()}, "fontRuns": runs,
+                          "cellsShaded": cells, "notes": notes}))
         return 0
     except Exception as e:
         print(json.dumps({"ok": False, "error": str(e)[:500]}))
