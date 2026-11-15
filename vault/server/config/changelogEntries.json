@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8b1ac710",
+   "fullHash": "8b1ac71010cf997bd0155e439a29790ed66ef0af",
+   "committedAt": "2026-11-16T09:23:03+10:00",
+   "author": "mrb",
+   "subject": "PDF to Word: move running headers/footers out of the body on every page",
+   "filesChanged": 1,
+   "insertions": 61,
+   "deletions": 57,
+   "area": "PDF Tools",
+   "goal": "Stop converted Word files getting an extra empty page that holds only the previous page footer.",
+   "whatChanged": "Running header/footer text (top or bottom 8% of a page, repeated on other pages) is now removed from every page before pdf2docx parses, not only from pages where a guessed table had broken the layout, and put back as Word header/footer frames at the PDF position. Fonts and cell fills are read from the original PDF. Pages where a guessed table still slices text are re-parsed with table guessing off.",
+   "filesImpacted": [
+    "server/services/pdfToWord/pdf_to_docx.py"
+   ],
+   "benefit": "LibreOffice press kit converts to 7 pages (PDF 7, was 8 with an empty page 2). On the 14 test PDFs no file lost words and no page count went up. Checked by rendering in Word locally.",
+   "concerns": "More documents now get their header/footer as Word frames. On a drawing set the repeated title block (Project, Drawing No.) is treated as footer: it looks the same but its text sits in the footer over the table lines instead of in the table cells. Frames are absolutely positioned, so changing the page size in Word will not move them. Not yet tested on the Railway server."
+  },
+  {
    "commit": "e7e411ec",
    "fullHash": "e7e411ec826c64d1005b8f0cf1b77c01c9006297",
    "committedAt": "2026-11-16T09:13:03+10:00",
