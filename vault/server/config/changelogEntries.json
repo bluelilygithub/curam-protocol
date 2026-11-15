@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7b26e64f",
+   "fullHash": "7b26e64fc448d0032f521d1240cc55e1d284cb05",
+   "committedAt": "2026-11-15T19:55:27+10:00",
+   "author": "mrb",
+   "subject": "PDF to Word: repair sliced text and nameless fonts",
+   "filesChanged": 1,
+   "insertions": 222,
+   "deletions": 3,
+   "area": "PDF Tools",
+   "goal": "Fix a bad PDF to Word result on a Chrome-printed press kit: body lines cut in half, a photo lost, an extra near-blank page, and every font shown as Word default serif.",
+   "whatChanged": "After pdf2docx parses the PDF, any page where a guessed (stream) table cuts through a line of text, or reaches into the running header/footer, is parsed again with that page header/footer text removed; if it is still cut, that page is parsed with table guessing off. Nameless Type3 fonts (Chrome/Skia PDFs) are classified from their rendered l/I glyphs: serif feet become Georgia, otherwise Arial; thick stem sets bold, slant sets italic. The script reports which pages were repaired and which fonts were replaced. Also used by Document Redaction PDF intake.",
+   "filesImpacted": [
+    "server/services/pdfToWord/pdf_to_docx.py"
+   ],
+   "benefit": "The press kit now converts to 6 pages matching the PDF (was 7, with sliced text and a missing photo) with serif headings, sans body text and bold captions. Checked locally by opening the .docx in Word and comparing page by page.",
+   "concerns": "On repaired pages the running header/footer text (e.g. Page 1 of 6) is dropped. Font recovery only picks Georgia or Arial, not the original font. A pdf2docx bug still leaves the Fact Sheet DETAILS header cell without its red fill (white text on white). Uses pdf2docx private Pages._instances to swap pages; wrapped so a failure falls back to the plain conversion. Five other PDFs showed no repairs or font swaps; not yet tested on the Railway server."
+  },
+  {
    "commit": "4d7a7504",
    "fullHash": "4d7a7504061e17cb35825e0dd7cb8ef5ea77124a",
    "committedAt": "2026-11-15T18:01:33+10:00",
