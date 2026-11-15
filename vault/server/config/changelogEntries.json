@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "642a32da",
+   "fullHash": "642a32daaf444ea7a4aa71a014d8ce63d37ad82a",
+   "committedAt": "2026-11-15T17:33:00+10:00",
+   "author": "mrb",
+   "subject": "Sketchbook: social media pack (crop/fit every social size, paid redraw per size)",
+   "filesChanged": 14,
+   "insertions": 611,
+   "deletions": 6,
+   "area": "Sketchbook",
+   "goal": "Once a sketch is settled, make it ready for every social platform (Instagram, Facebook, LinkedIn, X, YouTube, Pinterest) in one go, without leaving Sketchbook or needing the Graphics flag.",
+   "whatChanged": "New Social media pack button on the editor's Save or share card opens a full-width panel (client/src/pages/sketchbook/SocialPack.jsx) with the sketch at all 10 sizes in Graphics' SOCIAL_PRESETS: preview, a mode box per size (Auto, Whole picture with white margins, Crop smart/centre/top/bottom/left/right, Redrawn), a per-size download and Download ZIP of the ticked sizes. New server/services/sketchbookPack.js does crop/fit with sharp; Auto uses a fresh redraw, else crops when 80%+ of the sketch is kept, else fits. Routes POST /api/sketchbook/:id/pack (free, optional zip) and POST /api/sketchbook/:id/pack/:size/redraw (paid: sketch padded to the shape on white, edit model asked with fixed words to extend the scene, result kept in new column sketches.\"packRedraws\", one per size; marked stale once the picture changes). Guide catalogue, (i) box, docs/sketchbook.md, route manifest and tests updated; recycle-bin snapshot drops redraws only if it would pass the 16 MB bin limit.",
+   "filesImpacted": [
+    "server/services/sketchbookPack.js",
+    "server/services/sketchbookPack.test.js",
+    "server/routes/sketchbook.js",
+    "server/services/sketchbook.js",
+    "server/db.js",
+    "server/services/sketchbookTutor.js",
+    "server/routes/sketchbook.db.test.js",
+    "server/testing/routeManifest.json",
+    "client/src/pages/sketchbook/SocialPack.jsx",
+    "client/src/pages/sketchbook/SketchEditor.jsx",
+    "client/src/pages/sketchbook/sketchbookLogic.mjs",
+    "client/src/pages/sketchbook/sketchbookLogic.test.mjs",
+    "client/src/pages/sketchbook/sketchbookTools.mjs",
+    "docs/sketchbook.md"
+   ],
+   "benefit": "One click gives every social size from a sketch, free, with the whole cartoon kept by default rather than cropped off; only awkward shapes (story, banners) need a paid redraw.",
+   "concerns": "Redraw for this shape was tested only against a stand-in model: whether the live edit model (flux-kontext) really fills the white margins, especially on the 4:1 LinkedIn banner, is unproven, and each redraw costs about $0.03 from the shared daily image limit. Sketches are stored at up to 1024px, so most pack sizes are upscaled and slightly soft. Free pack checked on screen locally (desktop and phone width, ZIP download, no console errors); sketchbookPack.test.js and sketchbook.db.test.js pass locally. Adds a column (ALTER TABLE ADD COLUMN IF NOT EXISTS) on boot. Web sizes (link preview, site header) not included by choice."
+  },
+  {
    "commit": "e18fdb5c",
    "fullHash": "e18fdb5ca4926ebebe78e868e3b79eb5a6171b5d",
    "committedAt": "2026-11-15T13:28:24+10:00",
