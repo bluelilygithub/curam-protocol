@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4d7a7504",
+   "fullHash": "4d7a7504061e17cb35825e0dd7cb8ef5ea77124a",
+   "committedAt": "2026-11-15T18:01:33+10:00",
+   "author": "mrb",
+   "subject": "Style editor: \"What do you want to do?\" job screen, like Video Tools",
+   "filesChanged": 4,
+   "insertions": 224,
+   "deletions": 7,
+   "area": "Style editor",
+   "goal": "Give the Style editor the same use-case start screen Video Tools, PDF Tools and Graphics have, so people pick a job in plain words instead of working out which of 18 tools to use.",
+   "whatChanged": "The Style editor now opens on the shared JobStart screen with nine jobs (new look for a live page, brand a page, fix one thing, phones, easier to read, show a client, borrow another site's look, carry on with a saved page, practice page), kept as data in client/src/pages/restyle/restyleGoals.mjs. Picking one opens its first tool with the step bar; Back to all jobs above every tool and a What do you want to do? button at the top of the tool list. Panel and preview are hidden, not unmounted, on the job screen so the loaded page survives. During a job, building the preview (or first clicking something) moves to the job's next step instead of Ask in plain English. Optional open-on-last-tool via localStorage. New test restyleGoals.test.mjs; docs/restyle.md has a Job screen section.",
+   "filesImpacted": [
+    "client/src/pages/RestylePage.jsx",
+    "client/src/pages/restyle/restyleGoals.mjs",
+    "client/src/pages/restyle/restyleGoals.test.mjs",
+    "docs/restyle.md"
+   ],
+   "benefit": "A clear starting point for non-technical users, consistent with the other tool apps, with step-by-step guidance through each job.",
+   "concerns": "Checked on screen locally at desktop width only (practice job and easier-to-read job: demo load advanced to step 2, Back to all jobs worked, no page errors). Not checked: the other seven jobs end to end, phone width, or loading a live page during a job. People who were used to landing on Your page now see the job screen first unless they tick the open-on-last option."
+  },
+  {
    "commit": "642a32da",
    "fullHash": "642a32daaf444ea7a4aa71a014d8ce63d37ad82a",
    "committedAt": "2026-11-15T17:33:00+10:00",
