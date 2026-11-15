@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "251f31d8",
+   "fullHash": "251f31d8100420ecd17ee332da899d4711d59c07",
+   "committedAt": "2026-11-15T20:05:16+10:00",
+   "author": "mrb",
+   "subject": "PDF to Word: restore dropped header cell fill",
+   "filesChanged": 1,
+   "insertions": 125,
+   "deletions": 2,
+   "area": "PDF Tools",
+   "goal": "Make the press kit Fact Sheet DETAILS header readable: pdf2docx dropped its red background, leaving white text on white.",
+   "whatChanged": "After conversion, a table cell holding only light text with no shading gets the fill of the dark shape found behind that text in the PDF. A cell with no text of its own that only wraps a shaded nested table (how pdf2docx builds the first header cell) takes the same fill, so the header bar has no white gap. Colours are matched within rounding, since pdf2docx and PyMuPDF round the same red differently. The script now reports cellsShaded.",
+   "filesImpacted": [
+    "server/services/pdfToWord/pdf_to_docx.py"
+   ],
+   "benefit": "The Fact Sheet header is one solid red bar with PARAMETER and DETAILS both visible. Checked locally by opening the .docx in Word; the 5 other test PDFs shaded no cells.",
+   "concerns": "A faint divider line remains between the two header cells. Only fills found behind light text in the PDF are applied, and the text match is by cell text, so a repeated light label on different coloured bars could get the first colour found. Not yet tested on the Railway server."
+  },
+  {
    "commit": "7b26e64f",
    "fullHash": "7b26e64fc448d0032f521d1240cc55e1d284cb05",
    "committedAt": "2026-11-15T19:55:27+10:00",
