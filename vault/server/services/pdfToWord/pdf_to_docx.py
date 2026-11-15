@@ -9,6 +9,13 @@ pdf2docx and PyMuPDF are installed from server/services/pdfRedact/requirements.t
 
 Repairs on top of plain pdf2docx (found on a Chrome-printed press kit, 2026-11-15):
 
+0. Lost spaces. Chrome prints text alternating between two subsets of one font, so a space between words often
+   sits alone in its own span; pdf2docx drops whitespace-only spans ("Totalamount duon your account"). They are
+   merged into the neighbouring span before pdf2docx lays out the page.
+   Outlined headings. LibreOffice exports some headings as filled letter shapes plus an invisible copy of the
+   text; pdf2docx drops invisible text and does not draw the shapes. Invisible text covered by letter-sized filled
+   shapes is kept, in the shapes' colour. OCR text over a scan sits on an image, so it is still dropped.
+
 1. Sliced text. pdf2docx guesses "stream tables" from text laid out side by side. A running footer with text at
    both ends ("NEAL PRICE ... | Page 1 of 6") plus horizontal rules made it turn the bottom half of a page into a
    2-column table, cutting every body line in half (the right half landed in a narrow cell or was lost). After
@@ -30,6 +37,129 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict
+
+
+# ── 0. Lost spaces ───────────────────────────────────────────────────────────
+
+def _merge_space_spans(blocks):
+    """Attach every whitespace-only span to its neighbour in the same line. pdf2docx drops spans that are only
+    spaces, and Chrome prints text alternating between two subsets of one font ('To' 't' 'al' ' ' 'amo'...), so
+    the space between words often sits alone in its own span and vanishes ("Totalamount duon your account")."""
+    for b in blocks:
+        for line in b.get('lines', []):
+            spans = line.get('spans') or []
+            out = []
+            pending = []  # leading spaces with no previous span yet
+            for sp in spans:
+                chars = sp.get('chars') or []
+                if chars and all(not c['c'].strip() for c in chars):
+                    if out:
+                        prev = out[-1]
+                        prev['chars'] = prev['chars'] + chars
+                        x0, y0, x1, y1 = prev['bbox']
+                        prev['bbox'] = (x0, y0, max(x1, sp['bbox'][2]), y1)
+                    else:
+                        pending.extend(chars)
+                    continue
+                if pending and chars:
+                    sp['chars'] = pending + chars
+                    x0, y0, x1, y1 = sp['bbox']
+                    sp['bbox'] = (min(x0, pending[0]['bbox'][0]), y0, x1, y1)
+                    pending = []
+                out.append(sp)
+            if out:
+                line['spans'] = out
+    return blocks
+
+
+def _glyph_fill(page, bbox, drawings):
+    """Fill colour (0xRRGGBB) when letter-sized filled shapes cover this text box: the text itself is drawn as
+    outlines and the real text is an invisible copy underneath. None otherwise (e.g. OCR text over a scan, which
+    sits on an image, or text over one big background shape)."""
+    x0, y0, x1, y1 = bbox
+    w, h = x1 - x0, y1 - y0
+    if w <= 0 or h <= 0:
+        return None
+    covered, colours = 0.0, Counter()
+    for d in drawings:
+        fill = d.get('fill')
+        r = d['rect']
+        if not fill or r.height > h * 1.5 or r.width > max(h * 2, w * 0.9):
+            continue  # not glyph-sized
+        ix = min(x1, r.x1) - max(x0, r.x0)
+        iy = min(y1, r.y1) - max(y0, r.y0)
+        if ix > 0 and iy > 0:
+            covered += ix * iy
+            colours[tuple(round(v * 255) for v in fill[:3])] += ix * iy
+    if covered < 0.15 * w * h:
+        return None
+    r_, g_, b_ = colours.most_common(1)[0][0]
+    return (r_ << 16) | (g_ << 8) | b_
+
+
+def _outlined_text_trace(page):
+    """page.get_texttrace() with invisible text that is drawn as outlines marked visible, and {bbox: colour} for
+    those spans. LibreOffice exports some headings as filled letter shapes plus invisible text; pdf2docx drops
+    invisible text and does not draw the shapes, so the heading vanished ("Fact sheet & specifications")."""
+    trace = page.get_texttrace()
+    hidden = [t for t in trace if t.get('type') == 3]
+    if not hidden:
+        return trace, {}
+    drawings = [d for d in page.get_drawings() if d.get('fill')]
+    colours = {}
+    for t in hidden:
+        c = _glyph_fill(page, t['bbox'], drawings)
+        if c is not None:
+            t['type'] = 0
+            colours[tuple(round(v, 1) for v in t['bbox'])] = c
+    return trace, colours
+
+
+def _recolour_outlined(blocks, rescued):
+    """Give rescued invisible spans the colour of the shapes drawn over them (they report black)."""
+    if not rescued:
+        return blocks
+    boxes = [(rect, c) for rect, c in rescued.items()]
+    for b in blocks:
+        for line in b.get('lines', []):
+            for sp in line.get('spans', []):
+                x0, y0, x1, y1 = sp['bbox']
+                # rescued trace boxes can be single letters: match any box whose centre lies inside this span
+                for (a0, b0, a1, b1), c in boxes:
+                    if x0 <= (a0 + a1) / 2 <= x1 and y0 <= (b0 + b1) / 2 <= y1:
+                        sp['color'] = c
+                        break
+    return blocks
+
+
+def _patch_lost_spaces():
+    """Wrap pdf2docx's text extraction: keep invisible text that is drawn as outlines, then merge whitespace-only
+    spans, before layout. Returns True if patched."""
+    try:
+        from pdf2docx.page.RawPageFitz import RawPageFitz
+    except Exception:
+        return False
+    original = RawPageFitz._preprocess_text
+    if getattr(original, '_vault_spaces', False):
+        return True
+
+    def patched(self, **settings):
+        page = self.page_engine
+        rescued = {}
+        try:
+            trace, rescued = _outlined_text_trace(page)
+            if rescued:
+                page.get_texttrace = lambda: trace  # original() filters hidden text using this trace
+        except Exception:
+            rescued = {}
+        try:
+            blocks = original(self, **settings)
+        finally:
+            page.__dict__.pop('get_texttrace', None)
+        return _merge_space_spans(_recolour_outlined(blocks, rescued))
+    patched._vault_spaces = True
+    RawPageFitz._preprocess_text = patched
+    return True
 
 
 # ── 1. Stream tables that slice text ─────────────────────────────────────────
@@ -491,9 +621,11 @@ def main():
     src, dst = sys.argv[1], sys.argv[2]
     try:
         import logging
-        logging.disable(logging.WARNING)  # pdf2docx logs every page to stderr
-        cv = Converter(src)
         notes = []
+        logging.disable(logging.WARNING)  # pdf2docx logs every page to stderr
+        if not _patch_lost_spaces():
+            notes.append('space repair unavailable in this pdf2docx version')
+        cv = Converter(src)
         try:
             pages = len(cv.fitz_doc)
             settings = cv.default_settings
