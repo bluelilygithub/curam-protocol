@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { useUrlImport, magicWandSelectionCanvas, tintSelectionCanvas, loadImageEl, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatCost, CostNote } from '../shared';
+import { useUrlImport, magicWandSelectionCanvas, tintSelectionCanvas, SubjectSelectButtons, loadImageEl, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatCost, CostNote } from '../shared';
 
 export default function InpaintTool({ active }) {
   const getIcon = useIcon();
@@ -73,6 +73,16 @@ export default function InpaintTool({ active }) {
     const img = inpaintImgRef.current;
     if (!disp || !mask || !img) return;
     const sel = magicWandSelectionCanvas(img, disp.width, disp.height, x, y, inpaintTolerance);
+    mask.getContext('2d').drawImage(sel, 0, 0);
+    disp.getContext('2d').drawImage(tintSelectionCanvas(sel, 'rgba(239,68,68,0.5)'), 0, 0);
+    setInpaintHasMask(true);
+  };
+
+  // Select subject / background: added to the mask the same way as a magic-wand click.
+  const inpaintApplySelection = (sel) => {
+    const disp = inpaintCanvasRef.current;
+    const mask = inpaintMaskRef.current;
+    if (!disp || !mask) return;
     mask.getContext('2d').drawImage(sel, 0, 0);
     disp.getContext('2d').drawImage(tintSelectionCanvas(sel, 'rgba(239,68,68,0.5)'), 0, 0);
     setInpaintHasMask(true);
@@ -194,6 +204,13 @@ export default function InpaintTool({ active }) {
                     <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{inpaintTolerance}</span>
                   </div>
                 )}
+                <SubjectSelectButtons
+                  getImage={() => inpaintImgRef.current}
+                  size={() => ({ width: inpaintCanvasRef.current?.width, height: inpaintCanvasRef.current?.height })}
+                  onSelect={inpaintApplySelection}
+                  sourceKey={inpaintSource?.imageDataUrl}
+                  verb="mark for repainting"
+                />
                 <Tooltip text="Erase the painted mask and start over."><button type="button" onClick={clearInpaintMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear mask</button></Tooltip>
               </div>
             )}

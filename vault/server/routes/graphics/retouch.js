@@ -238,6 +238,48 @@ router.post('/background', async (req, res) => {
     res.status(err.status || 500).json({ error: err.message || 'Background removal failed' });
   }
 });
+// "Select subject" for Inpaint, Eraser and Extract Element: the same cut-out as Background (local model on a local
+// copy, Replicate on the live site), returned as a greyscale mask (white = subject, black = background, soft edges)
+// at the size of the picture sent. The browser turns it into a selection. Behind the paid-tool guard.
+router.post('/subject-mask', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) return res.status(400).json({ error: 'A valid image is required' });
+    const meta = await sharp(buffer).metadata();
+    assertStill(meta);
+    const { width: W, height: H } = orientedSize(meta);
+    if (!W || !H) return res.status(400).json({ error: 'Could not read that picture' });
+
+    let cutoutBuffer;
+    let provider;
+    let cost = { usd: 0, local: true };
+    if (runtimeConfig.isLocal) {
+      cutoutBuffer = await removeBgLocal(buffer, dataUrlMime(imageDataUrl));
+      provider = 'local-imgly';
+    } else {
+      const result = await removeBgWithReplicate(imageDataUrl);
+      cutoutBuffer = dataUrlToBuffer(result.imageDataUrl);
+      provider = 'replicate';
+      cost = estimateBackgroundCost({ isLocal: false });
+      logImageUsage({ userId: req.user.id, model: `replicate:${result.model}`, feature: 'graphics_subject', costUsd: cost.usd });
+    }
+    const mask = await sharp(cutoutBuffer).ensureAlpha().extractChannel(3).resize(W, H, { fit: 'fill' }).png().toBuffer();
+    const { data } = await sharp(mask).resize(64, 64, { fit: 'fill' }).raw().toBuffer({ resolveWithObject: true });
+    const coverage = data.reduce((sum, v) => sum + (v > 127 ? 1 : 0), 0) / data.length;
+    res.json({
+      ok: true,
+      provider,
+      width: W,
+      height: H,
+      coverage: Number(coverage.toFixed(3)),
+      cost,
+      maskDataUrl: `data:image/png;base64,${mask.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Could not find the subject' });
+  }
+});
 router.post('/recolor', async (req, res) => {
   try {
     const imageDataUrl = String(req.body?.imageDataUrl || '');

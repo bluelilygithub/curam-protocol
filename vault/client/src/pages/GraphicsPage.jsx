@@ -44,6 +44,7 @@ const MODES = [
   { id: 'batchtext', label: 'Batch Text', icon: 'text' },
   { id: 'collage', label: 'Collage', icon: 'grid' },
   { id: 'favicon', label: 'Favicon / Icons', icon: 'app-window' },
+  { id: 'qrcode', label: 'QR Code', icon: 'qr-code' },
   { id: 'exportsocial', label: 'Export for Social', icon: 'share-2' },
   { id: 'svg', label: 'Vectorize (SVG)', icon: 'shapes' },
   { id: 'iconlib', label: 'AI Icon Library', icon: 'layout-grid' },
@@ -79,7 +80,7 @@ const TOOL_TIPS = {
   printready: 'Get a picture ready for a printer: set 150, 300 or 600 DPI, add bleed, save as TIFF, PDF or PNG. CMYK files use a colour profile and show a soft proof of how colours will print.',
   autoenhance: 'One click that fixes brightness, contrast and colour, with a before-and-after slider.',
   cropresize: 'Set an exact size, or drag a crop box. Has presets for common social sizes.',
-  extend: 'Add empty space around a picture on any side, in white, a colour or transparent.',
+  extend: 'Add space around a picture on any side, or pad it to a shape such as square or 16:9. Fill the space with a colour, leave it transparent, or let AI fill carry the scene on past the edges.',
   perspective: 'Straighten a picture taken at an angle, such as a sign or document that looks like a trapezoid.',
   smartcrop: 'Crop to a size or shape while keeping the most interesting or most detailed part.',
   effects: 'Flip, rotate, add a border, round the corners, add a shadow, or apply a filter such as black and white.',
@@ -93,14 +94,15 @@ const TOOL_TIPS = {
   batchtext: 'Stamp a text label on up to 20 pictures at once, using the file name, number or date.',
   collage: 'Arrange 2 to 9 pictures into a grid.',
   favicon: 'Make a full website icon set, with its manifest file, from one picture.',
+  qrcode: 'Make a QR code for a link, text, Wi-Fi login, email, phone, text message or contact card, in your colours and with your logo. Runs in your browser.',
   svg: 'Trace a picture into a scalable SVG drawing. Best for logos, icons and clipart.',
   iconlib: 'Create a matching set of custom SVG icons from a subject and reference styles.',
   background: 'Cut out the subject and remove the background, or replace it with a colour, gradient or picture.',
-  extract: 'Paint over the part you want to keep; everything else becomes transparent.',
+  extract: 'Paint over the part you want to keep, or select the main subject in one click; everything else becomes transparent.',
   recolor: 'Change one colour to another everywhere it appears in a picture.',
-  eraser: 'Paint parts of a picture away to transparent, with a restore brush and undo. Runs in your browser.',
+  eraser: 'Paint parts of a picture away to transparent, or erase the whole background or subject in one click, with a restore brush and undo.',
   redact: 'Draw boxes over faces, number plates or private text and blur or pixelate them. Runs in your browser.',
-  inpaint: 'Paint over something to remove it, and optionally describe what to put there. The AI fills the area.',
+  inpaint: 'Paint over something (or select the subject or background in one click) to remove it, and describe what to put there. The AI fills the area.',
   picker: 'Click anywhere on a picture to read its exact colour. Runs in your browser.',
   histogram: 'See how dark and light the colours in a picture are, as a graph. Runs in your browser.',
   contrast: 'Check whether a text colour on a background colour is easy enough to read (WCAG).',
@@ -128,7 +130,7 @@ const MODE_GROUPS = [
   { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'exportsocial', 'pdf2img', 'printready', 'autoenhance'] },
   { label: 'Transform', ids: ['cropresize', 'extend', 'perspective', 'smartcrop'] },
   { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
-  { label: 'Compose', ids: ['annotate', 'watermark', 'textoverlay', 'composite', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
+  { label: 'Compose', ids: ['annotate', 'watermark', 'textoverlay', 'composite', 'batchtext', 'collage', 'favicon', 'qrcode', 'svg', 'iconlib'] },
   { label: 'Retouch', ids: ['background', 'extract', 'recolor', 'eraser', 'redact', 'inpaint'] },
   { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'alttext', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
@@ -192,8 +194,8 @@ const TOOL_HELP = {
   },
   extend: {
     title: 'Canvas Extend',
-    what: 'Add padding around an image — the opposite of cropping.',
-    features: ['Link all sides for uniform padding, or set each side independently', 'Fill: white, transparent (PNG), or a custom hex colour', 'Before/after compare + Export'],
+    what: 'Add space around an image — the opposite of cropping — and fill it with a colour, transparency, or AI.',
+    features: ['Link all sides for uniform space, or set each side independently', 'Pad to a shape: Square, Portrait 4:5, Story 9:16, Wide 16:9, Link 1.91:1 or Photo 3:2, keeping the whole picture centred', 'Fill: a colour (with Brand Kit swatches) or transparent (PNG) — local and free', 'AI fill: the image model paints the new space so the scene carries on past the edges; optionally describe what it should show', 'AI fill keeps your picture exactly as it is (only the new space is painted), adds at most twice the width and height, and saves as JPG', 'AI fill uses FAL like Inpaint; the cost and what is left of your daily limit show before you run it', 'Export panel and Use in…'],
   },
   perspective: {
     title: 'Perspective Correct',
@@ -245,6 +247,11 @@ const TOOL_HELP = {
     what: 'Arrange multiple images into a grid.',
     features: ['2–9 images, up to 9 cells', 'Column count control', 'Cell size and gap controls', 'Background colour picker', 'All cells cropped to a uniform size (cover)'],
   },
+  qrcode: {
+    title: 'QR Code',
+    what: 'Make a scannable QR code for a poster, flyer, menu, sign or product — entirely in your browser.',
+    features: ['What it does when scanned: open a link, show text, join a Wi-Fi network, start an email, call a number, start a text message, or save a contact card', 'Error correction Low, Medium, Quartile or High: how much of the code can be damaged or covered and still scan', 'Size up to 3000 px (PNG) or SVG, which stays sharp at any size for print', 'Margin (the plain border scanners need; 4 squares is standard)', 'Your colours, with Brand Kit swatches, a Swap button and a see-through background option', 'Logo in the middle from your Brand Kit or a picture you choose (switches to High error correction)', 'Warns when colours are too close, light-on-dark, the margin is too small or the code is very dense', 'Copy text shows exactly what the code contains', 'Use in… sends the PNG to Composite, Watermark and the other tools', 'Nothing is uploaded'],
+  },
   favicon: {
     title: 'Favicon / App Icons',
     what: 'Generate a complete app icon set from one image.',
@@ -283,7 +290,7 @@ const TOOL_HELP = {
   inpaint: {
     title: 'Inpaint / Remove',
     what: 'Paint a mask over an area and let AI fill or replace it.',
-    features: ['Paint a white mask with an adjustable brush', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider', 'Describe what should fill the masked area', 'Object removal tip: describe the background behind the object', 'Powered by FAL (fal-ai/flux-lora/inpainting by default)', 'Model overridable via GRAPHICS_INPAINT_MODEL env var', 'Cost logged like image generation'],
+    features: ['Paint a white mask with an adjustable brush', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider', 'One click: Subject or Background selects the main subject (or everything else) automatically, using the same AI cut-out as the Background tool (free on a local copy, a small charge on the live site; the cost shows first)', 'Describe what should fill the masked area', 'Object removal tip: describe the background behind the object', 'Powered by FAL (fal-ai/flux-lora/inpainting by default)', 'Model overridable via GRAPHICS_INPAINT_MODEL env var', 'Cost logged like image generation'],
   },
   picker: {
     title: 'Colour Picker',
@@ -342,13 +349,13 @@ const TOOL_HELP = {
   },
   eraser: {
     title: 'Eraser',
-    what: 'Paint over parts of an image to erase them to transparency — entirely in your browser.',
-    features: ['Circular brush with adjustable size (5–120 px)', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider — click again to add more to the selection', 'Erase mode: removes pixels to full transparency', 'Restore mode: paints original pixels back — useful if you overshoot', 'Smooth stroke interpolation between mouse positions', 'Undo/redo stack — up to 20 snapshots (Cmd/Ctrl+Z supported)', 'Reset: restore the image to its original state', 'Output is always a PNG with an alpha channel', 'Nothing is uploaded — fully client-side'],
+    what: 'Paint over parts of an image to erase them to transparency, or erase the whole background or subject in one click.',
+    features: ['Circular brush with adjustable size (5–120 px)', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider — click again to add more to the selection', 'One click: Subject or Background selects the main subject (or everything else) automatically, using the same AI cut-out as the Background tool (free on a local copy, a small charge on the live site; the cost shows first); in Restore mode it puts the subject or background back', 'Undo takes back a one-click selection like any brush stroke', 'Erase mode: removes pixels to full transparency', 'Restore mode: paints original pixels back — useful if you overshoot', 'Smooth stroke interpolation between mouse positions', 'Undo/redo stack — up to 20 snapshots (Cmd/Ctrl+Z supported)', 'Reset: restore the image to its original state', 'Output is always a PNG with an alpha channel', 'Painting and the magic wand run in your browser; only the Subject and Background buttons send the picture to the server'],
   },
   extract: {
     title: 'Extract Element',
     what: 'Paint a mask over the element you want to keep; the rest is removed to transparency.',
-    features: ['Paint brush marks the area to keep (shown as green overlay)', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider — click again to add more to the selection', 'Erase brush removes paint strokes (shown in red) for fine adjustments — works with either selection mode', 'Adjustable brush size (5–120 px)', 'Feather slider (0–30 px) blurs the mask edge for soft extraction', 'Clear mask button resets all painted strokes', 'Server applies the mask: painted area is kept, everything else removed', 'Result is a transparent PNG — export or feed into other tools', 'Runs locally on the server — no external AI needed'],
+    features: ['Paint brush marks the area to keep (shown as green overlay)', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider — click again to add more to the selection', 'One click: Subject or Background selects the main subject (or everything else) automatically, using the same AI cut-out as the Background tool (free on a local copy, a small charge on the live site; the cost shows first); with Erase on, it takes that part out of the selection instead', 'Erase brush removes paint strokes (shown in red) for fine adjustments — works with either selection mode', 'Adjustable brush size (5–120 px)', 'Feather slider (0–30 px) blurs the mask edge for soft extraction', 'Clear mask button resets all painted strokes', 'Server applies the mask: painted area is kept, everything else removed', 'Result is a transparent PNG — export or feed into other tools', 'Runs locally on the server — no external AI needed'],
   },
   textoverlay: {
     title: 'Text Overlay',
@@ -698,10 +705,10 @@ export default function GraphicsPage() {
                     </p>
                     <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                       <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> — Generate makes a new image from a prompt via your admin-configured model, swappable workspace-wide. Animate turns one into a GIF.</p>
-                      <p style={{ color: 'var(--color-text)' }}><strong>Retouch</strong> — real masked editing, not just full re-rolls: <strong>Inpaint/Remove</strong> paints an area (brush or magic-wand select) and describes what should replace it; <strong>Background</strong> removes/replaces with AI precision; <strong>Extract Element</strong> isolates a painted region as a transparent PNG; <strong>Recolor</strong> and <strong>Eraser</strong> handle targeted color/pixel changes; <strong>Redact</strong> blurs or pixelates faces, plates, or sensitive text.</p>
-                      <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> — Crop/Resize, Canvas Extend (pad outward), Perspective Correct, and Smart Crop (content-aware — attention, entropy, or a fixed direction, not a naive center-crop).</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Retouch</strong> — real masked editing, not just full re-rolls: <strong>Inpaint/Remove</strong> paints an area (brush, magic-wand or one-click subject/background select) and describes what should replace it; <strong>Background</strong> removes/replaces with AI precision; <strong>Extract Element</strong> isolates a painted or one-click-selected region as a transparent PNG; <strong>Recolor</strong> and <strong>Eraser</strong> handle targeted color/pixel changes; <strong>Redact</strong> blurs or pixelates faces, plates, or sensitive text.</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> — Crop/Resize, Canvas Extend (pad outward or to a shape, with a colour, transparency or AI fill that carries the scene on), Perspective Correct, and Smart Crop (content-aware — attention, entropy, or a fixed direction, not a naive center-crop).</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Enhance</strong> — Effects, Adjust (every slider change is a step you can untick on its own, with Undo and Redo), Color Grading, and Pipeline (chain up to 12 edits, including crop to a shape, text, your Brand Kit logo and the AI steps remove background and upscale, then save the steps as a named recipe and run it on up to 25 pictures from Batch).</p>
-                      <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> — Annotate, Watermark, Text Overlay, Composite, Watermark and Batch Text (text can use your Brand Kit font), Collage, Favicon/Icons (full manifest from one image), SVG (vectorize — 3 detail presets, 2–64 color control), and AI Icon Library (one cohesive themed set in a single pass).</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> — Annotate, Watermark, Text Overlay, Composite, Watermark and Batch Text (text can use your Brand Kit font), Collage, Favicon/Icons (full manifest from one image), QR Code (links, Wi-Fi, contacts and more, with your colours and logo), SVG (vectorize — 3 detail presets, 2–64 color control), and AI Icon Library (one cohesive themed set in a single pass).</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> — Upscale is fidelity-first with a Replicate model and a creativity dial, not a blunt resize. Plus Convert, Compress, Batch, Export for Social (every platform's crop bundled as one ZIP), PDF→Images, Print Ready, Auto-enhance — all deterministic, no AI cost, safe to re-run.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Alt text &amp; names (AI-suggested alt text and file names for you to check), Blur Detection, Image Diff, Remove Meta, File Info.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Good to know</strong> — tools that use AI show their estimated cost, and what is left of your daily limit, before they run. <strong>Recent results</strong> (button above the tool search, off until you switch it on) keeps your last 40 finished pictures in this browser only, so you can open one again; your browser can clear that storage, so download anything you need to keep.</p>
@@ -835,7 +842,8 @@ export default function GraphicsPage() {
                   {mode === 'textoverlay' && 'Add wrapped headline or caption text, with an optional background pill and outline.'}
                   {mode === 'composite' && 'Stack multiple text and logo layers onto a base image in one pass.'}
                   {mode === 'collage' && 'Arrange several images into a grid.'}
-                  {mode === 'extend' && 'Add padding around the image (white, a colour, or transparent).'}
+                  {mode === 'extend' && 'Add space around the image, or pad it to a shape, filled with a colour, transparency or AI.'}
+                  {mode === 'qrcode' && 'Make a QR code for a link, Wi-Fi, email, phone, text message or contact card.'}
                   {mode === 'annotate' && 'Click to type text right on the image, draw arrows/boxes/freehand, move anything, then save a PNG.'}
                   {mode === 'effects' && 'Flip, rotate (90° or any angle), border, round corners, shadow, or a filter (grayscale, sepia, invert, duotone).'}
                   {mode === 'adjust' && 'Tune brightness, contrast, colour, levels, gamma, sharpness, blur, noise reduction and vignette.'}
@@ -851,9 +859,9 @@ export default function GraphicsPage() {
                   {mode === 'pdf2img' && 'Render each page of a PDF to a PNG image.'}
                   {mode === 'printready' && 'Convert any image to a print-ready file at 150, 300, or 600 DPI — TIFF, PDF, or PNG output with optional bleed.'}
                   {mode === 'pipeline' && 'Chain several edits into one repeatable sequence.'}
-                  {mode === 'inpaint' && 'Paint over an area and let AI fill or replace it.'}
-                  {mode === 'eraser' && 'Paint over parts of an image to erase them to transparency.'}
-                  {mode === 'extract' && 'Paint a mask over an element to isolate it as a transparent PNG.'}
+                  {mode === 'inpaint' && 'Paint over an area (or select the subject or background in one click) and let AI fill or replace it.'}
+                  {mode === 'eraser' && 'Paint over parts of an image, or erase the whole background or subject in one click.'}
+                  {mode === 'extract' && 'Paint over an element, or select the main subject in one click, to isolate it as a transparent PNG.'}
                   {mode === 'perspective' && 'Correct keystone / trapezoid distortion with horizontal and vertical shear sliders.'}
                   {mode === 'smartcrop' && 'Crop to a target size or aspect ratio, with content-aware focus (attention, entropy, or a fixed direction).'}
                   {mode === 'colorgrade' && 'Apply a cinematic colour grade — warm, cool, vintage, fade, noir, and more — in one click.'}

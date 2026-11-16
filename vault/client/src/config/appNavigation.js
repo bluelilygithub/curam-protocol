@@ -63,7 +63,7 @@ export const APP_NAV_GROUPS = [
       { id: 'pdf', label: 'PDF Tools', path: '/pdf', icon: 'file-text', featureKey: 'pdf' },
       { id: 'fonts', label: 'Font Customizer', path: '/fonts', icon: 'type', featureKey: 'fonts' },
       { id: 'restyle', label: 'Style editor', path: '/restyle', icon: 'brush', featureKey: 'restyle', aliases: 'css restyle' },
-      { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
+      { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics', aliases: 'image picture photo qr code qrcode' },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
       { id: 'drawings', label: 'Diagrams', path: '/drawings', icon: 'pen-tool', featureKey: 'drawings', aliases: 'drawing drawings sketch whiteboard flowchart flow chart excalidraw' },
       { id: 'sketchbook', label: 'Sketchbook', path: '/sketchbook', icon: 'pencil-line', featureKey: 'sketchbook', aliases: 'cartoon cartoons illustrate illustration sketch pencil scene storyboard draw picture' },

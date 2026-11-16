@@ -1453,9 +1453,9 @@ function UserGuidePage() {
         {/* ── Graphics ── */}
         <SectionHeading id="graphics">Graphics</SectionHeading>
         <P>
-          <strong>Graphics</strong> (<code>/graphics</code>) bundles forty-two image tools behind a grouped,
+          <strong>Graphics</strong> (<code>/graphics</code>) bundles forty-four image tools behind a grouped,
           searchable sidebar. Most tools run locally and for free via server-side image processing or entirely in
-          your browser on a canvas; only a handful (Generate, Upscale, hosted Background removal, Inpaint) call a
+          your browser on a canvas; only a handful (Generate, Upscale, hosted Background removal, Inpaint, Canvas Extend's AI fill, the one-click subject select, Alt text) call a
           paid AI provider, and their cost is shown before you commit.
         </P>
 
@@ -1463,11 +1463,11 @@ function UserGuidePage() {
         <UL>
           <LI><strong>Create</strong> — Generate, Animate (GIF).</LI>
           <LI><strong>Optimise</strong> — Upscale, Convert, Compress, Batch, Export for Social, PDF → Images, Print Ready, Auto-enhance.</LI>
-          <LI><strong>Transform</strong> — Crop/Resize, Canvas Extend, Perspective Correct, Smart Crop.</LI>
+          <LI><strong>Transform</strong> — Crop/Resize, Canvas Extend (with AI fill), Perspective Correct, Smart Crop.</LI>
           <LI><strong>Enhance</strong> — Effects, Adjust, Color Grading, Pipeline.</LI>
-          <LI><strong>Compose</strong> — Annotate, Text Overlay, Composite, Watermark, Batch Text, Collage, Favicon/Icons, Vectorize (SVG), AI Icon Library.</LI>
+          <LI><strong>Compose</strong> — Annotate, Text Overlay, Composite, Watermark, Batch Text, Collage, Favicon/Icons, QR Code, Vectorize (SVG), AI Icon Library.</LI>
           <LI><strong>Retouch</strong> — Background, Extract Element, Recolor, Eraser, Redact, Inpaint.</LI>
-          <LI><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Blur Detection, Image Diff, Remove Meta, File Info.</LI>
+          <LI><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Alt text &amp; names, Blur Detection, Image Diff, Remove Meta, File Info.</LI>
         </UL>
 
         <SubHeading>Standout tools</SubHeading>
@@ -1479,6 +1479,9 @@ function UserGuidePage() {
           <LI><strong>Export for Social</strong> — one image in, a preview and download for every platform crop out, each independently adjustable before you export a zip of the lot.</LI>
           <LI><strong>Brand Kit</strong> — save a logo, up to three brand colours, and a font name once; Text Overlay, Watermark, and Composite then offer one-click brand swatches and a logo layer.</LI>
           <LI><strong>Magic wand selection</strong> — click a pixel to select a connected same-colour region (with a tolerance slider) in Inpaint, Eraser, and Extract Element, instead of hand-painting a mask.</LI>
+          <LI><strong>Select subject</strong> — in the same three tools, the <strong>Subject</strong> and <strong>Background</strong> buttons select the main subject, or everything else, in one click using the Background tool's AI cut-out (a small charge on the live site, shown first).</LI>
+          <LI><strong>Canvas Extend with AI fill</strong> — make a picture wider or taller (or pad it to square, 4:5, 9:16 or 16:9) and let the AI paint the new space so the scene carries on. Your picture itself is kept exactly as it is.</LI>
+          <LI><strong>QR Code</strong> — a code that opens a link, joins Wi-Fi, starts an email, call or text, or saves a contact card, in your colours and with your logo, as PNG or SVG. Runs in your browser.</LI>
         </UL>
 
         <Callout type="tip">
@@ -1489,7 +1492,7 @@ function UserGuidePage() {
 
         <P>
           Like PDF Tools and Video Tools, every sidebar tool button and every in-panel control (over 300 of them
-          across all 42 tools) shows a themed hover tooltip, and every tool has a click-to-open help icon
+          across all 44 tools) shows a themed hover tooltip, and every tool has a click-to-open help icon
           explaining its purpose in full.
         </P>
 

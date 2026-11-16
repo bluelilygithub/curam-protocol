@@ -159,6 +159,8 @@ export const semanticMap = {
   type: { lucide: 'Type' },
   swatch: { lucide: 'SwatchBook' },
   frame: { lucide: 'Frame' },
+  'qr-code': { lucide: 'QrCode' },
+  'scan-face': { lucide: 'ScanFace' },
   'app-window': { lucide: 'AppWindow' },
   shapes: { lucide: 'Shapes' },
   'layout-grid': { lucide: 'LayoutGrid' },

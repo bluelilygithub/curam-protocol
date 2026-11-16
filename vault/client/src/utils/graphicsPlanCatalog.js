@@ -73,6 +73,20 @@ export const GRAPHICS_PLAN_CATALOG = [
     },
   },
   {
+    id: 'expand',
+    label: 'Canvas Extend with AI fill',
+    description: 'Make the picture bigger on chosen sides and have the AI paint the new space so the scene carries on (reframe a photo wider or taller, make room for text). The original picture is kept exactly; only the new space is painted. Each side may add at most the picture\'s own size (left+right at most twice the width, top+bottom at most twice the height). Costs a little.',
+    endpoint: '/api/graphics/expand',
+    requiresMask: false,
+    paramSchema: {
+      top: { type: 'int', min: 0, max: 2000, default: 0 },
+      right: { type: 'int', min: 0, max: 2000, default: 0 },
+      bottom: { type: 'int', min: 0, max: 2000, default: 0 },
+      left: { type: 'int', min: 0, max: 2000, default: 0 },
+      prompt: { type: 'string', note: 'optional: what the new space should show, e.g. "more sky and sea"; empty carries on the scene' },
+    },
+  },
+  {
     id: 'augment',
     label: 'Augment (image-to-image)',
     description: 'Whole-image style/scene regeneration from a prompt — weather, mood, colourize a black-and-white photo, a stylistic reinterpretation. No mask. The whole image is regenerated, so identity/composition can shift more than the other auto-run modes; higher strength = closer to a new image, lower = closer to the original.',

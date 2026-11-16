@@ -18,7 +18,15 @@ const {
   GRAVITY_MAP,
   parseHexColor,
   SOCIAL_PRESETS,
+  loadContentRestrictions,
+  assertPromptAllowed,
+  resolveGraphicsModel,
+  resolveGraphicsProvider,
+  inpaintWithFal,
+  estimateGenerateCost,
+  logImageUsage,
 } = require('./shared');
+const { expandImage } = require('../../services/graphicsExpand');
 
 function parseAspect(value) {
   const m = String(value || '').trim().match(/^(\d+(?:\.\d+)?)\s*[:x/]\s*(\d+(?:\.\d+)?)$/i);
@@ -156,6 +164,47 @@ router.post('/extend', async (req, res) => {
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Canvas extend failed' });
+  }
+});
+// Canvas Extend with AI fill: the new space is painted by the image model to continue the scene
+// (services/graphicsExpand.js). Hosted FAL inpainting, so it is paid and sits behind the paid-tool guard.
+router.post('/expand', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) return res.status(400).json({ error: 'A valid image is required' });
+    assertStill(await sharp(buffer).metadata());
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 600);
+    const restrictions = await loadContentRestrictions();
+    if (prompt) assertPromptAllowed(prompt, restrictions);
+    const modelName = await resolveGraphicsModel(req.user.id);
+    const provider = await resolveGraphicsProvider(req.user.id, modelName);
+    if (provider !== 'fal') {
+      return res.status(400).json({ error: 'AI fill uses the FAL image provider. Switch your image provider in Settings, or use a plain colour.' });
+    }
+    const pads = {
+      top: clampInt(req.body?.top, 0, 5000, 0),
+      right: clampInt(req.body?.right, 0, 5000, 0),
+      bottom: clampInt(req.body?.bottom, 0, 5000, 0),
+      left: clampInt(req.body?.left, 0, 5000, 0),
+    };
+    const seed = Number.isFinite(Number(req.body?.seed)) ? Math.floor(Number(req.body.seed)) : Math.floor(Math.random() * 2147483647);
+    const result = await expandImage(buffer, pads, { prompt, inpaint: inpaintWithFal, seed });
+    const cost = estimateGenerateCost({ provider: 'fal' });
+    logImageUsage({ userId: req.user.id, model: `fal:${result.image?.endpoint || 'inpaint'}`, feature: 'graphics_expand', costUsd: cost.usd });
+    res.json({
+      ok: true,
+      width: result.width,
+      height: result.height,
+      format: 'jpeg',
+      bytes: result.buffer.length,
+      seed: result.seed,
+      model: result.image?.endpoint || null,
+      cost,
+      imageDataUrl: `data:image/jpeg;base64,${result.buffer.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'AI fill failed', code: err.code, matches: err.matches });
   }
 });
 // Perspective correction via affine shear (handles keystone / trapezoid distortion).

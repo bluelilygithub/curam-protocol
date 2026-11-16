@@ -2,7 +2,7 @@ import { useIcon } from '../../../providers/IconProvider';
 import React, { useState, useRef, useEffect } from 'react';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { magicWandSelectionCanvas, restoreWithinSelection, downloadDataUrl, loadImageInto } from '../shared';
+import { magicWandSelectionCanvas, restoreWithinSelection, SubjectSelectButtons, downloadDataUrl, loadImageInto } from '../shared';
 
 export default function EraserTool({ active }) {
   const getIcon = useIcon();
@@ -93,11 +93,11 @@ export default function EraserTool({ active }) {
     ctx.restore();
   };
 
-  const eraserWandAt = (x, y) => {
+  // Erase (or restore) inside a selection: a magic-wand click or Select subject / background.
+  const eraserApplySelection = (sel) => {
     const canvas = eraserCanvasRef.current;
     const img = eraserImgRef.current;
     if (!canvas || !img) return;
-    const sel = magicWandSelectionCanvas(img, canvas.width, canvas.height, x, y, eraserTolerance);
     const ctx = canvas.getContext('2d');
     if (eraserMode === 'restore') {
       ctx.drawImage(restoreWithinSelection(img, sel, canvas.width, canvas.height), 0, 0);
@@ -109,18 +109,28 @@ export default function EraserTool({ active }) {
     }
   };
 
+  const eraserWandAt = (x, y) => {
+    const canvas = eraserCanvasRef.current;
+    const img = eraserImgRef.current;
+    if (!canvas || !img) return;
+    eraserApplySelection(magicWandSelectionCanvas(img, canvas.width, canvas.height, x, y, eraserTolerance));
+  };
+
+  const snapshotEraser = () => {
+    const canvas = eraserCanvasRef.current;
+    if (!canvas) return;
+    const snap = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    eraserUndoRef.current = [...eraserUndoRef.current, snap].slice(-20);
+    eraserRedoRef.current = [];
+    setEraserCanUndo(true);
+    setEraserCanRedo(false);
+  };
+
   const onEraserDown = (e) => {
     const p = eraserPos(e);
     if (!p) return;
     e.preventDefault();
-    const canvas = eraserCanvasRef.current;
-    if (canvas) {
-      const snap = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-      eraserUndoRef.current = [...eraserUndoRef.current, snap].slice(-20);
-      eraserRedoRef.current = [];
-      setEraserCanUndo(true);
-      setEraserCanRedo(false);
-    }
+    snapshotEraser();
     if (eraserSelectMode === 'wand') { eraserWandAt(p.x, p.y); return; }
     eraserIsDrawingRef.current = true;
     eraserLastRef.current = p;
@@ -191,7 +201,7 @@ export default function EraserTool({ active }) {
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs in browser · free</span>
         </div>
         <div className="rounded-2xl border p-4 space-y-4 mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint over parts of an image to erase them to transparency. Switch to Restore mode to paint original pixels back. Exports as a PNG with an alpha channel.</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint over parts of an image to erase them to transparency, or erase the whole subject or background in one click. Switch to Restore mode to paint original pixels back. Exports as a PNG with an alpha channel.</p>
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
             <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) loadImageInto(src => { setEraserSource(src); setEraserCanUndo(false); setEraserCanRedo(false); })(f); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
@@ -215,6 +225,18 @@ export default function EraserTool({ active }) {
               <div className="flex-1 min-w-[160px]">
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Tolerance: {eraserTolerance}</label>
                 <Tooltip text="How similar neighbouring pixels must be to get selected. Higher picks up a wider range of colours; click again to add more to the selection."><input type="range" min="0" max="100" value={eraserTolerance} onChange={e => setEraserTolerance(Number(e.target.value))} className="w-full" /></Tooltip>
+              </div>
+            )}
+            {eraserSource?.imageDataUrl && (
+              <div className="w-full">
+                <SubjectSelectButtons
+                  getImage={() => eraserImgRef.current}
+                  size={() => ({ width: eraserCanvasRef.current?.width, height: eraserCanvasRef.current?.height })}
+                  onSelect={(sel) => { snapshotEraser(); eraserApplySelection(sel); }}
+                  sourceKey={eraserSource?.imageDataUrl}
+                  browserOnly
+                  verb={eraserMode === 'restore' ? 'restore' : 'erase'}
+                />
               </div>
             )}
             <div className="flex gap-2 flex-wrap">
@@ -243,7 +265,7 @@ export default function EraserTool({ active }) {
             />
           </div>
         )}
-        <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Everything runs in your browser — nothing is uploaded. The checkerboard pattern shows transparent areas.</p>
+        <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Painting and the magic wand run in your browser; only the one-click Subject and Background buttons send the picture to the server. The checkerboard pattern shows transparent areas.</p>
       </section>
     </>
   );

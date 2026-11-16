@@ -7,6 +7,7 @@ export const TOOL_COMPONENTS = {
   upscale: lazy(() => import('./tools/UpscaleTool')),
   convert: lazy(() => import('./tools/ConvertTool')),
   favicon: lazy(() => import('./tools/FaviconTool')),
+  qrcode: lazy(() => import('./tools/QrCodeTool')),
   exportsocial: lazy(() => import('./tools/ExportSocialTool')),
   svg: lazy(() => import('./tools/VectorizeTool')),
   iconlib: lazy(() => import('./tools/IconLibraryTool')),

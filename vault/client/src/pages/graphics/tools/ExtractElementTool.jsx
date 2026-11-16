@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { useUrlImport, magicWandSelectionCanvas, restoreWithinSelection, tintSelectionCanvas, loadImageInto, UrlImportRow, renderExport } from '../shared';
+import { useUrlImport, magicWandSelectionCanvas, restoreWithinSelection, tintSelectionCanvas, SubjectSelectButtons, loadImageInto, UrlImportRow, renderExport } from '../shared';
 
 export default function ExtractElementTool({ active }) {
   const getIcon = useIcon();
@@ -95,12 +95,12 @@ export default function ExtractElementTool({ active }) {
     }
   };
 
-  const extractWandAt = (x, y) => {
+  // Add a selection to the mask (Keep) or take it out (Erase): a magic-wand click or Select subject / background.
+  const extractApplySelection = (sel) => {
     const disp = extractCanvasRef.current;
     const mask = extractMaskRef.current;
     const img = extractImgRef.current;
     if (!disp || !mask || !img) return;
-    const sel = magicWandSelectionCanvas(img, disp.width, disp.height, x, y, extractTolerance);
     const dctx = disp.getContext('2d');
     const mctx = mask.getContext('2d');
     if (extractErasing) {
@@ -111,6 +111,13 @@ export default function ExtractElementTool({ active }) {
       dctx.drawImage(tintSelectionCanvas(sel, 'rgba(34,197,94,0.45)'), 0, 0);
       mctx.drawImage(sel, 0, 0);
     }
+  };
+
+  const extractWandAt = (x, y) => {
+    const disp = extractCanvasRef.current;
+    const img = extractImgRef.current;
+    if (!disp || !img) return;
+    extractApplySelection(magicWandSelectionCanvas(img, disp.width, disp.height, x, y, extractTolerance));
   };
 
   const onExtractDown = (e) => {
@@ -176,7 +183,7 @@ export default function ExtractElementTool({ active }) {
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint (green) over the element you want to keep. Everything outside the painted area will be removed. Use the Erase brush to clean up paint strokes.</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint (green) over the element you want to keep, or press Subject to select the main subject in one click. Everything outside the painted area will be removed. Use the Erase brush to clean up paint strokes.</p>
             <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
               <input type="file" accept="image/*" onChange={e => loadImageInto(src => { setExtractSource(src); })(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
@@ -218,6 +225,13 @@ export default function ExtractElementTool({ active }) {
                   )}
                   <Tooltip text="Clear the mask and start over."><button type="button" onClick={clearExtractMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear</button></Tooltip>
                 </div>
+                <SubjectSelectButtons
+                  getImage={() => extractImgRef.current}
+                  size={() => ({ width: extractCanvasRef.current?.width, height: extractCanvasRef.current?.height })}
+                  onSelect={extractApplySelection}
+                  sourceKey={extractSource?.imageDataUrl}
+                  verb={extractErasing ? 'take out of the selection' : 'keep'}
+                />
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Feather edges: {extractFeather}px</label>
                   <input type="range" min="0" max="30" step="1" value={extractFeather} onChange={e => setExtractFeather(Number(e.target.value))} className="w-full" />

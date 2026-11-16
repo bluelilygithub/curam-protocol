@@ -4,7 +4,7 @@
 // BEFORE the person presses the button. Nothing is spent or logged here. Not behind the paid-job guard
 // (it only covers POST), so it still answers when the limit has been reached.
 //
-//   ?tool=generate|augment|inpaint|upscale|background|icons|describe
+//   ?tool=generate|augment|inpaint|expand|upscale|background|subject|icons|describe
 //   &runs=N            how many runs the job will make (default 1; a batch passes its size)
 //   &width=&height=&scale=   upscale only: the source picture's pixels and the scale
 //   tool=recipe: &recipeId=N (a saved recipe) or &paid=removebg,upscale:4 (the AI steps being built), with &runs= pictures and &width=&height= of the
@@ -26,7 +26,7 @@ const paid = require('../../services/graphicsPaidSteps');
 const { spentLast24h, dailyCapUsd } = require('../../middleware/graphicsLimits');
 const { buildCostPreview } = require('../../services/graphicsCostPreview');
 
-const TOOLS = ['generate', 'augment', 'inpaint', 'upscale', 'background', 'icons', 'describe', 'recipe'];
+const TOOLS = ['generate', 'augment', 'inpaint', 'expand', 'upscale', 'background', 'subject', 'icons', 'describe', 'recipe'];
 
 // A recipe's AI steps, priced for one picture of the given size. Returns the same shape as the single-tool estimates.
 async function priceOfRecipe(userId, q) {
@@ -54,13 +54,13 @@ async function priceOfOneRun(tool, userId, q) {
     const provider = await resolveGraphicsProvider(userId, model);
     return estimateGenerateCost({ provider });
   }
-  if (tool === 'inpaint') return estimateGenerateCost({ provider: 'fal' }); // inpainting is hosted only
+  if (tool === 'inpaint' || tool === 'expand') return estimateGenerateCost({ provider: 'fal' }); // inpainting (and AI fill, which uses it) is hosted only
   if (tool === 'upscale') {
     if (runtimeConfig.isLocal) return { usd: 0, local: true };
     const scale = Math.min(8, Math.max(1, Number(q.scale) || 2));
     return upscaleCostForSize({ width: Number(q.width) || 0, height: Number(q.height) || 0, scale });
   }
-  if (tool === 'background') return estimateBackgroundCost({ isLocal: runtimeConfig.isLocal });
+  if (tool === 'background' || tool === 'subject') return estimateBackgroundCost({ isLocal: runtimeConfig.isLocal }); // Select subject is the same cut-out
   return { usd: null }; // icons and alt text are billed by the words the AI uses, so there is no price until it has run
 }
 

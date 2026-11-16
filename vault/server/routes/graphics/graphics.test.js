@@ -135,6 +135,7 @@ async function startServer() {
     assert.notStrictEqual((await post('/generate', { prompt: 'a graphic design poster', skipRefine: true })).status, 422, 'one word of a multi-word restriction is not enough');
     assert.strictEqual((await post('/augment', { prompt: 'make it gory', imageDataUrl: img })).status, 422, 'augment is guarded');
     assert.strictEqual((await post('/inpaint', { prompt: 'add gore here', imageDataUrl: img, maskDataUrl: img })).status, 422, 'inpaint is guarded');
+    assert.strictEqual((await post('/expand', { prompt: 'add gore here', imageDataUrl: img, left: 10 })).status, 422, 'AI fill checks a typed description too');
     r = await post('/preflight', { prompt: 'Singapore' });
     assert.strictEqual(r.body.restricted, false);
     r = await post('/preflight', { prompt: 'so much gore' });
@@ -268,6 +269,8 @@ async function startServer() {
     assert.strictEqual(r.body.code, 'GRAPHICS_DAILY_CAP');
     assert.strictEqual((await post('/inpaint', { prompt: 'x', imageDataUrl: smallUrl, maskDataUrl: smallUrl })).status, 429, 'inpaint is capped');
     assert.strictEqual((await post('/upscale', { imageDataUrl: smallUrl })).status, 429, 'upscale is capped');
+    assert.strictEqual((await post('/expand', { imageDataUrl: smallUrl, left: 10 })).status, 429, 'AI fill is capped');
+    assert.strictEqual((await post('/subject-mask', { imageDataUrl: smallUrl })).status, 429, 'Select subject is capped');
     assert.notStrictEqual((await post('/convert', { imageDataUrl: smallUrl, format: 'png' })).status, 429, 'free tools are not capped');
     global.__poolHandler = (sql) => (/usage_logs/.test(sql) ? { rows: [{ spent: '0.10' }] } : { rows: [{ value: '[]' }] });
     assert.notStrictEqual((await post('/generate', { prompt: 'a sunny hill', skipRefine: true })).status, 429, 'under the cap goes through');

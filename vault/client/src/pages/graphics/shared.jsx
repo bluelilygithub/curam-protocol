@@ -691,3 +691,102 @@ export function useProcessingWhile(label) {
   useEffect(() => () => { if (started.current) { stopProcessing(); started.current = false; } }, [stopProcessing]);
 }
 
+
+// ── Select subject / Select background ─────────────────────────────────────────────────────────────
+// One click instead of painting: the server finds the main subject with the same cut-out model as Background
+// (POST /api/graphics/subject-mask; free on a local copy, a small charge on the live site) and returns a soft
+// greyscale mask. It is turned into a selection canvas in the same form as the magic wand's (white, opaque where
+// selected, see-through elsewhere, soft at the edges), so each tool applies it exactly as it applies a wand click.
+// The mask is kept per picture, so switching between Subject and Background does not ask (or pay) twice.
+
+const SUBJECT_SEND_MAX = 1024;
+
+async function fetchSubjectMask(img) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  const s = Math.min(1, SUBJECT_SEND_MAX / Math.max(iw, ih));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(iw * s)); c.height = Math.max(1, Math.round(ih * s));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff'; // a see-through picture would otherwise turn black in the JPEG
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  const res = await api.post('/api/graphics/subject-mask', { imageDataUrl: c.toDataURL('image/jpeg', 0.9) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.maskDataUrl) throw new Error(data.error || 'Could not find the subject');
+  return { mask: await loadImageEl(data.maskDataUrl), coverage: data.coverage };
+}
+
+/** Selection canvas (outW x outH) from a subject mask: the subject, or everything else when `background` is true. */
+export function subjectSelectionCanvas(maskImg, outW, outH, background) {
+  const c = document.createElement('canvas');
+  c.width = outW; c.height = outH;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(maskImg, 0, 0, outW, outH);
+  const id = ctx.getImageData(0, 0, outW, outH);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = d[i];
+    d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+    d[i + 3] = background ? 255 - v : v;
+  }
+  ctx.putImageData(id, 0, 0);
+  return c;
+}
+
+/**
+ * Two buttons, "Subject" and "Background". `getImage()` returns the loaded picture (an <img>), `size()` returns the
+ * { width, height } of the tool's own canvas, and `onSelect(selCanvas, which)` applies the selection.
+ * `sourceKey` changes when the picture changes (so a new picture gets a new mask). `browserOnly` adds the line that
+ * this one feature sends the picture to the server (Eraser promises nothing is uploaded otherwise).
+ */
+export function SubjectSelectButtons({ getImage, size, onSelect, sourceKey, browserOnly = false, verb = 'select' }) {
+  const cache = useRef({ key: null, mask: null });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  useEffect(() => { cache.current = { key: null, mask: null }; setError(''); setNote(''); }, [sourceKey]);
+  useProcessingWhile(busy ? 'Finding the subject…' : null);
+
+  const pick = async (which) => {
+    const img = getImage();
+    const dims = size();
+    if (!img || !dims?.width) { setError('Choose a picture first'); return; }
+    setError(''); setNote('');
+    try {
+      if (cache.current.key !== sourceKey || !cache.current.mask) {
+        setBusy(true);
+        const { mask, coverage } = await fetchSubjectMask(img);
+        cache.current = { key: sourceKey, mask, coverage };
+      }
+      const { mask, coverage } = cache.current;
+      if (coverage != null && coverage < 0.005) { setNote('No clear subject was found in this picture. Paint or use the magic wand instead.'); return; }
+      if (coverage != null && coverage > 0.97) setNote('The whole picture looks like the subject. Check the selection before going on.');
+      onSelect(subjectSelectionCanvas(mask, dims.width, dims.height, which === 'background'), which);
+    } catch (err) {
+      setError(err.message || 'Could not find the subject');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const btn = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40 inline-flex items-center gap-1';
+  const style = { color: 'var(--color-text)', borderColor: 'var(--color-border)' };
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>One click:</span>
+        <Tooltip text={`Find the main subject (a person, product, animal or object) automatically and ${verb} it, instead of painting. Uses the same AI cut-out as the Background tool.`}>
+          <button type="button" disabled={busy} onClick={() => pick('subject')} className={btn} style={style}>Subject</button>
+        </Tooltip>
+        <Tooltip text={`Find the main subject automatically and ${verb} everything except it (the background).`}>
+          <button type="button" disabled={busy} onClick={() => pick('background')} className={btn} style={style}>Background</button>
+        </Tooltip>
+      </div>
+      <CostNote tool="subject" />
+      {browserOnly && <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>These two buttons send the picture to the server to find the subject; painting and the magic wand stay in your browser.</p>}
+      {note && <p className="text-[11px]" style={{ color: '#f59e0b' }}>{note}</p>}
+      {error && <p className="text-[11px]" style={{ color: '#ef4444' }}>{error}</p>}
+    </div>
+  );
+}

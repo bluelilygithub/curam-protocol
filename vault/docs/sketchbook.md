@@ -2,7 +2,7 @@
 
 Added 2026-11-08. A person describes a scene, a theory or a possibility (typed or spoken) and the image model draws it as a cartoon. Every picture is saved in the person's own collection, can be changed later with more words (the **same** picture changes, no new one is made), and can be saved as a file. Route `/sketchbook` (the collection) and `/sketchbook/:id` (one sketch). Content Creation in the navigation. Flag **`sketchbook`**, lifecycle **`preview`**, **off by default** (admins can always open it).
 
-It is its own tool, not part of Graphics, because it is project-shaped (a saved collection, a history per picture, follow-up edits) and Graphics' 43 tools are stateless picture-in, picture-out. It reuses Graphics' image generation, spend limits and content restrictions rather than rebuilding them.
+It is its own tool, not part of Graphics, because it is project-shaped (a saved collection, a history per picture, follow-up edits) and Graphics' 44 tools are stateless picture-in, picture-out. It reuses Graphics' image generation, spend limits and content restrictions rather than rebuilding them.
 
 ## What it does
 
