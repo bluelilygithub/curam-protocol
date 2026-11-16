@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "46b4e293",
+   "fullHash": "46b4e29322da20e94de9551c337643b2897fe7f2",
+   "committedAt": "2026-11-17T09:49:12+10:00",
+   "author": "mrb",
+   "subject": "Translate: status check no longer counts against the AI rate limit",
+   "filesChanged": 3,
+   "insertions": 16,
+   "deletions": 4,
+   "area": "Translate",
+   "goal": "Stop a running translation from using up the person's whole allowance of AI requests, which got their other clicks on the Translate page refused with \"Too many requests\".",
+   "whatChanged": "While a translation runs, the page asks the server for its progress every 2 seconds. That is 30 requests a minute, exactly the shared limit of 30 AI requests a minute per person, so opening My translations, Glossaries or the guide during a run could be refused. The progress check (GET /api/translate/jobs/:id/status) only reads the person's own job and calls no paid service, so it no longer counts. A small wrapper, aiLimiterExcept, was added beside the AI limiter to leave named free requests out of the count; server/index.js uses it for Translate with a rule that matches only a GET to that exact address. Every other Translate request (starting a translation, the estimate, the lists, the downloads) is limited exactly as before. The note in docs/translate-agent.md is updated.",
+   "filesImpacted": [
+    "server/middleware/aiRateLimit.js",
+    "server/index.js",
+    "docs/translate-agent.md"
+   ],
+   "benefit": "During a translation the rest of the Translate page keeps working. Checked with real requests against the real limiter and the rule from server/index.js on a small stand-in app: 100 progress checks in a row were all let through, other requests were still stopped at the 31st in a minute, a progress check after that was still let through, and a POST to the same address or a look-alike address was still limited.",
+   "concerns": "Not checked on the full server or the live app: nobody has yet run a real translation and clicked around during it. The progress check now has no limit of its own; it is a small database read of the caller's own row behind the login, so the risk is low, but a script could call it as often as it likes. The other Translate reads (jobs list, glossaries, downloads) still count against the AI limit although they call no AI either; someone clicking through them quickly can still be refused."
+  },
+  {
    "commit": "16ed0fd5",
    "fullHash": "16ed0fd59c25a3c1652e0a90dc19996d35620d68",
    "committedAt": "2026-11-17T09:42:10+10:00",
