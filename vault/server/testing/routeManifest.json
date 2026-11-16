@@ -3502,6 +3502,9 @@
   "GET /api/topic-research/usage": {
    "class": "authed"
   },
+  "POST /api/translate-tutor": {
+   "class": "authed"
+  },
   "GET /api/translate/config": {
    "class": "authed"
   },

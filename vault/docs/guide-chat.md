@@ -51,6 +51,7 @@ Three more page guides on `guideCore.js`/`guideRouter.js`, each with a tools lis
 | Sketchbook guide | `sketchbook` | `/api/sketchbook-tutor` (flag `sketchbook`) | `server/services/sketchbookTutor.js` | `node server/services/sketchbookTutor.test.js` (no npm script, to keep `package.json` unchanged) |
 | Plans guide | `plans` | `/api/plans-tutor` (flag `plans`) | `server/services/plansTutor.js` | `node server/services/plansTutor.test.js` (no npm script, to keep `package.json` unchanged) |
 | CSS guide | `css` | `/api/restyle-tutor` (flag `restyle`) | `server/services/restyleTutor.js` | `npm run test:restyle-tutor` |
+| Translate guide | `translate` | `/api/translate-tutor` (flag `translate`) | `server/services/translateTutor.js` (tools list `client/src/pages/translate/translateTools.mjs`) | `node server/services/translateTutor.test.js` (no npm script, to keep `package.json` unchanged) |
 
 They see no fonts, values, documents or pages. The CSS guide follows that tool's rule of no code words in anything a person reads (its test checks the catalogue, rules and page wording). The three tests use `server/services/guideTestKit.js` (`checkGuide`), which also checks the page's menu against the catalogue (every menu tool has a tip, a blurb and the same group in the guide); use it for the next page guide. The pages' menu is the shared `client/src/components/ToolSidebar.jsx` (see client/DESIGN.md).
 

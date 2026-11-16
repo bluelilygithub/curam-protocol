@@ -279,6 +279,7 @@ app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
+app.use('/api/translate-tutor', requireFeature('translate'), aiLimiter, require('./routes/translateTutor')); // the Translate guide chat (sees no documents or translations)
 app.use('/api/translate', requireFeature('translate'), aiLimiter, require('./routes/translate'));
 app.use('/api/guitar-play', requireFeature('guitar'), require('./routes/guitarPlay')); // set lists for gig mode, ear training
 app.use('/api/guitar-coach', requireFeature('guitar'), aiLimiter, require('./routes/guitarCoach')); // the Guitar coach: weekly review, session builder, explain a song

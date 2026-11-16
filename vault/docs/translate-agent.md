@@ -2,7 +2,7 @@
 
 Professional document translation at **`/translate`**. Upload a source file, answer short intake questions, then Vault LLMs prepare a glossary, translate in chunks, optionally run a QA review, and the browser builds a bilingual PDF.
 
-**Frontend:** `vault/client/src/pages/TranslatePage.jsx`  
+**Frontend:** `vault/client/src/pages/TranslatePage.jsx` (the page shell) + `vault/client/src/pages/translate/` (the screens; see **The page** below)  
 **Backend:** `vault/server/routes/translate.js`  
 **Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js` · `googleTranslateService.js` · `translateMemory.js` · `translateNativeOutput.js`  
 **Tables:** `translate_jobs`, `translate_glossaries`, `translate_memory`  
@@ -10,7 +10,30 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 
 Feature flag / app: **Translate** (languages).
 
-A `help-circle` icon next to the page title opens **`TranslateAboutModal`** — explains the pipeline, what the saved-vs-global glossary controls do, and other things worth knowing (View Results, no legal certification, the multi-column extraction limitation). Same modal pattern as Property Scenario's `AgentPurposeModal`; kept local to this page since Translate has one agent, not a hub of several.
+## The page (reworked 2026-11-17)
+
+The page follows the tool-page conventions (shared `ToolSidebar`, a "What do you want to do?" job screen, an (i) box, a compass tour, a guide chat, a tooltip on every control, plain words throughout). `TranslatePage.jsx` is only the shell; everything else is in `client/src/pages/translate/`:
+
+| File | What it is |
+|---|---|
+| `translateTools.mjs` | The four screens in the left-hand list (`new`, `jobs`, `glossaries`, `learned`), their hover tips and blurbs, the (i) text (`HOW_IT_WORKS`), the option names (`ENGINE_LABELS`, `LAYOUT_OPTIONS`) and `GUIDE_TOOLS` (the controls the guide's Open buttons can switch to). |
+| `translateGoals.mjs` | The eight ready-made jobs on the job screen. Each has a `preset` (`engine`, `review`, `layout`, optional `paste`, `targetLang`) that fills New translation in; `resolvePreset` falls back to Vault AI when Google Translate is not set up, and the form says so. |
+| `TranslationsWorkspace.jsx` | New translation and My translations. **One component, always mounted** (it shows nothing on the other screens), because it owns the running job: the status check and the PDF step carry on whichever screen is showing. |
+| `JobsDashboard.jsx` | My translations: the count boxes (All, Ready, Need checking, Running, Did not finish), search, and the rows. |
+| `QaPanel.jsx` | A job's result ("Open result"): the downloads, a one-line verdict, the list of what to look at, and a closed "Technical details (for support)" block with the models, version and counts. Opens for a job with no saved check results too, for its downloads. |
+| `qaReport.js` | `resultVerdict(qa)` (which KINDS of problem the checks listed; not a score) and the plain-text check report. |
+| `lessons.jsx` | Lessons learnt and "Everything applied so far". The stored `disposition` values are unchanged; `DISPOSITION_WORDS` is what the page shows for them. |
+| `GlossariesPanel.jsx` | Glossaries: New glossary, Open, Delete (inline "Delete? Yes / No"), Add a word, Add from a CSV file (third column `keep`, or the older `DNT`, leaves a word as it is). Learned glossaries carry a "Learned" badge. The list is read again each time the screen opens. |
+| `LearnedPanel.jsx` | What it has learned: the applied rules and words (`GET /lessons`), and the stored wording per pair of languages with "Download translation memory" (`GET /memory/stats`, `/memory/export.tmx`). Read-only. |
+| `translatePdf.jsx`, `shared.jsx` | The PDF builder and the small shared pieces (`Modal`, `Btn`, `Tip`, `saveFromApi`). |
+| `TranslateTutorChat.jsx` | The Translate guide's wording; the chat is the shared `components/tutor/TutorChat.jsx`. |
+
+- **Guide:** `guideId` `translate`, `POST /api/translate-tutor` (flag `translate`, AI rate limit), `server/services/translateTutor.js` on `guideCore.js`, route on `guideRouter.js`. It sees no document or translation. **Update `translateTools.mjs` and `CATALOG` together, and keep button names on the page the same as the ones the catalogue quotes** ("Open result", "Download check report", "Lessons learnt", "Apply selected", "New glossary", "Keep as is", "Learned", "Download translation memory").
+- **Tour:** `client/src/utils/tours/translateTour.js`, 9 steps, started from the compass beside the title or `/translate?tour=1`. `/translate?tool=<id>` opens one screen.
+- **Tests** (no npm scripts, on purpose: a `package.json` edit means a slow deploy): `node server/services/translateTutor.test.js`, `node client/src/pages/translate/translateGoals.test.mjs`, `node client/src/pages/translate/qaReport.test.mjs`, plus `npm run test:guides`.
+- **Known limit, not changed here:** every `/api/translate/*` request counts against the shared AI rate limit (30 a minute per person), and a running job asks for its status every 2 seconds, which is 30 a minute by itself. Other requests made while a job runs can be refused with "Too many requests". The page now keeps the list it has when that happens instead of breaking, but the limit itself is still there.
+
+Older sections below still say "QA panel", "View Results" and name `TranslatePage.jsx` for code that now lives in `client/src/pages/translate/`; the behaviour they describe is unchanged.
 
 ---
 
