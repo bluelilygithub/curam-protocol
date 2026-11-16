@@ -31,9 +31,10 @@ export const VIDEO_GOALS = [
   {
     id: 'captions',
     title: 'Add captions to a talking video',
-    blurb: 'Write out what is said, check it, burn it in.',
+    blurb: 'Cut the pauses, write out what is said, burn it in.',
     icon: 'type',
     steps: [
+      { tool: 'remove-silences', note: 'Cut the pauses and dead air out first, so it gets to the point.' },
       { tool: 'transcribe-audio', note: 'Load the video, choose "With timestamps", fix any wrong words.' },
       { tool: 'caption-studio', note: 'Style the captions and burn them into the video.' },
     ],
@@ -66,9 +67,22 @@ export const VIDEO_GOALS = [
     blurb: 'Your logo on it, an opening title, a closing message.',
     icon: 'megaphone',
     steps: [
+      { tool: 'remove-logo', note: 'Hide an old logo or a camera date stamp first, if there is one.' },
       { tool: 'overlay', note: 'Put your logo or watermark on the video.' },
       { tool: 'extend-ending', note: 'Add an opening title and a closing hold with music.' },
       { tool: 'end-card', note: 'End with a call to action.' },
+    ],
+  },
+  {
+    id: 'fix-footage',
+    title: 'Fix shaky or grainy phone footage',
+    blurb: 'Steady it, smooth the grain, even out the sound.',
+    icon: 'wand',
+    steps: [
+      { tool: 'stabilize', note: 'Steady the shake. Strong suits walking shots.' },
+      { tool: 'denoise', note: 'Smooth out the grain from low light or zooming in.' },
+      { tool: 'normalize', note: 'Even out the loudness so it plays at a normal level.' },
+      { tool: 'convert', note: 'Make the file smaller so it is easy to share.' },
     ],
   },
   {

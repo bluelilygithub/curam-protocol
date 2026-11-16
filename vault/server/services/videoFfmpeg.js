@@ -73,6 +73,11 @@ async function probeVideo(filePath) {
     height: video?.height || null,
     fps: video?.avg_frame_rate || null,
     codec: video?.codec_name || null,
+    pixFmt: video?.pix_fmt || null,
+    // HDR phone video (iPhone default) is smpte2084 (PQ) or arib-std-b67 (HLG); videoCleanup.toSdrIfHdr turns it to normal colour
+    colorTransfer: video?.color_transfer || null,
+    colorPrimaries: video?.color_primaries || null,
+    hdr: ['smpte2084', 'arib-std-b67'].includes(String(video?.color_transfer || '').toLowerCase()),
     hasAudio: Boolean(audio),
     format: data.format?.format_name || null,
     // a phone video is stored sideways with a turn flag; players (and ffmpeg) turn it, so the shown size is width/height swapped
@@ -108,8 +113,19 @@ function clipArgs(inputPath, outputPath, { startSec, endSec, keepOriginal = fals
   return args;
 }
 
+/**
+ * `keepOriginal` first tries a smart cut (videoCleanup.smartCut): exact on the frame, only the two ends re-encoded, the
+ * middle copied untouched. When the file does not suit it (not H.264, turned, HDR, short) it falls back to the plain copy,
+ * which starts on the keyframe before the requested time.
+ * @returns {Promise<{ method: 'smart'|'copy'|'encode' }>}
+ */
 async function clipVideo(inputPath, outputPath, range) {
+  if (range?.keepOriginal) {
+    const { smartCut } = require('./videoCleanup'); // required here: videoCleanup requires this file
+    if (await smartCut(inputPath, outputPath, range)) return { method: 'smart' };
+  }
   await execFileAsync(FFMPEG, clipArgs(inputPath, outputPath, range));
+  return { method: range?.keepOriginal ? 'copy' : 'encode' };
 }
 
 async function convertVideo(inputPath, outputPath, { crf = 23, maxWidth } = {}) {
@@ -538,23 +554,59 @@ const LOUDNESS_PRESETS = {
 };
 
 /**
- * One-pass loudnorm — good enough for an occasional-user "fix my volume"
- * tool. True two-pass (measure then apply exact I/LRA/TP) is more accurate
- * but doubles encode time and requires parsing loudnorm's stderr JSON; for
- * a single click on short clips one-pass is the right tradeoff here.
+ * Read the measurement JSON that loudnorm prints at the end of a print_format=json pass. Returns null when it is missing or
+ * the sound is silent (measured loudness -inf), in which case the one-pass filter is used.
+ */
+function parseLoudnormJson(stderr) {
+  const text = String(stderr || '');
+  const at = text.lastIndexOf('{');
+  const close = text.lastIndexOf('}');
+  if (at < 0 || close < at) return null;
+  try {
+    const j = JSON.parse(text.slice(at, close + 1));
+    const nums = ['input_i', 'input_lra', 'input_tp', 'input_thresh', 'target_offset'].map((k) => Number(j[k]));
+    if (!nums.every(Number.isFinite)) return null;
+    return { i: nums[0], lra: nums[1], tp: nums[2], thresh: nums[3], offset: nums[4] };
+  } catch {
+    return null;
+  }
+}
+
+/** The second-pass filter: the target plus what pass one measured, so loudnorm can apply one exact, even correction. */
+function loudnormSecondPass(preset, m) {
+  return `loudnorm=I=${preset.i}:LRA=${preset.lra}:TP=${preset.tp}`
+    + `:measured_I=${m.i}:measured_LRA=${m.lra}:measured_TP=${m.tp}:measured_thresh=${m.thresh}:offset=${m.offset}:linear=true`;
+}
+
+/**
+ * Two-pass loudnorm (since 2026-11-17; was one pass). Pass one only reads the sound to measure it (quick: the picture is
+ * not decoded); pass two applies one exact correction, so the result lands on the target instead of near it and
+ * quiet-then-loud clips are not pumped. Falls back to one pass if the measurement cannot be read.
  * @param {{ preset?: 'quiet'|'normal'|'loud', crf?: number }} [opts]
+ * @returns {Promise<{ passes: 1|2 }>}
  */
 async function normalizeAudioLoudness(inputPath, outputPath, opts = {}) {
   const preset = LOUDNESS_PRESETS[opts.preset] || LOUDNESS_PRESETS.normal;
   const probe = await probeVideo(inputPath);
   if (!probe.hasAudio) throw new Error('Video has no audio track to normalize');
   const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
-  const af = `loudnorm=I=${preset.i}:LRA=${preset.lra}:TP=${preset.tp}`;
+  let af = `loudnorm=I=${preset.i}:LRA=${preset.lra}:TP=${preset.tp}`;
+  let passes = 1;
+  try {
+    const { stderr } = await execFileAsync(FFMPEG, [
+      '-hide_banner', '-nostats', '-i', inputPath, '-map', '0:a:0', '-vn',
+      '-af', `${af}:print_format=json`, '-f', 'null', '-',
+    ], 600000);
+    const measured = parseLoudnormJson(stderr);
+    if (measured) { af = loudnormSecondPass(preset, measured); passes = 2; }
+  } catch { /* measuring failed: one pass below still works */ }
+  // loudnorm works at 192 kHz inside; -ar brings it back to a normal rate
   try {
     await execFileAsync(FFMPEG, [
       '-y', '-i', inputPath,
+      '-map', '0:v:0', '-map', '0:a:0',
       '-c:v', 'copy',
-      '-af', af,
+      '-af', af, '-ar', '48000',
       '-c:a', 'aac', '-b:a', '192k',
       '-movflags', '+faststart',
       outputPath,
@@ -562,13 +614,15 @@ async function normalizeAudioLoudness(inputPath, outputPath, opts = {}) {
   } catch {
     await execFileAsync(FFMPEG, [
       '-y', '-i', inputPath,
-      '-af', af,
+      '-map', '0:v:0', '-map', '0:a:0',
+      '-af', af, '-ar', '48000',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
       '-c:a', 'aac', '-b:a', '192k',
       '-movflags', '+faststart',
       outputPath,
     ], 600000);
   }
+  return { passes };
 }
 
 /**
@@ -1217,6 +1271,8 @@ module.exports = {
   execFileAsync,
   LOUDNESS_PRESETS,
   normalizeAudioLoudness,
+  parseLoudnormJson,
+  loudnormSecondPass,
   videoToGif,
   SLIDESHOW_DIMS,
   buildSlideshow,

@@ -76,6 +76,9 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { appendEndCard, normalizeEndCard } = require('../services/videoEndCard');
 const { joinClips } = require('../services/videoJoin/joinClips');
 const { joinCapabilities } = require('../services/videoJoin/capabilities');
+const {
+  toSdrIfHdr, ffmpegFilters, removeSilences, stabilizeVideo, denoiseVideo, removeLogo,
+} = require('../services/videoCleanup');
 
 const router = express.Router();
 
@@ -245,12 +248,18 @@ function sendImageBuffer(res, buffer, filename = 'thumbnail.jpg') {
   res.send(buffer);
 }
 
-async function writeUpload(dir, file) {
+/**
+ * Write an uploaded video to the job folder. HDR phone video (the iPhone default) is turned to normal colour here, once,
+ * so every tool after it gets correct colour instead of a grey, washed-out picture (videoCleanup.toSdrIfHdr).
+ * `sdr: false` keeps the file exactly as uploaded (File info, and Clip's "keep original quality").
+ */
+async function writeUpload(dir, file, { sdr = true } = {}) {
   if (!file?.buffer?.length) throw new Error('Video file is required');
   const ext = extensionForMime(file.mimetype);
   const inputPath = path.join(dir, `input${ext}`);
   await fs.writeFile(inputPath, file.buffer);
-  return inputPath;
+  if (!sdr) return inputPath;
+  return (await toSdrIfHdr(inputPath)).path;
 }
 
 router.get('/status', async (req, res) => {
@@ -292,6 +301,8 @@ router.get('/status', async (req, res) => {
     transcribe,
     // AI voice isolation is billed per run on Replicate and needs the token; the quick (ffmpeg) option always works.
     isolateVoice: { ai: Boolean(process.env.REPLICATE_API_TOKEN) },
+    // Which optional ffmpeg filters this server has (HDR colour fix, Stabilise, Reduce grain, Remove logo, Remove pauses).
+    filters: ffmpeg ? await ffmpegFilters() : null,
   });
 });
 
@@ -629,7 +640,7 @@ router.post('/reference-video', upload.single('video'), ffmpegRoute('reference-v
 
 router.post('/probe', upload.single('video'), ffmpegRoute('probe', async (req, res) => {
   const info = await withTempDir(async (dir) => {
-    const inputPath = await writeUpload(dir, req.file);
+    const inputPath = await writeUpload(dir, req.file, { sdr: false });
     return probeVideo(inputPath);
   });
 
@@ -652,13 +663,16 @@ router.post('/clip', upload.single('video'), ffmpegRoute('clip', async (req, res
     return res.status(400).json({ error: 'endSec must be greater than startSec' });
   }
 
+  let method = 'encode';
   const buffer = await withTempDir(async (dir) => {
-    const inputPath = await writeUpload(dir, req.file);
+    const inputPath = await writeUpload(dir, req.file, { sdr: !keepOriginal });
     const outputPath = path.join(dir, 'clip.mp4');
-    await clipVideo(inputPath, outputPath, { startSec, endSec, keepOriginal });
+    ({ method } = await clipVideo(inputPath, outputPath, { startSec, endSec, keepOriginal }));
     return readOutputFile(outputPath);
   });
 
+  // 'smart' = exact cut, only the ends re-encoded; 'copy' = plain copy from the keyframe before the start
+  res.setHeader('X-Clip-Method', method);
   sendVideoBuffer(res, buffer, 'clip.mp4');
 }));
 
@@ -681,8 +695,9 @@ router.post('/clip-from-url', ffmpegRoute('clip-from-url', async (req, res) => {
   }
 
   const buffer = await withTempDir(async (dir) => {
-    const inputPath = path.join(dir, 'source-download');
-    await fetchLicensedVideo(url, inputPath);
+    const downloaded = path.join(dir, 'source-download');
+    await fetchLicensedVideo(url, downloaded);
+    const inputPath = keepOriginal ? downloaded : (await toSdrIfHdr(downloaded)).path;
     const outputPath = path.join(dir, 'clip.mp4');
     await clipVideo(inputPath, outputPath, { startSec, endSec, keepOriginal });
     return readOutputFile(outputPath);
@@ -802,7 +817,7 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
       const ext = extensionForMime(file.mimetype);
       const inputPath = path.join(dir, `join_in_${i}${ext}`);
       await fs.writeFile(inputPath, file.buffer);
-      inputPaths.push(inputPath);
+      inputPaths.push((await toSdrIfHdr(inputPath)).path);
     }
     const playOrder = plan ? plan.order.map((i) => inputPaths[i]) : inputPaths;
     const outputPath = path.join(dir, 'joined.mp4');
@@ -1316,8 +1331,9 @@ router.post('/replace-section', upload.fields([{ name: 'video', maxCount: 1 }, {
 
     const jobId = startBackgroundJob(req.user.id, 'replace-section', (signal) => withTempDir(async (dir) => {
       const videoPath = await writeUpload(dir, videoFile);
-      const replacementPath = path.join(dir, `replacement-in${extensionForMime(replacementFile.mimetype)}`);
-      await fs.writeFile(replacementPath, replacementFile.buffer);
+      const replacementRaw = path.join(dir, `replacement-in${extensionForMime(replacementFile.mimetype)}`);
+      await fs.writeFile(replacementRaw, replacementFile.buffer);
+      const replacementPath = (await toSdrIfHdr(replacementRaw)).path;
       const outPath = path.join(dir, 'replaced.mp4');
       await replaceSectionService.replaceSection({
         videoPath, replacementPath, outPath, options, signal,
@@ -1789,6 +1805,65 @@ router.post('/normalize', upload.single('video'), ffmpegRoute('normalize', async
   });
 
   sendVideoBuffer(res, buffer, 'normalized.mp4');
+}));
+
+// ---- Clean up (added 2026-11-17; recipes in server/services/videoCleanup.js) ----
+
+router.post('/remove-silences', upload.single('video'), ffmpegRoute('remove-silences', async (req, res) => {
+  const level = ['gentle', 'normal', 'strong'].includes(req.body?.level) ? req.body.level : 'normal';
+  const minPauseSec = Number(req.body?.minPauseSec);
+  const padSec = Number(req.body?.padSec);
+  let summary = null;
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'no-pauses.mp4');
+    summary = await removeSilences(inputPath, outputPath, {
+      level,
+      minPauseSec: Number.isFinite(minPauseSec) ? minPauseSec : undefined,
+      padSec: Number.isFinite(padSec) ? padSec : undefined,
+    });
+    return readOutputFile(outputPath);
+  });
+  res.setHeader('X-Removed-Seconds', String(summary.removedSec));
+  res.setHeader('X-Cuts', String(summary.cuts));
+  sendVideoBuffer(res, buffer, 'no-pauses.mp4');
+}, { errorStatus: 500 }));
+
+router.post('/stabilize', upload.single('video'), ffmpegRoute('stabilize', async (req, res) => {
+  const strength = ['gentle', 'normal', 'strong'].includes(req.body?.strength) ? req.body.strength : 'normal';
+  let method = null;
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'stabilized.mp4');
+    ({ method } = await stabilizeVideo(inputPath, outputPath, { strength }));
+    return readOutputFile(outputPath);
+  });
+  res.setHeader('X-Stabilize-Method', method);
+  sendVideoBuffer(res, buffer, 'stabilized.mp4');
+}));
+
+router.post('/denoise', upload.single('video'), ffmpegRoute('denoise', async (req, res) => {
+  const strength = ['light', 'medium', 'strong'].includes(req.body?.strength) ? req.body.strength : 'medium';
+  const hiss = req.body?.hiss === 'true' || req.body?.hiss === true;
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'denoised.mp4');
+    await denoiseVideo(inputPath, outputPath, { strength, hiss });
+    return readOutputFile(outputPath);
+  });
+  sendVideoBuffer(res, buffer, 'denoised.mp4');
+}));
+
+router.post('/remove-logo', upload.single('video'), ffmpegRoute('remove-logo', async (req, res) => {
+  const box = parseJsonBodyField(req.body?.box);
+  if (!box || typeof box !== 'object') return res.status(400).json({ error: 'Draw a box around the logo first.' });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'no-logo.mp4');
+    await removeLogo(inputPath, outputPath, { box });
+    return readOutputFile(outputPath);
+  });
+  sendVideoBuffer(res, buffer, 'no-logo.mp4');
 }));
 
 router.post('/togif', upload.single('video'), ffmpegRoute('togif', async (req, res) => {

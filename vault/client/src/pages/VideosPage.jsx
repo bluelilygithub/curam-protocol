@@ -31,6 +31,7 @@ import Dialog from '../components/Dialog';
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
 import { VIDEO_GOALS } from './videos/videoGoals.mjs';
 import RemoveSwearing from './videos/RemoveSwearing';
+import LogoBoxPicker from './videos/LogoBoxPicker';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -258,8 +259,8 @@ const TOOL_HELP = {
     what: 'One-click loudness fix so a video\'s volume sits at a consistent level.',
     features: [
       'Presets: quiet / normal / loud — no raw ffmpeg parameters to configure',
-      'Uses ffmpeg\'s loudnorm filter, single-pass for speed',
-      'Good for a quick "fix my volume" pass on an occasional clip',
+      'Two passes: it first measures the whole soundtrack, then applies one exact correction, so the result lands on the target level',
+      'The picture is copied as it is, so it stays fast',
     ],
   },
   togif: {
@@ -382,11 +383,52 @@ const TOOL_HELP = {
       'Jump straight into Caption studio with a saved video pre-selected',
     ],
   },
+  'remove-silences': {
+    title: 'Remove pauses',
+    what: 'Cut the pauses and dead air out of a talking video, so it gets to the point.',
+    features: [
+      'Finds every stretch where nobody is speaking and cuts it out; the picture and the sound are cut at exactly the same places, so lips stay in sync',
+      'How much counts as a pause: Less (only real silence), Normal, or More (also quiet breathing and room noise)',
+      'Shortest pause to cut, from 0.3 to 5 seconds, and a little breathing room kept either side of every word',
+      'Tells you how many pauses it cut and how many seconds shorter the video is',
+      'Works best on one person talking to camera. Music under the voice hides the pauses',
+    ],
+  },
+  stabilize: {
+    title: 'Stabilise',
+    what: 'Steady shaky handheld video.',
+    features: [
+      'Looks at the whole video first to learn the shake, then moves each frame against it',
+      'Gentle, Normal or Strong; stronger makes it steadier and zooms in a little more to hide the moving edges',
+      'Sound is kept as it is',
+      'Takes about twice as long as other tools, because it goes through the video twice',
+    ],
+  },
+  denoise: {
+    title: 'Reduce grain',
+    what: 'Smooth out the grain and speckle in low-light or zoomed-in video.',
+    features: [
+      'Light, Medium or Strong; stronger is smoother but can soften fine detail',
+      'Optional: also lower a steady background hiss in the sound',
+      'Best on footage shot indoors, at night, or zoomed in on a phone',
+    ],
+  },
+  'remove-logo': {
+    title: 'Remove logo',
+    what: 'Hide a logo, date stamp or old watermark that stays in one place, by filling the box with the picture around it.',
+    features: [
+      'Draw a box over the logo on the video, or start from a corner and adjust',
+      'The box is filled in from the pixels around it; it works best on small marks over plain or gently moving backgrounds',
+      'The logo must not move during the video',
+      'For your own footage only, such as an old logo or a camera date stamp. Do not use it to remove someone else\'s watermark',
+    ],
+  },
   info: {
     title: 'File info',
     what: 'Inspect a video\'s technical details without processing it.',
     features: [
       'Duration, resolution, and container format',
+      'Says whether the video is HDR (most new phones record it); every tool turns HDR to normal colour automatically',
       'Video and audio codec details',
       'Useful for confirming a file before running it through another tool',
     ],
@@ -430,13 +472,18 @@ const TOOL_TIPS = {
   'extend-ending': 'Hold the first and last pictures of a video with a title over each, while the music plays on and fades out.',
   'add-music': 'Opens the Music page, where you can make background music to fit your video, or add your own track and a voiceover.',
   'saved-library': 'The videos and images you have saved from these tools, to preview, rename, delete or send back to Caption studio.',
-  info: "Show a video's length, picture size, format, and whether it has sound.",
+  'remove-silences': 'Cut the pauses and dead air out of a talking video. You choose how quiet counts as a pause.',
+  stabilize: 'Steady shaky handheld video. It zooms in a little to hide the moving edges.',
+  denoise: 'Smooth out grain and speckle in dark or zoomed-in video, and optionally lower background hiss.',
+  'remove-logo': 'Hide a logo or date stamp that stays in one place on your own video, by filling it in from the picture around it.',
+  info: "Show a video's length, picture size, format, whether it has sound, and whether it is HDR.",
   thumbnail: 'Save one picture (JPG) from any moment in a video.',
 };
 
 const GROUP_TIPS = {
   make: 'Start something new: a clip from a written description, or a video from your pictures.',
   edit: 'Cut, replace, join, reshape or change the speed of a video.',
+  cleanup: 'Fix the footage itself: cut out pauses, steady the shake, smooth out grain, hide a fixed logo.',
   titles: 'Put words and logos on a video: titles, closing messages, captions and watermarks.',
   audio: 'Everything for sound: pull it out, clean it up, trim it, mix it with music, or write out what is said.',
   export: 'Make the finished file: smaller, in the right shape for social media, as a GIF, or as a still picture.',
@@ -461,6 +508,16 @@ const TOOL_GROUPS = [
       { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'reframe', label: 'Crop / reframe', desc: '9:16, 16:9, 1:1, 4:5 — crop or letterbox' },
       { id: 'speed', label: 'Speed', desc: 'Slow-mo or speed up (0.25×–4×)' },
+    ],
+  },
+  {
+    id: 'cleanup',
+    label: 'Clean up',
+    tools: [
+      { id: 'remove-silences', label: 'Remove pauses', desc: 'Cut the dead air out of a talking video' },
+      { id: 'stabilize', label: 'Stabilise', desc: 'Steady shaky handheld footage' },
+      { id: 'denoise', label: 'Reduce grain', desc: 'Smooth grainy low-light video' },
+      { id: 'remove-logo', label: 'Remove logo', desc: 'Hide a fixed logo or date stamp' },
     ],
   },
   {
@@ -1204,6 +1261,13 @@ export default function VideosPage() {
 
   // Normalize
   const [normalizePreset, setNormalizePreset] = useState('normal');
+  // Clean up tools
+  const [silenceLevel, setSilenceLevel] = useState('normal');
+  const [silenceMinPause, setSilenceMinPause] = useState(0.6);
+  const [stabStrength, setStabStrength] = useState('normal');
+  const [denoiseStrength, setDenoiseStrength] = useState('medium');
+  const [denoiseHiss, setDenoiseHiss] = useState(false);
+  const [logoBox, setLogoBox] = useState(null);
 
   // Video → GIF
   const [gifFps, setGifFps] = useState(12);
@@ -1757,7 +1821,7 @@ export default function VideosPage() {
     }
   };
 
-  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson, forTool }) => {
+  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson, forTool, doneMessage }) => {
     startProcessing(label, 'Processing on the server with ffmpeg.');
     try {
       const res = await api.postForm(`/api/videos/${endpoint}`, formData);
@@ -1772,7 +1836,7 @@ export default function VideosPage() {
       const blob = await res.blob();
       setResultFromBlob(blob, resultFilename, forTool ?? tool);
       setLastTransaction({ tool: forTool ?? endpoint });
-      addToast('Done', 'success');
+      addToast((typeof doneMessage === 'function' && doneMessage(res.headers)) || 'Done', 'success');
       return blob;
     } catch (err) {
       addToast(err.message, 'error');
@@ -2754,6 +2818,9 @@ export default function VideosPage() {
       convert: { crf: setCrf, maxWidth: (x) => setMaxWidth(String(x)) },
       audio: { audioMode: setAudioMode },
       normalize: { normalizePreset: setNormalizePreset },
+      'remove-silences': { silenceLevel: setSilenceLevel, minPauseSec: setSilenceMinPause },
+      stabilize: { stabStrength: setStabStrength },
+      denoise: { denoiseStrength: setDenoiseStrength, denoiseHiss: setDenoiseHiss },
       togif: { gifFps: setGifFps, gifWidth: setGifWidth, gifStartSec: setGifStartSec, gifEndSec: (x) => setGifEndSec(String(x)) },
       'export-social': { exportPresets: setExportPresets, exportFocus: setExportFocus },
       reframe: { reframeAspect: setReframeAspect, reframeMode: setReframeMode, reframeFocus: setReframeFocus },
@@ -2833,6 +2900,7 @@ export default function VideosPage() {
             <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
               <p style={{ color: 'var(--color-text)' }}><strong>Make</strong> a new video: Generate clip (from a written description, optionally starting from a picture), or Slideshow (your pictures with music, captions and transitions).</p>
               <p style={{ color: 'var(--color-text)' }}><strong>Edit video</strong> — Clip / trim (with a timeline you can scrub), Replace a section (swap the picture of one stretch for a clip of exactly the same length, sound untouched), Join videos (cuts or transitions), Crop / reframe, Speed.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Clean up</strong> — Remove pauses (cut the dead air out of a talking video), Stabilise (steady shaky footage), Reduce grain, Remove logo (a fixed logo or date stamp on your own video). HDR video from a phone is turned to normal colour automatically in every tool.</p>
               <p style={{ color: 'var(--color-text)' }}><strong>Titles and captions</strong> — Annotate (a line of text), Call to action (a closing message), Intro and ending (hold the first and last frames with a title over each while the music plays on and fades out), Overlay / watermark, and Caption studio (styled subtitles, including from a script with no timestamps).</p>
               <p style={{ color: 'var(--color-text)' }}><strong>Audio</strong> — Extract audio, Isolate voice (from background music), Audio → transcript, Trim audio, Mix audio (voice plus music), Add music, Mute / replace audio, Normalize audio.</p>
               <p style={{ color: 'var(--color-text)' }}><strong>Export and convert</strong> — Convert / compress, Export for Social (tall, square and widescreen versions at once), Video → GIF, Thumbnail.</p>
@@ -3516,10 +3584,10 @@ export default function VideosPage() {
             <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
               <input type="checkbox" checked={clipKeepOriginal} onChange={(e) => setClipKeepOriginal(e.target.checked)} className="mt-0.5" />
               <span>
-                <Tooltip text="Copies the picture and sound exactly as they are, with no re-compression, so quality is identical to your master. The cut can only start on a keyframe, so it may begin a second or two before your Start time.">
+                <Tooltip text="Keeps the middle of the clip exactly as it is, with no re-compression, and re-saves only the second or so at each end so the cut lands on the exact frame. For files where that is not possible (most iPhone videos), it copies from the nearest earlier keyframe, so the clip may begin a second or two before your Start time.">
                   <span className="font-medium">Keep original quality (no re-encode)</span>
                 </Tooltip>
-                <span className="block" style={{ color: 'var(--color-muted)' }}>Fastest and lossless. Off = exact cut to the frame, re-saved at very high quality.</span>
+                <span className="block" style={{ color: 'var(--color-muted)' }}>Fastest, and the middle is untouched. Off = the whole clip is re-saved at very high quality.</span>
               </span>
             </label>
             <Tooltip text={isClipUrlMode ? 'Download the file and cut it to the selected in/out range.' : 'Cut the video down to just the selected in/out range.'}>
@@ -3533,7 +3601,12 @@ export default function VideosPage() {
                   fd.append('startSec', String(startSec));
                   if (endSec !== '') fd.append('endSec', String(endSec));
                   fd.append('keepOriginal', String(clipKeepOriginal));
-                  runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' });
+                  runFormVideo('clip', fd, {
+                    label: 'Clipping…',
+                    resultFilename: 'clip.mp4',
+                    forTool: 'clip',
+                    doneMessage: (h) => (h.get('X-Clip-Method') === 'copy' ? 'Done. Copied from the nearest keyframe, so it may start a little early.' : null),
+                  });
                 }}
                 disabled={!ffmpegOk || (isClipUrlMode && clipUrlLoading)}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
@@ -4593,6 +4666,191 @@ export default function VideosPage() {
               </button>
             </Tooltip>
             {resultForTool === 'normalize' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'remove-silences' && (
+          <section className="space-y-3">
+            <ToolHeader id="remove-silences" label="Remove pauses" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Cuts the pauses out of a talking video. The picture and sound are cut at the same places, so lips stay in sync. Best on one person talking; music under the voice hides the pauses.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>How much counts as a pause</span>
+                <Tooltip text="Less cuts only real silence. More also cuts quiet breathing and room noise; try it if Normal leaves gaps in, and Less if it clips the ends of words.">
+                  <select value={silenceLevel} onChange={(e) => setSilenceLevel(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="gentle">Less (only real silence)</option>
+                    <option value="normal">Normal</option>
+                    <option value="strong">More (quiet noise too)</option>
+                  </select>
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Shortest pause to cut (seconds)</span>
+                <Tooltip text="Pauses shorter than this are left in, so the speech keeps its natural rhythm. 0.6 seconds suits most talking; raise it to cut only long gaps.">
+                  <input type="number" min={0.3} max={5} step={0.1} value={silenceMinPause} onChange={(e) => setSilenceMinPause(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            {status?.filters && !status.filters.silencedetect && (
+              <p className="text-xs" style={{ color: '#f59e0b' }}>Remove pauses is not available on this server.</p>
+            )}
+            <Tooltip text="Find the pauses and cut them out. Your original file is not changed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('level', silenceLevel);
+                  fd.append('minPauseSec', String(silenceMinPause));
+                  runFormVideo('remove-silences', fd, {
+                    label: 'Removing pauses…',
+                    resultFilename: 'no-pauses.mp4',
+                    forTool: 'remove-silences',
+                    doneMessage: (h) => {
+                      const cuts = Number(h.get('X-Cuts'));
+                      const sec = Number(h.get('X-Removed-Seconds'));
+                      return cuts ? `Cut ${cuts} pause${cuts === 1 ? '' : 's'}; the video is ${sec.toFixed(1)} seconds shorter.` : null;
+                    },
+                  });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Remove pauses
+              </button>
+            </Tooltip>
+            {resultForTool === 'remove-silences' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'stabilize' && (
+          <section className="space-y-3">
+            <ToolHeader id="stabilize" label="Stabilise" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Steadies shaky handheld video. It goes through the video twice (once to learn the shake, once to correct it), so it takes a little longer than other tools.
+            </p>
+            <label className="block space-y-1 max-w-xs">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Strength</span>
+              <Tooltip text="Stronger makes it steadier but zooms in a little more to hide the moving edges. Gentle keeps deliberate camera moves; Strong suits walking shots.">
+                <select value={stabStrength} onChange={(e) => setStabStrength(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="gentle">Gentle</option>
+                  <option value="normal">Normal</option>
+                  <option value="strong">Strong</option>
+                </select>
+              </Tooltip>
+            </label>
+            {status?.filters && !status.filters.vidstab && status.filters.deshake && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This server uses the simpler one-pass steadying, which removes less shake.</p>
+            )}
+            <Tooltip text="Steady the video. Your original file is not changed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('strength', stabStrength);
+                  runFormVideo('stabilize', fd, { label: 'Stabilising…', resultFilename: 'stabilized.mp4', forTool: 'stabilize' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Stabilise video
+              </button>
+            </Tooltip>
+            {resultForTool === 'stabilize' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'denoise' && (
+          <section className="space-y-3">
+            <ToolHeader id="denoise" label="Reduce grain" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Smooths out the grain and speckle you get indoors, at night, or zoomed in on a phone.
+            </p>
+            <label className="block space-y-1 max-w-xs">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Strength</span>
+              <Tooltip text="Stronger is smoother but can soften fine detail such as hair and text. Start with Medium.">
+                <select value={denoiseStrength} onChange={(e) => setDenoiseStrength(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="light">Light</option>
+                  <option value="medium">Medium</option>
+                  <option value="strong">Strong</option>
+                </select>
+              </Tooltip>
+            </label>
+            <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="checkbox" checked={denoiseHiss} onChange={(e) => setDenoiseHiss(e.target.checked)} className="mt-0.5" />
+              <Tooltip text="Also lowers a steady background hiss or hum in the sound. Leave it off if there is music, which it can dull.">
+                <span>Also reduce background hiss in the sound</span>
+              </Tooltip>
+            </label>
+            {status?.filters && !status.filters.hqdn3d && (
+              <p className="text-xs" style={{ color: '#f59e0b' }}>Reduce grain is not available on this server.</p>
+            )}
+            <Tooltip text="Smooth out the grain. Your original file is not changed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('strength', denoiseStrength);
+                  fd.append('hiss', String(denoiseHiss));
+                  runFormVideo('denoise', fd, { label: 'Reducing grain…', resultFilename: 'denoised.mp4', forTool: 'denoise' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Reduce grain
+              </button>
+            </Tooltip>
+            {resultForTool === 'denoise' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'remove-logo' && (
+          <section className="space-y-3">
+            <ToolHeader id="remove-logo" label="Remove logo" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Hides a logo, date stamp or old watermark that stays in one place, by filling the box in from the picture around it. For your own footage only.
+            </p>
+            <LogoBoxPicker src={previewUrl} box={logoBox} onChange={setLogoBox} />
+            {status?.filters && !status.filters.delogo && (
+              <p className="text-xs" style={{ color: '#f59e0b' }}>Remove logo is not available on this server.</p>
+            )}
+            <Tooltip text="Fill in the box from the picture around it. Your original file is not changed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  if (!logoBox || !(logoBox.w > 0.003 && logoBox.h > 0.003)) { addToast('Draw a box around the logo first', 'error'); return; }
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('box', JSON.stringify(logoBox));
+                  runFormVideo('remove-logo', fd, { label: 'Removing the logo…', resultFilename: 'no-logo.mp4', forTool: 'remove-logo' });
+                }}
+                disabled={!ffmpegOk || !logoBox}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Remove logo
+              </button>
+            </Tooltip>
+            {resultForTool === 'remove-logo' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>
@@ -5679,6 +5937,7 @@ export default function VideosPage() {
                 <dt style={{ color: 'var(--color-muted)' }}>Duration</dt><dd>{formatDuration(probe.duration)}</dd>
                 <dt style={{ color: 'var(--color-muted)' }}>Resolution</dt><dd>{probe.width && probe.height ? `${probe.width}×${probe.height}` : '—'}</dd>
                 <dt style={{ color: 'var(--color-muted)' }}>Codec</dt><dd>{probe.codec || '—'}</dd>
+                <dt style={{ color: 'var(--color-muted)' }}>HDR</dt><dd>{probe.hdr ? 'Yes. Tools turn it to normal colour automatically.' : 'No'}</dd>
                 <dt style={{ color: 'var(--color-muted)' }}>Audio</dt><dd>{probe.hasAudio ? 'Yes' : 'No'}</dd>
                 <dt style={{ color: 'var(--color-muted)' }}>Size</dt><dd>{formatBytes(probe.uploadSize || probe.size)}</dd>
                 <dt style={{ color: 'var(--color-muted)' }}>Container</dt><dd>{probe.format || '—'}</dd>

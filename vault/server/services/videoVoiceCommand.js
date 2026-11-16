@@ -95,6 +95,24 @@ const TOOL_SCHEMAS = {
     label: 'Normalize audio',
     fields: { normalizePreset: E('Target loudness', ['quiet', 'normal', 'loud']) },
   },
+  'remove-silences': {
+    label: 'Remove pauses',
+    fields: {
+      silenceLevel: E('How much counts as a pause: gentle = only real silence ("less"), normal, strong = also quiet noise ("more", "cut more")', ['gentle', 'normal', 'strong']),
+      minPauseSec: N('Shortest pause to cut, in seconds', 0.3, 5),
+    },
+  },
+  stabilize: {
+    label: 'Stabilise',
+    fields: { stabStrength: E('How strongly to steady it', ['gentle', 'normal', 'strong']) },
+  },
+  denoise: {
+    label: 'Reduce grain',
+    fields: {
+      denoiseStrength: E('How strongly to smooth the grain', ['light', 'medium', 'strong']),
+      denoiseHiss: B('Also reduce background hiss in the sound'),
+    },
+  },
   togif: {
     label: 'Video to GIF',
     fields: {
