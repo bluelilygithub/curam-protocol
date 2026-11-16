@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b0e96f3d",
+   "fullHash": "b0e96f3d0c693e7037ad6e8740c4454008171c13",
+   "committedAt": "2026-11-17T08:03:59+10:00",
+   "author": "mrb",
+   "subject": "Graphics jobs: reframe step in social, new QR code job, honest step-bar hint",
+   "filesChanged": 7,
+   "insertions": 28,
+   "deletions": 11,
+   "area": "Graphics",
+   "goal": "Put the new AI fill and QR Code tool on the Graphics start screen (\"What do you want to do?\"), and stop the step bar telling people to use Use in… for tools that cannot receive a picture that way.",
+   "whatChanged": "\"Post on social media\" now starts with an optional Canvas Extend step (pad to square, 4:5 or 9:16, AI fill carries the scene on), then Text Overlay, Watermark, Export for Social. New ninth job \"Make a QR code\": QR Code, then Print Ready. The step bar's \"when you are done\" line now checks whether the next tool accepts Use in… (HANDOFF_MODES); when it does not (Print Ready, Smart Crop, Vectorize, Favicon and others) it says \"download the result, then choose that file in …\". This also corrects the existing print, product and logo jobs, which pointed at Use in… for tools that do not take it. The shared JobBar accepts carry as a function of the next tool; Video Tools, PDF Tools and CSS pass fixed text and are unchanged. The Ask Graphics \"What it can actually run\" box now mentions AI fill. goals test updated for the new step order; docs updated.",
+   "filesImpacted": [
+    "client/src/pages/graphics/goals.mjs",
+    "client/src/pages/graphics/goals.test.mjs",
+    "client/src/pages/graphics/GoalStart.jsx",
+    "client/src/components/JobStart.jsx",
+    "client/src/pages/GraphicsPage.jsx",
+    "client/src/components/GraphicsAskPanel.jsx",
+    "docs/graphics-tools.md"
+   ],
+   "benefit": "People reach AI fill from the most-used job and get a QR code job without browsing the tool list, and the step bar no longer sends them to a Use in… option that does not exist. Seen on screen locally: the nine tiles, the social job opening on Canvas Extend, and the QR job's step bar with the download wording. goals, tool-count and tutor tests pass; client builds.",
+   "concerns": "The Canvas Extend step is optional but the bar still counts it (\"Step 1 of 4\"); someone with a photo already the right shape skips it via the step chips. Print Ready still cannot receive a picture through Use in…, so the QR job needs a download and re-open; adding Print Ready (and the other tools) as Use in… targets would remove that step. The changed JobBar is shared with Video Tools, PDF Tools and CSS: they pass plain text, which works as before, but their bars were not re-checked on screen."
+  },
+  {
    "commit": "8f8e9c1d",
    "fullHash": "8f8e9c1dcd8689bbed393edb0bca6f3debde09d5",
    "committedAt": "2026-11-17T07:45:07+10:00",
