@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "3391ee86",
+   "fullHash": "3391ee86d32031a9604fb437b6b9dcf6b30bec3c",
+   "committedAt": "2026-11-17T07:00:10+10:00",
+   "author": "mrb",
+   "subject": "Video Tools: HDR colour fix, smart cut, two-pass loudness, Clean up tools",
+   "filesChanged": 13,
+   "insertions": 1216,
+   "deletions": 37,
+   "area": "Video Tools",
+   "goal": "Fix washed-out colour on phone HDR video in every tool, make three existing tools more accurate, and add four clean-up tools, using recipes from the ffmpeg-skill project (MIT) rewritten on Vault's own ffmpeg helpers.",
+   "whatChanged": "HDR uploads (iPhone default) are tone-mapped to normal colour once before any tool runs (writeUpload, Join, Clip from a link, Replace a section), capped at 1080p; File info shows HDR. Clip \"keep original quality\" is a smart cut (only the ends re-encoded, middle copied by exact packet count, checked by length and full decode, else the old stream copy). Normalize audio is two-pass with 48 kHz output. New Clean up group: Remove pauses, Stabilise, Reduce grain, Remove logo (draw a box). /api/videos/status lists which optional ffmpeg filters exist. Job cards: captions job starts with Remove pauses, brand job with Remove logo, new \"Fix shaky or grainy phone footage\" card. Tutor catalogue, voice commands and docs updated.",
+   "filesImpacted": [
+    "server/services/videoCleanup.js",
+    "server/services/videoCleanup.test.js",
+    "server/services/videoFfmpeg.js",
+    "server/routes/videos.js",
+    "server/services/videoTutor.js",
+    "server/services/videoVoiceCommand.js",
+    "client/src/pages/VideosPage.jsx",
+    "client/src/pages/videos/LogoBoxPicker.jsx",
+    "client/src/pages/videos/VoiceCommandBar.jsx",
+    "client/src/pages/videos/videoGoals.mjs",
+    "docs/video-tools.md",
+    "docs/key-files.md",
+    "docs/features.md"
+   ],
+   "benefit": "Measured locally on ffmpeg-made test clips: HDR picture match 15.9 to 23.1 dB through the Convert route; smart cut exact to the frame and 2-4x faster than a full re-encode; Normalize lands on -16.0 LUFS; Remove pauses keeps picture and sound the same length; Stabilise cuts frame-to-frame shake 61%; Remove logo fills the box cleanly. All four new tools run end to end in the browser against a local server. No new packages or Dockerfile change, so a fast deploy.",
+   "concerns": "Not tried on a real iPhone file; all test clips were synthetic. Smart-cut files not played in Safari or on an iPhone, and most iPhone video (HEVC) falls back to the old copy. HDR above 1080p now comes out at 1080p. The HDR conversion adds an extra encode for HDR uploads, which could push long 4K clips toward the five-minute request limit. Stabilise takes about twice as long as other tools and is not a background job. Reduce grain strengths were tuned on synthetic grain and can soften fine detail. The Railway ffmpeg filters (zscale, vidstab) are expected from Debian but unconfirmed until /api/videos/status is checked after deploy. Separately noticed: all /api/videos routes share a 30-per-minute limit, which quick tool switching can use up."
+  },
+  {
    "commit": "8b1ac710",
    "fullHash": "8b1ac71010cf997bd0155e439a29790ed66ef0af",
    "committedAt": "2026-11-16T09:23:03+10:00",
