@@ -79,7 +79,8 @@ export function BackToJobs({ onBack, toolLabel, goal }) {
 
 // Shown above a tool while a job is under way: the steps in order, the current one marked, and its one-line
 // instruction. Clicking a step opens that tool. Hidden when the person opens a tool that is not a step.
-// `carry` says how a result moves to the next tool (each app words it differently).
+// `carry` says how a result moves to the next tool (each app words it differently): fixed text, or a function of the
+// next tool's id when that depends on the tool (Graphics: only some tools take a picture through Use in…).
 export function JobBar({ goal, mode, onStep, labelFor, carry }) {
   const at = stepIndex(goal, mode);
   if (!goal || at < 0) return null;
@@ -112,7 +113,7 @@ export function JobBar({ goal, mode, onStep, labelFor, carry }) {
         <strong>Step {at + 1} of {goal.steps.length}:</strong> {goal.steps[at].note}
         {next && (
           <>
-            {' '}When you are done, {carry}{' '}
+            {' '}When you are done, {typeof carry === 'function' ? carry(next.tool) : carry}{' '}
             <button type="button" onClick={() => onStep(next.tool)} className="underline hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{labelFor(next.tool)}</button>.
           </>
         )}

@@ -12,8 +12,8 @@ import { GRAPHICS_PLAN_CATALOG, findPlanMode } from '../utils/graphicsPlanCatalo
 // mode the user wants to keep editing in, same "Use in…" mechanism every result panel already
 // has). See server/services/graphicsPlanService.js for the parsing/validation side.
 //
-// Scope is intentionally bounded to GRAPHICS_PLAN_CATALOG's five auto-runnable modes (adjust,
-// colorgrade, background, recolor, extend) plus two mask-requiring modes (inpaint, extract) that
+// Scope is intentionally bounded to GRAPHICS_PLAN_CATALOG's auto-runnable modes (adjust,
+// colorgrade, background, recolor, extend, expand = Canvas Extend's AI fill, augment) plus two mask-requiring modes (inpaint, extract) that
 // are always opened manually, never auto-run — see that file's own comment for why.
 
 function loadImageEl(src) {

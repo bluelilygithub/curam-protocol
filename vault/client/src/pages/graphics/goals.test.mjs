@@ -28,7 +28,7 @@ for (const g of GOALS) {
     seen.add(s.tool);
   }
 }
-assert.strictEqual(stepIndex(GOALS[0], 'watermark'), 1);
+assert.strictEqual(stepIndex(GOALS[0], 'watermark'), 2); // after the optional Canvas Extend and Text Overlay steps
 assert.strictEqual(stepIndex(GOALS[0], 'convert'), -1);
 assert.strictEqual(stepIndex(null, 'convert'), -1);
 console.log(`graphics goals: ok (${GOALS.length} goals)`);

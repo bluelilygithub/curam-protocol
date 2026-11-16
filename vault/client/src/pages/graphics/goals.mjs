@@ -9,9 +9,10 @@ export const GOALS = [
   {
     id: 'social',
     title: 'Post on social media',
-    blurb: 'Add a headline and your logo, then get every platform size.',
+    blurb: 'Reframe to the right shape, add a headline and your logo, then get every platform size.',
     icon: 'share-2',
     steps: [
+      { tool: 'extend', note: 'Optional: pad to square, 4:5 or 9:16; AI fill carries the scene on.' },
       { tool: 'textoverlay', note: 'Add your headline or caption.' },
       { tool: 'watermark', note: 'Put your logo or name on the picture.' },
       { tool: 'exportsocial', note: 'Download every platform size as one ZIP.' },
@@ -79,6 +80,16 @@ export const GOALS = [
     steps: [
       { tool: 'generate', note: 'Describe the picture you want.' },
       { tool: 'upscale', note: 'Enlarge it if you need more detail or size.' },
+    ],
+  },
+  {
+    id: 'qrcode',
+    title: 'Make a QR code',
+    blurb: 'For a poster, flyer, menu or sign: a link, Wi-Fi login or contact card.',
+    icon: 'qr-code',
+    steps: [
+      { tool: 'qrcode', note: 'Make the code in your colours and test-scan it with your phone.' },
+      { tool: 'printready', note: 'For print: set 300 DPI and add bleed.' },
     ],
   },
   {
