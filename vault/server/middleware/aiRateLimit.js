@@ -15,4 +15,14 @@ const aiLimiter = rateLimit({
   message: { error: 'Too many requests, please slow down.' },
 });
 
-module.exports = { aiLimiter };
+/**
+ * The AI limiter with some free, read-only requests left out of the count. `isFree(req)` says which.
+ * Used where a page has to ask for progress every couple of seconds (a running translation checks its status
+ * 30 times a minute, which used to spend the person's whole allowance and get their other clicks refused).
+ * Only leave out requests that read the caller's own rows and call no paid service.
+ */
+function aiLimiterExcept(isFree) {
+  return (req, res, next) => (isFree(req) ? next() : aiLimiter(req, res, next));
+}
+
+module.exports = { aiLimiter, aiLimiterExcept };

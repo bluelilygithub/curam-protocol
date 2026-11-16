@@ -136,7 +136,7 @@ app.use('/api', requireAuth);
 
 // Per-user cap on AI-cost endpoints — chat streams and generation calls hit
 // paid Anthropic/Gemini/Replicate/FAL/Rainforest APIs directly.
-const { aiLimiter } = require('./middleware/aiRateLimit');
+const { aiLimiter, aiLimiterExcept } = require('./middleware/aiRateLimit');
 
 app.use('/api/user', requireAuth, require('./routes/user'));
 app.use('/api/health', require('./routes/health'));
@@ -280,7 +280,9 @@ app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, r
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 app.use('/api/translate-tutor', requireFeature('translate'), aiLimiter, require('./routes/translateTutor')); // the Translate guide chat (sees no documents or translations)
-app.use('/api/translate', requireFeature('translate'), aiLimiter, require('./routes/translate'));
+// The status check of a running translation (every 2 seconds) is a plain read of the caller's own job: it does not count against the AI limit.
+const translateStatusCheck = (req) => req.method === 'GET' && /^\/jobs\/\d+\/status\/?$/.test(req.path);
+app.use('/api/translate', requireFeature('translate'), aiLimiterExcept(translateStatusCheck), require('./routes/translate'));
 app.use('/api/guitar-play', requireFeature('guitar'), require('./routes/guitarPlay')); // set lists for gig mode, ear training
 app.use('/api/guitar-coach', requireFeature('guitar'), aiLimiter, require('./routes/guitarCoach')); // the Guitar coach: weekly review, session builder, explain a song
 app.use('/api/guitar-tutor', requireFeature('guitar'), aiLimiter, require('./routes/guitarTutor')); // the Guitar guide chat (sees no songs, chords or scores)
