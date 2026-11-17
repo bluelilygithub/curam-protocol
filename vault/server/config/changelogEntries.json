@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2076eb79",
+   "fullHash": "2076eb79d4ef39e1f1c31c2679913de0cf7df308",
+   "committedAt": "2026-11-17T16:00:46+10:00",
+   "author": "mrb",
+   "subject": "Translate house styles: Download for review (Word) from Test this set",
+   "filesChanged": 7,
+   "insertions": 188,
+   "deletions": 9,
+   "area": "Translate",
+   "goal": "Let the owner hand a house-style test to a native speaker as a proper document to review, and make clear the AI version in a test is a check, not a suggested replacement.",
+   "whatChanged": "The Test this set window in House styles has a new button, Download for review (Word). It saves a Word document with a note for the reviewer, the guidance given to the translator, then for each example a table of the original, the approved translation and the AI version (made without seeing the approved one), tick boxes for which reads better (approved, AI version, both fine, neither) and space for comments, then overall comments and a \"Reviewed by / Date\" line. The reviewer can type into it, track changes or add comments and send it back. It is built in the browser with jszip, which was already installed. The test window now says plainly that the AI version is a check, not a suggestion, and the approved translation stays the standard. The guide and docs mention the button.",
+   "filesImpacted": [
+    "client/src/pages/translate/reviewDocx.mjs",
+    "client/src/pages/translate/reviewDocx.test.mjs",
+    "client/src/pages/translate/HouseStylesPanel.jsx",
+    "server/routes/translate.js",
+    "server/services/translateTutor.js",
+    "server/services/translateTutor.test.js",
+    "docs/translate-agent.md"
+   ],
+   "benefit": "A fluent reviewer gets a clear, printable, editable comparison to mark up, instead of a screen only the admin can see. Seen on the local app (stand-in translator): made a set, ran Test this set, pressed Download for review; the file downloaded and a Word-file reader (mammoth) read back every part, macrons included, with no page errors. A new test builds the document and reads it back each time. Guide and goals tests pass; client builds. No package.json change.",
+   "concerns": "The file has not been opened in Microsoft Word itself, only read back with a Word-file reader, which checks the content and structure but not exactly how Word lays it out (tick boxes use the ☐ character, which Word shows with a fallback font if Calibri lacks it). The AI versions in the local test were the stand-in's reversed words, not real Māori. The document holds the test as it was when downloaded; running the test again gives a new AI version, and with a real model it can differ slightly from run to run."
+  },
+  {
    "commit": "2884a5fa",
    "fullHash": "2884a5fa1bdfef714b6ab6952a8c4c3358512876",
    "committedAt": "2026-11-17T15:23:52+10:00",
