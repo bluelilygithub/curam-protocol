@@ -1810,6 +1810,9 @@
   "POST /api/graphics/export-social": {
    "class": "authed"
   },
+  "POST /api/graphics/expand": {
+   "class": "authed"
+  },
   "POST /api/graphics/extend": {
    "class": "authed"
   },
@@ -1904,6 +1907,9 @@
    "class": "authed"
   },
   "POST /api/graphics/strip-metadata": {
+   "class": "authed"
+  },
+  "POST /api/graphics/subject-mask": {
    "class": "authed"
   },
   "POST /api/graphics/text": {
@@ -3646,6 +3652,12 @@
   "POST /api/videos/clip": {
    "class": "authed"
   },
+  "POST /api/videos/clean-language/text": {
+   "class": "authed"
+  },
+  "POST /api/videos/clean-language": {
+   "class": "authed"
+  },
   "POST /api/videos/convert": {
    "class": "authed"
   },
@@ -3739,6 +3751,12 @@
   "POST /api/videos/replace-section": {
    "class": "authed"
   },
+  "POST /api/videos/remove-logo": {
+   "class": "authed"
+  },
+  "POST /api/videos/remove-silences": {
+   "class": "authed"
+  },
   "POST /api/videos/slideshow/plan": {
    "class": "authed"
   },
@@ -3752,6 +3770,9 @@
    "class": "authed"
   },
   "GET /api/videos/status": {
+   "class": "authed"
+  },
+  "POST /api/videos/stabilize": {
    "class": "authed"
   },
   "POST /api/videos/thumbnail": {
@@ -3794,6 +3815,27 @@
    "class": "authed"
   },
   "POST /api/ai-visibility-tutor": {
+   "class": "authed"
+  },
+  "GET /api/ai-visibility/assistants": {
+   "class": "authed"
+  },
+  "GET /api/ai-visibility/audits/:id/markdown": {
+   "class": "authed"
+  },
+  "GET /api/ai-visibility/audits/:id/pdf": {
+   "class": "authed"
+  },
+  "DELETE /api/ai-visibility/audits/:id": {
+   "class": "authed"
+  },
+  "GET /api/ai-visibility/audits/:id": {
+   "class": "authed"
+  },
+  "GET /api/ai-visibility/audits": {
+   "class": "authed"
+  },
+  "POST /api/ai-visibility/audits": {
    "class": "authed"
   },
   "POST /api/web-extractor-tutor": {
@@ -4334,6 +4376,9 @@
    "class": "authed"
   },
   "GET /api/videos/vision-info": {
+   "class": "authed"
+  },
+  "POST /api/videos/denoise": {
    "class": "authed"
   },
   "GET /api/plans/calendar": {
