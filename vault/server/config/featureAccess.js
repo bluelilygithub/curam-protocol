@@ -59,6 +59,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  // free TV channels listed by iptv-org, played by the browser (docs/live-tv.md): off until an admin switches it on (admins can always open it)
+  liveTv: false,
   // reads attached Gmail threads into a commitments ledger and prepares cited follow-up text to copy (docs/email-follow-up.md): off until an admin switches it on
   emailFollowUp: false,
   // the Vault Shelf Windows app pushes clipboard items into Notes, Invoice Review, the CRM inbox and a redaction check: off until an admin switches it on
@@ -85,6 +87,7 @@ const FEATURE_LIFECYCLE = {
   drawings: 'preview',        // new: the Excalidraw editor in Vault; not yet run on Railway (fonts, memory, the font-subsetting helper blocked by the CSP)
   sketchbook: 'preview',      // new: cartoon pictures from a description; paid image calls, not yet tried with the live image service
   plans: 'preview',           // new: plans with dates, dependencies and a Gantt; not yet used on Railway
+  liveTv: 'preview',          // new: streams come and go, and most will not play in a browser; not yet run on Railway
 };
 const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
 

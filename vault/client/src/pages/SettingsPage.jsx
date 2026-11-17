@@ -29,6 +29,7 @@ import { TOUR_KEY as SKETCHBOOK_TOUR_KEY } from '../utils/tours/sketchbookTour';
 import { TOUR_KEY as PLANS_TOUR_KEY } from '../utils/tours/plansTour';
 import { TOUR_KEY as BURNER_MAIL_TOUR_KEY } from '../utils/tours/burnerMailTour';
 import { TOUR_KEY as DNS_LOOKUP_TOUR_KEY } from '../utils/tours/dnsLookupTour';
+import { TOUR_KEY as LIVE_TV_TOUR_KEY } from '../utils/tours/liveTvTour';
 import { TOUR_KEY as GUITAR_TOUR_KEY } from '../utils/tours/guitarTour';
 import { TOUR_KEY as DEVICE_PREVIEW_TOUR_KEY } from '../utils/tours/devicePreviewTour';
 import { TOUR_KEY as TRANSLATE_TOUR_KEY } from '../utils/tours/translateTour';
@@ -2739,6 +2740,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(DNS_LOOKUP_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Live TV Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                5-step tour — finding a channel, favourites and recent, watching, and what to do when a link will not play
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(LIVE_TV_TOUR_KEY);
+                navigate('/live-tv?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(LIVE_TV_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

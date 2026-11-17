@@ -1864,6 +1864,18 @@ function UserGuidePage() {
           profile PDF and a visual slideshow summary across assessments.
         </P>
 
+        <SubHeading>Live TV</SubHeading>
+        <P>
+          Watch free TV channels from around the world, from the public iptv-org list (refreshed once a day). Pick
+          a country or a kind of channel, or search by name, and press a channel to play it. Your browser fetches
+          the picture straight from the broadcaster; Vault never stores or passes on video. Many links fail (off
+          air, or only shown in their own country): try the channel&apos;s other links, or <strong>Open in VLC</strong>,
+          which downloads a small playlist file for VLC, a free player that plays more of them. Star a channel to
+          keep it in <strong>Favourites</strong>; <strong>Recent</strong> shows what you watched and each link says
+          whether it played for you last time. Adult channels and channels removed after a copyright complaint
+          are always left out. It is off for members until an admin switches it on in Settings → Feature Access.
+        </P>
+
         <SubHeading>Inbox Intel</SubHeading>
         <P>
           A read-only Gmail dashboard that fetches your last 50 inbox messages and classifies each one with Claude

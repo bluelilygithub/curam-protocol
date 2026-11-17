@@ -1276,6 +1276,28 @@ async function initSchema() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_sketches_user ON sketches ("userId", "updatedAt" DESC)`);
     // Social media pack: paid AI redraws of a sketch for one social size each, JSON text { [sizeId]: { image, at, from } } (services/sketchbookPack.js).
     await client.query(`ALTER TABLE sketches ADD COLUMN IF NOT EXISTS "packRedraws" TEXT NOT NULL DEFAULT '{}'`);
+    // ── Live TV (docs/live-tv.md): the channel list itself lives in memory (fetched daily from iptv-org); only each person's favourites and
+    // whether each stream played for them are stored. "channelId" is iptv-org's id (e.g. ABCNews.au). Plays are trimmed to 300 per person.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS live_tv_favourites (
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "channelId" TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("userId", "channelId")
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS live_tv_plays (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "channelId" TEXT NOT NULL,
+        url         TEXT NOT NULL,
+        ok          BOOLEAN NOT NULL,
+        problem     TEXT,
+        "playedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_live_tv_plays_user ON live_tv_plays ("userId", "playedAt" DESC)`);
     // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
     // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
     await client.query(`

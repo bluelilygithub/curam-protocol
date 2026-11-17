@@ -4416,6 +4416,33 @@
   },
   "PUT /api/client-projects/:id/dates-mode": {
    "class": "authed"
+  },
+  "GET /api/live-tv-player/hls.light.min.js": {
+   "class": "public"
+  },
+  "GET /api/live-tv-player/player.js": {
+   "class": "public"
+  },
+  "GET /api/live-tv-player": {
+   "class": "public"
+  },
+  "POST /api/live-tv-tutor": {
+   "class": "authed"
+  },
+  "GET /api/live-tv/channels": {
+   "class": "authed"
+  },
+  "DELETE /api/live-tv/favourites/:channelId": {
+   "class": "authed"
+  },
+  "POST /api/live-tv/favourites": {
+   "class": "authed"
+  },
+  "GET /api/live-tv/meta": {
+   "class": "authed"
+  },
+  "POST /api/live-tv/plays": {
+   "class": "authed"
   }
  }
 }

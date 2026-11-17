@@ -45,6 +45,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  liveTv: false, // keep in step with server/config/featureAccess.js
   emailFollowUp: false, // keep in step with server/config/featureAccess.js
   passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
   topicResearch: false, // keep in step with server/config/featureAccess.js
@@ -65,6 +66,7 @@ export const FEATURE_LIFECYCLE = {
   drawings: 'preview',
   sketchbook: 'preview',
   plans: 'preview',
+  liveTv: 'preview',
 };
 export const LIFECYCLE_LABELS = {
   preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
@@ -121,6 +123,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'fitness', label: 'Fitness' },
       { key: 'burnerMail', label: 'Burner Mail' },
       { key: 'dnsLookup', label: 'DNS Lookup' },
+      { key: 'liveTv', label: 'Live TV' },
       { key: 'emailFollowUp', label: 'Email Follow-Up' },
       { key: 'passwordVault', label: 'Password Vault' },
       { key: 'topicResearch', label: 'Topic Research' },

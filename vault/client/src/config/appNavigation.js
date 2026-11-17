@@ -121,6 +121,7 @@ export const APP_NAV_GROUPS = [
       { id: 'mood', label: 'Mood', path: '/mood', icon: 'mood', featureKey: 'mood' },
       { id: 'wellbeing', label: 'Wellbeing Check', path: '/wellbeing', icon: 'heart-pulse', featureKey: 'wellbeing' },
       { id: 'newsDigest', label: 'News Digest', path: '/news-digest', icon: 'news', featureKey: 'newsDigest' },
+      { id: 'liveTv', label: 'Live TV', path: '/live-tv', icon: 'tv', featureKey: 'liveTv' },
       { id: 'propertyScenario', label: 'Property', path: '/property-scenario', icon: 'home', featureKey: 'propertyScenario' },
     ],
   },

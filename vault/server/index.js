@@ -131,6 +131,10 @@ app.use('/api/pc-helper', require('./routes/pcHealth').helperRouter);
 // Burner Mail: the mail provider (a Cloudflare Email Worker) posts each raw email here; it proves itself with INBOUND_MAIL_SECRET, so before requireAuth.
 app.use('/api/inbound-mail', require('./routes/burnerMail').inboundRouter);
 
+// Live TV player page: a frame cannot send the login header, and the page holds no data (it only plays a stream address the Live TV page
+// passes it), so before requireAuth. It sets its own security rules; see server/routes/liveTvPlayer.js and docs/live-tv.md.
+app.use('/api/live-tv-player', require('./routes/liveTvPlayer'));
+
 const { requireAuth, requireAdmin, requireFeature, requireAnyFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
@@ -271,6 +275,8 @@ app.use('/api/shares-tutor', requireFeature('shares'), aiLimiter, require('./rou
 app.use('/api/settings-tutor', aiLimiter, require('./routes/settingsTutor')); // the Settings and Admin guide chat (sees no settings, keys or users)
 app.use('/api/domains-tutor', requireFeature('domains'), aiLimiter, require('./routes/domainsTutor')); // the Domain guide chat (sees no descriptions, names or results)
 app.use('/api/dns-lookup-tutor',requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
+app.use('/api/live-tv', requireFeature('liveTv'), require('./routes/liveTv')); // free channels listed by iptv-org; the browser plays them, Vault relays no video (docs/live-tv.md)
+app.use('/api/live-tv-tutor', requireFeature('liveTv'), aiLimiter, require('./routes/liveTvTutor')); // the Live TV guide chat (sees no channels or history)
 app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)
 app.use('/api/topic-research', requireFeature('topicResearch'), require('./routes/topicResearch'));
 app.use('/api/serp-tracker-tutor', requireFeature('serpTracker'), aiLimiter, require('./routes/serpTrackerTutor')); // the SERP Tracker guide chat (sees no site, searches, results or costs)

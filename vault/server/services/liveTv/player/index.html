@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Live TV player</title>
+<!-- Vault's Live TV player (docs/live-tv.md). It runs in its own frame with its own security rules, so only this page may load video
+     from outside servers; the rest of Vault keeps its strict rules. It holds no data and needs no login: the Live TV page tells it which
+     stream to play (postMessage, same origin only) and it says back whether the stream started. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #e5e5e5; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  video { width: 100%; height: 100%; display: block; background: #000; }
+  #msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; pointer-events: none; }
+  #msg[hidden] { display: none; }
+</style>
+</head>
+<body>
+<video id="video" controls playsinline></video>
+<div id="msg">Choose a channel to watch.</div>
+<script src="hls.light.min.js"></script>
+<script src="player.js"></script>
+</body>
+</html>
