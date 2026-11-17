@@ -1510,24 +1510,29 @@ function UserGuidePage() {
         <SubHeading>Starting a translation</SubHeading>
         <UL>
           <LI><strong>What do you want to do?</strong> offers ready-made jobs (a quick draft, a document to send to someone, a scanned PDF, a Word or Excel file kept editable, te reo Māori and more). Picking one opens New translation with the options already filled in; you can still change any of them.</LI>
-          <LI>Add a <strong>PDF</strong>, <strong>Word</strong> (.docx), <strong>Excel</strong> (.xlsx or .xls) or <strong>plain text</strong> file up to 5 MB, or press <strong>Paste text instead</strong>. Scanned PDF pages are read as pictures first. Old .doc files are not accepted: save them as .docx.</LI>
-          <LI>Pick the language under <strong>Translate to</strong>. Languages marked ⚠ have fewer examples for the AI to learn from, so check those results more carefully.</LI>
+          <LI>Add a <strong>PDF</strong>, <strong>Word</strong> (.docx), <strong>Excel</strong> (.xlsx or .xls) or <strong>plain text</strong> file up to 5 MB, or press <strong>Paste text instead</strong> (once used, <strong>Show text</strong> and <strong>Change text</strong> let you check or change it). Scanned PDF pages are read as pictures first. Old .doc files are not accepted: save them as .docx.</LI>
+          <LI>Pick the language under <strong>Translate to</strong>. To make more at once, press them under <strong>Also translate into</strong>: each becomes its own translation. Languages marked ⚠ have fewer examples for the AI to learn from, so check those results more carefully.</LI>
           <LI>Say what kind of document it is and who will read it, and list any <strong>words to keep as they are</strong> (brand names, product codes).</LI>
           <LI><strong>More options</strong> holds the translator (<strong>Vault AI</strong>, careful, a few minutes; or <strong>Google Translate</strong>, a fast draft, when it is set up), the PDF layout, the glossary and the second-model check.</LI>
-          <LI>Press <strong>Start translation</strong> and <strong>keep the page open</strong> until it finishes: the PDF is put together in your browser at the end.</LI>
+          <LI>Press <strong>Start translation</strong>. It runs on the server, so you can keep working or close the page; a message says when it is ready.</LI>
         </UL>
 
-        <SubHeading>Results and checks</SubHeading>
+        <SubHeading>Reading it, changing it, keeping it</SubHeading>
         <P>
-          <strong>My translations</strong> lists every translation with boxes that count how many are ready, need
-          checking, are running or did not finish. <strong>Open result</strong> on a row has the downloads at the
-          top, one line saying whether the checks found anything, then the list of what to look at: parts whose
-          meaning may have changed, garbled or unfinished parts, unsure terms and wording that may not suit the
-          reader. That line says which kinds of problem were listed; it is not an accuracy score, and the checks
-          do not correct anything.
+          A finished translation waits in <strong>My translations</strong> as a draft, <strong>Ready to read</strong>.
+          <strong> Open result</strong> shows each part of the original beside its translation, with the parts the
+          checks are about marked: parts whose meaning may have changed, garbled or unfinished parts, unsure terms and
+          wording that may not suit the reader. That verdict says which kinds of problem were listed; it is not an
+          accuracy score, and the checks do not correct anything.
         </P>
+        <UL>
+          <LI><strong>Another pass</strong>: add a requirement (a rule in your own words, or a word to translate one way or keep as written) and translate again, the whole document or only the parts you pick. The version shown stays until the new one is ready, and every version can be read again under <strong>Version</strong>.</LI>
+          <LI>Tick <strong>Remember</strong> on a requirement to use it in future translations too.</LI>
+          <LI><strong>Keep this version</strong> makes the files and only then saves anything you ticked to remember. To change a kept translation later, press <strong>Reopen as a draft</strong>.</LI>
+          <LI>Untick <strong>Let me read it before it is kept</strong> (under More options) to have a translation kept straight away.</LI>
+        </UL>
 
-        <SubHeading>Downloads</SubHeading>
+        <SubHeading>Downloads (once kept)</SubHeading>
         <UL>
           <LI>The <strong>translated PDF</strong>: the translation only, or each original page followed by its translation.</LI>
           <LI>An editable <strong>Word</strong> or <strong>Excel</strong> file when the original was one and its structure could be matched up.</LI>
@@ -1542,8 +1547,9 @@ function UserGuidePage() {
         </UL>
 
         <Callout type="info">
-          A deleted translation or glossary waits in the recycle bin (Settings → Recycle bin) for 30 days. Translations are
-          for reference and are not legally certified. The compass beside the page title starts a short tour, and the
+          Translations are kept for 90 days unless you choose 1 year or Until I delete them at the top of My translations. A deleted
+          translation or glossary waits in the recycle bin (Settings → Recycle bin) for 30 days. Translations are for reference
+          and are not legally certified. The compass beside the page title starts a short tour, and the
           round button at the bottom right is the Translate guide: tell it what you want to do.
         </Callout>
 

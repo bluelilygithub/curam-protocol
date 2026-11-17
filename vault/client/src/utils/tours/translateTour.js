@@ -81,12 +81,12 @@ export function startTranslateTour(goTool = () => {}) {
     'The line at the top says what this translation will do. Below it, say what kind of document it is and who will read it, and list any words to keep as they are. “More options” holds the translator, the PDF layout, the glossary and the second-model check.');
 
   step(5, 'translate-start', 'new', '[data-tour="translate-start"]', 'top',
-    'Start, and keep the page open',
-    'Press Start translation. A window shows each step while it runs. Keep this page open until it finishes: the PDF is put together in your browser at the end, so closing or reloading stops the translation part-way.');
+    'Start, then carry on',
+    'Press Start translation. It runs on the server, so you can keep working or close the page; it appears in My translations, and a message says when it is ready to read. To translate into several languages at once, pick them under Also translate into first.');
 
   step(6, 'translate-tool-jobs', 'jobs', '[data-tour="translate-tool-jobs"]', 'right',
     'My translations',
-    'Every translation you have run, newest first. The boxes at the top count how many are ready, need checking, are still running or did not finish. “Open result” on a row has the downloads and the list of what the checks found. The checks find problems; they do not fix them.');
+    'Every translation, newest first. A finished one waits as a draft (“Ready to read”). Open result shows it beside the original with the parts the checks are about marked. To change something, add a requirement and run another pass; when you are happy, press Keep this version to make the files and download them.');
 
   step(7, 'translate-tool-glossaries', 'glossaries', '[data-tour="translate-tool-glossaries"]', 'right',
     'Glossaries',

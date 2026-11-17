@@ -6,7 +6,8 @@
 //   node client/src/pages/translate/translateGoals.test.mjs   (checks every step names a real screen and every preset is valid)
 //
 // preset keys: engine 'llm' | 'google' (google falls back to llm when it is not set up), review true|false,
-// layout 'translation-only' | 'bilingual-pages', paste true (open on the paste box), targetLang (a language code).
+// layout 'translation-only' | 'bilingual-pages', paste true (open on the paste box), targetLang (a language code),
+// reviewBeforeKeep false (kept straight away instead of waiting as a draft to read; on unless a job says otherwise).
 
 export const TRANSLATE_GOALS = [
   {
@@ -14,10 +15,10 @@ export const TRANSLATE_GOALS = [
     title: 'Get a quick draft to understand a document',
     blurb: 'Fast and rough. For reading something yourself, not for sending on.',
     icon: 'zap',
-    preset: { engine: 'google', review: false, layout: 'translation-only' },
+    preset: { engine: 'google', review: false, layout: 'translation-only', reviewBeforeKeep: false },
     steps: [
-      { tool: 'new', note: 'Add the document and pick the language. This job uses the fast translator and skips the second check.' },
-      { tool: 'jobs', note: 'Open the result and download the PDF or the plain text.' },
+      { tool: 'new', note: 'Add the document and pick the language. This job uses the fast translator, skips the second check and is kept straight away.' },
+      { tool: 'jobs', note: 'Open the result to read it beside the original, or download the PDF or the plain text.' },
     ],
   },
   {
@@ -28,7 +29,7 @@ export const TRANSLATE_GOALS = [
     preset: { engine: 'llm', review: true, layout: 'translation-only' },
     steps: [
       { tool: 'new', note: 'Add the document, pick the language, and say what kind of document it is and who will read it.' },
-      { tool: 'jobs', note: 'Open the result, read what the checks found, then download.' },
+      { tool: 'jobs', note: 'Open the result and read it beside the original. If something needs changing, add a requirement and run another pass. Then press Keep this version and download.' },
     ],
   },
   {
@@ -39,7 +40,7 @@ export const TRANSLATE_GOALS = [
     preset: { engine: 'llm', review: true, layout: 'bilingual-pages' },
     steps: [
       { tool: 'new', note: 'Add the document and pick the language. The PDF will show each original page, then its translation.' },
-      { tool: 'jobs', note: 'Open the result; the list of things to check tells you where to look first.' },
+      { tool: 'jobs', note: 'Open the result: each part sits beside its original, and the parts the checks are about are marked. Keep it to get the PDF.' },
     ],
   },
   {
@@ -50,7 +51,7 @@ export const TRANSLATE_GOALS = [
     preset: { engine: 'llm', review: true, layout: 'translation-only' },
     steps: [
       { tool: 'new', note: 'Add a .docx or .xlsx file. In Excel only cells with words are translated; numbers are left alone.' },
-      { tool: 'jobs', note: 'Download Word or Download Excel appears beside the job when the editable file could be built.' },
+      { tool: 'jobs', note: 'Read it, keep it, and Download Word or Download Excel appears when the editable file could be built.' },
     ],
   },
   {
@@ -61,7 +62,7 @@ export const TRANSLATE_GOALS = [
     preset: { engine: 'llm', review: true, layout: 'bilingual-pages' },
     steps: [
       { tool: 'new', note: 'Add the scanned PDF. It tells you how many pages need reading as pictures; those take longer.' },
-      { tool: 'jobs', note: 'Open the result. Pages that were hard to read are marked; check those against the original.' },
+      { tool: 'jobs', note: 'Open the result and check the pages that were hard to read against the original before you keep it.' },
     ],
   },
   {
@@ -72,7 +73,7 @@ export const TRANSLATE_GOALS = [
     preset: { engine: 'llm', review: true, layout: 'translation-only', targetLang: 'mi' },
     steps: [
       { tool: 'new', note: 'Add the document. Leave "Iwi / rohe audience" empty for standard te reo Māori.' },
-      { tool: 'jobs', note: 'Open the result; any regional word choices are listed beside the standard form.' },
+      { tool: 'jobs', note: 'Open the result; any regional word choices are listed beside the standard form. A pass with a word requirement changes one you do not want.' },
     ],
   },
   {
@@ -83,7 +84,7 @@ export const TRANSLATE_GOALS = [
     preset: { engine: 'llm', review: false, layout: 'translation-only', paste: true },
     steps: [
       { tool: 'new', note: 'Paste or dictate the text, press Use this text, then pick the language.' },
-      { tool: 'jobs', note: 'Open the result and choose Download plain text.' },
+      { tool: 'jobs', note: 'Open the result to read it, or press Copy translation. Keep it to download the plain text.' },
     ],
   },
   {
@@ -95,7 +96,18 @@ export const TRANSLATE_GOALS = [
     steps: [
       { tool: 'glossaries', note: 'Make a glossary: the words that must always be translated one way, or left as they are.' },
       { tool: 'new', note: 'Add the document. Under More options, untick the learned glossary and pick yours.' },
-      { tool: 'jobs', note: 'Open the result and use Lessons learnt to add anything the checks found to your wording.' },
+      { tool: 'jobs', note: 'Open the result. Add requirements for what should be different and tick Remember on the ones for every time, then keep it.' },
+    ],
+  },
+  {
+    id: 'several',
+    title: 'Translate one document into several languages',
+    blurb: 'Pick them all at once. The document is read only once; each language gets its own result.',
+    icon: 'languages',
+    preset: { engine: 'llm', review: true, layout: 'translation-only' },
+    steps: [
+      { tool: 'new', note: 'Add the document, pick the first language under Translate to, then press the others under Also translate into.' },
+      { tool: 'jobs', note: 'Each language is its own row. A message says as each one is ready; read and keep them one by one.' },
     ],
   },
 ];

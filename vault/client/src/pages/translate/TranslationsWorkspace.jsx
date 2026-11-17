@@ -1,29 +1,28 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { pdf } from '@react-pdf/renderer';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
-import useProcessingStore from '../../store/processingStore';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { LANGUAGES, orderLanguages, languageOptionLabel } from '../../utils/translateLanguages';
 import {
   Btn, Field, Sel, Tip, getPdfJs, detectUploadKind, saveFromApi, baseName, isSpreadsheet,
-  PROGRESS_STAGE_ORDER, PROGRESS_STEP_LABELS, ACCEPT_UPLOAD, DOMAIN_OPTIONS, AUDIENCE_OPTIONS,
+  ACCEPT_UPLOAD, DOMAIN_OPTIONS, AUDIENCE_OPTIONS,
 } from './shared';
-import { parseQa } from './qaReport';
-import { registerFonts, buildBilingualPdf } from './translatePdf';
 import { resolvePreset } from './translateGoals.mjs';
 import { ENGINE_LABELS, LAYOUT_OPTIONS } from './translateTools.mjs';
-import QaPanel from './QaPanel';
+import ResultScreen from './ResultScreen';
 import JobsDashboard from './JobsDashboard';
 import { offerUndo } from '../../utils/binUndo';
 
-// New translation and My translations. One component holds both screens because a running job belongs to both: the form starts it,
-// the status check and the PDF step (still done in this browser) carry on whichever screen is showing, and the list shows the result.
-// `view` ('new' | 'jobs', anything else hides it) picks the screen; the component stays mounted so a running job is never dropped.
+// New translation and My translations (with one translation open: ResultScreen). The server does all the work, PDF included, so a
+// translation carries on when the page is closed. This component keeps the list fresh while anything runs and says when one is ready.
+// `view` ('new' | 'jobs', anything else hides it) picks the screen; it stays mounted so those notices still arrive on other screens.
 
-export default function TranslationsWorkspace({ glossaries, view, preset, onShowJobs, onNewTranslation, onOpenGlossaries }) {
+const RUNNING = (j) => !['done', 'failed', 'cancelled', 'ready'].includes(j.status) || !!j.runningPass;
+const MAX_EXTRA_LANGUAGES = 7;
+
+export default function TranslationsWorkspace({ glossaries, view, preset, onShowJobs, onNewTranslation, onOpenGlossaries, openJobId, onOpenJob }) {
   const [jobs, setJobs]             = useState([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [file, setFile]             = useState(null);
@@ -56,26 +55,65 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
   const [engine, setEngine] = useState('llm'); // llm | google
   const [pdfLayout, setPdfLayout] = useState('translation-only'); // translation-only | bilingual-pages
   const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
-  const [qaJob, setQaJob] = useState(null);
+  const [alsoLangs, setAlsoLangs] = useState([]); // more languages for the same document ("Also translate into")
+  const [reviewBeforeKeep, setReviewBeforeKeep] = useState(true);
+  const [keepDays, setKeepDays] = useState('90');
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [activeJobId, setActiveJobId] = useState(null);
-  const [activeJob, setActiveJob]   = useState(null);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const fileRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
-  const pollRef = useRef(null);
-  const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
+
+  // Say when a translation that was running is ready (or failed), with a button to open it. Compares with the last list seen.
+  const lastStatus = useRef(null);
+  const openJobRef = useRef(openJobId); // the translation open on screen says its own news; no second notice for it
+  openJobRef.current = view === 'jobs' ? openJobId : null;
+  function noticeFinished(list) {
+    const before = lastStatus.current;
+    lastStatus.current = new Map(list.map((j) => [j.id, j.status]));
+    if (!before) return;
+    for (const j of list) {
+      const was = before.get(j.id);
+      if (j.id === openJobRef.current) continue;
+      if (!was || was === j.status || ['done', 'ready', 'failed', 'cancelled'].includes(was)) continue;
+      const open = { label: 'Open it', onClick: () => onOpenJob?.(j.id) };
+      if (j.status === 'ready') addToast(`“${j.filename}” is ready to read.`, 'success', 8000, open);
+      else if (j.status === 'done') addToast(`“${j.filename}” is translated and kept. The files are ready.`, 'success', 8000, open);
+      else if (j.status === 'failed') addToast(`“${j.filename}” did not finish: ${j.errorMessage || 'the translation failed'}`, 'error');
+    }
+  }
+
+  useEffect(() => {
+    api.get('/api/settings').then((r) => (r.ok ? r.json() : {})).then((st) => {
+      if (st && /^\d+$/.test(String(st.translate_keep_days || ''))) setKeepDays(String(st.translate_keep_days));
+    }).catch(() => {});
+  }, []);
+  const changeKeepDays = async (v) => {
+    const prev = keepDays;
+    setKeepDays(v);
+    try {
+      const res = await api.post('/api/settings', { key: 'translate_keep_days', value: v });
+      if (!res.ok) throw new Error();
+      addToast(v === '0' ? 'Translations are now kept until you delete them.' : `Translations older than ${v === '365' ? 'a year' : '90 days'} will be deleted when Vault next starts.`, 'success');
+    } catch { setKeepDays(prev); addToast('Could not save that choice', 'error'); }
+  };
 
   const loadJobs = useCallback(() => {
     // A refused request (too many in a minute, a server error) answers with an error object, not a list: keep the list we have.
-    api.get('/api/translate/jobs').then(r => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d)) setJobs(d); }).catch(() => {})
+    api.get('/api/translate/jobs').then(r => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d)) { noticeFinished(d); setJobs(d); } }).catch(() => {})
       .finally(() => setLoadingJobs(false));
   }, []);
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
+
+  // While anything runs (a translation, a pass, its files being made) the list is read again every 3 seconds, on any screen.
+  const anyRunning = jobs.some(RUNNING);
+  useEffect(() => {
+    if (!anyRunning) return undefined;
+    const t = setInterval(loadJobs, 3000);
+    return () => clearInterval(t);
+  }, [anyRunning, loadJobs]);
 
   // Look up whether a global (auto-learned) glossary already exists for the chosen target
   // language — surfaced as an opt-in checkbox rather than forcing the manual glossary picker.
@@ -111,6 +149,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
     setEnableReview(Boolean(p.review));
     setPdfLayout(p.layout);
     if (p.targetLang) setTargetLang(p.targetLang);
+    setReviewBeforeKeep(p.reviewBeforeKeep !== false);
     if (!file) setPasteMode(Boolean(p.paste));
     setPresetNote({ title: preset.title, fellBack: Boolean(p.fellBack), wanted: preset.values.engine });
   }, [preset?.nonce, engineAvailability.llm, engineAvailability.google]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -208,11 +247,16 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
     runPreflight(f);
   };
 
+  const [showPasted, setShowPasted] = useState(false);
+  const changePastedText = () => { setFile(null); setPreflight(null); setEstimate(null); setPasteMode(true); };
+
   const usePastedText = () => {
     if (!pasteText.trim()) return;
     const blob = new Blob([pasteText], { type: 'text/plain' });
     const f = new File([blob], 'pasted-text.txt', { type: 'text/plain' });
+    f.pasted = true; // the form shows the text itself instead of a file name, with Show text and Change text
     setPasteMode(false);
+    setShowPasted(false);
     handleFileSelect(f);
   };
 
@@ -244,30 +288,32 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
       if (useGlobalGlossary) fd.append('useGlobalGlossary', 'true');
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
+      fd.append('reviewBeforeKeep', reviewBeforeKeep ? 'true' : 'false');
+      const languages = [targetLang, ...alsoLangs.filter((l) => l !== targetLang)];
+      if (languages.length > 1) fd.append('targetLanguages', JSON.stringify(languages));
       fd.append('intakeAnswers', JSON.stringify({
         domain: domain || 'general',
         audience,
         tone,
         mustKeepTerms,
         notes: intakeNotes,
-        regionalAudience: targetLang === 'mi' ? regionalAudience.trim() : '',
+        regionalAudience: (targetLang === 'mi' || alsoLangs.includes('mi')) ? regionalAudience.trim() : '',
       }));
 
-      const res  = await api.postForm('/api/translate/jobs', fd);
+      const res  = await api.postForm(languages.length > 1 ? '/api/translate/jobs/batch' : '/api/translate/jobs', fd);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Submission failed');
 
-      startProcessing('Translating your document…', 'Keep this page open until it finishes. Closing or reloading it stops the translation.', {
-        steps: PROGRESS_STEP_LABELS,
-        onCancel: () => cancelJob(body.jobId),
-      });
-      setActiveJobId(body.jobId);
-      setFile(null); setPreflight(null); setEstimate(null);
+      addToast(languages.length > 1
+        ? `Started ${languages.length} translations. They carry on even if you close this page; each one is in My translations when it is ready.`
+        : 'Started. It carries on even if you close this page. It is in My translations when it is ready to read.', 'success');
+      setFile(null); setPreflight(null); setEstimate(null); setPasteText('');
       // Reset the native file input's value — selecting the *same* file again (e.g. re-running
       // the same document into another language) doesn't fire a change event otherwise, so the
       // dropzone looks like it silently ignored the click and only a page refresh "fixes" it.
       if (fileRef.current) fileRef.current.value = '';
       loadJobs();
+      onShowJobs?.();
     } catch (e) {
       addToast(e.message, 'error');
     } finally {
@@ -275,57 +321,12 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
     }
   };
 
-  // Poll active job — drives the global ProcessingModal (see processingStore) instead of an
-  // inline progress row, so a long translation reads the same way as other blocking agent runs
-  // (e.g. Property Scenario).
-  useEffect(() => {
-    if (!activeJobId) return;
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const res  = await api.get(`/api/translate/jobs/${activeJobId}/status`);
-        const data = await res.json();
-        setActiveJob(data);
-
-        const stageIdx = PROGRESS_STAGE_ORDER.indexOf(data.status) - 1;
-        if (stageIdx >= 0) {
-          setProcessingSteps(PROGRESS_STEP_LABELS.map((label, i) => ({
-            label,
-            status: i < stageIdx ? 'done' : i === stageIdx ? 'active' : 'pending',
-          })));
-        }
-        updateProcessingDetail(data.stage
-          ? `${data.stage}${data.progress != null ? ` — ${data.progress}%` : ''}`
-          : null);
-
-        if (data.status === 'generating' && data.translatedTextJson && !generatingPdf) {
-          clearInterval(pollRef.current);
-          generateAndUploadPdf(data);
-        }
-        if (data.status === 'failed' || data.status === 'done' || data.status === 'cancelled') {
-          clearInterval(pollRef.current);
-          stopProcessing();
-          setActiveJobId(null);
-          if (data.status === 'failed') { addToast(data.errorMessage || 'Translation failed', 'error'); onShowJobs?.(); }
-          if (data.status === 'cancelled') addToast('Translation cancelled');
-          loadJobs();
-        }
-      } catch {}
-    }, 2000);
-    return () => clearInterval(pollRef.current);
-  }, [activeJobId, generatingPdf]);
-
   const cancelJob = async (jobId) => {
     try {
       const res = await api.post(`/api/translate/jobs/${jobId}/cancel`, {});
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || 'Could not cancel — it may have already finished');
-      }
-      if (jobId === activeJobId) {
-        clearInterval(pollRef.current);
-        stopProcessing();
-        setActiveJobId(null);
       }
       addToast('Cancelling…');
       loadJobs();
@@ -348,52 +349,6 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
       addToast(e.message, 'error');
     } finally {
       setEstimating(false);
-    }
-  };
-
-  const generateAndUploadPdf = async (jobData) => {
-    setGeneratingPdf(true);
-    setProcessingSteps(PROGRESS_STEP_LABELS.map((label, i) => ({
-      label, status: i < PROGRESS_STEP_LABELS.length - 1 ? 'done' : 'active',
-    })));
-    updateProcessingDetail('Putting the PDF together…');
-    try {
-      // JSONB columns come back from pg already parsed; handle both string and object
-      const payload = typeof jobData.translatedTextJson === 'string'
-        ? JSON.parse(jobData.translatedTextJson)
-        : jobData.translatedTextJson;
-
-      if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
-
-      await registerFonts(jobData.targetLanguage, jobData.sourceLanguage);
-      const jobIntake = typeof jobData.intakeAnswers === 'string'
-        ? JSON.parse(jobData.intakeAnswers)
-        : jobData.intakeAnswers;
-      const doc = buildBilingualPdf({
-        ...payload,
-        sourceLanguage: jobData.sourceLanguage,
-        targetLanguage: jobData.targetLanguage,
-        engine: jobIntake?.engine === 'google' ? 'google' : 'llm',
-      });
-      const blob = await pdf(doc).toBlob();
-      const fd = new FormData();
-      fd.append('translatedPdf', blob, 'translated.pdf');
-      const res = await api.postForm(`/api/translate/jobs/${jobData.id}/complete`, fd);
-      if (!res.ok) throw new Error('Failed to save PDF');
-      loadJobs();
-      addToast('Translation finished. It is in My translations.', 'success');
-      onShowJobs?.();
-    } catch (e) {
-      addToast('PDF generation failed: ' + e.message, 'error');
-      // Mark failed on server via the dedicated status endpoint
-      api.postForm(`/api/translate/jobs/${jobData.id}/fail`, (() => {
-        const fd = new FormData(); fd.append('error', e.message); return fd;
-      })()).catch(() => {});
-    } finally {
-      setGeneratingPdf(false);
-      setActiveJobId(null);
-      setActiveJob(null);
-      stopProcessing();
     }
   };
 
@@ -434,6 +389,8 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
     enableReview ? 'checked by a second AI model' : 'no second-model check',
     `PDF: ${layoutLabel.toLowerCase()}`,
     useGlobalGlossary ? `learned glossary for ${langName}` : ownGlossary ? `glossary “${ownGlossary.name}”` : 'no glossary',
+    reviewBeforeKeep ? 'you read it before it is kept' : 'kept straight away',
+    ...(alsoLangs.length ? [`also into ${alsoLangs.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')}`] : []),
   ].join(' · ');
   const CARD = 'rounded-2xl border p-5 space-y-4';
   const CARD_STYLE = { borderColor: 'var(--color-border)', background: 'var(--color-surface)' };
@@ -481,7 +438,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
                 </div>
               </div>
             ) : (
-              <Tooltip text="Drop a file here, or click to choose one. PDF, Word (.docx), Excel (.xlsx, .xls) or plain text (.txt), up to 5 MB. Scanned PDFs are read with text recognition first.">
+              <Tooltip text={file?.pasted ? 'The text you pasted is the document. Show text checks it; Change text takes you back to the paste box.' : 'Drop a file here, or click to choose one. PDF, Word (.docx), Excel (.xlsx, .xls) or plain text (.txt), up to 5 MB. Scanned PDFs are read with text recognition first.'}>
                 <div
                   role="button"
                   tabIndex={0}
@@ -490,12 +447,35 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
                   onClick={() => !file && fileRef.current?.click()}
+                  style={{ borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-bg)', cursor: file ? 'default' : 'pointer' }}
                   onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !file) { e.preventDefault(); fileRef.current?.click(); } }}
-                  className="rounded-xl border-2 border-dashed p-8 text-center cursor-pointer transition-all duration-200"
-                  style={{ borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-bg)' }}
+                  className={`rounded-xl border-2 border-dashed text-center transition-all duration-200 ${file?.pasted ? 'p-4' : 'p-8'}`}
                 >
                   <input ref={fileRef} type="file" accept={ACCEPT_UPLOAD} className="hidden" onChange={(e) => handleFileSelect(e.target.files[0])} />
-                  {!file ? (
+                  {file?.pasted ? (
+                    <div className="text-left space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                        Your pasted text · {pasteText.trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words
+                      </p>
+                      {showPasted ? (
+                        <div className="text-sm whitespace-pre-wrap break-words rounded-lg border p-3 overflow-y-auto" style={{ maxHeight: 260, borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}>{pasteText}</div>
+                      ) : (
+                        <p className="text-sm line-clamp-2" style={{ color: 'var(--color-muted)' }}>{pasteText.slice(0, 220)}{pasteText.length > 220 ? '…' : ''}</p>
+                      )}
+                      <div className="flex gap-3">
+                        <Tooltip text={showPasted ? 'Hide the text again.' : 'Show all the text you pasted, to check it before you start.'}>
+                          <button type="button" onClick={() => setShowPasted((v) => !v)} className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+                            {showPasted ? 'Hide text' : 'Show text'}
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Go back to the paste box with this text in it, to change it.">
+                          <button type="button" onClick={changePastedText} className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+                            Change text
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  ) : !file ? (
                     <>
                       <div className="flex justify-center mb-2" style={{ color: 'var(--color-primary)' }}>{getIcon('upload', { size: 28 })}</div>
                       <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Drop a PDF, Word, Excel or text file here, or click to choose one</p>
@@ -510,7 +490,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
                       </p>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setFile(null); setPreflight(null); setPasteText(''); setEstimate(null); if (fileRef.current) fileRef.current.value = ''; }}
+                        onClick={(e) => { e.stopPropagation(); setFile(null); setPreflight(null); setEstimate(null); if (fileRef.current) fileRef.current.value = ''; }}
                         className="text-xs underline transition-opacity duration-200 hover:opacity-60"
                         style={{ color: 'var(--color-muted)' }}
                       >
@@ -522,7 +502,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
               </Tooltip>
             )}
 
-            {file && (preflighting ? (
+            {file && !file.pasted && (preflighting ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{kind === 'pdf' ? 'Looking through the PDF…' : 'Getting the file ready…'}</p>
             ) : preflight && (
               <div className="text-sm space-y-1" style={{ color: 'var(--color-muted)' }}>
@@ -550,15 +530,34 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
                     ? 'The AI has seen fewer examples of this language, so expect lower quality and check the result carefully.'
                     : 'For this translation only. The usual language is set in Settings, AI & Chat, Translate agent.'}
               >
-                <Tip text="The language to translate into. The language of the original is worked out for you. One language per translation.">
-                  <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }} aria-label="Translate to">
+                <Tip text="The language to translate into. The language of the original is worked out for you. To make more than one language at once, pick them under Also translate into.">
+                  <Sel value={targetLang} onChange={(v) => { setTargetLang(v); setAlsoLangs((prev) => prev.filter((c) => c !== v)); if (v !== 'mi' && !alsoLangs.includes('mi')) setRegionalAudience(''); }} aria-label="Translate to">
                     {languageOptions.map((l) => <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>)}
                   </Sel>
                 </Tip>
               </Field>
             </div>
 
-            {targetLang === 'mi' && (
+            <Field label="Also translate into (optional)" hint={alsoLangs.length ? `${alsoLangs.length + 1} translations will be made, one per language, each with its own result. The document is read only once.` : 'Pick more languages to translate the same document into several at once.'}>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Also translate into" data-tour="translate-also">
+                {languageOptions.filter((l) => l.code !== targetLang).map((l) => {
+                  const on = alsoLangs.includes(l.code);
+                  const full = !on && alsoLangs.length >= MAX_EXTRA_LANGUAGES;
+                  return (
+                    <Tooltip key={l.code} text={full ? `Up to ${MAX_EXTRA_LANGUAGES + 1} languages at once.` : on ? `Stop translating into ${l.label} as well.` : `Also translate this document into ${l.label}. It becomes its own translation, with its own result.`}>
+                      <button type="button" disabled={full} aria-pressed={on}
+                        onClick={() => setAlsoLangs((prev) => (on ? prev.filter((c) => c !== l.code) : [...prev, l.code]))}
+                        className="text-xs px-2.5 py-1 rounded-full border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                        style={{ borderColor: on ? 'var(--color-primary)' : 'var(--color-border)', color: on ? 'var(--color-primary)' : 'var(--color-text)', background: on ? 'var(--color-surface)' : 'var(--color-bg)', fontWeight: on ? 600 : 400 }}>
+                        {on ? '✓ ' : ''}{languageOptionLabel(l)}
+                      </button>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </Field>
+
+            {(targetLang === 'mi' || alsoLangs.includes('mi')) && (
               <Field label="Iwi / rohe audience (optional)" hint="Leave empty for standard te reo Māori. Regional word choices are listed in the result beside the standard form.">
                 <Tip text="Name the audience only if the wording should suit a particular iwi or rohe, for example Ngāi Tahu.">
                   <VoiceInput value={regionalAudience} onChange={setRegionalAudience} placeholder="e.g. Ngāi Tahu audience, Tāmaki Makaurau" label="Iwi or rohe audience" />
@@ -714,6 +713,18 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
                     </button>
                   </Field>
 
+                  <Tooltip text="On: the translation waits for you as a draft. You read it beside the original, can run more passes with your own requirements, and press Keep this version when happy. Off: it is kept as soon as it is done, with its files ready to download.">
+                    <label className={CHECK} style={{ color: 'var(--color-text)' }}>
+                      <input type="checkbox" className="mt-1" checked={reviewBeforeKeep} onChange={(e) => setReviewBeforeKeep(e.target.checked)} />
+                      <span>
+                        Let me read it before it is kept
+                        <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+                          {reviewBeforeKeep ? 'You can change it with more passes first. The files are made when you keep it.' : 'Kept straight away. You can still reopen it later to run more passes.'}
+                        </span>
+                      </span>
+                    </label>
+                  </Tooltip>
+
                   <Tooltip text="Another AI model compares every part of the translation with the original and lists what looks wrong. It finds problems; it does not fix them. It adds time. Checks for missing, empty and cut-short parts always run.">
                     <label className={CHECK} style={{ color: 'var(--color-text)' }}>
                       <input type="checkbox" className="mt-1" checked={enableReview} onChange={(e) => setEnableReview(e.target.checked)} />
@@ -732,10 +743,10 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
 
           {/* ── Start ── */}
           <div className="xl:col-span-2 flex items-center gap-3 flex-wrap" data-tour="translate-start">
-            <Tooltip text={file ? 'Start the translation. A window shows each step. Keep this page open until it finishes.' : 'Add a document first.'}>
+            <Tooltip text={file ? 'Start the translation. It runs on the server: you can keep working, or close the page, and it carries on. It appears in My translations.' : 'Add a document first.'}>
               <span>
                 <Btn onClick={handleSubmit} disabled={!canStart} className="!px-5 !py-2">
-                  {submitting ? 'Starting…' : 'Start translation'}
+                  {submitting ? 'Starting…' : alsoLangs.length ? `Start ${alsoLangs.length + 1} translations` : 'Start translation'}
                 </Btn>
               </span>
             </Tooltip>
@@ -761,13 +772,27 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
         </div>
       )}
 
-      {view === 'jobs' && (
+      {view === 'jobs' && openJobId && (
+        <ResultScreen
+          key={openJobId}
+          jobId={openJobId}
+          jobRow={jobs.find((j) => j.id === openJobId)}
+          onBack={() => onOpenJob?.(null)}
+          onChanged={loadJobs}
+          onDownload={downloadJob}
+          onDownloadNative={downloadNativeJob}
+          onDownloadOriginal={downloadOriginalJob}
+          onDownloadText={downloadTextJob}
+        />
+      )}
+
+      {view === 'jobs' && !openJobId && (
         <JobsDashboard
           jobs={jobs}
           loading={loadingJobs}
-          activeJobId={activeJobId}
+          activeJobId={null}
           deletingId={deletingId}
-          onOpen={setQaJob}
+          onOpen={(job) => onOpenJob?.(job.id)}
           onCancel={cancelJob}
           onDelete={deleteJob}
           tooLargeId={tooLargeId}
@@ -775,18 +800,8 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
           onDownload={downloadJob}
           onDownloadNative={downloadNativeJob}
           onNew={onNewTranslation}
-        />
-      )}
-
-      {qaJob && (
-        <QaPanel
-          qa={parseQa(qaJob)}
-          job={qaJob}
-          onClose={() => setQaJob(null)}
-          onDownload={downloadJob}
-          onDownloadNative={downloadNativeJob}
-          onDownloadOriginal={downloadOriginalJob}
-          onDownloadText={downloadTextJob}
+          keepDays={keepDays}
+          onKeepDays={changeKeepDays}
         />
       )}
     </>

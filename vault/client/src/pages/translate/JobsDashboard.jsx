@@ -5,7 +5,7 @@ import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { LANGUAGES } from '../../utils/translateLanguages';
-import { StatusBadge, Tip, isSpreadsheet } from './shared';
+import { StatusBadge, Tip, Sel, isSpreadsheet } from './shared';
 import { parseQa, resultVerdict, isStalled, VERDICT_COLOURS } from './qaReport';
 
 // My translations: the counts at the top (press one to show only those), then every job with its verdict and the way into its result.
@@ -14,14 +14,23 @@ const langLabel = (code) => LANGUAGES.find((l) => l.code === code)?.label || cod
 
 const FILTERS = [
   { id: 'all', label: 'All', tip: 'Show every translation.' },
-  { id: 'ready', label: 'Ready', tip: 'Finished translations with downloads. Press to show only these.' },
-  { id: 'check', label: 'Need checking', tip: 'Finished, but the checks listed something serious: meaning that may have changed, or garbled or unfinished parts. Press to show only these.' },
-  { id: 'running', label: 'Running', tip: 'Still being translated. Press to show only these.' },
-  { id: 'stopped', label: 'Did not finish', tip: 'Failed, cancelled, or stopped part-way because the page was closed. Press to show only these.' },
+  { id: 'toread', label: 'Ready to read', tip: 'Drafts waiting for you: read them, run another pass if something needs changing, then press Keep this version. Press to show only these.' },
+  { id: 'kept', label: 'Kept', tip: 'Translations you have kept, with their downloads. Press to show only these.' },
+  { id: 'check', label: 'Need checking', tip: 'Ready to read or kept, but the checks listed something serious: meaning that may have changed, or garbled or unfinished parts. Press to show only these.' },
+  { id: 'running', label: 'Running', tip: 'Still being translated, or having its files made. You can close the page; it carries on. Press to show only these.' },
+  { id: 'stopped', label: 'Did not finish', tip: 'Failed, cancelled, or stopped part-way because the server restarted. Press to show only these.' },
+];
+
+// How long translations are kept (the person's own setting translate_keep_days; the server deletes older ones when it starts).
+export const KEEP_OPTIONS = [
+  { v: '90', label: '90 days' },
+  { v: '365', label: '1 year' },
+  { v: '0', label: 'Until I delete them' },
 ];
 
 function bucketOf(job, activeJobId) {
-  if (job.status === 'done') return 'ready';
+  if (job.status === 'done') return 'kept';
+  if (job.status === 'ready') return 'toread';
   if (job.status === 'failed' || job.status === 'cancelled' || isStalled(job, activeJobId)) return 'stopped';
   return 'running';
 }
@@ -30,6 +39,7 @@ const SMALL_BTN = 'text-xs px-2.5 py-1 rounded-lg border inline-flex items-cente
 
 export default function JobsDashboard({
   jobs, loading, activeJobId, deletingId, onOpen, onCancel, onDelete, onDownload, onDownloadNative, onNew, tooLargeId, onKeepTooLarge,
+  keepDays, onKeepDays,
 }) {
   const getIcon = useIcon();
   const [filter, setFilter] = useState('all');
@@ -39,14 +49,15 @@ export default function JobsDashboard({
   const rows = useMemo(() => jobs.map((job) => {
     const qa = parseQa(job);
     const bucket = bucketOf(job, activeJobId);
-    const verdict = job.status === 'done' || qa ? resultVerdict(qa) : null;
+    const verdict = job.status === 'done' || job.status === 'ready' || qa ? resultVerdict(qa) : null;
     return { job, bucket, verdict, stalled: bucket === 'stopped' && !['failed', 'cancelled'].includes(job.status) };
   }), [jobs, activeJobId]);
 
-  const needsCheck = (r) => r.bucket === 'ready' && r.verdict?.level === 'check';
+  const needsCheck = (r) => (r.bucket === 'kept' || r.bucket === 'toread') && r.verdict?.level === 'check';
   const counts = useMemo(() => ({
     all: rows.length,
-    ready: rows.filter((r) => r.bucket === 'ready').length,
+    toread: rows.filter((r) => r.bucket === 'toread').length,
+    kept: rows.filter((r) => r.bucket === 'kept').length,
     check: rows.filter(needsCheck).length,
     running: rows.filter((r) => r.bucket === 'running').length,
     stopped: rows.filter((r) => r.bucket === 'stopped').length,
@@ -84,7 +95,7 @@ export default function JobsDashboard({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3" data-tour="translate-counts">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3" data-tour="translate-counts">
         {FILTERS.map((f) => (
           <Tooltip key={f.id} text={f.tip}>
             <button
@@ -103,9 +114,21 @@ export default function JobsDashboard({
         ))}
       </div>
 
-      <Tip text="Show only the translations whose file name contains these words. The microphone lets you say it instead." className="w-full sm:max-w-sm">
-        <VoiceInput value={search} onChange={setSearch} placeholder="Find by file name…" label="Find a translation by file name" className="!py-1.5" />
-      </Tip>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tip text="Show only the translations whose file name contains these words. The microphone lets you say it instead." className="w-full sm:max-w-sm">
+          <VoiceInput value={search} onChange={setSearch} placeholder="Find by file name…" label="Find a translation by file name" className="!py-1.5" />
+        </Tip>
+        {onKeepDays && (
+          <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+            Translations are kept for
+            <Tip text="Translations older than this are deleted for good, with their files, the next time Vault starts. Choose Until I delete them to keep everything." className="w-44">
+              <Sel value={keepDays} onChange={onKeepDays} aria-label="How long translations are kept">
+                {KEEP_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+              </Sel>
+            </Tip>
+          </label>
+        )}
+      </div>
 
       {!shown.length ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
@@ -131,7 +154,7 @@ export default function JobsDashboard({
             </thead>
             <tbody>
               {shown.map(({ job, verdict, stalled }) => {
-                const finished = ['done', 'failed', 'cancelled'].includes(job.status);
+                const finished = ['done', 'failed', 'cancelled', 'ready', 'generating'].includes(job.status) || stalled;
                 const lowScan = job.avgOcrConfidence != null && job.avgOcrConfidence < 0.7;
                 const kind = isSpreadsheet(job) ? 'Excel' : 'Word';
                 return (
@@ -159,11 +182,27 @@ export default function JobsDashboard({
                     </td>
                     <td className="px-3 py-2.5">
                       {stalled ? (
-                        <Tooltip text="This translation was interrupted, usually because the page was closed or reloaded while it ran. It cannot carry on. Cancel it and run the document again.">
+                        <Tooltip text="This translation stopped part-way, usually because the server restarted while it ran. It cannot carry on. Delete it and run the document again.">
                           <span className="text-xs font-medium" style={{ color: '#b45309' }}>Stopped part-way</span>
                         </Tooltip>
                       ) : <StatusBadge status={job.status} />}
-                      {job.status === 'done' && verdict && (
+                      {bucketOf(job, activeJobId) === 'running' && !stalled && (
+                        <span className="block text-xs mt-1" style={{ color: 'var(--color-muted)', maxWidth: 260 }}>
+                          {job.stage || 'Waiting to start'}{job.progress != null ? ` · ${job.progress}%` : ''}
+                          <span className="block h-1 rounded-full mt-1 overflow-hidden" style={{ background: 'var(--color-border)', width: 160 }}>
+                            <span className="block h-1" style={{ width: `${Math.max(3, Math.min(100, Number(job.progress) || 0))}%`, background: 'var(--color-primary)', transition: 'width 200ms' }} />
+                          </span>
+                        </span>
+                      )}
+                      {job.runningPass && (
+                        <span className="block text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                          Pass {job.runningPass.passNo} running{job.runningPass.progress != null ? ` · ${job.runningPass.progress}%` : ''}
+                        </span>
+                      )}
+                      {job.status === 'ready' && job.errorMessage && (
+                        <span className="block text-xs mt-1" style={{ color: '#991b1b', maxWidth: 260 }}>{job.errorMessage}</span>
+                      )}
+                      {(job.status === 'done' || job.status === 'ready') && verdict && (
                         <Tooltip text={`${verdict.detail} This says which kinds of problem the checks listed. It is not an accuracy score.`}>
                           <span className="block text-xs mt-1" style={{ color: VERDICT_COLOURS[verdict.level] }}>{verdict.label}</span>
                         </Tooltip>
@@ -174,8 +213,8 @@ export default function JobsDashboard({
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex gap-2 flex-wrap justify-end items-center">
-                        {(job.status === 'done' || job.qaSummaryJson) && (
-                          <Tooltip text="Open this translation: its downloads, then what the checks found.">
+                        {(job.status === 'done' || job.status === 'ready' || job.qaSummaryJson) && (
+                          <Tooltip text={job.status === 'ready' ? 'Read this translation beside the original, run another pass if something needs changing, and keep it when you are happy.' : 'Open this translation: read it beside the original, what the checks found, and its downloads.'}>
                             <button
                               type="button"
                               onClick={() => onOpen(job)}

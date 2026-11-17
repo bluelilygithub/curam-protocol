@@ -4752,10 +4752,17 @@ async function initSchema() {
     )
   `);
 
-  // 90-day retention cleanup
+  // Retention clean-up: each person chooses how long translations are kept (setting translate_keep_days, on My translations:
+  // 90, 365, or 0 for "until I delete them"). Default 90 days, as before. Runs on every start-up.
   await pool.query(`
-    DELETE FROM translate_jobs WHERE "createdAt" < NOW() - INTERVAL '90 days'
-  `);
+    DELETE FROM translate_jobs j
+     WHERE j."createdAt" < NOW() - make_interval(days => COALESCE((
+             SELECT CASE WHEN s.value ~ '^[0-9]+$' THEN s.value::int END FROM settings s
+              WHERE s."userId" = j."userId" AND s.key = 'translate_keep_days'), 90))
+       AND COALESCE((
+             SELECT CASE WHEN s.value ~ '^[0-9]+$' THEN s.value::int END FROM settings s
+              WHERE s."userId" = j."userId" AND s.key = 'translate_keep_days'), 90) > 0
+  `).catch((err) => console.warn('[db] translate retention clean-up skipped:', err.message));
 
   // Migrate translatedTextJson from JSONB → TEXT if it was created with the old schema
   await pool.query(`
@@ -4805,6 +4812,32 @@ async function initSchema() {
   await pool.query(`
     ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "estimateJson" TEXT
   `);
+  // When the job last changed (a stage, a pass, a keep): tells a job that is still working from one stopped by a restart.
+  await pool.query(`ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ`);
+  // Drafts: every version of a translation (pass 1 is the first translation; later passes re-translate it with the person's
+  // requirements). The job row holds the version being worked on; Keep this version commits one. See services/translateDraft.js.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_job_passes (
+      id                  SERIAL PRIMARY KEY,
+      "jobId"             INTEGER NOT NULL REFERENCES translate_jobs(id) ON DELETE CASCADE,
+      "userId"            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "passNo"            INTEGER NOT NULL,
+      status              TEXT NOT NULL DEFAULT 'running',
+      stage               TEXT,
+      progress            INTEGER DEFAULT 0,
+      scope               TEXT NOT NULL DEFAULT 'all',
+      "partIndexes"       JSONB,
+      requirements        JSONB,
+      "changedIndexes"    JSONB,
+      "translatedByPage"  JSONB,
+      "qaSummary"         JSONB,
+      "errorMessage"      TEXT,
+      "createdAt"         TIMESTAMPTZ DEFAULT NOW(),
+      "completedAt"       TIMESTAMPTZ,
+      UNIQUE ("jobId", "passNo")
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_translate_job_passes_user ON translate_job_passes ("userId", "jobId")`);
 
   // ── Translation memory (exact-match segment reuse + TMX export) ─────────────
   await pool.query(`

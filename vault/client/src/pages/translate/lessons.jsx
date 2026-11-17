@@ -775,24 +775,3 @@ export function LessonsLogModal({ defaultLanguage, onClose }) {
     </Modal>
   );
 }
-
-// ── PDF generation (client-side) ──────────────────────────────────────────────
-// Font-selection logic lives in translatePdfFonts.js (plain JS, unit-tested with node — see
-// translatePdfFonts.test.js) so the font-fallback regression it guards against (mi → en font
-// selection checking target only, missing that source needed Noto) can be tested without a
-// bundler/JSX. Imported here, not duplicated, so the test suite verifies the logic this page
-// actually runs.
-// react-pdf/textkit runs every word through a hyphenation callback to compute line-wrap
-// candidates — by default an English-syllable hyphenator. Fed a word in a language it
-// doesn't recognise (te reo Māori, Polish, etc.), it can split and reconstruct the word
-// wrong, corrupting letters around the break — not only at actual wrap points, since the
-// callback also runs during width-fitting for words that never end up wrapping. Confirmed
-// on a real mi → en job: "Māori" rendered as "M ori" and "Kōhanga" as "KMhanga" throughout
-// the PDF even though the correct Noto font was already selected and its glyphs are all
-// present — the corruption was happening in text-layout, not glyph rendering. Disabling
-// hyphenation (treat every word as unbreakable) removes the callback from the picture
-// entirely. Registered once; @react-pdf de-dupes repeat calls internally. This is a
-// module-level Font singleton local to THIS bundle — server-side PDF generators
-// (textToPdf.js, webExtractorPdf.js, propertyScenarioPdf.js, invoicePdf.js) are separate
-// processes and each needs (or already has) its own registerHyphenationCallback call; this
-// one only protects client-side renders in this page.

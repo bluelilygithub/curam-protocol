@@ -37,16 +37,6 @@ export async function getPdfJs() {
 
 // Job stage order mirrors server pipeline stages (see docs/translate-agent.md § Pipeline):
 // pending → extracting → ocr → preparing → translating → reviewing → generating → done/failed.
-export const PROGRESS_STAGE_ORDER = ['pending', 'extracting', 'ocr', 'preparing', 'translating', 'reviewing', 'generating'];
-export const PROGRESS_STEP_LABELS = [
-  'Reading the document',
-  'Reading scanned pages',
-  'Preparing the wording',
-  'Translating',
-  'Checking the translation',
-  'Making the PDF',
-];
-
 export const ACCEPT_UPLOAD =
   '.pdf,.docx,.xlsx,.xls,.txt,application/pdf,'
   + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
@@ -146,8 +136,9 @@ export function StatusBadge({ status }) {
     preparing:  { label: 'Preparing wording',    color: '#9333ea', bg: 'rgba(147,51,234,0.1)' },
     translating:{ label: 'Translating', color: '#0891b2', bg: 'rgba(8,145,178,0.1)' },
     reviewing:  { label: 'Checking',   color: '#c2410c', bg: 'rgba(194,65,12,0.1)' },
-    generating: { label: 'Making PDF',  color: '#d97706', bg: 'rgba(217,119,6,0.1)'  },
-    done:       { label: 'Done',        color: '#16a34a', bg: 'rgba(22,163,74,0.1)'  },
+    generating: { label: 'Making the files',  color: '#d97706', bg: 'rgba(217,119,6,0.1)'  },
+    ready:      { label: 'Ready to read', color: '#2563eb', bg: 'rgba(37,99,235,0.1)' },
+    done:       { label: 'Kept',        color: '#16a34a', bg: 'rgba(22,163,74,0.1)'  },
     failed:     { label: 'Failed',      color: '#dc2626', bg: 'rgba(220,38,38,0.1)'  },
     cancelled:  { label: 'Cancelled',   color: 'var(--color-muted)', bg: 'rgba(0,0,0,0.06)' },
   };

@@ -143,9 +143,10 @@ export const VERDICT_COLOURS = {
   none: 'var(--color-muted)',
 };
 
-/** A job that is neither finished nor running here: the page was closed (or the server restarted) while it ran. */
+/** A job still marked as working that has not changed for 30 minutes: the server restarted while it ran. (The page being closed no
+ * longer stops a translation: the server does all of it.) Drafts ('ready') are finished. */
 export function isStalled(job, activeJobId, now = Date.now()) {
-  if (['done', 'failed', 'cancelled'].includes(job.status)) return false;
+  if (['done', 'failed', 'cancelled', 'ready'].includes(job.status)) return false;
   if (job.id === activeJobId) return false;
-  return now - new Date(job.createdAt).getTime() > 30 * 60 * 1000;
+  return now - new Date(job.updatedAt || job.createdAt).getTime() > 30 * 60 * 1000;
 }

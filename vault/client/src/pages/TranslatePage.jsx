@@ -39,7 +39,11 @@ export default function TranslatePage() {
   const info = useToolInfoModal('vault_translate_info_seen');
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [tool, setTool] = useState(initialTool);
+  const [tool, setToolRaw] = useState(initialTool);
+  const [openJobId, setOpenJobId] = useState(null); // one translation open on My translations (ResultScreen), or null for the list
+  // Choosing a screen from the list (or the guide, the tour, a job step) shows that screen; for My translations, the list itself.
+  const setTool = (id) => { setOpenJobId(null); setToolRaw(id); };
+  const openJob = (id) => { setToolRaw('jobs'); setOpenJobId(id ? Number(id) : null); };
   const [goal, setGoal] = useState(null);     // the job picked on the job screen
   const [preset, setPreset] = useState(null); // { nonce, title, values }: what New translation is filled in with
   const nonce = useRef(0);
@@ -75,8 +79,10 @@ export default function TranslatePage() {
   useEffect(() => {
     const wantedTool = searchParams.get('tool');
     const wantsTour = searchParams.get('tour') === '1';
-    if (!wantedTool && !wantsTour) return;
+    const wantedJob = Number(searchParams.get('job')) || null;
+    if (!wantedTool && !wantsTour && !wantedJob) return;
     if (isTool(wantedTool)) setTool(wantedTool);
+    if (wantedJob) openJob(wantedJob);
     setSearchParams({}, { replace: true });
     if (wantsTour) { info.close(); setTimeout(startTour, 300); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -143,7 +149,7 @@ export default function TranslatePage() {
             {tool !== 'start' && <BackToJobs onBack={backToStart} toolLabel={null} goal={null} />}
             <JobBar goal={goal} mode={tool} onStep={setTool} labelFor={toolLabel} carry={<>go to</>} />
 
-            {tool !== 'start' && (
+            {tool !== 'start' && !(tool === 'jobs' && openJobId) && (
               <div>
                 <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{toolLabel(tool)}</h2>
                 <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
@@ -158,6 +164,8 @@ export default function TranslatePage() {
               onShowJobs={() => setTool('jobs')}
               onNewTranslation={() => setTool('new')}
               onOpenGlossaries={() => setTool('glossaries')}
+              openJobId={openJobId}
+              onOpenJob={openJob}
             />
             {tool === 'glossaries' && <GlossariesPanel glossaries={glossaries} setGlossaries={setGlossaries} onOpenLearned={() => setTool('learned')} onReload={loadGlossaries} />}
             {tool === 'learned' && <LearnedPanel onOpenGlossaries={() => setTool('glossaries')} />}

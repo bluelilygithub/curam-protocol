@@ -377,7 +377,7 @@
    "class": "authed"
   },
   "POST /api/clients/:id/email-sync": {
-    "class": "authed"
+   "class": "authed"
   },
   "POST /api/clients/:id/attachments": {
    "class": "authed"
@@ -3560,6 +3560,24 @@
    "class": "authed"
   },
   "GET /api/translate/jobs/:id/status": {
+   "class": "authed"
+  },
+  "GET /api/translate/jobs/:id/read": {
+   "class": "authed"
+  },
+  "PUT /api/translate/jobs/:id/requirements": {
+   "class": "authed"
+  },
+  "POST /api/translate/jobs/:id/passes": {
+   "class": "authed"
+  },
+  "POST /api/translate/jobs/:id/passes/:passNo/cancel": {
+   "class": "authed"
+  },
+  "POST /api/translate/jobs/:id/keep": {
+   "class": "authed"
+  },
+  "POST /api/translate/jobs/:id/reopen": {
    "class": "authed"
   },
   "DELETE /api/translate/jobs/:id": {

@@ -31,6 +31,11 @@ const { calculateCost } = require('../services/costCalculator');
 const { getUsdToAudRate } = require('../services/marketData');
 const { v4: uuidv4 } = require('uuid');
 const sendEmail = require('../utils/sendEmail');
+const draft = require('../services/translateDraft');
+const {
+  splitLongParagraph, mapPool, findOrCreateGlobalGlossary, upsertGlobalGlossaryTerms, applyLessons,
+  savePassOne, finalizeJob, runPass, cleanRequirements, partsOf, clearStalledPasses,
+} = draft;
 
 const router = express.Router();
 
@@ -66,7 +71,7 @@ async function setJobStatus(jobId, fields) {
   const keys   = Object.keys(fields);
   const values = Object.values(fields);
   const sets   = keys.map((k, i) => `"${k}"=$${i + 2}`).join(', ');
-  await pool.query(`UPDATE translate_jobs SET ${sets} WHERE id=$1`, [jobId, ...values]);
+  await pool.query(`UPDATE translate_jobs SET ${sets}, "updatedAt"=NOW() WHERE id=$1`, [jobId, ...values]);
 }
 
 async function markJobFailed(jobId, message) {
@@ -287,62 +292,6 @@ router.get('/drift-frequency/:lang', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-async function findOrCreateGlobalGlossary(userId, targetLanguage) {
-  const { rows } = await pool.query(
-    `SELECT * FROM translate_glossaries WHERE "userId"=$1 AND "targetLanguage"=$2 AND "isGlobal"=TRUE`,
-    [userId, targetLanguage]
-  );
-  if (rows[0]) return rows[0];
-  const inserted = await pool.query(
-    `INSERT INTO translate_glossaries ("userId", name, terms, "targetLanguage", "isGlobal")
-     VALUES ($1,$2,'[]',$3,TRUE) RETURNING *`,
-    [userId, `Global — ${targetLanguage}`, targetLanguage]
-  );
-  return inserted.rows[0];
-}
-
-// Cross-job drift tracking — see translate_term_drift in db.js. Only terms that DIDN'T reach a
-// confirmed lock (no proposedTarget, or the '(varies)' placeholder) are worth tracking: a term
-// that failed once is noise, one that recurs across jobs is a real pattern. Fire-and-forget from
-// the caller — never worth failing a completed job over a tracking write.
-async function recordTermDrift(userId, targetLanguage, uncertainTerms, jobId) {
-  const terms = (uncertainTerms || []).filter((t) => t?.source
-    && (!t.proposedTarget || t.proposedTarget === '(varies)'));
-  if (!terms.length) return;
-  const seen = new Set();
-  for (const t of terms) {
-    const key = String(t.source).trim().toLowerCase();
-    if (!key || seen.has(key)) continue; // one bump per job even if the term drifted on several rows
-    seen.add(key);
-    await pool.query(
-      `INSERT INTO translate_term_drift ("userId", "targetLanguage", "termKey", term, "jobCount", "lastJobId", "lastSeenAt")
-       VALUES ($1,$2,$3,$4,1,$5,NOW())
-       ON CONFLICT ("userId", "targetLanguage", "termKey")
-       DO UPDATE SET "jobCount"=translate_term_drift."jobCount"+1, "lastJobId"=$5, "lastSeenAt"=NOW(), term=$4`,
-      [userId, targetLanguage, key, t.source, jobId]
-    );
-  }
-}
-
-// Merges newly-seen glossary terms into the global glossary for a language, keyed by source
-// text (case-insensitive). Existing entries win — a job's fresh proposal never overwrites a
-// term the user (or a prior job) already locked in.
-async function upsertGlobalGlossaryTerms(userId, targetLanguage, newTerms) {
-  if (!Array.isArray(newTerms) || !newTerms.length) return;
-  const glossary = await findOrCreateGlobalGlossary(userId, targetLanguage);
-  const existing = Array.isArray(glossary.terms) ? glossary.terms : [];
-  const bySource = new Map(existing.map((t) => [String(t.source || '').trim().toLowerCase(), t]));
-  for (const t of newTerms) {
-    const key = String(t?.source || '').trim().toLowerCase();
-    if (!key || bySource.has(key)) continue;
-    bySource.set(key, t);
-  }
-  await pool.query(
-    `UPDATE translate_glossaries SET terms=$1, "updatedAt"=NOW() WHERE id=$2`,
-    [JSON.stringify([...bySource.values()]), glossary.id]
-  );
-}
-
 // "Lessons learnt" — HITL picks language-specific QA findings (uncertain terms, dialectal
 // choices, glossary drift) from a finished job's QA report and locks them into that language's
 // global glossary, same merge behaviour as the automatic top-up above (existing entries win).
@@ -406,76 +355,12 @@ router.get('/lessons', async (req, res) => {
 router.post('/lessons/apply', async (req, res) => {
   try {
     const { targetLanguage, globalLines, terms, jobId, jobFilename } = req.body || {};
-    const cleanGlobalLines = (Array.isArray(globalLines) ? globalLines : [])
-      .map((l) => String(l || '').trim()).filter(Boolean);
-    const cleanTerms = (Array.isArray(terms) ? terms : [])
-      .filter((t) => t && String(t.source || '').trim())
-      .map((t) => ({
-        source: String(t.source).trim(),
-        target: String(t.target || '').trim(),
-        note: t.note ? String(t.note).trim() : undefined,
-        doNotTranslate: !!t.doNotTranslate,
-        disposition: t.disposition || 'Lock rendering',
-      }));
-
-    if (!cleanGlobalLines.length && !cleanTerms.length) {
-      return res.status(400).json({ error: 'Nothing to apply' });
-    }
-    if (cleanTerms.length && !targetLanguage) {
-      return res.status(400).json({ error: 'targetLanguage is required to lock terms' });
-    }
-
-    const logRows = [];
-
-    if (cleanGlobalLines.length) {
-      const { rows: settingsRows } = await pool.query(
-        `SELECT value FROM settings WHERE "userId"=$1 AND key='translate_custom_instructions'`,
-        [req.user.id]
-      );
-      const existing = settingsRows[0]?.value || '';
-      const merged = [existing, cleanGlobalLines.map((l) => `- ${l}`).join('\n')].filter(Boolean).join('\n\n');
-      await pool.query(
-        `INSERT INTO settings ("userId", key, value) VALUES ($1, 'translate_custom_instructions', $2)
-         ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
-        [req.user.id, merged]
-      );
-      for (const line of cleanGlobalLines) {
-        logRows.push({ scope: 'global', targetLanguage: null, disposition: 'Global rule', sourceTerm: null, targetTerm: null, detail: line });
-      }
-    }
-
-    if (cleanTerms.length) {
-      await upsertGlobalGlossaryTerms(req.user.id, targetLanguage, cleanTerms);
-      for (const t of cleanTerms) {
-        logRows.push({
-          scope: 'language', targetLanguage, disposition: t.disposition,
-          sourceTerm: t.source, targetTerm: t.doNotTranslate ? '(do not translate)' : t.target,
-          detail: t.note || `${t.source} → ${t.doNotTranslate ? 'do not translate' : t.target}`,
-        });
-      }
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      for (const r of logRows) {
-        await client.query(
-          `INSERT INTO translate_lessons_log
-             ("userId", scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail, "jobId", "jobFilename")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [req.user.id, r.scope, r.targetLanguage, r.disposition, r.sourceTerm, r.targetTerm, r.detail,
-            jobId ? parseInt(jobId, 10) : null, jobFilename || null]
-        );
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-
-    res.json({ ok: true, globalApplied: cleanGlobalLines.length, termsApplied: cleanTerms.length });
+    const hasLines = (Array.isArray(globalLines) ? globalLines : []).some((l) => String(l || '').trim());
+    const hasTerms = (Array.isArray(terms) ? terms : []).some((t) => t && String(t.source || '').trim());
+    if (!hasLines && !hasTerms) return res.status(400).json({ error: 'Nothing to apply' });
+    if (hasTerms && !targetLanguage) return res.status(400).json({ error: 'targetLanguage is required to lock terms' });
+    const out = await applyLessons(req.user.id, { targetLanguage, globalLines, terms, jobId, jobFilename });
+    res.json({ ok: true, ...out });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -507,6 +392,11 @@ router.get('/jobs', async (req, res) => {
               "pageCount", "scannedPageCount", "avgOcrConfidence", "glossaryId", "batchId",
               "errorMessage", "fileSizeBytes", "charCount", "qaSummaryJson",
               ("translatedFile" IS NOT NULL) AS "hasNativeOutput",
+              "updatedAt",
+              (SELECT json_build_object('passNo', p."passNo", 'stage', p.stage, 'progress', p.progress)
+                 FROM translate_job_passes p WHERE p."jobId" = translate_jobs.id AND p.status = 'running'
+                ORDER BY p."passNo" DESC LIMIT 1) AS "runningPass",
+              (SELECT MAX(p."passNo") FROM translate_job_passes p WHERE p."jobId" = translate_jobs.id) AS "passCount",
               "createdAt", "completedAt"
        FROM translate_jobs WHERE "userId"=$1 ORDER BY "createdAt" DESC`,
       [req.user.id]
@@ -522,7 +412,12 @@ router.get('/jobs/:id/status', async (req, res) => {
               "pageCount", "scannedPageCount", "avgOcrConfidence", "translatedTextJson",
               "qaSummaryJson", "proposedGlossaryJson", "intakeAnswers",
               ("translatedFile" IS NOT NULL) AS "hasNativeOutput", "translatedFileName",
-              "errorMessage", "completedAt"
+              "updatedAt",
+              (SELECT json_build_object('passNo', p."passNo", 'stage', p.stage, 'progress', p.progress)
+                 FROM translate_job_passes p WHERE p."jobId" = translate_jobs.id AND p.status = 'running'
+                ORDER BY p."passNo" DESC LIMIT 1) AS "runningPass",
+              (SELECT MAX(p."passNo") FROM translate_job_passes p WHERE p."jobId" = translate_jobs.id) AS "passCount",
+              "errorMessage", "completedAt", "createdAt"
        FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
       [req.params.id, req.user.id]
     );
@@ -744,7 +639,8 @@ router.delete('/jobs/:id', async (req, res) => {
         binId = await bin.moveToBin(db, {
           userId: req.user.id, type: JOB_TYPE, id: job.id, title: job.filename,
           detail: `Translation into ${job.targetLanguage}${job.status === 'done' ? '' : ` · ${job.status}`}`,
-          payload: snapshotJob(job), maxBytes: JOB_MAX_BYTES,
+          payload: snapshotJob(job, (await db.query('SELECT * FROM translate_job_passes WHERE "jobId"=$1 ORDER BY "passNo"', [job.id])).rows),
+          maxBytes: JOB_MAX_BYTES,
         });
       } catch (err) {
         if (err.code !== 'TOO_LARGE') throw err;
@@ -769,7 +665,7 @@ router.post('/jobs/:id/cancel', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `UPDATE translate_jobs SET status='cancelled', "errorMessage"='Cancelled by user'
-       WHERE id=$1 AND "userId"=$2 AND status NOT IN ('done', 'failed', 'cancelled')
+       WHERE id=$1 AND "userId"=$2 AND status NOT IN ('done', 'failed', 'cancelled', 'ready', 'generating')
        RETURNING id`,
       [req.params.id, req.user.id]
     );
@@ -796,10 +692,147 @@ router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, re
     if (!req.file) return res.status(400).json({ error: 'PDF required' });
     await pool.query(
       `UPDATE translate_jobs
-       SET "translatedPdf"=$1, status='done', progress=100, "completedAt"=NOW()
-       WHERE id=$2 AND "userId"=$3`,
+       SET "translatedPdf"=$1, status='done', progress=100, "completedAt"=NOW(), "updatedAt"=NOW()
+       WHERE id=$2 AND "userId"=$3 AND status='generating' AND "translatedPdf" IS NULL`,
       [req.file.buffer, req.params.id, req.user.id]
     );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Drafts: read, requirements, passes, keep (services/translateDraft.js) ──────
+const parseJson = (v) => (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return null; } })() : v);
+
+// The translation as parts (original beside translation), the versions (passes) and the requirements. ?pass=N shows that version.
+router.get('/jobs/:id/read', async (req, res) => {
+  try {
+    const job = await draft.loadJob(Number(req.params.id) || 0, req.user.id);
+    if (!job) return res.status(404).json({ error: 'Not found' });
+    const payload = parseJson(job.translatedTextJson);
+    if (!payload) return res.status(409).json({ error: 'This translation has no text yet.' });
+    await clearStalledPasses(job.id);
+    const { rows: passRows } = await pool.query(
+      `SELECT "passNo", status, stage, progress, scope, "partIndexes", requirements, "changedIndexes", "errorMessage", "createdAt", "completedAt"
+         FROM translate_job_passes WHERE "jobId"=$1 ORDER BY "passNo"`, [job.id]);
+    const passes = passRows.length ? passRows : [{ passNo: 1, status: 'done', scope: 'all', requirements: [], createdAt: job.createdAt, completedAt: job.completedAt }];
+    const currentPass = Number(payload.currentPass) || 1;
+    const wanted = Number(req.query.pass) || currentPass;
+    let translatedByPage = payload.translatedByPage;
+    let qaSummary = parseJson(job.qaSummaryJson);
+    let changedIndexes = [];
+    if (wanted !== currentPass || passRows.length) {
+      const { rows } = await pool.query('SELECT * FROM translate_job_passes WHERE "jobId"=$1 AND "passNo"=$2', [job.id, wanted]);
+      if (rows[0]?.status === 'done') {
+        if (wanted !== currentPass) {
+          translatedByPage = parseJson(rows[0].translatedByPage) || translatedByPage;
+          qaSummary = parseJson(rows[0].qaSummary) || qaSummary;
+        }
+        changedIndexes = parseJson(rows[0].changedIndexes) || [];
+      } else if (wanted !== currentPass) {
+        return res.status(404).json({ error: 'That version is not available.' });
+      }
+    }
+    const intake = parseJson(job.intakeAnswers) || {};
+    res.json({
+      id: job.id, filename: job.filename, status: job.status, errorMessage: job.errorMessage,
+      sourceLanguage: job.sourceLanguage, targetLanguage: job.targetLanguage, engine: intake.engine || payload.engine || 'llm',
+      sourceFormat: payload.sourceFormat, pageLabels: payload.pageLabels || {}, pdfLayout: payload.pdfLayout,
+      currentPass, viewingPass: wanted, changedIndexes,
+      parts: partsOf(payload, translatedByPage).map(({ i, page, idx, source, target }) => ({ i, page, idx, source, target })),
+      qaSummary, passes, requirements: cleanRequirements(intake.requirements), enableReview: !!job.enableReview,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Save the requirement list (the "remember" ticks too) without running a pass.
+router.put('/jobs/:id/requirements', async (req, res) => {
+  try {
+    const job = await draft.loadJob(Number(req.params.id) || 0, req.user.id);
+    if (!job) return res.status(404).json({ error: 'Not found' });
+    const intake = parseJson(job.intakeAnswers) || {};
+    intake.requirements = draft.keepAppliedMarks(intake.requirements, req.body?.requirements);
+    await draft.setJob(job.id, { intakeAnswers: JSON.stringify(intake) });
+    res.json({ ok: true, requirements: intake.requirements });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Run another pass: { requirements, scope: 'all' | 'parts', parts: [part numbers] }. Only on a draft, one pass at a time.
+router.post('/jobs/:id/passes', async (req, res) => {
+  try {
+    const job = await draft.loadJob(Number(req.params.id) || 0, req.user.id);
+    if (!job) return res.status(404).json({ error: 'Not found' });
+    if (job.status !== 'ready') return res.status(409).json({ error: job.status === 'done' ? 'This translation has been kept. Reopen it as a draft first.' : 'This translation is not ready yet.' });
+    await clearStalledPasses(job.id);
+    const scope = req.body?.scope === 'parts' ? 'parts' : 'all';
+    const parts = scope === 'parts' ? [...new Set((Array.isArray(req.body?.parts) ? req.body.parts : []).map(Number).filter((n) => Number.isInteger(n) && n >= 0))].slice(0, 5000) : null;
+    if (scope === 'parts' && !parts.length) return res.status(400).json({ error: 'Pick the parts to translate again first.' });
+    const intake = parseJson(job.intakeAnswers) || {};
+    const requirements = draft.keepAppliedMarks(intake.requirements, req.body?.requirements);
+    intake.requirements = requirements;
+    await draft.setJob(job.id, { intakeAnswers: JSON.stringify(intake) });
+    let row;
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO translate_job_passes ("jobId", "userId", "passNo", status, stage, progress, scope, "partIndexes", requirements)
+         SELECT $1, $2, COALESCE(MAX("passNo"), 1) + 1, 'running', 'Starting…', 0, $3, $4, $5
+           FROM translate_job_passes WHERE "jobId"=$1
+         HAVING NOT EXISTS (SELECT 1 FROM translate_job_passes WHERE "jobId"=$1 AND status='running')
+         RETURNING id, "passNo"`,
+        [job.id, req.user.id, scope, parts ? JSON.stringify(parts) : null, JSON.stringify(requirements)]);
+      row = rows[0];
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Another pass has just started. Wait for it to finish.' });
+      throw err;
+    }
+    if (!row) return res.status(409).json({ error: 'A pass is already running on this translation. Wait for it to finish.' });
+    runPass(job.id, req.user.id, row.id).catch((err) => console.error('[translate] pass crashed:', err.message));
+    res.status(202).json({ ok: true, passNo: row.passNo });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/jobs/:id/passes/:passNo/cancel', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE translate_job_passes SET status='cancelled', stage='Cancelled', "completedAt"=NOW()
+        WHERE "jobId"=$1 AND "passNo"=$2 AND "userId"=$3 AND status='running' RETURNING id`,
+      [Number(req.params.id) || 0, Number(req.params.passNo) || 0, req.user.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'That pass is not running.' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Keep this version: { passNo } keeps an earlier version instead of the current one. Makes the files in the background.
+router.post('/jobs/:id/keep', async (req, res) => {
+  try {
+    const job = await draft.loadJob(Number(req.params.id) || 0, req.user.id);
+    if (!job) return res.status(404).json({ error: 'Not found' });
+    if (job.status !== 'ready') return res.status(409).json({ error: job.status === 'done' ? 'This translation is already kept.' : 'This translation is not ready to keep.' });
+    await clearStalledPasses(job.id);
+    const { rows: running } = await pool.query(`SELECT 1 FROM translate_job_passes WHERE "jobId"=$1 AND status='running'`, [job.id]);
+    if (running.length) return res.status(409).json({ error: 'A pass is still running. Wait for it, or cancel it, before keeping.' });
+    const passNo = req.body?.passNo ? Number(req.body.passNo) : null;
+    const { rows } = await pool.query(
+      `UPDATE translate_jobs SET status='generating', stage='Making the files…', "updatedAt"=NOW() WHERE id=$1 AND status='ready' RETURNING id`, [job.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'This translation is not ready to keep.' });
+    finalizeJob(job.id, req.user.id, { passNo }).catch(() => { /* the job is back to a draft with the reason on it */ });
+    res.status(202).json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Reopen a kept translation as a draft, to run more passes ("Run again"). The kept files stay until it is kept again.
+router.post('/jobs/:id/reopen', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE translate_jobs SET status='ready', stage='Ready to read', "errorMessage"=NULL, "updatedAt"=NOW()
+        WHERE id=$1 AND "userId"=$2 AND status='done' AND "translatedTextJson" IS NOT NULL RETURNING id, "translatedTextJson", "qaSummaryJson"`,
+      [Number(req.params.id) || 0, req.user.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'Only a kept translation can be reopened.' });
+    // A translation from before drafts existed has no pass rows: its text becomes pass 1, so passes can be compared with it.
+    const { rows: has } = await pool.query('SELECT 1 FROM translate_job_passes WHERE "jobId"=$1 LIMIT 1', [rows[0].id]);
+    if (!has.length) {
+      const payload = parseJson(rows[0].translatedTextJson) || {};
+      await savePassOne({ jobId: rows[0].id, userId: req.user.id, translatedByPage: payload.translatedByPage || {}, qaSummary: parseJson(rows[0].qaSummaryJson) || {} });
+    }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -888,6 +921,7 @@ router.post('/jobs', sourceUpload, async (req, res) => {
   if (overrides.translateModelId) intakeAnswers.translateModelId = overrides.translateModelId;
   if (overrides.reviewModelId) intakeAnswers.reviewModelId = overrides.reviewModelId;
   if (useGlobalGlossary) intakeAnswers.useGlobalGlossary = true;
+  intakeAnswers.reviewBeforeKeep = String(req.body.reviewBeforeKeep ?? 'true') !== 'false';
 
   const { rows } = await pool.query(
     `INSERT INTO translate_jobs
@@ -919,10 +953,8 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 // Same intake as a single job, but `targetLanguages` is a JSON array. Extraction (+ OCR) runs
 // once and is shared across every language instead of repeating it per job.
 //
-// Deprecated: target language is now a single Settings-level choice (translate_target_language),
-// not picked per job, so there's no UI path left to select more than one language per run.
-// Route kept (unused by the client) rather than removed, since translate_jobs."batchId" and
-// existing rows still reference it — deleting it is a bigger change than this ask needs.
+// Used by "Also translate into" on New translation. With the learned glossary ticked, each language uses (and later adds to) its
+// own learned glossary; a glossary picked by hand is used for every language.
 router.post('/jobs/batch', sourceUpload, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
@@ -1002,10 +1034,17 @@ router.post('/jobs/batch', sourceUpload, async (req, res) => {
   intakeAnswers.pdfLayout = pdfLayout;
   if (overrides.translateModelId) intakeAnswers.translateModelId = overrides.translateModelId;
   if (overrides.reviewModelId) intakeAnswers.reviewModelId = overrides.reviewModelId;
+  const useGlobalGlossary = String(req.body.useGlobalGlossary || '') === 'true' && !glossaryId;
+  if (useGlobalGlossary) intakeAnswers.useGlobalGlossary = true;
+  intakeAnswers.reviewBeforeKeep = String(req.body.reviewBeforeKeep ?? 'true') !== 'false';
 
   const batchId = uuidv4();
   const jobIds = [];
+  const glossaryByLang = {};
+  const intakeByLang = {};
   for (const lang of targetLanguages) {
+    glossaryByLang[lang] = useGlobalGlossary ? (await findOrCreateGlobalGlossary(req.user.id, lang)).id : (glossaryId ? parseInt(glossaryId, 10) : null);
+    intakeByLang[lang] = { ...intakeAnswers, regionalAudience: lang === 'mi' ? (intakeAnswers.regionalAudience || '') : '' };
     const { rows } = await pool.query(
       `INSERT INTO translate_jobs
          ("userId", filename, status, "targetLanguage", "fileSizeBytes", "originalPdf",
@@ -1013,7 +1052,7 @@ router.post('/jobs/batch', sourceUpload, async (req, res) => {
        VALUES ($1,$2,'pending',$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [
         req.user.id, req.file.originalname, lang, req.file.size, req.file.buffer,
-        glossaryId ? parseInt(glossaryId, 10) : null, JSON.stringify(intakeAnswers), enableReview, batchId,
+        glossaryByLang[lang], JSON.stringify(intakeByLang[lang]), enableReview, batchId,
       ]
     );
     jobIds.push(rows[0].id);
@@ -1035,7 +1074,7 @@ router.post('/jobs/batch', sourceUpload, async (req, res) => {
       const jobId = jobIds[i];
       try {
         await processTranslateJob(jobId, req.file.buffer, req.user.id, lang,
-          glossaryId ? parseInt(glossaryId, 10) : null, scannedImages, intakeAnswers, enableReview,
+          glossaryByLang[lang], scannedImages, intakeByLang[lang], enableReview,
           fileMeta, sharedExtraction);
       } catch (err) {
         await markJobFailed(jobId, err.message);
@@ -1047,40 +1086,6 @@ router.post('/jobs/batch', sourceUpload, async (req, res) => {
 });
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
-function splitLongParagraph(text, limit = 3500) {
-  if (text.length <= limit) return [text];
-  const pieces = [];
-  const sentences = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text];
-  let current = '';
-  for (const s of sentences) {
-    if (current.length + s.length > limit && current.length > 0) {
-      pieces.push(current.trim());
-      current = s;
-    } else {
-      current += s;
-    }
-  }
-  if (current.trim()) pieces.push(current.trim());
-  return pieces.length ? pieces : [text.slice(0, limit)];
-}
-
-/** Run async work over items with limited concurrency; preserves result order. */
-async function mapPool(items, concurrency, worker) {
-  const results = new Array(items.length);
-  let next = 0;
-  async function run() {
-    while (true) {
-      const i = next;
-      next += 1;
-      if (i >= items.length) return;
-      results[i] = await worker(items[i], i);
-    }
-  }
-  const n = Math.max(1, Math.min(concurrency, items.length));
-  await Promise.all(Array.from({ length: n }, () => run()));
-  return results;
-}
-
 /** Extraction + OCR — the part of the pipeline that doesn't depend on target language.
  *  Factored out so a multi-language fan-out batch can run it once and reuse the result for
  *  every target language instead of re-extracting (and re-OCR'ing) per language. */
@@ -1796,87 +1801,39 @@ async function processTranslateJob(
     qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
   }
 
-  // ── 7b. Translation memory: save this job's pairs, bump reuse counts ────────
-  try {
-    await translateMemory.savePairs({
-      userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
-      domain: intakeAnswers?.domain || null, pairs: reviewPairs,
-    });
-    if (tmReuseCount > 0) {
-      await translateMemory.bumpHitCounts({
-        userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
-        sources: [...tmHits.keys()],
-      });
-    }
-  } catch (err) {
-    console.warn('[translate] TM save failed:', err.message);
-  }
-
-  // ── 7c. Native (editable) output for .docx/.xlsx sources ────────────────────
-  // ── 7b. Learn back into the global glossary, if this job opted in ───────────
-  // Best-effort — a glossary write failure should never fail an otherwise-complete job.
-  if (engine === 'llm' && intakeAnswers?.useGlobalGlossary) {
-    try {
-      await upsertGlobalGlossaryTerms(userId, targetLanguage, glossaryTerms);
-    } catch (err) {
-      console.warn('[translate] global glossary learn-back failed:', err.message);
-    }
-  }
-
-  // Best-effort, alongside the always-available PDF below — never blocks the job on failure.
-  let nativeOutput = null;
-  try {
-    if (sourceFormat === 'xlsx' || sourceFormat === 'xls') {
-      const buf = buildNativeXlsx({ originalBuffer: fileBuffer, paragraphsByPage, translatedByPage, pageLabels });
-      if (buf) nativeOutput = { buffer: buf, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx' };
-    } else if (sourceFormat === 'docx') {
-      const sourceParagraphs = paragraphsByPage[1] || [];
-      const translatedParagraphs = translatedByPage[1] || [];
-      const buf = await buildNativeDocx({ originalBuffer: fileBuffer, paragraphs: sourceParagraphs, translations: translatedParagraphs });
-      if (buf) nativeOutput = { buffer: buf, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx' };
-    }
-  } catch (err) {
-    console.warn('[translate] native output build failed:', err.message);
-  }
-  if (nativeOutput) {
-    const base = (fileMeta.filename || 'document').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
-    await setJobStatus(jobId, {
-      translatedFile: nativeOutput.buffer,
-      translatedFileMime: nativeOutput.mime,
-      translatedFileName: `translated-${base}.${nativeOutput.ext}`,
-    });
-  }
-
+  // ── 8. A draft to read, or kept straight away ────────────────────────────────
+  // Nothing lasting is written here. Translation memory, the learned glossary, the drift tally and the files (PDF, Word/Excel) are
+  // written when the person keeps a version (services/translateDraft.js finalizeJob), so a draft they reject leaves no trace. The
+  // PDF is made on the server now: the page can be closed while a translation runs.
+  const payload = {
+    sourceByPage: paragraphsByPage,
+    translatedByPage,
+    pageCount,
+    pageLabels: pageLabels || {},
+    sourceFormat,
+    engine,
+    pdfLayout,
+    scannedPages,
+    avgOcrConfidence,
+    qaSummary,
+    glossaryTerms,
+    currentPass: 1,
+    tmHitSources: [...tmHits.keys()],
+  };
   await checkJobCancelled(jobId);
-
-  recordTermDrift(userId, targetLanguage, qaSummary.uncertainTerms, jobId)
-    .catch((err) => console.error('[translate] recordTermDrift failed:', err.message));
-
-  // ── 8. Hand off to client PDF generation ────────────────────────────────────
+  await savePassOne({ jobId, userId, translatedByPage, qaSummary });
   await setJobStatus(jobId, {
-    status: 'generating',
-    stage: pdfLayout === 'translation-only'
-      ? 'Generating translated PDF…'
-      : pdfLayout === 'side-by-side'
-        ? 'Generating side-by-side PDF…'
-        : 'Generating bilingual PDF…',
-    progress: 90,
+    status: 'ready',
+    stage: 'Ready to read',
+    progress: 100,
     charCount: totalCharCount,
     qaSummaryJson: JSON.stringify(qaSummary),
-    translatedTextJson: JSON.stringify({
-      sourceByPage: paragraphsByPage,
-      translatedByPage,
-      pageCount,
-      pageLabels: pageLabels || {},
-      sourceFormat,
-      engine,
-      pdfLayout,
-      scannedPages,
-      avgOcrConfidence,
-      qaSummary,
-      glossaryTerms,
-    }),
+    translatedTextJson: JSON.stringify(payload),
   });
+  if (intakeAnswers?.reviewBeforeKeep === false) {
+    // A failure leaves it as a draft with the reason on it, and Keep this version can be pressed again.
+    await finalizeJob(jobId, userId).catch(() => {});
+  }
 }
 
 module.exports = router;

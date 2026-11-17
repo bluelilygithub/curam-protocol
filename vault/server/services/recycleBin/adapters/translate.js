@@ -17,11 +17,13 @@ const JOB_MAX_BYTES = 40 * 1024 * 1024;
 const JOB_FILE_COLUMNS = ['originalPdf', 'translatedPdf', 'translatedFile'];
 const JOB_JSONB_COLUMNS = ['sourceTextJson', 'intakeAnswers'];
 
-/** The job row as it goes into the bin: file columns turned into base64 text so they survive being stored as JSON. */
-function snapshotJob(row) {
+const PASS_JSONB_COLUMNS = ['partIndexes', 'requirements', 'changedIndexes', 'translatedByPage', 'qaSummary'];
+
+/** The job row as it goes into the bin, with its versions (passes): file columns turned into base64 text so they survive as JSON. */
+function snapshotJob(row, passes = []) {
   const job = { ...row };
   for (const col of JOB_FILE_COLUMNS) if (Buffer.isBuffer(job[col])) job[col] = { base64: job[col].toString('base64') };
-  return { job };
+  return { job, passes };
 }
 
 register(JOB_TYPE, {
@@ -35,6 +37,12 @@ register(JOB_TYPE, {
     for (const col of JOB_JSONB_COLUMNS) override[col] = job[col] == null ? null : JSON.stringify(job[col]);
     // the glossary it used may have been deleted since: insertRow leaves that link empty rather than failing
     const entityId = await insertRow(db, 'translate_jobs', job, { userId, override });
+    // Its versions (passes), if it had any: a pass still marked running when it was deleted comes back as stopped.
+    for (const p of Array.isArray(payload.passes) ? payload.passes : []) {
+      const o = { jobId: entityId, status: p.status === 'running' ? 'failed' : p.status };
+      for (const col of PASS_JSONB_COLUMNS) o[col] = p[col] == null ? null : JSON.stringify(p[col]);
+      await insertRow(db, 'translate_job_passes', p, { userId, override: o, keepId: false });
+    }
     return { entityId };
   },
 });

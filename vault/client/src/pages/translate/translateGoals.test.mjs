@@ -22,6 +22,7 @@ for (const g of TRANSLATE_GOALS) {
   assert.ok(layouts.includes(g.preset.layout), `${g.id}: a layout the form offers`);
   assert.strictEqual(typeof g.preset.review, 'boolean', `${g.id}: the second check is on or off`);
   if (g.preset.targetLang) assert.ok(langs.includes(g.preset.targetLang), `${g.id}: a real language`);
+  if ('reviewBeforeKeep' in g.preset) assert.strictEqual(typeof g.preset.reviewBeforeKeep, 'boolean', `${g.id}: read-before-keep is on or off`);
 }
 
 // Google is not set up: the fast job still runs, on Vault AI, and says so.
