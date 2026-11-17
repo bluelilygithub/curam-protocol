@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b937b431",
+   "fullHash": "b937b431f6a852085e717edc1fdf74b180880fab",
+   "committedAt": "2026-11-17T14:51:57+10:00",
+   "author": "mrb",
+   "subject": "Route manifest: classify 15 routes added by earlier commits",
+   "filesChanged": 1,
+   "insertions": 45,
+   "deletions": 0,
+   "area": "Security tests",
+   "goal": "Make the cross-user safety test pass again: it refuses to pass while any route the app serves is missing from the list of who may call it.",
+   "whatChanged": "Fifteen routes added by earlier commits were served but not listed in the route manifest: seven for AI Visibility (assistants, audits list, open, create, delete, markdown and PDF downloads), two for Graphics (expand, subject mask) and six for Video Tools (clean language and its text version, denoise, remove logo, remove silences, stabilise). They were added with the test's own update option, which classes a route by calling it signed out: all fifteen refused, so all are \"signed-in only\". The file's existing order was kept and nothing else in it changed.",
+   "filesImpacted": [
+    "server/testing/routeManifest.json"
+   ],
+   "benefit": "The test that checks no route leaks to signed-out callers, admin routes stay admin-only, and one person cannot reach another's data runs clean again, so a real new gap shows up instead of being lost among old ones. Run locally: all 1,466 routes listed, every non-public route answers 401 signed out, all 34 admin routes answer 403 to an ordinary member, and the ownership half passes.",
+   "concerns": "This only lists the routes; it does not change how they behave. The ownership half checks these routes the same way as every other route, but no extra test data was added for AI Visibility audits, so whether one person can open another's audit by id is only covered as far as the existing ownership probes reach. The test runs locally, not in the deploy."
+  },
+  {
    "commit": "3ff24cea",
    "fullHash": "3ff24cea2172264eea51058e9d959a2374b85913",
    "committedAt": "2026-11-17T14:44:15+10:00",
