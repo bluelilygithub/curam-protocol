@@ -38,6 +38,7 @@ checkGuide({
     ['keep-time', 'notes', /do not go to the recycle bin/, 'the keep time is permanent'],
     ['styles', 'does', /Admins only/, 'house styles are admin-only'],
     ['styles', 'does', /Test this set/, 'the test button is named as on the page'],
+    ['styles', 'does', /Download for review \(Word\)/, 'the review download is named as on the page'],
     ['house-style-choice', 'notes', /not reused/, 'translation memory is skipped with a house style'],
     ['jobs', 'notes', /Stopped part-way/, 'an interrupted job is explained'],
     ['jobs', 'notes', /recycle bin for 30 days/, 'a deleted job goes to the recycle bin'],

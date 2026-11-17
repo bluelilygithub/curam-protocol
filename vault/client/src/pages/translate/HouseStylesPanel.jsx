@@ -11,6 +11,8 @@ import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { LANGUAGES } from '../../utils/translateLanguages';
 import { Sel, Tip } from './shared';
 import { offerUndo } from '../../utils/binUndo';
+import { downloadBlob } from '../../utils/exportHelpers';
+import { buildReviewDocx, reviewFileName } from './reviewDocx.mjs';
 
 // House styles (admins only): per language, sets of approved examples for the whole workspace. A set is a kind of content with a
 // comment on how it is translated, and pairs of an original and its approved translation. When a translation into or out of the
@@ -104,9 +106,22 @@ export default function HouseStylesPanel({ isAdmin }) {
       const res = await api.post(`/api/translate/styles/${saved.id}/test`, {});
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'The test could not run');
-      setTest(body);
+      setTest({ ...body, comment: saved.comment || '' });
     } catch (e) { addToast(e.message, 'error'); }
     finally { stopProcessing(); }
+  };
+
+  // The test as a Word document for a native speaker: each original, the approved translation and Translate's version, with tick
+  // boxes for which reads better and room for comments (reviewDocx.mjs).
+  const downloadReview = async () => {
+    try {
+      const languageLabel = langLabel(test.set.languageCode);
+      const blob = await buildReviewDocx({
+        setName: test.set.name, languageLabel, comment: test.comment, model: test.model, date: new Date(),
+        results: test.results.map((r) => ({ ...r, originalLabel: langLabel(r.originalLanguage) })),
+      });
+      downloadBlob(blob, reviewFileName(test.set.name, languageLabel));
+    } catch (e) { addToast('Could not make the document: ' + e.message, 'error'); }
   };
 
   if (!isAdmin) {
@@ -246,11 +261,20 @@ export default function HouseStylesPanel({ isAdmin }) {
 
       {test && (
         <Dialog title={`Test: ${test.set.name}`} size="2xl" onClose={() => setTest(null)}
-          footer={<button type="button" onClick={() => setTest(null)} className={BTN} style={PRIMARY}>Close</button>}>
+          footer={(
+            <div className="flex flex-wrap gap-2 justify-end">
+              <Tooltip text="Save this test as a Word document for a native speaker: each original, your approved translation and Translate's version side by side, with boxes to tick which reads better and room for comments. They can edit it and send it back.">
+                <button type="button" onClick={downloadReview} className={BTN} style={BTN_STYLE}>{getIcon('download', { size: 14 })} Download for review (Word)</button>
+              </Tooltip>
+              <button type="button" onClick={() => setTest(null)} className={BTN} style={PRIMARY}>Close</button>
+            </div>
+          )}>
           <div className="space-y-4 text-sm" style={{ color: 'var(--color-text)' }}>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Each original was translated into {langLabel(test.set.languageCode)} with this set, without the translator seeing that example's
-              own approved translation. Compare the two; a fluent reader should judge which is closer. {test.tested < test.total ? `The first ${test.tested} of ${test.total} examples were tested.` : ''}
+              This is a check, not a suggestion: your approved translation stays the standard and nothing is changed. Each original was
+              translated into {langLabel(test.set.languageCode)} with this set, without the translator seeing that example's own approved
+              translation, to show how close Translate gets on its own. A fluent reader should judge; Download for review makes a Word
+              document for them. {test.tested < test.total ? `The first ${test.tested} of ${test.total} examples were tested.` : ''}
             </p>
             {test.results.map((r, i) => (
               <div key={r.id} className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
@@ -262,7 +286,7 @@ export default function HouseStylesPanel({ isAdmin }) {
                     <p className="whitespace-pre-wrap">{r.approved}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-primary)' }}>Translate's version, with this set</p>
+                    <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-primary)' }}>Translate's version (made without seeing your approved translation)</p>
                     {r.error ? <p style={{ color: '#ef4444' }}>{r.error}</p> : <p className="whitespace-pre-wrap">{r.got}</p>}
                   </div>
                 </div>

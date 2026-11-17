@@ -437,9 +437,9 @@ router.post('/styles/:setId/test', requireAdmin, async (req, res) => {
           sourceLanguage: e.originalLanguage, targetLanguage: set.languageCode, glossaryTerms: [], guidance: block.text, runningGlossary: {},
           intakeAnswers: {},
         });
-        return { id: e.id, original: e.original, approved: e.approved, got, examplesShown: block.used };
+        return { id: e.id, originalLanguage: e.originalLanguage, original: e.original, approved: e.approved, got, examplesShown: block.used };
       } catch (err) {
-        return { id: e.id, original: e.original, approved: e.approved, error: err.message };
+        return { id: e.id, originalLanguage: e.originalLanguage, original: e.original, approved: e.approved, error: err.message };
       }
     });
     res.json({ set: { id: set.id, name: set.name, languageCode: set.languageCode }, model: models.translate.modelId, tested: results.length, total: set.examples.length, results });
