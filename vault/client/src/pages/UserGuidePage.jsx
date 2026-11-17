@@ -1873,7 +1873,11 @@ function UserGuidePage() {
           which downloads a small playlist file for VLC, a free player that plays more of them. Star a channel to
           keep it in <strong>Favourites</strong>; <strong>Recent</strong> shows what you watched and each link says
           whether it played for you last time. Adult channels and channels removed after a copyright complaint
-          are always left out. It is off for members until an admin switches it on in Settings → Feature Access.
+          are always left out. Many channels also show <strong>what is on now</strong> and a 7-day <strong>TV guide</strong> under
+          the picture (a free guide covering Australian free-to-air for one city, chosen by an admin, plus some streaming channels,
+          updated every 6 hours). <strong>Programmes</strong> searches the guide by title, episode or description, and the star on a
+          programme adds the show to <strong>My shows</strong>, which lists every time it is on in the next week on any channel in the
+          guide. It is off for members until an admin switches it on in Settings → Feature Access.
         </P>
 
         <SubHeading>Inbox Intel</SubHeading>

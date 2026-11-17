@@ -8,6 +8,10 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { getCatalogue, filterChannels } = require('../services/liveTv/catalogue');
+const guide = require('../services/liveTv/guide');
+const { requireAdmin } = require('../middleware/auth');
+
+const guideDeps = { pool, getCatalogue };
 
 const router = express.Router();
 
@@ -50,9 +54,39 @@ async function lastPlays(userId, channelIds) {
   return out;
 }
 
+// What is on now and next for each channel shown (one query for the page of channels).
+async function nowNext(channelIds) {
+  if (!channelIds.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT "channelId", title, "subTitle", start, stop FROM (
+       SELECT "channelId", title, "subTitle", start, stop, ROW_NUMBER() OVER (PARTITION BY "channelId" ORDER BY start) AS n
+         FROM live_tv_programmes WHERE "channelId" = ANY($1::text[]) AND stop > NOW()) x
+      WHERE n <= 2 ORDER BY "channelId", start`, [channelIds]);
+  const out = new Map();
+  for (const r of rows) {
+    const list = out.get(r.channelId) || [];
+    list.push({ title: r.title, subTitle: r.subTitle, start: r.start, stop: r.stop });
+    out.set(r.channelId, list);
+  }
+  return out;
+}
+
+const programmeOut = (r, cat) => {
+  const c = cat.byId.get(r.channelId);
+  return {
+    channelId: r.channelId, channelName: c?.name || r.channelId, canPlay: !!c?.browserOk,
+    title: r.title, subTitle: r.subTitle, description: r.description, category: r.category, episode: r.episode,
+    start: r.start, stop: r.stop, titleKey: r.titleKey,
+  };
+};
+
+// Search text for ILIKE: the person's words, with % and _ taken literally.
+const likeText = (q) => `%${String(q).replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+
 router.get('/meta', async (req, res, next) => {
   try {
     const cat = await getCatalogue();
+    guide.ensureFresh(guideDeps).catch(() => {}); // the guide refreshes itself in the background when it is old or missing
     const favs = await favouriteIds(req.user.id);
     res.json({
       countries: cat.countries,
@@ -74,11 +108,13 @@ router.get('/channels', async (req, res, next) => {
     const view = VIEWS.includes(req.query.view) ? req.query.view : 'all';
     const favs = await favouriteIds(req.user.id);
     let ids = null;
-    if (view === 'favourites') ids = favs;
+    // ?ids=a,b: exactly these channels (a programme result opening its channel)
+    if (req.query.ids) ids = String(req.query.ids).split(',').map(cleanId).filter(Boolean).slice(0, 60);
+    else if (view === 'favourites') ids = favs;
     if (view === 'recent') ids = await recentIds(req.user.id);
     const { total, channels } = filterChannels(cat, {
       ids,
-      country: view === 'all' ? String(req.query.country || '').toUpperCase().slice(0, 3) : '',
+      country: view === 'all' && !req.query.ids ? String(req.query.country || '').toUpperCase().slice(0, 3) : '',
       category: String(req.query.category || '').slice(0, 40),
       q: String(req.query.q || '').slice(0, 100),
       browserOnly: req.query.browserOnly === '1',
@@ -86,6 +122,7 @@ router.get('/channels', async (req, res, next) => {
       limit: req.query.limit,
     });
     const plays = await lastPlays(req.user.id, channels.map((c) => c.id));
+    const onAir = await nowNext(channels.map((c) => c.id));
     const favSet = new Set(favs);
     res.json({
       total,
@@ -95,7 +132,7 @@ router.get('/channels', async (req, res, next) => {
         const country = cat.countryNames.get(c.country);
         return {
           id: c.id, name: c.name, network: c.network, country: c.country, countryName: country?.name || c.country, flag: country?.flag || '',
-          categories: c.categories, website: c.website, browserOk: c.browserOk, favourite: favSet.has(c.id),
+          categories: c.categories, website: c.website, browserOk: c.browserOk, favourite: favSet.has(c.id), onAir: onAir.get(c.id) || [],
           streams: c.streams.map((s) => ({ ...s, lastPlay: played[s.url] || null })),
         };
       }),
@@ -115,6 +152,9 @@ router.post('/favourites', async (req, res, next) => {
     await pool.query(
       `INSERT INTO live_tv_favourites ("userId", "channelId") VALUES ($1, $2) ON CONFLICT ("userId", "channelId") DO NOTHING`,
       [req.user.id, channelId]);
+    // A newly starred channel outside the guide so far: fetch its guide file now rather than at the next 6-hourly refresh.
+    const { rows } = await pool.query('SELECT 1 FROM live_tv_programmes WHERE "channelId" = $1 LIMIT 1', [channelId]);
+    if (!rows.length) guide.refreshGuide(guideDeps).catch(() => {});
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
@@ -123,6 +163,119 @@ router.post('/favourites', async (req, res, next) => {
 router.delete('/favourites/:channelId', async (req, res, next) => {
   try {
     await pool.query('DELETE FROM live_tv_favourites WHERE "userId" = $1 AND "channelId" = $2', [req.user.id, cleanId(req.params.channelId)]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ---- TV guide (shared by the workspace: public schedule facts, no "userId"; see services/liveTv/guide.js) ----
+
+router.get('/guide/status', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT COUNT(*) AS n, COUNT(DISTINCT "channelId") AS channels, MAX("fetchedAt") AS at FROM live_tv_programmes WHERE stop > NOW()');
+    res.json({
+      region: await guide.getRegion(pool), regions: guide.REGIONS,
+      programmes: Number(rows[0].n), channels: Number(rows[0].channels), refreshedAt: rows[0].at, ...guide.status(),
+    });
+  } catch (err) { next(err); }
+});
+
+// Admin: which Australian city's guide to use (local news and times differ by city), then refresh.
+router.put('/guide/region', requireAdmin, async (req, res, next) => {
+  try {
+    await guide.setRegion(pool, String(req.body?.region || ''));
+    guide.refreshGuide(guideDeps).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/guide/refresh', requireAdmin, (req, res) => {
+  guide.refreshGuide(guideDeps).catch(() => {});
+  res.status(202).json({ ok: true });
+});
+
+// One channel's programmes between two times (the page asks for one local day at a time).
+router.get('/guide/channel/:channelId', async (req, res, next) => {
+  try {
+    const cat = await getCatalogue();
+    const from = new Date(String(req.query.from || ''));
+    const to = new Date(String(req.query.to || ''));
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to <= from || to - from > 2 * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: 'Which day?' });
+    }
+    const { rows } = await pool.query(
+      `SELECT * FROM live_tv_programmes WHERE "channelId" = $1 AND stop > $2 AND start < $3 ORDER BY start LIMIT 200`,
+      [cleanId(req.params.channelId), from, to]);
+    res.json({ programmes: rows.map((r) => programmeOut(r, cat)) });
+  } catch (err) { next(err); }
+});
+
+// Programme search: titles, episode names and descriptions from now to the end of the guide, grouped by show.
+router.get('/programmes/search', async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q.length < 2) return res.json({ shows: [] });
+    const cat = await getCatalogue();
+    const like = likeText(q);
+    const { rows } = await pool.query(
+      `SELECT * FROM live_tv_programmes
+        WHERE stop > NOW() AND (title ILIKE $1 OR "subTitle" ILIKE $1 OR description ILIKE $1)
+        ORDER BY (title ILIKE $1) DESC, start LIMIT 400`, [like]);
+    const favs = new Set((await pool.query('SELECT "titleKey" FROM live_tv_shows WHERE "userId" = $1', [req.user.id])).rows.map((r) => r.titleKey));
+    const shows = new Map();
+    for (const r of rows) {
+      const s = shows.get(r.titleKey) || { titleKey: r.titleKey, title: r.title, favourite: favs.has(r.titleKey), titleMatch: false, airings: [] };
+      if (r.title.toLowerCase().includes(q.toLowerCase())) s.titleMatch = true;
+      if (s.airings.length < 12) s.airings.push(programmeOut(r, cat));
+      shows.set(r.titleKey, s);
+    }
+    const list = [...shows.values()]
+      .map((s) => ({ ...s, airings: s.airings.sort((a, b) => new Date(a.start) - new Date(b.start)) }))
+      .sort((a, b) => (b.titleMatch - a.titleMatch) || (new Date(a.airings[0].start) - new Date(b.airings[0].start)))
+      .slice(0, 40);
+    res.json({ shows: list });
+  } catch (err) { next(err); }
+});
+
+// ---- favourite shows (per person) ----
+
+router.get('/shows', async (req, res, next) => {
+  try {
+    const cat = await getCatalogue();
+    const { rows: shows } = await pool.query(
+      'SELECT "titleKey", title, "createdAt" FROM live_tv_shows WHERE "userId" = $1 ORDER BY title', [req.user.id]);
+    const keys = shows.map((s) => s.titleKey);
+    const { rows } = keys.length ? await pool.query(
+      `SELECT * FROM live_tv_programmes WHERE "titleKey" = ANY($1::text[]) AND stop > NOW() ORDER BY start LIMIT 500`, [keys]) : { rows: [] };
+    const airings = new Map();
+    for (const r of rows) {
+      const list = airings.get(r.titleKey) || [];
+      if (list.length < 12) list.push(programmeOut(r, cat));
+      airings.set(r.titleKey, list);
+    }
+    res.json({ shows: shows.map((s) => ({ titleKey: s.titleKey, title: s.title, favourite: true, airings: airings.get(s.titleKey) || [] })) });
+  } catch (err) { next(err); }
+});
+
+router.post('/shows', async (req, res, next) => {
+  try {
+    const title = String(req.body?.title || '').trim().slice(0, 300);
+    const key = guide.titleKey(title);
+    if (!key) return res.status(400).json({ error: 'Which programme?' });
+    await pool.query(
+      `INSERT INTO live_tv_shows ("userId", "titleKey", title) VALUES ($1, $2, $3) ON CONFLICT ("userId", "titleKey") DO NOTHING`,
+      [req.user.id, key, title]);
+    res.json({ ok: true, titleKey: key });
+  } catch (err) { next(err); }
+});
+
+// Like a channel star, taking a show off favourites is a toggle, so it does not go to the recycle bin.
+router.delete('/shows/:titleKey', async (req, res, next) => {
+  try {
+    await pool.query('DELETE FROM live_tv_shows WHERE "userId" = $1 AND "titleKey" = $2', [req.user.id, String(req.params.titleKey || '').slice(0, 200)]);
     res.json({ ok: true });
   } catch (err) { next(err); }
 });

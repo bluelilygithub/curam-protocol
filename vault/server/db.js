@@ -1298,6 +1298,36 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_live_tv_plays_user ON live_tv_plays ("userId", "playedAt" DESC)`);
+    // Live TV guide (services/liveTv/guide.js): programmes from the free i.mjh.nz guide files, shared by the workspace (public schedule
+    // facts, no "userId"). Replaced per channel every 6 hours; kept from 3 hours ago to 8 days ahead. "titleKey" is the title reduced to
+    // lower-case words, so search and favourite shows match "Doctor Who" and "doctor who!" alike.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS live_tv_programmes (
+        id            BIGSERIAL PRIMARY KEY,
+        "channelId"   TEXT NOT NULL,
+        start         TIMESTAMPTZ NOT NULL,
+        stop          TIMESTAMPTZ NOT NULL,
+        title         TEXT NOT NULL,
+        "subTitle"    TEXT NOT NULL DEFAULT '',
+        description   TEXT NOT NULL DEFAULT '',
+        category      TEXT NOT NULL DEFAULT '',
+        episode       TEXT NOT NULL DEFAULT '',
+        "titleKey"    TEXT NOT NULL,
+        "fetchedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_live_tv_programmes_channel ON live_tv_programmes ("channelId", start)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_live_tv_programmes_title ON live_tv_programmes ("titleKey", start)`);
+    // Favourite shows: a programme title a person wants to follow; "My shows" lists its upcoming airings on any channel in the guide.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS live_tv_shows (
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "titleKey"  TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("userId", "titleKey")
+      )
+    `);
     // Brand Kit fonts read from a website (docs/brand-from-url.md): the converted font FILE, one heading and one body font per person.
     // The kit's other fields stay in settings.graphics_brand_kit (JSON); a font is up to a few hundred KB, so it lives here.
     await client.query(`

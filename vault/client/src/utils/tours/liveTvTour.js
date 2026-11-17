@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_live_tv_completed';
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -59,7 +59,7 @@ export function startLiveTvTour() {
   tour.addStep({
     id: 'tv-filters',
     title: 'Find a channel',
-    text: 'All, Favourites or Recent. Then narrow All by country, by kind of channel (news, sport, music …) or by name. Tick "Only ones that can play here" to hide channels that need VLC.',
+    text: 'All, Favourites or Recent channels; narrow All by country, kind (news, sport, music …) or name. Programmes searches the TV guide, and My shows lists the programmes you starred.',
     attachTo: { element: '[data-tour="live-tv-filters"]', on: 'bottom' },
     beforeShowPromise: check('tv-filters', '[data-tour="live-tv-filters"]'),
     when: { show() { injectStepCounter(2); } },
@@ -87,10 +87,20 @@ export function startLiveTvTour() {
   });
 
   tour.addStep({
+    id: 'tv-guide',
+    title: 'TV guide',
+    text: 'Under the picture: what is on today and for the next week, with ON NOW on the current programme. Press a programme for its details, or its star to follow the show in My shows. The free guide covers Australian free-to-air and some streaming channels.',
+    attachTo: { element: '[data-tour="live-tv-guide"]', on: 'left' },
+    beforeShowPromise: check('tv-guide', '[data-tour="live-tv-guide"]'),
+    when: { show() { injectStepCounter(5); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'tv-limits',
     title: 'Good to know',
     text: 'Many links stop working or are only shown in their own country, so expect some to fail. Adult channels and ones removed after a copyright complaint are always left out. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(6); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

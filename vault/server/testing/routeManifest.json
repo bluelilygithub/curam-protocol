@@ -4443,6 +4443,30 @@
   },
   "POST /api/live-tv/plays": {
    "class": "authed"
+  },
+  "GET /api/live-tv/guide/channel/:channelId": {
+   "class": "authed"
+  },
+  "POST /api/live-tv/guide/refresh": {
+   "class": "admin"
+  },
+  "PUT /api/live-tv/guide/region": {
+   "class": "admin"
+  },
+  "GET /api/live-tv/guide/status": {
+   "class": "authed"
+  },
+  "GET /api/live-tv/programmes/search": {
+   "class": "authed"
+  },
+  "DELETE /api/live-tv/shows/:titleKey": {
+   "class": "authed"
+  },
+  "GET /api/live-tv/shows": {
+   "class": "authed"
+  },
+  "POST /api/live-tv/shows": {
+   "class": "authed"
   }
  }
 }

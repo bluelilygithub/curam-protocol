@@ -10,9 +10,14 @@ import Skeleton from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { downloadBlob } from '../utils/exportHelpers';
+import useDraggable from '../hooks/useDraggable';
 import LiveTvTutorChat from './liveTv/LiveTvTutorChat';
 import { HOW_IT_WORKS, GUIDE_TOOLS } from './liveTv/liveTvTools.mjs';
-import { pickStream, lastResult, m3uFor, m3uFileName, HOW_LABEL, initials } from './liveTv/liveTvHelpers.mjs';
+import { pickStream, lastResult, m3uFor, m3uFileName, HOW_LABEL, initials, clock, guideDays } from './liveTv/liveTvHelpers.mjs';
+import ChannelGuide from './liveTv/ChannelGuide';
+import { Combobox } from './measurements/shared';
+import { countryItems } from './liveTv/liveTvHelpers.mjs';
+import ShowResults from './liveTv/ShowResults';
 import { startLiveTvTour, TOUR_KEY as LIVE_TV_TOUR_KEY } from '../utils/tours/liveTvTour';
 
 // Live TV (docs/live-tv.md): free channels listed by the public iptv-org project. The picture plays in a separate frame
@@ -31,7 +36,10 @@ const VIEWS = [
   { id: 'all', label: 'All', tip: 'Every channel, narrowed by country, kind and name.' },
   { id: 'favourites', label: 'Favourites', tip: 'The channels you starred.' },
   { id: 'recent', label: 'Recent', tip: 'The channels you played lately, newest first.' },
+  { id: 'programmes', label: 'Programmes', tip: 'Search the TV guide for a programme by name, episode or description.' },
+  { id: 'shows', label: 'My shows', tip: 'The programmes you starred, with every time they are on in the next week.' },
 ];
+const CHANNEL_VIEWS = ['all', 'favourites', 'recent'];
 
 function readPrefs() {
   try { return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch { return {}; }
@@ -76,6 +84,12 @@ function ChannelRow({ channel, active, onPlay, onStar }) {
             {last === 'ok' && <span className="text-[11px]" style={{ color: GOOD }}>Played last time</span>}
             {last === 'failed' && <span className="text-[11px]" style={{ color: BAD }}>Did not play last time</span>}
           </span>
+          {channel.onAir?.[0] && (
+            <span className="block text-xs truncate mt-0.5" style={{ color: 'var(--color-text)' }}>
+              {new Date(channel.onAir[0].start) <= new Date() ? 'Now' : clock(channel.onAir[0].start)}: {channel.onAir[0].title}
+              <span style={{ color: 'var(--color-muted)' }}> · until {clock(channel.onAir[0].stop)}</span>
+            </span>
+          )}
         </span>
       </button>
       <StarButton on={channel.favourite} onClick={() => onStar(channel)} />
@@ -115,6 +129,32 @@ export default function LiveTvPage() {
   const pendingRef = useRef(null);
   const attemptRef = useRef(null); // { channelId, url, reported }
 
+  // TV guide: programme search, favourite shows (My shows) and the guide's own status
+  const [showKeys, setShowKeys] = useState(new Set());
+  const [progQ, setProgQ] = useState('');
+  const [progQuery, setProgQuery] = useState('');
+  const [progResults, setProgResults] = useState(null);
+  const [myShows, setMyShows] = useState(null);
+  const [showsBusy, setShowsBusy] = useState(false);
+  const [guideStatus, setGuideStatus] = useState(null);
+  const [guideDay, setGuideDay] = useState(0);
+  const isChannelView = CHANNEL_VIEWS.includes(view);
+
+  // Mini player: the picture floats in a corner when its place on the page is scrolled out of view while something plays.
+  const dockRef = useRef(null);
+  const [dockVisible, setDockVisible] = useState(true);
+  const [miniClosed, setMiniClosed] = useState(false);
+  const miniDrag = useDraggable({ storageKey: 'vault:live-tv:mini:pos', ignore: 'button, input, textarea, select, a, [data-nodrag]' });
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(([entry]) => setDockVisible(entry.intersectionRatio > 0.4), { threshold: [0, 0.4, 1] });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  // a failed link stays up too, so the person sees why (the player shows the reason) and can press another channel
+  const floating = !dockVisible && !miniClosed && ['loading', 'playing', 'failed'].includes(state.phase);
+
   useEffect(() => {
     api.get('/api/settings/feature-access').then((r) => r.json())
       .then((d) => { if (d?.flags) setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...d.flags }); })
@@ -143,7 +183,7 @@ export default function LiveTvPage() {
   useEffect(() => { if (view) savePrefs({ view, country, category, browserOnly }); }, [view, country, category, browserOnly]);
 
   const load = useCallback(async (offset = 0) => {
-    if (!view) return;
+    if (!view || !CHANNEL_VIEWS.includes(view)) return;
     setLoading(true); setListError('');
     try {
       const qs = new URLSearchParams({ view, offset: String(offset), limit: String(PAGE_SIZE) });
@@ -162,6 +202,49 @@ export default function LiveTvPage() {
   }, [view, country, category, query, browserOnly]);
 
   useEffect(() => { load(0); }, [load]);
+
+  const loadShows = useCallback(async () => {
+    const r = await api.get('/api/live-tv/shows').catch(() => null);
+    const d = r && r.ok ? await r.json() : { shows: [] };
+    setMyShows(d.shows);
+    setShowKeys(new Set(d.shows.map((x) => x.titleKey)));
+  }, []);
+  useEffect(() => { loadShows(); }, [loadShows]);
+
+  const loadGuideStatus = useCallback(() => {
+    api.get('/api/live-tv/guide/status').then((r) => (r.ok ? r.json() : null)).then((d) => d && setGuideStatus(d)).catch(() => {});
+  }, []);
+  useEffect(() => { if (view === 'programmes' || view === 'shows') loadGuideStatus(); }, [view, loadGuideStatus]);
+  useEffect(() => { if (view === 'shows') loadShows(); }, [view, loadShows]);
+
+  useEffect(() => { const t = setTimeout(() => setProgQuery(progQ.trim()), 350); return () => clearTimeout(t); }, [progQ]);
+  useEffect(() => {
+    if (view !== 'programmes') return undefined;
+    if (progQuery.length < 2) { setProgResults(null); return undefined; }
+    let gone = false;
+    setShowsBusy(true);
+    api.get(`/api/live-tv/programmes/search?q=${encodeURIComponent(progQuery)}`)
+      .then((r) => (r.ok ? r.json() : { shows: [] }))
+      .then((d) => { if (!gone) setProgResults(d.shows); })
+      .catch(() => { if (!gone) setProgResults([]); })
+      .finally(() => { if (!gone) setShowsBusy(false); });
+    return () => { gone = true; };
+  }, [view, progQuery]);
+
+  const toggleShow = async (p) => {
+    const on = !showKeys.has(p.titleKey);
+    setShowKeys((cur) => { const n = new Set(cur); if (on) n.add(p.titleKey); else n.delete(p.titleKey); return n; });
+    const r = on
+      ? await api.post('/api/live-tv/shows', { title: p.title }).catch(() => null)
+      : await api.delete(`/api/live-tv/shows/${encodeURIComponent(p.titleKey)}`).catch(() => null);
+    if (!r || !r.ok) { loadShows(); return; }
+    if (view === 'shows') loadShows();
+  };
+
+  const setRegion = async (region) => {
+    const r = await api.put('/api/live-tv/guide/region', { region }).catch(() => null);
+    if (r && r.ok) { setGuideStatus((g) => (g ? { ...g, region, running: true } : g)); setTimeout(loadGuideStatus, 15000); }
+  };
 
   // ---- the player frame ----
   const send = useCallback((message) => {
@@ -213,11 +296,31 @@ export default function LiveTvPage() {
     attemptRef.current = { channelId: ch.id, url: s.url, reported: false };
     setState({ phase: 'loading', problem: '' });
     send({ type: 'play', url: s.url });
-    if (window.matchMedia && !window.matchMedia('(min-width: 1280px)').matches) {
-      document.querySelector('[data-guide="player"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    // no jump back to the top: if the picture is out of view it plays in the mini player while the person keeps browsing
+    setMiniClosed(false);
   };
-  const playChannel = (ch) => playStream(ch, pickStream(ch));
+
+  const backToPlayer = () => dockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const stopPlaying = () => {
+    attemptRef.current = null;
+    send({ type: 'stop' });
+    setState({ phase: 'idle', problem: '' });
+    setMiniClosed(true);
+  };
+  const playChannel = (ch) => { setGuideDay(0); playStream(ch, pickStream(ch)); };
+
+  // A programme result: open its channel; play it when the programme is on now, else show the channel's guide on that day.
+  const openAiring = async (a, live) => {
+    const r = await api.get(`/api/live-tv/channels?ids=${encodeURIComponent(a.channelId)}`).catch(() => null);
+    const d = r && r.ok ? await r.json() : null;
+    const ch = d?.channels?.[0];
+    if (!ch) return;
+    const day = Math.max(0, guideDays(new Date()).findIndex((x) => new Date(a.start) >= x.from && new Date(a.start) < x.to));
+    setGuideDay(day);
+    if (live) playStream(ch, pickStream(ch));
+    else { setChannel(ch); setStream(pickStream(ch)); setState({ phase: 'idle', problem: '' }); send({ type: 'stop' }); }
+    document.querySelector('[data-guide="player"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const toggleStar = async (ch) => {
     const on = !ch.favourite;
@@ -260,7 +363,7 @@ export default function LiveTvPage() {
   });
   const btn = 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40';
   const phaseLine = {
-    idle: ['Choose a channel to watch.', 'var(--color-muted)'],
+    idle: [channel ? 'Not playing. Press Play to watch it now.' : 'Choose a channel to watch.', 'var(--color-muted)'],
     none: ['This channel has no links left.', BAD],
     loading: ['Connecting…', 'var(--color-muted)'],
     playing: ['Playing', GOOD],
@@ -270,7 +373,8 @@ export default function LiveTvPage() {
 
   return (
     <VoiceInputProvider lang="en-AU">
-      <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+      {/* no overflow here on purpose: the app frame (main) scrolls this page, and an overflow box that never scrolls would stop the Watch panel staying in view (sticky binds to the nearest overflow box) */}
+      <div className="flex flex-col flex-1 p-4 sm:p-6">
         <div className="w-full max-w-[1700px] mx-auto space-y-5">
           <div>
             <div className="flex items-center gap-2">
@@ -291,13 +395,45 @@ export default function LiveTvPage() {
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] items-start">
             {/* ---- Watch ---- */}
-            <section className="xl:order-2 xl:sticky xl:top-0 rounded-2xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-guide="player" data-tour="live-tv-player">
-              <div className="relative w-full rounded-xl overflow-hidden" style={{ aspectRatio: '16 / 9', background: '#000' }}>
-                <iframe
-                  ref={frameRef} src={PLAYER_SRC} title="Live TV player" className="absolute inset-0 w-full h-full border-0"
-                  allow="autoplay; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="no-referrer"
-                />
+            {/* Wide screens: the panel stays in place at window height and the parts under the picture scroll inside it.
+                Narrower screens: when the picture scrolls out of view while something plays, the same frame floats in a corner
+                (only its CSS changes, so the video never reloads). */}
+            <section className="xl:order-2 xl:sticky xl:top-0 xl:flex xl:flex-col xl:max-h-[calc(100dvh-6rem)] rounded-2xl border p-4 space-y-3 xl:space-y-0 xl:gap-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-guide="player" data-tour="live-tv-player">
+              <div ref={dockRef} className="relative w-full shrink-0 rounded-xl overflow-hidden" style={{ aspectRatio: '16 / 9', background: '#000' }}>
+                {floating && (
+                  <button type="button" onClick={backToPlayer} className="absolute inset-0 flex items-center justify-center text-sm hover:opacity-70 transition-opacity duration-200" style={{ color: '#e5e5e5' }}>
+                    Playing in the mini player. Press to bring it back here.
+                  </button>
+                )}
+                <div
+                  ref={miniDrag.ref}
+                  className={floating ? 'fixed z-30 rounded-xl overflow-hidden shadow-2xl border' : 'absolute inset-0'}
+                  style={floating ? {
+                    right: 16, bottom: 96, width: 'min(360px, calc(100vw - 32px))', background: '#000', borderColor: 'var(--color-border)', ...miniDrag.style,
+                  } : undefined}
+                  role={floating ? 'region' : undefined}
+                  aria-label={floating ? 'Mini player' : undefined}
+                >
+                  {floating && (
+                    <div {...miniDrag.handleProps} className="flex items-center gap-1 px-2 py-1 cursor-move select-none" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>
+                      <span className="flex-1 min-w-0 truncate text-xs font-medium">{channel?.name || 'Live TV'}</span>
+                      <Tooltip text="Back to the full-size player">
+                        <button type="button" data-nodrag onClick={backToPlayer} aria-label="Back to the full-size player" className="p-1 rounded hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>{getIcon('maximize-2', { size: 14 })}</button>
+                      </Tooltip>
+                      <Tooltip text="Stop playing">
+                        <button type="button" data-nodrag onClick={stopPlaying} aria-label="Stop playing" className="p-1 rounded hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 14 })}</button>
+                      </Tooltip>
+                    </div>
+                  )}
+                  <div className="relative w-full h-full" style={floating ? { aspectRatio: '16 / 9' } : undefined}>
+                    <iframe
+                      ref={frameRef} src={PLAYER_SRC} title="Live TV player" className="absolute inset-0 w-full h-full border-0"
+                      allow="autoplay; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
               </div>
+              <div className="space-y-3 xl:overflow-y-auto xl:min-h-0 xl:flex-1 xl:pr-1">
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-base font-semibold truncate" style={{ color: 'var(--color-text)' }}>{channel ? channel.name : 'Nothing playing'}</p>
@@ -314,6 +450,13 @@ export default function LiveTvPage() {
 
               {channel && stream && (
                 <div className="flex flex-wrap gap-2">
+                  {state.phase === 'idle' && stream.how === 'browser' && (
+                    <Tooltip text={`Play ${channel.name} now`}>
+                      <button type="button" onClick={() => playStream(channel, stream)} className={btn} style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)', borderColor: 'var(--color-primary)' }}>
+                        {getIcon('play', { size: 14 })}Play
+                      </button>
+                    </Tooltip>
+                  )}
                   <Tooltip text="Download a small playlist file for this link and open it with VLC, a free video player that plays many links a browser cannot.">
                     <button type="button" onClick={openInVlc} className={btn} style={chip(state.phase === 'vlc' || state.phase === 'failed')}>
                       {getIcon('download', { size: 14 })}Open in VLC
@@ -349,12 +492,15 @@ export default function LiveTvPage() {
                   })}
                 </div>
               )}
+
+              {channel && <ChannelGuide channel={channel} showKeys={showKeys} onToggleShow={toggleShow} initialDay={guideDay} />}
+              </div>
             </section>
 
             {/* ---- Find a channel ---- */}
             <section className="xl:order-1 rounded-2xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-guide="browse">
               <div className="space-y-2.5" data-tour="live-tv-filters">
-                <div className="flex gap-1.5" role="tablist" aria-label="Which channels">
+                <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="What to show">
                   {VIEWS.map((v) => (
                     <Tooltip key={v.id} text={v.tip}>
                       <button
@@ -364,14 +510,14 @@ export default function LiveTvPage() {
                     </Tooltip>
                   ))}
                 </div>
+                {isChannelView && (<>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {view === 'all' && (
-                    <Tooltip text="Narrow the list to one country. A channel's country is where it broadcasts from.">
-                      <select className={FIELD} style={FIELD_STYLE} aria-label="Country" value={country} onChange={(e) => setCountry(e.target.value)}>
-                        <option value="">All countries</option>
-                        {(meta?.countries || []).map((c) => <option key={c.code} value={c.code}>{c.flag} {c.name} ({c.count})</option>)}
-                      </select>
-                    </Tooltip>
+                    <Combobox
+                      items={countryItems(meta?.countries)} value={country} onChange={setCountry} prefixFirst searchHint={false}
+                      label="Country" placeholder="Type a country or its code (AU, NZ, UK …)"
+                      tip="Narrow the list to one country: start typing its name or code. A channel's country is where it broadcasts from."
+                    />
                   )}
                   <Tooltip text="Narrow the list to one kind of channel, such as news, sport or music.">
                     <select className={FIELD} style={FIELD_STYLE} aria-label="Kind of channel" value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -387,8 +533,57 @@ export default function LiveTvPage() {
                     Only ones that can play here
                   </label>
                 </Tooltip>
+                </>)}
+                {view === 'programmes' && (
+                  <VoiceInput value={progQ} onChange={setProgQ} label="Search programmes" placeholder="Search programmes: a title, an episode or a word from the description" maxLength={100} />
+                )}
               </div>
 
+              {!isChannelView && guideStatus && (
+                <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }} data-tour="live-tv-guide-status">
+                  <span>
+                    {guideStatus.running ? 'Updating the guide… ' : ''}
+                    Guide: {guideStatus.channels} channel{guideStatus.channels === 1 ? '' : 's'}, next 7 days
+                    {guideStatus.refreshedAt ? `, updated ${clock(guideStatus.refreshedAt)}` : ''}. Australian free-to-air for {guideStatus.region}, plus your starred and recent channels where a guide exists.
+                  </span>
+                  {isAdmin && (
+                    <Tooltip text="Admins: which city's Australian guide to use (local news and times differ by city).">
+                      <select className="px-2 py-1 rounded-lg border text-xs" style={FIELD_STYLE} aria-label="Guide city" value={guideStatus.region} onChange={(e) => setRegion(e.target.value)}>
+                        {guideStatus.regions.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
+
+              {view === 'programmes' && (
+                <div className="space-y-2" data-tour="live-tv-programmes">
+                  {showsBusy && !progResults && <Skeleton lines={3} className="h-12" label="Searching the guide" />}
+                  {progQuery.length < 2 && (
+                    <EmptyState icon="search" title="Find a programme" body="Type at least two letters. Results show every time it is on in the next week, on any channel in the guide. Star a programme to keep it in My shows." />
+                  )}
+                  {progQuery.length >= 2 && progResults && progResults.length === 0 && (
+                    <EmptyState icon="search" title="Nothing found" body="No programme in the guide matches. The guide covers the next 7 days on the channels shown above." />
+                  )}
+                  {progResults && progResults.length > 0 && (
+                    <ShowResults shows={progResults} showKeys={showKeys} onToggleShow={toggleShow} onOpenAiring={openAiring} />
+                  )}
+                </div>
+              )}
+
+              {view === 'shows' && (
+                <div className="space-y-2">
+                  {!myShows && <Skeleton lines={3} className="h-12" label="Loading My shows" />}
+                  {myShows && myShows.length === 0 && (
+                    <EmptyState icon="star" title="No shows yet" body="Star a programme in a channel's guide or in Programmes search, and every time it is on shows here." />
+                  )}
+                  {myShows && myShows.length > 0 && (
+                    <ShowResults shows={myShows} showKeys={showKeys} onToggleShow={toggleShow} onOpenAiring={openAiring} />
+                  )}
+                </div>
+              )}
+
+              {isChannelView && (<>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {view && !loading && !listError && `${total.toLocaleString()} channel${total === 1 ? '' : 's'}`}
                 {meta?.fetchedAt && ` · list from ${new Date(meta.fetchedAt).toLocaleDateString()}`}
@@ -413,6 +608,7 @@ export default function LiveTvPage() {
                   </button>
                 )}
               </div>
+              </>)}
             </section>
           </div>
         </div>

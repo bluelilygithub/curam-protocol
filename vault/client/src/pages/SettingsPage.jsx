@@ -2746,7 +2746,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Live TV Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                5-step tour — finding a channel, favourites and recent, watching, and what to do when a link will not play
+                6-step tour — finding a channel, favourites and recent, watching, the TV guide and My shows, and what to do when a link will not play
               </p>
             </div>
             <button

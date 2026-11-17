@@ -29,6 +29,8 @@ const key = (r) => `${r.method} ${r.path}`;
 const SHARED_BY_DESIGN = {
   'GET /api/recipes/grocery/corrections': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
   'GET /api/translate/styles': 'Translate house styles are workspace-wide approved examples kept by admins; every member\'s New translation lists them (docs/translate-agent.md, "House styles")',
+  'GET /api/live-tv/guide/status': 'the Live TV guide is workspace-wide public schedule data (no userId); everyone sees the same guide (docs/live-tv.md, "TV guide")',
+  'GET /api/live-tv/guide/channel/:channelId': 'the Live TV guide is workspace-wide public schedule data (no userId) (docs/live-tv.md, "TV guide")',
   'GET /api/translate/styles/:setId': 'Translate house styles are workspace-wide approved examples kept by admins (docs/translate-agent.md, "House styles")',
 };
 // Writes that touch rows tied to another member's id ON PURPOSE. Each needs a written reason.

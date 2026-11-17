@@ -79,8 +79,11 @@ export function Badge({ children, bg = 'var(--color-bg)', fg = 'var(--color-mute
 /**
  * Searchable picker with a mic in its search box.
  * items: [{ id, label, hint?, section?, keywords? }]. speak(text) â†’ id | null resolves a spoken name.
+ * Typing a letter on the closed picker opens it with that letter already in the search box (typeahead). With `prefixFirst`, items
+ * whose label (or a keyword) starts with what is typed come before ones that only contain it (used by Live TV's country picker).
+ * `searchHint={false}` leaves the grey hint (e.g. "24 channels") out of the search.
  */
-export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ€¦', label, selectedLabel, className = '', tip, dataTour }) {
+export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ€¦', label, selectedLabel, className = '', tip, dataTour, prefixFirst = false, searchHint = true }) {
   const getIcon = useIcon();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -100,13 +103,20 @@ export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ
   const filtered = useMemo(() => {
     const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
     if (!toks.length) return items;
-    return items.filter((it) => {
-      const hay = `${it.label} ${it.hint || ''} ${it.keywords || ''}`.toLowerCase();
+    const hits = items.filter((it) => {
+      const hay = `${it.label} ${searchHint ? it.hint || '' : ''} ${it.keywords || ''}`.toLowerCase();
       return toks.every((t) => hay.includes(t));
     });
-  }, [items, q]);
+    if (!prefixFirst) return hits;
+    const typed = q.trim().toLowerCase();
+    const words = (it) => [it.label, ...String(it.keywords || '').split(/\s+/)].map((w) => String(w).toLowerCase());
+    // an exact keyword (a country code such as "ca") first, then names or keywords that start with it, then the rest
+    const rank = (it) => (words(it).slice(1).includes(typed) ? 0 : words(it).some((w) => w.startsWith(typed)) ? 1 : 2);
+    return hits.map((it, i) => [rank(it), i, it]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[2]);
+  }, [items, q, prefixFirst, searchHint]);
 
   useEffect(() => { setActive(0); }, [q, open]);
+  useEffect(() => { if (!open) setQ(''); }, [open]);
 
   const choose = (id) => { onChange(id); setOpen(false); setQ(''); btnRef.current?.focus(); };
   const current = items.find((i) => i.id === value);
@@ -119,6 +129,15 @@ export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ
           ref={btnRef}
           type="button"
           onClick={() => setOpen((o) => !o)}
+          onKeyDown={(e) => {
+            // typeahead: a letter or number opens the picker with it already typed
+            // (and keys that land here before the search box has focus are added to it, so fast typing loses nothing)
+            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && (open || /\S/.test(e.key))) {
+              e.preventDefault();
+              if (open) setQ((cur) => cur + e.key); else { setQ(e.key); setOpen(true); }
+            }
+            else if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(true); }
+          }}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label={label}
@@ -138,6 +157,7 @@ export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ
             label={`Search ${label || 'list'}`}
             autoFocus
             mic={false}
+            onFocus={(e) => { const n = e.target.value.length; try { e.target.setSelectionRange(n, n); } catch { /* not a text box */ } }}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, filtered.length - 1)); }
               else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }

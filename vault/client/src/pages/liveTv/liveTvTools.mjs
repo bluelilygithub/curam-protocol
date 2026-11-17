@@ -15,13 +15,13 @@ export const GROUP_TIPS = {
 };
 
 export const TOOL_TIPS = {
-  browse: 'The channel list: free channels from around the world, by country, kind or name. Your favourites and recently watched are one tap away.',
-  player: 'Plays the chosen channel in the page. Some channels only play in a separate player such as VLC; the buttons under the picture handle that.',
+  browse: 'The channel list: free channels from around the world, by country, kind or name. Your favourites, recently watched, programme search and My shows are one tap away.',
+  player: 'Plays the chosen channel in the page, with its TV guide underneath. Some channels only play in a separate player such as VLC; the buttons under the picture handle that.',
 };
 
 export const TOOL_BLURBS = {
-  browse: 'Free channels by country, kind or name.',
-  player: 'Watch here, or open the channel in VLC.',
+  browse: 'Free channels, programme search and My shows.',
+  player: 'Watch here with the TV guide, or open the channel in VLC.',
 };
 
 // The longer text for the (i) "How Live TV works" box.
@@ -30,6 +30,7 @@ export const HOW_IT_WORKS = [
   ['Playing a channel', 'Choose a channel and it plays in the box. Your browser fetches the picture straight from the broadcaster: Vault never stores or passes on any video.'],
   ['Why some will not play', 'Many links stop working, are only shown in their own country, or only let the broadcaster\'s own website play them. When one fails, try its other links if it has any, or open it in VLC (a free video player), which plays more of them.'],
   ['Favourites and recent', 'Press the star to keep a channel in Favourites. Recent shows what you watched lately, and each link says whether it played for you last time. Nobody else sees yours.'],
+  ['TV guide', 'Many channels show what is on now and a 7-day guide under the picture. It comes from a free guide that covers Australian free-to-air channels and some streaming channels, updated every 6 hours. Search it in Programmes, and star a programme to see every time it is on in My shows.'],
   ['Be sensible', 'Being on the list does not make a channel licensed for your country. Treat it like any free-to-air link you find online.'],
 ];
 
@@ -46,4 +47,9 @@ export const GUIDE_TOOLS = [
   { id: 'favourite', label: 'Favourite star', tool: 'player' },
   { id: 'vlc', label: 'Open in VLC', tool: 'player' },
   { id: 'copy-link', label: 'Copy link', tool: 'player' },
+  { id: 'channel-guide', label: 'TV guide', tool: 'player' },
+  { id: 'show-star', label: 'Programme star', tool: 'player' },
+  { id: 'programmes', label: 'Programmes', tool: 'browse' },
+  { id: 'my-shows', label: 'My shows', tool: 'browse' },
+  { id: 'guide-city', label: 'Guide city', tool: 'browse' },
 ];
