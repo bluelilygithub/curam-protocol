@@ -41,7 +41,7 @@ const CATALOG = [
     notes: 'It is a rough figure. The real cost changes with the size of the glossary and whether the second check runs.' },
   { id: 'jobs', label: 'My translations', group: 'Translate',
     does: 'Lists every translation you have run, newest first. The boxes at the top count how many are ready, how many need checking, how many are still running and how many did not finish; press one to show only those. The search box finds a job by file name. Each row has Open result, and Delete.',
-    notes: 'A job marked "Stopped part-way" was interrupted, usually because the page was closed while it ran: cancel it and run the document again. Delete removes the job and its files for good; it asks first.' },
+    notes: 'A job marked "Stopped part-way" was interrupted, usually because the page was closed while it ran: cancel it and run the document again. Delete asks first, then moves the job and its files to the recycle bin for 30 days. An Undo button shows straight after; later, Settings, Recycle bin puts it back.' },
   { id: 'open-result', label: 'Open result', group: 'Translate',
     does: 'On a row in My translations, press Open result. The window has the downloads at the top, then one line saying whether the checks found anything, then the list of what to look at: parts whose meaning may have changed, unsure terms, garbled or unfinished rows, and wording that may not suit the reader.',
     notes: 'The verdict ("No problems found", "Worth a look", "Needs checking") is worked out from which kinds of problem the checks listed. It is a guide to where to look, not a measured accuracy score, and a clean result is not proof the translation is right.' },
@@ -56,7 +56,7 @@ const CATALOG = [
     notes: 'Applying changes future translations only. The job you are looking at stays as it is: run the document again to see the difference. Everything applied is listed under What it has learned.' },
   { id: 'glossaries', label: 'Glossaries', group: 'Wording',
     does: 'Lists your glossaries. Press New glossary, give it a name, and add rows: the word as it appears in the original, how it must be translated, or a tick under "Keep as is" to leave it untranslated. Open a glossary to change or remove rows. The ones marked "Learned" are built by Translate itself, one per language, and can be edited the same way.',
-    notes: 'Changes apply from the next translation. Deleting a glossary cannot be undone.' },
+    notes: 'Changes apply from the next translation. A deleted glossary goes to the recycle bin for 30 days: Undo shows straight after, and Settings, Recycle bin puts it back later.' },
   { id: 'learned', label: 'What it has learned', group: 'Wording',
     does: 'Shows two things. First, every rule and word applied from Lessons learnt, newest first, with the date and the job it came from; filter it by rules for all languages or by one language. Second, how many translated passages Translate has stored for each pair of languages and how often it has reused them: a passage that appears again word for word is given the same translation as last time. Download translation memory saves those passages as a TMX file for other translation software.',
     notes: 'This screen shows what was learned; to change a learned word, edit the learned glossary under Glossaries. Only passages that match exactly are reused.' },
@@ -83,7 +83,7 @@ const NOT_POSSIBLE = [
   'A certified or sworn translation for a court, an immigration office or a regulator: that needs a qualified human translator.',
   'An accuracy score. The verdict on a result says which kinds of problem the checks listed, not how accurate the translation is.',
   'Carrying on a job after the page was closed: it has to be run again.',
-  'Getting a deleted translation back: deleting a job removes it for good.',
+  'Getting a deleted translation or glossary back after 30 days: the recycle bin (Settings, Recycle bin) keeps them for 30 days, then they are gone for good. A very large translation cannot go in the recycle bin at all; the page says so and asks before deleting it for good.',
   'Translating speech or a live conversation, or files straight from Google Drive (download them as Word or Excel first).',
 ];
 

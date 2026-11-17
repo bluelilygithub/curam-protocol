@@ -29,7 +29,7 @@ function bucketOf(job, activeJobId) {
 const SMALL_BTN = 'text-xs px-2.5 py-1 rounded-lg border inline-flex items-center gap-1 transition-opacity duration-200 hover:opacity-70';
 
 export default function JobsDashboard({
-  jobs, loading, activeJobId, deletingId, onOpen, onCancel, onDelete, onDownload, onDownloadNative, onNew,
+  jobs, loading, activeJobId, deletingId, onOpen, onCancel, onDelete, onDownload, onDownloadNative, onNew, tooLargeId, onKeepTooLarge,
 }) {
   const getIcon = useIcon();
   const [filter, setFilter] = useState('all');
@@ -207,9 +207,30 @@ export default function JobsDashboard({
                             </button>
                           </Tooltip>
                         )}
-                        {confirmDelete === job.id ? (
+                        {tooLargeId === job.id ? (
                           <span className="text-xs inline-flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-                            Delete for good?
+                            Too big for the recycle bin. Delete for good?
+                            <button
+                              type="button"
+                              disabled={deletingId === job.id}
+                              className="underline transition-opacity duration-200 hover:opacity-60"
+                              style={{ color: '#ef4444' }}
+                              onClick={() => onDelete(job.id, { forever: true })}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              className="underline transition-opacity duration-200 hover:opacity-60"
+                              style={{ color: 'var(--color-muted)' }}
+                              onClick={onKeepTooLarge}
+                            >
+                              No, keep it
+                            </button>
+                          </span>
+                        ) : confirmDelete === job.id ? (
+                          <span className="text-xs inline-flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+                            Delete?
                             <button
                               type="button"
                               disabled={deletingId === job.id}
@@ -229,7 +250,7 @@ export default function JobsDashboard({
                             </button>
                           </span>
                         ) : (
-                          <Tooltip text="Delete this translation and its files. It cannot be brought back.">
+                          <Tooltip text="Delete this translation and its files. It asks first, then keeps them in the recycle bin for 30 days (Settings, Recycle bin) in case you want them back.">
                             <button type="button" onClick={() => setConfirmDelete(job.id)} aria-label={`Delete ${job.filename || 'this translation'}`} className={SMALL_BTN} style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                               {getIcon('trash', { size: 13 })}
                             </button>

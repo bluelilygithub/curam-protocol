@@ -6,6 +6,7 @@ import Tooltip from '../../components/Tooltip';
 import EmptyState from '../../components/EmptyState';
 import { LANGUAGES } from '../../utils/translateLanguages';
 import { Btn, Modal, Field, Input, Tip } from './shared';
+import { offerUndo } from '../../utils/binUndo';
 
 // Glossaries: the lists of words that must always be translated one way, or left as they are. The ones marked "Learned" are built by
 // Translate itself, one per language, and are edited the same way. The names of the controls here ("New glossary", "Keep as is",
@@ -23,7 +24,7 @@ export function parseGlossaryCsv(text) {
   }).filter((t) => t.source);
 }
 
-export default function GlossariesPanel({ glossaries, setGlossaries, onOpenLearned }) {
+export default function GlossariesPanel({ glossaries, setGlossaries, onOpenLearned, onReload }) {
   const getIcon = useIcon();
   const [modal, setModal] = useState(null); // null | 'new' | the glossary being changed
   const [form, setForm] = useState({ name: '', terms: [] });
@@ -79,9 +80,10 @@ export default function GlossariesPanel({ glossaries, setGlossaries, onOpenLearn
     setDeleting(id);
     try {
       const res = await api.delete(`/api/translate/glossaries/${id}`);
-      if (!res.ok) throw new Error('Could not delete the glossary');
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Could not delete the glossary');
       setGlossaries((prev) => prev.filter((g) => g.id !== id));
-      addToast('Glossary deleted', 'success');
+      offerUndo({ message: 'Glossary moved to the recycle bin. It stays there for 30 days.', binIds: body.binId, restoredMessage: 'Glossary put back', after: onReload });
     } catch (e) { addToast(e.message, 'error'); }
     finally { setDeleting(null); setConfirmId(null); }
   };
@@ -141,7 +143,7 @@ export default function GlossariesPanel({ glossaries, setGlossaries, onOpenLearn
                     <div className="flex gap-2 justify-end items-center">
                       {confirmId === g.id ? (
                         <span className="text-xs inline-flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-                          Delete? It cannot be undone.
+                          Delete?
                           <button type="button" onClick={() => deleteGlossary(g.id)} disabled={deleting === g.id} className="underline transition-opacity duration-200 hover:opacity-60" style={{ color: '#ef4444' }}>{deleting === g.id ? 'Deleting…' : 'Yes'}</button>
                           <button type="button" onClick={() => setConfirmId(null)} className="underline transition-opacity duration-200 hover:opacity-60">No</button>
                         </span>
@@ -150,7 +152,7 @@ export default function GlossariesPanel({ glossaries, setGlossaries, onOpenLearn
                           <Tooltip text="Open this glossary to add, change or remove its words.">
                             <button type="button" onClick={() => openEdit(g)} className={SMALL_BTN} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Open</button>
                           </Tooltip>
-                          <Tooltip text={g.isGlobal ? 'Delete this learned glossary. Translate starts a new, empty one for the language at the next translation. Cannot be undone.' : 'Delete this glossary for good. It asks first.'}>
+                          <Tooltip text={g.isGlobal ? 'Delete this learned glossary. It asks first, then keeps it in the recycle bin for 30 days. Translate starts a new, empty one for the language at the next translation.' : 'Delete this glossary. It asks first, then keeps it in the recycle bin for 30 days (Settings, Recycle bin) in case you want it back.'}>
                             <button type="button" onClick={() => setConfirmId(g.id)} className={SMALL_BTN} style={{ borderColor: 'var(--color-border)', color: '#ef4444' }}>Delete</button>
                           </Tooltip>
                         </>

@@ -101,7 +101,7 @@ export function downloadQaReport(job, qa, appVersion) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `qa-report-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.txt`;
+  a.download = `check-report-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }

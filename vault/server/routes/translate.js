@@ -232,14 +232,30 @@ router.put('/glossaries/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Deleting a glossary puts it in the shared recycle bin for 30 days (docs/recycle-bin.md); the reply carries the bin id for Undo.
 router.delete('/glossaries/:id', async (req, res) => {
+  const bin = require('../services/recycleBin');
+  const { GLOSSARY_TYPE } = require('../services/recycleBin/adapters/translate');
+  const db = await pool.connect();
   try {
-    await pool.query(
-      `DELETE FROM translate_glossaries WHERE id=$1 AND "userId"=$2`,
-      [req.params.id, req.user.id]
-    );
-    res.status(204).end();
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    await db.query('BEGIN');
+    const { rows } = await db.query(
+      `SELECT * FROM translate_glossaries WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [Number(req.params.id) || 0, req.user.id]);
+    const g = rows[0];
+    if (!g) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That glossary was not found' }); }
+    const count = Array.isArray(g.terms) ? g.terms.length : 0;
+    const binId = await bin.moveToBin(db, {
+      userId: req.user.id, type: GLOSSARY_TYPE, id: g.id, title: g.name,
+      detail: `${count} word${count === 1 ? '' : 's'}${g.isGlobal ? ' · learned' : ''}`,
+      payload: { glossary: g },
+    });
+    await db.query(`DELETE FROM translate_glossaries WHERE id=$1 AND "userId"=$2`, [g.id, req.user.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally { db.release(); }
 });
 
 // Global glossary: one auto-learned glossary per (userId, targetLanguage). Looked up/created
@@ -686,7 +702,7 @@ router.post('/jobs/:id/email', async (req, res) => {
     try { qa = job.qaSummaryJson ? (typeof job.qaSummaryJson === 'string' ? JSON.parse(job.qaSummaryJson) : job.qaSummaryJson) : null; } catch { qa = null; }
     if (qa) {
       attachments.push({
-        filename: `qa-report-${base}.txt`,
+        filename: `check-report-${base}.txt`,
         content: Buffer.from(buildQaReportTextServer(job, qa), 'utf8'),
         contentType: 'text/plain',
       });
@@ -708,14 +724,41 @@ router.post('/jobs/:id/email', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Deleting a translation puts it, with its files, in the shared recycle bin for 30 days (docs/recycle-bin.md); the reply carries
+// the bin id for Undo. Its files live in the row, so the snapshot can be big: one too big for the bin is refused with 413 and
+// `tooLarge`, and the page then asks whether to delete it for good (?forever=1).
 router.delete('/jobs/:id', async (req, res) => {
+  const bin = require('../services/recycleBin');
+  const { JOB_TYPE, JOB_MAX_BYTES, snapshotJob } = require('../services/recycleBin/adapters/translate');
+  const forever = req.query.forever === '1';
+  const db = await pool.connect();
   try {
-    await pool.query(
-      `DELETE FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
-      [req.params.id, req.user.id]
-    );
-    res.status(204).end();
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    await db.query('BEGIN');
+    const { rows } = await db.query(
+      `SELECT * FROM translate_jobs WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [Number(req.params.id) || 0, req.user.id]);
+    const job = rows[0];
+    if (!job) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That translation was not found' }); }
+    let binId = null;
+    if (!forever) {
+      try {
+        binId = await bin.moveToBin(db, {
+          userId: req.user.id, type: JOB_TYPE, id: job.id, title: job.filename,
+          detail: `Translation into ${job.targetLanguage}${job.status === 'done' ? '' : ` · ${job.status}`}`,
+          payload: snapshotJob(job), maxBytes: JOB_MAX_BYTES,
+        });
+      } catch (err) {
+        if (err.code !== 'TOO_LARGE') throw err;
+        await db.query('ROLLBACK');
+        return res.status(413).json({ error: 'This translation is too big to keep in the recycle bin.', tooLarge: true });
+      }
+    }
+    await db.query(`DELETE FROM translate_jobs WHERE id=$1 AND "userId"=$2`, [job.id, req.user.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally { db.release(); }
 });
 
 // Cancel a running job. Marks it 'cancelled' immediately; the background pipeline checks this

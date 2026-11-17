@@ -40,6 +40,7 @@ export const HOW_IT_WORKS = [
   ['Glossaries', 'A glossary is a list of words with the translation they must always get, or a mark to leave them as they are. Translate keeps one learned glossary per language and adds to it after every job, so the same word is translated the same way next time. You can edit it, or make your own.'],
   ['Keep the page open', 'The PDF is put together in your browser at the end. If you close or reload the page while a translation runs, it stops part-way and has to be run again.'],
   ['What it does not do', 'It does not keep the look of the original PDF (fonts, columns, pictures): you get the words, in order. PDFs with several columns or tables can be read in the wrong order, which spoils the translation, so check those carefully. You cannot edit a translation here. Translations are not legally certified.'],
+  ['Deleting', 'A deleted translation or glossary waits in the recycle bin for 30 days (Settings, Recycle bin) and can be put back. After that it is gone for good.'],
 ];
 
 // The words the page uses for each choice; the guide's catalogue uses the same names.

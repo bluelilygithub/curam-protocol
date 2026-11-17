@@ -17,6 +17,7 @@ import { resolvePreset } from './translateGoals.mjs';
 import { ENGINE_LABELS, LAYOUT_OPTIONS } from './translateTools.mjs';
 import QaPanel from './QaPanel';
 import JobsDashboard from './JobsDashboard';
+import { offerUndo } from '../../utils/binUndo';
 
 // New translation and My translations. One component holds both screens because a running job belongs to both: the form starts it,
 // the status check and the PDF step (still done in this browser) carry on whichever screen is showing, and the list shows the result.
@@ -396,11 +397,20 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
     }
   };
 
-  const deleteJob = async (id) => {
+  // Delete moves the translation and its files to the shared recycle bin (30 days) and offers Undo. One too big for the bin
+  // comes back as "too large": the list then asks whether to delete it for good (`forever`).
+  const [tooLargeId, setTooLargeId] = useState(null);
+  const deleteJob = async (id, { forever = false } = {}) => {
     setDeletingId(id);
     try {
-      await api.delete(`/api/translate/jobs/${id}`);
+      const res = await api.delete(`/api/translate/jobs/${id}${forever ? '?forever=1' : ''}`);
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 413 && body.tooLarge) { setTooLargeId(id); return; }
+      if (!res.ok) throw new Error(body.error || 'Could not delete the translation');
+      setTooLargeId(null);
       setJobs(prev => prev.filter(j => j.id !== id));
+      if (forever) addToast('Translation deleted for good', 'success');
+      else offerUndo({ message: 'Translation moved to the recycle bin. It stays there for 30 days.', binIds: body.binId, restoredMessage: 'Translation put back', after: loadJobs });
     } catch (e) { addToast(e.message, 'error'); }
     finally { setDeletingId(null); }
   };
@@ -760,6 +770,8 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
           onOpen={setQaJob}
           onCancel={cancelJob}
           onDelete={deleteJob}
+          tooLargeId={tooLargeId}
+          onKeepTooLarge={() => setTooLargeId(null)}
           onDownload={downloadJob}
           onDownloadNative={downloadNativeJob}
           onNew={onNewTranslation}

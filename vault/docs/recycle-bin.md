@@ -83,6 +83,8 @@ If the thing has files (or anything else outside the snapshot), register `discar
 
 - **Graphics recipes**: `graphics-recipe` (`adapters/graphicsRecipes.js`): a saved Graphics recipe (its steps and output format; settings only, no pictures). `DELETE /api/graphics/recipes/:id` in `server/routes/graphics/recipes.js`; Undo toast on the Pipeline screen; a restore is refused with a plain message past the 50-recipe limit. See `docs/graphics-tools.md` ("Saved recipes").
 
+- **Translate**: `translate-job` and `translate-glossary` (`adapters/translate.js`). A translation keeps its files in its own row (BYTEA), so here the files ARE in the payload, as base64, and this kind may be up to 40 MB; a bigger one is refused (413 `tooLarge`) and the page asks whether to delete it for good. A learned glossary restored after a new one was started for the same language comes back as an ordinary glossary. Undo toast on My translations and Glossaries. See `docs/translate-agent.md` ("The page").
+
 Candidates to adopt next (not done): saved CSS pages, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
 
 Chats are in the bin since 2026-10-24 (see Used by).

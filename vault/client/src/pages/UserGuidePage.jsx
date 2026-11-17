@@ -1501,38 +1501,50 @@ function UserGuidePage() {
         {/* ── Translate ── */}
         <SectionHeading id="translate">Translate</SectionHeading>
         <P>
-          <strong>Translate</strong> (<code>/translate</code>) is a professional document translation pipeline for
-          whole files, not just snippets of chat text. Upload a source document, answer a short intake about
-          domain, audience, and tone, and Vault prepares a glossary, translates it in chunks, optionally reviews
-          its own output, and produces a finished PDF (plus a native Word/Excel file where possible).
+          <strong>Translate</strong> (<code>/translate</code>) turns a whole document, or text you paste, into another
+          language, checks the result, and gives you the files to download. The list on the left has four screens:
+          <strong> New translation</strong>, <strong>My translations</strong>, <strong>Glossaries</strong> and
+          <strong> What it has learned</strong>.
         </P>
 
-        <SubHeading>Uploading a document</SubHeading>
+        <SubHeading>Starting a translation</SubHeading>
         <UL>
-          <LI>Accepts <strong>PDF</strong> (including scanned pages via built-in OCR), <strong>Word</strong> (.docx), <strong>Excel</strong> (.xlsx/.xls), and <strong>plain text</strong> — or paste text directly instead of uploading a file.</LI>
-          <LI>Pick a <strong>target language</strong> from a dropdown seeded from the workspace default; languages flagged with a ⚠ have lower training-data coverage and lower expected quality.</LI>
-          <LI>Choose an engine: the <strong>Vault LLM</strong> for domain tone, glossaries, and QA review, or <strong>Google Translate</strong> for fast drafts in common languages.</LI>
+          <LI><strong>What do you want to do?</strong> offers ready-made jobs (a quick draft, a document to send to someone, a scanned PDF, a Word or Excel file kept editable, te reo Māori and more). Picking one opens New translation with the options already filled in; you can still change any of them.</LI>
+          <LI>Add a <strong>PDF</strong>, <strong>Word</strong> (.docx), <strong>Excel</strong> (.xlsx or .xls) or <strong>plain text</strong> file up to 5 MB, or press <strong>Paste text instead</strong>. Scanned PDF pages are read as pictures first. Old .doc files are not accepted: save them as .docx.</LI>
+          <LI>Pick the language under <strong>Translate to</strong>. Languages marked ⚠ have fewer examples for the AI to learn from, so check those results more carefully.</LI>
+          <LI>Say what kind of document it is and who will read it, and list any <strong>words to keep as they are</strong> (brand names, product codes).</LI>
+          <LI><strong>More options</strong> holds the translator (<strong>Vault AI</strong>, careful, a few minutes; or <strong>Google Translate</strong>, a fast draft, when it is set up), the PDF layout, the glossary and the second-model check.</LI>
+          <LI>Press <strong>Start translation</strong> and <strong>keep the page open</strong> until it finishes: the PDF is put together in your browser at the end.</LI>
         </UL>
 
-        <SubHeading>Glossaries &amp; QA</SubHeading>
+        <SubHeading>Results and checks</SubHeading>
         <P>
-          You can attach a saved glossary of must-keep terms, or let Vault use a language's auto-learned global
-          glossary (terms it has picked up from previous jobs, refined over time). After translation, an optional
-          review pass checks every segment for completeness, meaning-preserving accuracy, and consistency, and
-          produces a QA report with a heuristic confidence score (High/Medium/Low) shown on the job list.
+          <strong>My translations</strong> lists every translation with boxes that count how many are ready, need
+          checking, are running or did not finish. <strong>Open result</strong> on a row has the downloads at the
+          top, one line saying whether the checks found anything, then the list of what to look at: parts whose
+          meaning may have changed, garbled or unfinished parts, unsure terms and wording that may not suit the
+          reader. That line says which kinds of problem were listed; it is not an accuracy score, and the checks
+          do not correct anything.
         </P>
 
-        <SubHeading>Output</SubHeading>
+        <SubHeading>Downloads</SubHeading>
         <UL>
-          <LI><strong>Side by side</strong>, <strong>separate translated document</strong>, or <strong>bilingual pages</strong> PDF layouts.</LI>
-          <LI>A native <strong>.docx</strong> or <strong>.xlsx</strong> download when the source was one of those formats and the structure lines up cleanly.</LI>
-          <LI>A plain-text export of the translation alone, and a downloadable QA report.</LI>
-          <LI><strong>Lessons learnt</strong> — turn a job's QA findings into checkable action items that either update a standing instruction for every future job, or lock a specific term's rendering into that language's glossary.</LI>
+          <LI>The <strong>translated PDF</strong>: the translation only, or each original page followed by its translation.</LI>
+          <LI>An editable <strong>Word</strong> or <strong>Excel</strong> file when the original was one and its structure could be matched up.</LI>
+          <LI>The <strong>plain text</strong>, the <strong>original</strong>, and a <strong>check report</strong>. <strong>Email these documents</strong> sends them as attachments.</LI>
+        </UL>
+
+        <SubHeading>Fixing the wording for next time</SubHeading>
+        <UL>
+          <LI><strong>Glossaries</strong> are lists of words that must always be translated one way, or left as they are. Translate also keeps one <strong>Learned</strong> glossary per language and adds to it after every translation.</LI>
+          <LI><strong>Lessons learnt</strong>, in a result, turns what the checks found into a tick list: a rule for every future translation, or a word to fix for that language. It changes later translations only.</LI>
+          <LI><strong>What it has learned</strong> lists everything you applied, and how much stored wording Translate now reuses.</LI>
         </UL>
 
         <Callout type="info">
-          Translate also has an OCR mode for scanned PDF pages, built on a pool of background text-recognition
-          workers, so a scanned contract or form doesn't need to be re-typed before it can be translated.
+          A deleted translation or glossary waits in the recycle bin (Settings → Recycle bin) for 30 days. Translations are
+          for reference and are not legally certified. The compass beside the page title starts a short tour, and the
+          round button at the bottom right is the Translate guide: tell it what you want to do.
         </Callout>
 
         <Divider />

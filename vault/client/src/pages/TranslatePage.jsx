@@ -159,7 +159,7 @@ export default function TranslatePage() {
               onNewTranslation={() => setTool('new')}
               onOpenGlossaries={() => setTool('glossaries')}
             />
-            {tool === 'glossaries' && <GlossariesPanel glossaries={glossaries} setGlossaries={setGlossaries} onOpenLearned={() => setTool('learned')} />}
+            {tool === 'glossaries' && <GlossariesPanel glossaries={glossaries} setGlossaries={setGlossaries} onOpenLearned={() => setTool('learned')} onReload={loadGlossaries} />}
             {tool === 'learned' && <LearnedPanel onOpenGlossaries={() => setTool('glossaries')} />}
 
             {tool !== 'start' && (

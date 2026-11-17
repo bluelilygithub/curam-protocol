@@ -280,9 +280,11 @@ app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, r
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 app.use('/api/translate-tutor', requireFeature('translate'), aiLimiter, require('./routes/translateTutor')); // the Translate guide chat (sees no documents or translations)
-// The status check of a running translation (every 2 seconds) is a plain read of the caller's own job: it does not count against the AI limit.
-const translateStatusCheck = (req) => req.method === 'GET' && /^\/jobs\/\d+\/status\/?$/.test(req.path);
-app.use('/api/translate', requireFeature('translate'), aiLimiterExcept(translateStatusCheck), require('./routes/translate'));
+// Reading in Translate (the lists, a job's status every 2 seconds while it runs, the downloads) only reads the caller's own rows
+// and calls no paid service, so it does not count against the AI limit. Everything that is not a GET still does: starting a
+// translation, the estimate, saving, deleting, emailing. A GET route added to routes/translate.js must stay free of AI calls.
+const translateRead = (req) => req.method === 'GET';
+app.use('/api/translate', requireFeature('translate'), aiLimiterExcept(translateRead), require('./routes/translate'));
 app.use('/api/guitar-play', requireFeature('guitar'), require('./routes/guitarPlay')); // set lists for gig mode, ear training
 app.use('/api/guitar-coach', requireFeature('guitar'), aiLimiter, require('./routes/guitarCoach')); // the Guitar coach: weekly review, session builder, explain a song
 app.use('/api/guitar-tutor', requireFeature('guitar'), aiLimiter, require('./routes/guitarTutor')); // the Guitar guide chat (sees no songs, chords or scores)
