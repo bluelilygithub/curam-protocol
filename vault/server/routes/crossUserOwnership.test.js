@@ -28,6 +28,8 @@ const key = (r) => `${r.method} ${r.path}`;
 // Routes that show one member's rows to others ON PURPOSE. Each needs a written reason.
 const SHARED_BY_DESIGN = {
   'GET /api/recipes/grocery/corrections': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
+  'GET /api/translate/styles': 'Translate house styles are workspace-wide approved examples kept by admins; every member\'s New translation lists them (docs/translate-agent.md, "House styles")',
+  'GET /api/translate/styles/:setId': 'Translate house styles are workspace-wide approved examples kept by admins (docs/translate-agent.md, "House styles")',
 };
 // Writes that touch rows tied to another member's id ON PURPOSE. Each needs a written reason.
 const WRITES_BY_DESIGN = {

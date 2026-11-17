@@ -1544,6 +1544,7 @@ function UserGuidePage() {
           <LI><strong>Glossaries</strong> are lists of words that must always be translated one way, or left as they are. Translate also keeps one <strong>Learned</strong> glossary per language and adds to it after every translation.</LI>
           <LI><strong>Lessons learnt</strong>, in a result, turns what the checks found into a tick list: a rule for every future translation, or a word to fix for that language. It changes later translations only.</LI>
           <LI><strong>What it has learned</strong> lists everything you applied, and how much stored wording Translate now reuses.</LI>
+          <LI><strong>House styles</strong> (admins): for a language that needs it, sets of approved examples, an original and its approved translation, with a comment on how that kind of content is translated. New translation shows a <strong>House style</strong> choice for that language (or Translate picks the closest), the translator matches the examples and the checker judges by them. <strong>Test this set</strong> shows how Translate would do each example beside your approved version.</LI>
         </UL>
 
         <Callout type="info">

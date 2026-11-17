@@ -285,8 +285,19 @@ test('protectDoNotTranslateTerms swaps every occurrence of a multi-word doNotTra
   assert.strictEqual(tokens.length, 2);
 });
 
-test('protectDoNotTranslateTerms never swaps single-word doNotTranslate terms (kept out of scope)', () => {
-  const { tokens } = protectDoNotTranslateTerms('Visit Curam today', [{ source: 'Curam', doNotTranslate: true }]);
+test('protectDoNotTranslateTerms swaps a single-word name on the keep list (Taumata, Curam)', () => {
+  const { text, tokens } = protectDoNotTranslateTerms('Taumata leads; visit Curam today. Taumata again.', [
+    { source: 'Taumata', doNotTranslate: true }, { source: 'Curam', doNotTranslate: true },
+  ]);
+  assert.strictEqual(tokens.length, 3);
+  assert.ok(!/Taumata|Curam/.test(text), 'names must not be visible to the model');
+  assert.strictEqual(restoreDoNotTranslateTerms(text, tokens), 'Taumata leads; visit Curam today. Taumata again.');
+});
+
+test('protectDoNotTranslateTerms never swaps a lowercase single word, and never inside a longer word', () => {
+  const { tokens } = protectDoNotTranslateTerms('the tier is set; Taumatarea and taumata stay', [
+    { source: 'tier', doNotTranslate: true }, { source: 'Taumata', doNotTranslate: true },
+  ]);
   assert.strictEqual(tokens.length, 0);
 });
 

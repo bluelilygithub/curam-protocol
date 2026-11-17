@@ -42,6 +42,9 @@ const CATALOG = [
   { id: 'read-first', label: 'Let me read it before it is kept', group: 'Translate',
     does: 'Under More options on New translation, this tick box is on by default: the finished translation waits in My translations as "Ready to read", so it can be read and changed with more passes before Keep this version makes the files. Untick it to have it kept straight away with its files ready.',
     notes: 'The ready-made job "Get a quick draft" unticks it. A translation kept straight away can still be reopened as a draft later.' },
+  { id: 'house-style-choice', label: 'House style', group: 'Translate',
+    does: 'When the language under "Translate to" has house styles, New translation shows a "House style" list: Let Translate choose (the closest set for the document), one of the sets by name, or No house style. The result screen says which house style was used.',
+    notes: 'House styles are approved examples an admin keeps for a language; the translator matches them and the checker lists departures starting "House style:". For a translation out of a language with house styles (for example te reo Māori into English), Translate chooses one by itself. Saved wording from earlier translations is not reused when a house style is used, so every part is translated with the examples in view.' },
   { id: 'estimate', label: 'Get estimate', group: 'Translate',
     does: 'After adding a file on New translation, press Get estimate to see how many characters the document has and a rough cost in Australian dollars before starting.',
     notes: 'It is a rough figure. The real cost changes with the size of the glossary, whether the second check runs, and each extra pass.' },
@@ -82,6 +85,10 @@ const CATALOG = [
     does: 'Shows two things. First, every rule and word applied from Lessons learnt, or saved from a requirement ticked Remember, newest first, with the date and the job it came from; filter it by rules for all languages or by one language. Second, how many translated passages Translate has stored for each pair of languages and how often it has reused them: a passage that appears again word for word is given the same translation as last time. Download translation memory saves those passages as a TMX file for other translation software.',
     notes: 'This screen shows what was learned; to change a learned word, edit the learned glossary under Glossaries. Only passages that match exactly are reused, and only from kept translations.' },
 ];
+
+CATALOG.push({ id: 'styles', label: 'House styles', group: 'Wording',
+  does: 'Admins only. Pick a language, press New set, name the kind of content (for example Corporate vision statements), write how it is translated (register, re-expressing ideas rather than word for word, names to keep), and add examples: the original and its approved translation, with an optional note. Save. Test this set translates each example\'s original with the set, without letting the translator see that example\'s answer, and shows the result beside the approved translation.',
+  notes: 'A set applies to the whole workspace, to translations into and out of its language. Most languages need none. The comment and examples are sent with every part of a translation that uses the set, so they add to its cost; the screen says when examples no longer fit and the later ones are left out. Test this set costs about as much as translating the examples. A deleted set goes to the recycle bin for 30 days. Members who are not admins do not see this screen.' });
 
 const RULES = [
   'Start from the list on the left: New translation to translate something, My translations for results, passes, Keep and downloads, Glossaries for fixed wording, What it has learned for the history of that wording. "What do you want to do?" at the top of the list offers ready-made jobs that fill in the options.',

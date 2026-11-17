@@ -13,6 +13,8 @@ import { TRANSLATE_GOALS } from './translate/translateGoals.mjs';
 import TranslationsWorkspace from './translate/TranslationsWorkspace';
 import GlossariesPanel from './translate/GlossariesPanel';
 import LearnedPanel from './translate/LearnedPanel';
+import HouseStylesPanel from './translate/HouseStylesPanel';
+import useAuthStore from '../store/authStore';
 import TranslateTutorChat from './translate/TranslateTutorChat';
 
 // The Translate page: a left-hand list of four screens (translate/translateTools.mjs), a "What do you want to do?" job screen that
@@ -36,6 +38,7 @@ function initialTool() {
 
 export default function TranslatePage() {
   const getIcon = useIcon();
+  const isAdmin = !!useAuthStore((s) => s.user?.isAdmin);
   const info = useToolInfoModal('vault_translate_info_seen');
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -90,7 +93,7 @@ export default function TranslatePage() {
   const menu = GROUPS.map((label) => ({
     label,
     tip: GROUP_TIPS[label],
-    tools: TRANSLATE_TOOLS.filter((t) => t.group === label).map((t) => ({ ...t, tip: TOOL_TIPS[t.id] })),
+    tools: TRANSLATE_TOOLS.filter((t) => t.group === label && (!t.adminOnly || isAdmin)).map((t) => ({ ...t, tip: TOOL_TIPS[t.id] })),
   }));
 
   // The guide's "Open" buttons: switch to the screen that holds the control, exactly as clicking it in the list would.
@@ -169,6 +172,7 @@ export default function TranslatePage() {
             />
             {tool === 'glossaries' && <GlossariesPanel glossaries={glossaries} setGlossaries={setGlossaries} onOpenLearned={() => setTool('learned')} onReload={loadGlossaries} />}
             {tool === 'learned' && <LearnedPanel onOpenGlossaries={() => setTool('glossaries')} />}
+            {tool === 'styles' && <HouseStylesPanel isAdmin={isAdmin} />}
 
             {tool !== 'start' && (
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>

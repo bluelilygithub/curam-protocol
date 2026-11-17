@@ -3514,6 +3514,24 @@
   "GET /api/translate/config": {
    "class": "authed"
   },
+  "GET /api/translate/styles": {
+   "class": "authed"
+  },
+  "GET /api/translate/styles/:setId": {
+   "class": "authed"
+  },
+  "POST /api/translate/styles": {
+   "class": "admin"
+  },
+  "PUT /api/translate/styles/:setId": {
+   "class": "admin"
+  },
+  "DELETE /api/translate/styles/:setId": {
+   "class": "admin"
+  },
+  "POST /api/translate/styles/:setId/test": {
+   "class": "admin"
+  },
   "GET /api/translate/drift-frequency/:lang": {
    "class": "authed"
   },

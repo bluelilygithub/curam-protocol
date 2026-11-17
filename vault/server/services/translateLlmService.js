@@ -468,12 +468,20 @@ function autoFixPartialReoTermDrift({ pairs, glossaryTerms }) {
  * mechanical repair above are left in place as defence in depth for any term the swap misses
  * (e.g. a variant spelling not matching `source` exactly).
  *
- * Multi-word terms only, longest-first, so a shorter term that happens to be a substring of a
- * longer one (e.g. "Reo Māori" inside "Tāone Reo Māori") never partially swaps the longer one.
+ * Multi-word terms, plus single words that look like names (capital first letter, 3+ letters: "Taumata", "Curam"), longest
+ * first, so a shorter term that happens to be a substring of a longer one (e.g. "Reo Māori" inside "Tāone Reo Māori") never
+ * partially swaps the longer one. Single words were out of scope at first (2026-09-10); added 2026-11-17 after a real test where a
+ * company name that is also an ordinary Māori word ("Taumata", summit) was only protected by an instruction. Lowercase single
+ * words are still never swapped, so an ordinary word on a list cannot be frozen everywhere.
  */
+/** One word that reads as a name: a capital first letter and at least 3 letters (Taumata, Curam, ACME). */
+function isNameLikeWord(s) {
+  return /^\p{Lu}[\p{L}\p{M}'’-]{2,}$/u.test(s);
+}
+
 function protectDoNotTranslateTerms(text, glossaryTerms) {
   const terms = (glossaryTerms || [])
-    .filter((t) => t?.doNotTranslate && t?.source && /\s/.test(String(t.source).trim()))
+    .filter((t) => t?.doNotTranslate && t?.source && (/\s/.test(String(t.source).trim()) || isNameLikeWord(String(t.source).trim())))
     .map((t) => String(t.source))
     .filter((s, i, arr) => arr.indexOf(s) === i) // dedupe
     .sort((a, b) => b.length - a.length);
@@ -864,6 +872,11 @@ Be concise. Empty arrays are fine. No markdown fences.
 Use the pair index (0-based global index shown) when flagging rows.
 ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional audience was specified; list dialectalChoices when non-standard forms were used.\n` : ''}`;
 
+  // A house style the translation was asked to follow (services/translateStyles.js): the checker lists clear departures from it.
+  const reviewSystem = intakeAnswers.houseStyleNote
+    ? `${system}\n\nThis translation was asked to follow an approved house style. ${intakeAnswers.houseStyleNote}\nWhere a part clearly departs from it (register, idiom, a word it should keep, word-for-word where it should be re-expressed), list it under audienceFlags with the issue starting "House style: ".`
+    : system;
+
   // ── 2. LLM review of ALL pairs in batches (side-by-side), run in parallel ──
   const BATCH = 35;
   const REVIEW_CONCURRENCY = Math.max(1, Math.min(6, Number(process.env.TRANSLATE_REVIEW_CONCURRENCY) || 4));
@@ -905,7 +918,7 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
     ].filter(Boolean).join('\n');
 
     try {
-      const res = await callModel(modelId, prompt, { maxTokens: 3500, system, returnUsage: true });
+      const res = await callModel(modelId, prompt, { maxTokens: 3500, system: reviewSystem, returnUsage: true });
       if (userId) {
         logUsage({
           userId, model: modelId,

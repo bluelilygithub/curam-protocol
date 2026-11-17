@@ -7,13 +7,14 @@ export const TRANSLATE_TOOLS = [
   { id: 'jobs', label: 'My translations', group: 'Translate', icon: 'list', tour: 'translate-tool-jobs' },
   { id: 'glossaries', label: 'Glossaries', group: 'Wording', icon: 'book', tour: 'translate-tool-glossaries' },
   { id: 'learned', label: 'What it has learned', group: 'Wording', icon: 'lightbulb', tour: 'translate-tool-learned' },
+  { id: 'styles', label: 'House styles', group: 'Wording', icon: 'palette', tour: 'translate-tool-styles', adminOnly: true },
 ];
 
 export const GROUPS = ['Translate', 'Wording'];
 
 export const GROUP_TIPS = {
   Translate: 'Translate a document, read it beside the original, change it with more passes, keep it, and find it again with its downloads.',
-  Wording: 'The words Translate must always use, and what it has picked up from your earlier translations.',
+  Wording: 'The words Translate must always use, what it has picked up from your earlier translations, and (admins) approved house styles per language.',
 };
 
 export const TOOL_TIPS = {
@@ -21,6 +22,7 @@ export const TOOL_TIPS = {
   jobs: 'Every translation you have run: the ones waiting for you to read, the ones kept with their downloads, and the ones still running.',
   glossaries: 'Lists of words that must always be translated the same way, or never translated (brand names, product codes). One learned list per language is built for you.',
   learned: 'The rules and wording Translate has picked up from your earlier translations, and how much wording it now reuses.',
+  styles: 'Admins: for a language that needs it, sets of approved examples (an original and its approved translation) with a comment on how that kind of content is translated. Translations into and out of the language follow them.',
 };
 
 // One short line shown at the top of the open screen.
@@ -29,6 +31,7 @@ export const TOOL_BLURBS = {
   jobs: 'Your translations, newest first. Open one to read it beside the original, run another pass, keep it, and download it.',
   glossaries: 'Words that must always be translated the same way, or left as they are.',
   learned: 'What Translate has picked up from your earlier translations.',
+  styles: 'Approved examples per language, for the whole workspace. Most languages need none.',
 };
 
 // The longer text for the (i) "How Translate works" box.
@@ -40,6 +43,7 @@ export const HOW_IT_WORKS = [
   ['Read it, change it, then keep it', 'A finished translation waits as a draft. Open it to read each part beside the original, with the parts the checks are about marked. If something needs changing, add a requirement (a rule in your own words, or a word to translate one way or keep as written) and run another pass, over the whole document or only the parts you pick. Earlier versions stay readable. Press Keep this version when you are happy: only then are the files made and anything you ticked to remember saved for future translations. Untick “Let me read it before it is kept” to skip this.'],
   ['What you get back', 'Once kept: a PDF of the translation, or a PDF with each original page followed by its translation. A Word or Excel file comes back as an editable Word or Excel file too, when its structure allows. You can also download the plain text, the original, and a report of what the checks found, or email them.'],
   ['The checks', 'Every translation is checked for missing, empty and cut-short parts. With the second-model check on, another AI model compares each part with the original and lists anything that looks wrong: changed meaning, unsure terms, garbled rows. The checks find problems; they do not fix them. A pass with your requirements is how you fix them.'],
+  ['House styles', 'For a language that needs it (te reo Māori, say), an admin keeps sets of approved examples: an original and its approved translation, with a comment on how that kind of content is translated. When you translate into or out of that language, New translation shows the set it will use (or picks the closest). The translator matches the examples and the checker judges by them. Saved wording from earlier translations is not reused for such a translation.'],
   ['Glossaries', 'A glossary is a list of words with the translation they must always get, or a mark to leave them as they are. Translate keeps one learned glossary per language and adds to it each time you keep a translation, so the same word is translated the same way next time. You can edit it, or make your own.'],
   ['How long they are kept', 'My translations keeps them for 90 days unless you choose 1 year or Until I delete them (at the top of the list). A deleted translation or glossary waits in the recycle bin (Settings, Recycle bin) for 30 days.'],
   ['What it does not do', 'It does not keep the look of the original PDF (fonts, columns, pictures): you get the words, in order. PDFs with several columns or tables can be read in the wrong order, which spoils the translation, so check those carefully. You cannot type changes into a translation here: ask for them with a requirement and another pass, or edit the Word, Excel or plain text download. Translations are not legally certified.'],
@@ -65,6 +69,7 @@ export const GUIDE_TOOLS = [
   { id: 'glossary-choice', label: 'Glossary', tool: 'new' },
   { id: 'second-check', label: 'Second-model check', tool: 'new' },
   { id: 'read-first', label: 'Let me read it before it is kept', tool: 'new' },
+  { id: 'house-style-choice', label: 'House style', tool: 'new' },
   { id: 'estimate', label: 'Get estimate', tool: 'new' },
   { id: 'jobs', label: 'My translations', tool: 'jobs' },
   { id: 'keep-time', label: 'Translations are kept for', tool: 'jobs' },
@@ -78,4 +83,5 @@ export const GUIDE_TOOLS = [
   { id: 'lessons', label: 'Lessons learnt', tool: 'jobs' },
   { id: 'glossaries', label: 'Glossaries', tool: 'glossaries' },
   { id: 'learned', label: 'What it has learned', tool: 'learned' },
+  { id: 'styles', label: 'House styles', tool: 'styles' },
 ];

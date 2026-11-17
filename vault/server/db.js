@@ -4838,6 +4838,32 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_translate_job_passes_user ON translate_job_passes ("userId", "jobId")`);
+  // House styles: per language, sets of approved examples kept by an admin for the WHOLE workspace (no "userId" on purpose: like
+  // workspace_settings, everyone's translations use them; only admins can change them). See services/translateStyles.js.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_style_sets (
+      id             SERIAL PRIMARY KEY,
+      "languageCode" TEXT NOT NULL,
+      name           TEXT NOT NULL,
+      comment        TEXT,
+      "createdBy"    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      "updatedBy"    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_style_examples (
+      id                 SERIAL PRIMARY KEY,
+      "setId"            INTEGER NOT NULL REFERENCES translate_style_sets(id) ON DELETE CASCADE,
+      "originalLanguage" TEXT NOT NULL DEFAULT 'en',
+      original           TEXT NOT NULL,
+      approved           TEXT NOT NULL,
+      note               TEXT,
+      "sortOrder"        INTEGER DEFAULT 0
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_translate_style_examples_set ON translate_style_examples ("setId", "sortOrder")`);
 
   // ── Translation memory (exact-match segment reuse + TMX export) ─────────────
   await pool.query(`

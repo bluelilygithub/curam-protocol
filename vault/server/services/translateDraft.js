@@ -435,6 +435,7 @@ async function runPass(jobId, userId, passId) {
     if (!payload) throw new Error('This translation has no text to work from.');
     const intake = parse(job.intakeAnswers) || {};
     const proposed = parse(job.proposedGlossaryJson) || {};
+    if (proposed.houseStyle?.note) intake.houseStyleNote = proposed.houseStyle.note; // the checker judges a pass by the same house style
     const prevQa = parse(job.qaSummaryJson) || {};
     const requirements = cleanRequirements(parse(pass.requirements));
     const targetLanguage = job.targetLanguage;
@@ -527,7 +528,7 @@ async function runPass(jobId, userId, passId) {
     const base = {
       engine: engineUsed, pdfLayout: payload.pdfLayout, passNo, scope: pass.scope, requirements,
       translateModel: engineUsed === 'llm' ? llmModel : 'google-translate-v2', reviewModel: reviewWanted ? reviewModel : null,
-      glossaryTermCount: glossaryTerms.length, guidance, maoriPolicy: prevQa.maoriPolicy || null,
+      glossaryTermCount: glossaryTerms.length, guidance, maoriPolicy: prevQa.maoriPolicy || null, houseStyle: prevQa.houseStyle || proposed.houseStyle || null,
       completenessCheck: { ran: true, beforeSubjectiveReview: true, ...gate.stats, autoFlagged: (gate.garbledOrIncompleteRows || []).length },
     };
     let qa;

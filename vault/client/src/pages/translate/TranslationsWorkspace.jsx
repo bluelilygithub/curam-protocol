@@ -58,6 +58,8 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
   const [alsoLangs, setAlsoLangs] = useState([]); // more languages for the same document ("Also translate into")
   const [reviewBeforeKeep, setReviewBeforeKeep] = useState(true);
   const [keepDays, setKeepDays] = useState('90');
+  const [styleSets, setStyleSets] = useState([]); // house styles (admin-kept, per language): which ones exist
+  const [styleSetId, setStyleSetId] = useState(''); // '' = let Translate choose, 'none', or a set id
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -83,6 +85,11 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
       else if (j.status === 'failed') addToast(`“${j.filename}” did not finish: ${j.errorMessage || 'the translation failed'}`, 'error');
     }
   }
+
+  useEffect(() => {
+    api.get('/api/translate/styles').then((r) => (r.ok ? r.json() : {})).then((d) => setStyleSets(Array.isArray(d.sets) ? d.sets.filter((s) => s.exampleCount > 0) : [])).catch(() => {});
+  }, [view]);
+  useEffect(() => { setStyleSetId(''); }, [targetLang]);
 
   useEffect(() => {
     api.get('/api/settings').then((r) => (r.ok ? r.json() : {})).then((st) => {
@@ -298,6 +305,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
         mustKeepTerms,
         notes: intakeNotes,
         regionalAudience: (targetLang === 'mi' || alsoLangs.includes('mi')) ? regionalAudience.trim() : '',
+        styleSetId,
       }));
 
       const res  = await api.postForm(languages.length > 1 ? '/api/translate/jobs/batch' : '/api/translate/jobs', fd);
@@ -378,6 +386,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
   const getIcon = useIcon();
 
   const langName = LANGUAGES.find((l) => l.code === targetLang)?.label || targetLang;
+  const langSets = styleSets.filter((s) => s.languageCode === targetLang);
   const lowResource = languageOptions.find((l) => l.code === targetLang)?.lowResource;
   const ownGlossary = glossaries.find((g) => String(g.id) === String(glossaryId));
   const layoutLabel = LAYOUT_OPTIONS.find((l) => l.v === pdfLayout)?.label || pdfLayout;
@@ -390,6 +399,7 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
     `PDF: ${layoutLabel.toLowerCase()}`,
     useGlobalGlossary ? `learned glossary for ${langName}` : ownGlossary ? `glossary “${ownGlossary.name}”` : 'no glossary',
     reviewBeforeKeep ? 'you read it before it is kept' : 'kept straight away',
+    ...(langSets.length ? [styleSetId === 'none' ? 'no house style' : styleSetId ? `house style “${langSets.find((s) => String(s.id) === String(styleSetId))?.name || ''}”` : 'house style chosen by Translate'] : []),
     ...(alsoLangs.length ? [`also into ${alsoLangs.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')}`] : []),
   ].join(' · ');
   const CARD = 'rounded-2xl border p-5 space-y-4';
@@ -556,6 +566,18 @@ export default function TranslationsWorkspace({ glossaries, view, preset, onShow
                 })}
               </div>
             </Field>
+
+            {langSets.length > 0 && (
+              <Field label={`House style for ${langName}`} hint={styleSetId === 'none' ? 'No house style: the translation works as for any other language.' : 'Approved examples an admin keeps for this language. The translator matches them and the checker judges by them.'}>
+                <Tip text={`Choose which approved examples this document should follow. "Let Translate choose" picks the closest set for the document${langSets.length === 1 ? ' (there is one)' : ''}.`}>
+                  <Sel value={styleSetId} onChange={setStyleSetId} aria-label="House style">
+                    <option value="">Let Translate choose{langSets.length === 1 ? ` (${langSets[0].name})` : ''}</option>
+                    {langSets.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+                    <option value="none">No house style</option>
+                  </Sel>
+                </Tip>
+              </Field>
+            )}
 
             {(targetLang === 'mi' || alsoLangs.includes('mi')) && (
               <Field label="Iwi / rohe audience (optional)" hint="Leave empty for standard te reo Māori. Regional word choices are listed in the result beside the standard form.">

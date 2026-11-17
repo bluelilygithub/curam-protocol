@@ -65,4 +65,19 @@ register(GLOSSARY_TYPE, {
   },
 });
 
+// A house style (workspace-wide, admin only): the set and its examples, back under the same id when it is free.
+register('translate-style-set', {
+  label: 'Translate house style',
+  async restore(db, userId, payload) {
+    const set = payload?.set;
+    if (!set || !set.name) throw new Error('This deleted house style has nothing to restore.');
+    const entityId = await insertRow(db, 'translate_style_sets', set, { userId });
+    let order = 0;
+    for (const e of Array.isArray(set.examples) ? set.examples : []) {
+      await insertRow(db, 'translate_style_examples', e, { userId, keepId: false, override: { setId: entityId, sortOrder: order++ } });
+    }
+    return { entityId };
+  },
+});
+
 module.exports = { JOB_TYPE, GLOSSARY_TYPE, JOB_MAX_BYTES, snapshotJob };

@@ -220,6 +220,13 @@ export default function ResultScreen({ jobId, onBack, onChanged, onDownload, onD
             {langLabel(data.sourceLanguage)} → {langLabel(data.targetLanguage)}
             <StatusBadge status={data.status} />
           </p>
+          {data.qaSummary?.houseStyle && (
+            <Tooltip text={`${data.qaSummary.houseStyle.how === 'picked' ? 'Picked on New translation.' : data.qaSummary.houseStyle.how === 'only' ? 'The only house style for this language.' : 'Chosen by Translate as the closest for this document.'} ${data.qaSummary.houseStyle.examplesUsed} of ${data.qaSummary.houseStyle.examplesTotal} approved examples were sent to the translator. The checker lists departures from it starting "House style:".`}>
+              <p className="text-xs inline-flex items-center gap-1" style={{ color: 'var(--color-muted)' }}>
+                {getIcon('palette', { size: 12 })} House style: {data.qaSummary.houseStyle.name}
+              </p>
+            </Tooltip>
+          )}
         </div>
         {doneVersions.length > 1 && (
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Versions">

@@ -32,6 +32,9 @@ const { getUsdToAudRate } = require('../services/marketData');
 const { v4: uuidv4 } = require('uuid');
 const sendEmail = require('../utils/sendEmail');
 const draft = require('../services/translateDraft');
+const styles = require('../services/translateStyles');
+const { requireAdmin } = require('../middleware/auth');
+const { getModelsForUser } = require('../services/modelResolver');
 const {
   splitLongParagraph, mapPool, findOrCreateGlobalGlossary, upsertGlobalGlossaryTerms, applyLessons,
   savePassOne, finalizeJob, runPass, cleanRequirements, partsOf, clearStalledPasses,
@@ -361,6 +364,85 @@ router.post('/lessons/apply', async (req, res) => {
     if (hasTerms && !targetLanguage) return res.status(400).json({ error: 'targetLanguage is required to lock terms' });
     const out = await applyLessons(req.user.id, { targetLanguage, globalLines, terms, jobId, jobFilename });
     res.json({ ok: true, ...out });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── House styles (services/translateStyles.js) ────────────────────────────────
+// Workspace-wide: everyone can read them (New translation offers the sets for the chosen language); only admins change or test them.
+router.get('/styles', async (req, res) => {
+  try {
+    res.json({ sets: await styles.listSets(), budget: styles.BLOCK_CHAR_BUDGET, maxExamples: styles.MAX_EXAMPLES_PER_SET });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/styles/:setId', async (req, res) => {
+  try {
+    const set = await styles.getSet(req.params.setId);
+    if (!set) return res.status(404).json({ error: 'That house style was not found' });
+    res.json(set);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/styles', requireAdmin, async (req, res) => {
+  try {
+    res.status(201).json(await styles.saveSet({ body: req.body, userId: req.user.id }));
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+
+router.put('/styles/:setId', requireAdmin, async (req, res) => {
+  try {
+    const set = await styles.saveSet({ id: req.params.setId, body: req.body, userId: req.user.id });
+    if (!set) return res.status(404).json({ error: 'That house style was not found' });
+    res.json(set);
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+
+// Delete: into the deleting admin's recycle bin for 30 days, with its examples.
+router.delete('/styles/:setId', requireAdmin, async (req, res) => {
+  const bin = require('../services/recycleBin');
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const set = await styles.getSet(req.params.setId, db);
+    if (!set) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That house style was not found' }); }
+    const binId = await bin.moveToBin(db, {
+      userId: req.user.id, type: 'translate-style-set', id: set.id, title: set.name,
+      detail: `House style · ${set.languageCode} · ${set.examples.length} example${set.examples.length === 1 ? '' : 's'}`,
+      payload: { set },
+    });
+    await db.query('DELETE FROM translate_style_sets WHERE id=$1', [set.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally { db.release(); }
+});
+
+// Test a set: translate each example's original (up to 10) with the set's brief, leaving that example out so the translator cannot
+// copy the answer, and return each result beside the approved translation. Calls the translation model once per example (paid).
+router.post('/styles/:setId/test', requireAdmin, async (req, res) => {
+  try {
+    const set = await styles.getSet(req.params.setId);
+    if (!set) return res.status(404).json({ error: 'That house style was not found' });
+    if (!set.examples.length) return res.status(400).json({ error: 'Add at least one example first.' });
+    const models = await resolveTranslateModels({ userId: req.user.id });
+    if (!models.ok || !models.translate?.modelId) return res.status(503).json({ error: models.errors?.[0] || 'No translation model is set up.' });
+    const sample = set.examples.slice(0, styles.MAX_TEST_EXAMPLES);
+    const results = await mapPool(sample, 3, async (e) => {
+      const block = await styles.buildStyleBlock({ setId: set.id, targetLanguage: set.languageCode, sourceLanguage: e.originalLanguage, skipExampleId: e.id });
+      try {
+        const [got] = await translateParagraphBatch({
+          modelId: models.translate.modelId, userId: req.user.id, paragraphs: [e.original],
+          sourceLanguage: e.originalLanguage, targetLanguage: set.languageCode, glossaryTerms: [], guidance: block.text, runningGlossary: {},
+          intakeAnswers: {},
+        });
+        return { id: e.id, original: e.original, approved: e.approved, got, examplesShown: block.used };
+      } catch (err) {
+        return { id: e.id, original: e.original, approved: e.approved, error: err.message };
+      }
+    });
+    res.json({ set: { id: set.id, name: set.name, languageCode: set.languageCode }, model: models.translate.modelId, tested: results.length, total: set.examples.length, results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1335,9 +1417,36 @@ async function processTranslateJob(
     console.warn('[translate] loadCustomInstructions failed:', err.message);
   }
 
+  // House style (services/translateStyles.js): the set picked on the form, or the closest one for this language pair. Its comment
+  // and approved examples go to the translator in full (not summarised), and a short note to the checker. Translation memory is
+  // skipped for such a job (below), so old wording cannot bypass the examples.
+  let houseStyle = null;
+  try {
+    let lightModel = null;
+    try { lightModel = (await getModelsForUser(userId))?.light || null; } catch { lightModel = null; }
+    const chosen = await styles.chooseSet({
+      choice: intakeAnswers?.styleSetId, targetLanguage, sourceLanguage, sample: sourceSkim, modelId: lightModel,
+    });
+    if (chosen?.set) {
+      const block = await styles.buildStyleBlock({ setId: chosen.set.id, targetLanguage, sourceLanguage });
+      if (block.text) {
+        glossaryPrep.guidance = [glossaryPrep.guidance, block.text].filter(Boolean).join('\n\n');
+        houseStyle = {
+          id: chosen.set.id, name: chosen.set.name, languageCode: chosen.set.languageCode, how: chosen.how,
+          examplesUsed: block.used, examplesTotal: block.total, note: styles.styleNoteForReview(block.set),
+        };
+        intakeAnswers = { ...intakeAnswers, houseStyleNote: houseStyle.note };
+        console.log('[translate] house style', { jobId, set: houseStyle.name, how: houseStyle.how, examples: `${block.used}/${block.total}` });
+      }
+    }
+  } catch (err) {
+    console.warn('[translate] house style skipped:', err.message);
+  }
+
   await setJobStatus(jobId, {
     sourceLanguage,
     proposedGlossaryJson: JSON.stringify({
+      houseStyle,
       terms: glossaryTerms,
       uncertainTerms: glossaryPrep.uncertainTerms || [],
       dialectalChoices: glossaryPrep.dialectalChoices || [],
@@ -1375,7 +1484,7 @@ async function processTranslateJob(
     const allPagesForTm = Object.keys(paragraphsByPage).map(Number);
     const allTexts = allPagesForTm.flatMap((p) => paragraphsByPage[p])
       .filter((t) => !paragraphContainsDoNotTranslateTerm(t, glossaryTerms));
-    tmHits = await translateMemory.lookupExact({
+    if (!houseStyle) tmHits = await translateMemory.lookupExact({
       userId, sourceLang: sourceLanguage, targetLang: targetLanguage, texts: allTexts,
     });
   } catch (err) {
@@ -1673,6 +1782,7 @@ async function processTranslateJob(
     translateModel: engine === 'llm' ? translateModelId : 'google-translate-v2',
     reviewModel: enableReview ? reviewModelId : null,
     repairStats,
+    houseStyle,
     maoriPolicy: String(targetLanguage || '').toLowerCase() === 'mi'
       ? (intakeAnswers?.regionalAudience
         ? `Regional adaptation for: ${intakeAnswers.regionalAudience}`
