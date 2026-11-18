@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "e1761d50",
+   "fullHash": "e1761d50162281585a1c714387cfd570e911123d",
+   "committedAt": "2026-11-18T10:56:26+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: keep pictures within provider limits and show the model's real error",
+   "filesChanged": 3,
+   "insertions": 100,
+   "deletions": 18,
+   "area": "PDF Tools",
+   "goal": "The owner's first live conversion (claude-haiku-4-5) failed with \"The AI model could not be reached\", which hid the real reason. Show the real reason, and make requests lighter like Graphics and Video Tools so they stay inside the providers' picture limits.",
+   "whatChanged": "Model errors now name the model and give the provider's own reason (providerReason/modelFailure): busy (529/503), rate limit (429), rejected key (401/403), unknown model (404), timeout, or the raw text. Still returned as 502 so a provider 401 cannot sign the person out; the server log line adds the picture count and prompt size. Page pictures are re-made on the server at 1568 px longest side as JPEG; extracted picture copies for the model are 512 px (was 768); at most 20 pictures go in one request (was up to 25), because Claude refuses pictures over 2000 px when a request has more than 20. Every extracted picture still goes in the zip. Test fixture PNG replaced: the hand-typed one was rejected now and then by libspng. Docs updated.",
+   "filesImpacted": [
+    "server/services/pdfToHtml.js",
+    "server/services/pdfToHtml.test.js",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "If it still fails, the message says why; requests are smaller and avoid the many-pictures size limit.",
+   "concerns": "The real cause of the owner's failure is unknown: production logs were not available (Railway CLI not logged in) and the local AI keys are invalid. The picture limit is a likely cause for a picture-heavy page but is not confirmed. Not run against a real model."
+  },
+  {
    "commit": "9733556f",
    "fullHash": "9733556f64c89fc0401e69855d1b293a8b37c439",
    "committedAt": "2026-11-18T10:44:16+10:00",
