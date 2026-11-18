@@ -37,4 +37,11 @@ assert.equal(buildAttentionItems({ tasksOverdue: { count: 2, sample: ['A', 'B'] 
 const long = buildAttentionItems({ tasksOverdue: { count: 1, sample: ['x'.repeat(200)] } })[0];
 assert.ok(long.detail.length <= 40);
 
+// a PDF → HTML page finished in the background and not opened yet
+const web = buildAttentionItems({ pdfHtmlReady: { count: 1, sample: ['Blue Webpage Draft 2'] } })[0];
+assert.equal(web.id, 'pdf-html-ready');
+assert.equal(web.title, '1 web page ready in PDF → HTML');
+assert.equal(web.to, '/pdf?tool=pdftohtml');
+assert.equal(buildAttentionItems({ pdfHtmlReady: { count: 0, sample: [] } }).length, 0);
+
 console.log('attention: ok');

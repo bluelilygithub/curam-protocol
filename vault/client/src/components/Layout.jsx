@@ -12,6 +12,7 @@ import TaskReminderModal from './TaskReminderModal';
 import InquirySession from './mood/InquirySession';
 import TourButton from './TourButton';
 import Toast from './Toast';
+import PdfHtmlWatcher from './PdfHtmlWatcher';
 import AppsLauncher from './AppsLauncher';
 import ShelfLauncher from './ShelfLauncher';
 import WfhHoursPrompt from './WfhHoursPrompt';
@@ -626,6 +627,7 @@ function Layout() {
       </div>
       <TourButton />
       <Toast />
+      <PdfHtmlWatcher />
       <QuickCapture />
       <MorningDigest />
       <WfhHoursPrompt enabled={canUseFeature('finance')} />

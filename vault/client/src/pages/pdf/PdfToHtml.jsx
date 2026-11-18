@@ -11,6 +11,7 @@ import {
   readFileAsDataUrl, dataUrlToUint8Array, initPdfjsWorker, getPdfPageCount, downloadFile,
 } from '../PdfPage';
 import { parsePageRange } from './PdfExtraTools';
+import { setToolOpen, startWatching } from './pdfHtmlWatch';
 import { renderScale, planSlices, sliceBudget, textLines, linesPerSlice, SLICE_OVERLAP } from './pdfToHtmlLayout.mjs';
 
 const MAX_PAGES = 5; // matches server/services/pdfToHtml.js
@@ -121,7 +122,7 @@ function JobProgress({ live, onStop, getIcon, revising }) {
       </div>
       <p className="text-xs mt-1.5" style={muted}>
         About {pct}%{live?.charsWritten ? ` · ${Number(live.charsWritten).toLocaleString('en-AU')} characters written` : ''}.
-        {' '}You can leave this page: it carries on, and the result is here when you come back to PDF → HTML (kept for 7 days).
+        {' '}You can leave this page: it carries on, Vault tells you when it is ready, and the result is here when you come back (kept for 7 days).
       </p>
     </div>
   );
@@ -225,10 +226,11 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
     api.get('/api/pdf/to-html/model-config').then((r) => r.json()).then((d) => { if (live2 && d && !d.error) setModelCfg(d); }).catch(() => {});
     loadJobs().then((list) => {
       if (!live2) return;
-      const pick = list.find((j) => j.status === 'running') || list.find((j) => String(j.id) === readLocal(LAST_JOB_KEY));
+      const pick = list.find((j) => j.status === 'running') || list.find((j) => j.status === 'done' && !j.seenAt) || list.find((j) => String(j.id) === readLocal(LAST_JOB_KEY));
       if (pick) openJob(pick.id, { quiet: true });
     });
-    return () => { live2 = false; clearTimeout(saveTimer.current); };
+    setToolOpen(true); // the app-wide watcher stays quiet while this is on screen
+    return () => { live2 = false; clearTimeout(saveTimer.current); setToolOpen(false); };
   }, []);
 
   // While a job runs: check on it every POLL_MS (small answer). When it ends, load the whole page once.
@@ -291,6 +293,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
       setHtml(''); setHistory([]); setShownPartial(''); setTab('preview');
       setLive({ status: 'running', kind: 'create', stage: 'Starting', progress: 1 });
       writeLocal(LAST_JOB_KEY, data.id);
+      startWatching();
       loadJobs();
     } catch (err) {
       setError(err.message || 'Could not start the web page.');
@@ -309,6 +312,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not start that change.');
       setAsk('');
+      startWatching();
       setLive({ status: 'running', kind: 'revise', stage: 'Starting', progress: 1 });
       setTab('preview');
     } catch (err) {

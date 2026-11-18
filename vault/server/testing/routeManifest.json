@@ -7,6 +7,9 @@
   "GET /api/pdf/to-html/jobs/:id": {
    "class": "authed"
   },
+  "GET /api/pdf/to-html/jobs/alerts": {
+   "class": "authed"
+  },
   "GET /api/pdf/to-html/model-config": {
    "class": "authed"
   },

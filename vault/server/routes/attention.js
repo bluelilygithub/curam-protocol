@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
   const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch((err) => { console.error('[attention]', err.message); return null; });
   const taskBase = `FROM tasks WHERE "userId" = $1 AND "parentTaskId" IS NULL AND status IN ('todo','in-progress') AND "dueDate" IS NOT NULL`;
 
-  const [overdue, dueToday, reminders, invoices, expense, suggestions, youtube] = await Promise.all([
+  const [overdue, dueToday, reminders, invoices, expense, suggestions, youtube, pdfHtml] = await Promise.all([
     q(`SELECT title, COUNT(*) OVER () AS n ${taskBase} AND LEFT("dueDate", 10) < $2
         ORDER BY "dueDate" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 3`, [userId, today]),
     q(`SELECT title, COUNT(*) OVER () AS n ${taskBase} AND LEFT("dueDate", 10) = $2
@@ -48,6 +48,9 @@ router.get('/', async (req, res) => {
     can('gmailIntel') ? q(`SELECT COUNT(*)::int AS n FROM expense_review_queue WHERE "userId" = $1 AND "reviewStatus" = 'pending'`, [userId]) : null,
     q(`SELECT COUNT(*)::int AS n FROM agent_suggestions WHERE "userId" = $1 AND status = 'new'`, [userId]),
     can('youtube') ? youtubeUnseen(pool, userId).catch((err) => { console.error('[attention]', err.message); return null; }) : null,
+    // PDF Tools → PDF → HTML pages that finished in the background and have not been opened yet (PDF Tools has no feature switch)
+    q(`SELECT filename, COUNT(*) OVER () AS n FROM pdf_html_jobs WHERE "userId" = $1 AND status = 'done' AND "seenAt" IS NULL
+        ORDER BY "finishedAt" DESC LIMIT 3`, [userId]),
   ]);
 
   const list = (rows, field) => (rows ? { count: Number(rows[0]?.n || 0), sample: rows.map((r) => r[field]) } : null);
@@ -59,6 +62,7 @@ router.get('/', async (req, res) => {
     expensePending: expense ? { count: Number(expense[0]?.n || 0) } : null,
     suggestionsNew: suggestions ? { count: Number(suggestions[0]?.n || 0) } : null,
     youtubeNew: youtube && youtube.count > 0 ? youtube : null,
+    pdfHtmlReady: list(pdfHtml, 'filename'),
   };
   Object.keys(raw).forEach((k) => { if (!raw[k]) delete raw[k]; });
   res.json({ items: buildAttentionItems(raw) });

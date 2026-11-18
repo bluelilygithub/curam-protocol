@@ -4808,6 +4808,9 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_pdf_html_jobs_user ON pdf_html_jobs ("userId", "createdAt" DESC)`);
+  // When the person last opened a finished page in the tool. NULL after a run ends = "ready, not looked at yet": the needs-attention list
+  // and the app-wide "your web page is ready" toast use it. Existing rows count as seen.
+  await pool.query(`ALTER TABLE pdf_html_jobs ADD COLUMN IF NOT EXISTS "seenAt" TIMESTAMPTZ DEFAULT NOW()`);
   // A job cannot survive a restart (the model call lived in the old process): say so instead of showing it running for ever.
   await pool.query(`UPDATE pdf_html_jobs SET status = CASE WHEN html IS NULL THEN 'failed' ELSE 'done' END,
                       "errorMessage" = 'Stopped part-way because the server restarted (usually a Vault update). ' || CASE WHEN html IS NULL THEN 'Start it again.' ELSE 'The page is as it was before that change; ask again.' END,

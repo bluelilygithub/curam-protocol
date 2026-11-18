@@ -1495,6 +1495,11 @@ router.get('/to-html/jobs', async (req, res) => {
   try { res.json({ jobs: await pdfToHtmlJobs.list(req.user.id) }); } catch (err) { sendToolError(res, 'to-html/jobs', err, 'Could not load your web pages'); }
 });
 
+// For the app-wide "your web page is ready" toast (client/src/components/PdfHtmlWatcher.jsx): small, polled only while a job runs.
+router.get('/to-html/jobs/alerts', async (req, res) => {
+  try { res.json(await pdfToHtmlJobs.alerts(req.user.id)); } catch (err) { sendToolError(res, 'to-html/jobs/alerts', err, 'Could not check your web pages'); }
+});
+
 router.post('/to-html/jobs', aiLimiter, async (req, res) => {
   try {
     const buf = pdfBufFromDataUrl(req.body?.dataUrl);

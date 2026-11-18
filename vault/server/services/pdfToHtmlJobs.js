@@ -86,8 +86,8 @@ function createJobs(deps = {}) {
   async function startCreate(userId, input) {
     if (await hasRunning(userId)) throw Object.assign(new Error('A web page is already being made. Wait for it to finish, or stop it.'), { status: 409 });
     const { rows } = await q(
-      `INSERT INTO pdf_html_jobs ("userId", filename, kind, status, stage, progress, "pageImagesJson", "originalsJson")
-       VALUES ($1, $2, 'create', 'running', 'Starting', 1, $3, $4) RETURNING id`,
+      `INSERT INTO pdf_html_jobs ("userId", filename, kind, status, stage, progress, "pageImagesJson", "originalsJson", "seenAt")
+       VALUES ($1, $2, 'create', 'running', 'Starting', 1, $3, $4, NULL) RETURNING id`,
       [userId, String(input.title || '').slice(0, 200), JSON.stringify(input.pageImages || []), JSON.stringify((input.originals || []).slice(0, 5))],
     );
     const id = rows[0].id;
@@ -130,7 +130,7 @@ function createJobs(deps = {}) {
     if (!job.html) throw Object.assign(new Error('There is no web page to change yet.'), { status: 400 });
     const ask = String(instruction || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
     if (!ask) throw Object.assign(new Error('Say what to change.'), { status: 400 });
-    await q(`UPDATE pdf_html_jobs SET status = 'running', kind = 'revise', instruction = $2, stage = 'Starting', progress = 1, "charsWritten" = 0,
+    await q(`UPDATE pdf_html_jobs SET status = 'running', kind = 'revise', instruction = $2, stage = 'Starting', progress = 1, "charsWritten" = 0, "seenAt" = NULL,
                "partialHtml" = NULL, "errorMessage" = NULL, "finishedAt" = NULL, "updatedAt" = NOW() WHERE id = $1`, [id, ask]);
     const ac = new AbortController();
     controllers.set(id, ac);
@@ -173,7 +173,7 @@ function createJobs(deps = {}) {
 
   /** The person's recent web pages, newest first, without the big parts. */
   async function list(userId) {
-    const { rows } = await q(`SELECT id, filename, kind, status, stage, progress, model, "errorMessage", "createdAt", "updatedAt", "finishedAt"
+    const { rows } = await q(`SELECT id, filename, kind, status, stage, progress, model, "errorMessage", "createdAt", "updatedAt", "finishedAt", "seenAt"
                                 FROM pdf_html_jobs WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 10`, [userId]);
     return rows;
   }
@@ -188,6 +188,8 @@ function createJobs(deps = {}) {
     const r = rows[0];
     if (!r) throw Object.assign(new Error('That web page is no longer here (pages are kept for 7 days).'), { status: 404 });
     if (light) return r;
+    // opening a finished page counts as seeing it (clears the needs-attention item; the toast is not shown again)
+    if (r.status !== 'running') await q(`UPDATE pdf_html_jobs SET "seenAt" = NOW() WHERE id = $1 AND "seenAt" IS NULL AND status <> 'running'`, [id]).catch(() => {});
     return {
       ...r,
       historyJson: undefined, imagesJson: undefined, pageImagesJson: undefined, originalsJson: undefined, slicesJson: undefined,
@@ -207,7 +209,15 @@ function createJobs(deps = {}) {
     if (!rowCount) throw Object.assign(new Error('That web page cannot be saved right now (it is being changed, or it is gone).'), { status: 409 });
   }
 
-  return { startCreate, startRevise, cancel, list, get, saveHtml };
+  /** For the app-wide watcher: is anything running, and which finished pages have not been opened yet (newest first). */
+  async function alerts(userId) {
+    const { rows } = await q(`SELECT id, filename, kind, status, "errorMessage", "finishedAt" FROM pdf_html_jobs
+                                WHERE "userId" = $1 AND (status = 'running' OR ("seenAt" IS NULL AND status IN ('done', 'failed')))
+                                ORDER BY "updatedAt" DESC LIMIT 10`, [userId]);
+    return { running: rows.filter((r) => r.status === 'running').length, finished: rows.filter((r) => r.status !== 'running') };
+  }
+
+  return { startCreate, startRevise, cancel, list, get, saveHtml, alerts };
 }
 
 module.exports = { createJobs, expectedChars, writingProgress, partialFrom, MAX_HISTORY, ...createJobs() };
