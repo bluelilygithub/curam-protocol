@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "35518bba",
+   "fullHash": "35518bbaf70a49b0f3e9cc3555d7d4e27109044c",
+   "committedAt": "2026-11-19T06:19:23+10:00",
+   "author": "mrb",
+   "subject": "Fix boot on an empty database: add ef_cases.\"clientId\" after clients exists",
+   "filesChanged": 2,
+   "insertions": 93,
+   "deletions": 1,
+   "area": "Database",
+   "goal": "Let Vault start on a brand-new, empty database (a new server, a restore into an empty database, a throwaway test database) without changing what existing databases have.",
+   "whatChanged": "server/db.js created ef_cases (Email Follow-Up) with \"clientId\" INTEGER REFERENCES clients(id) about 570 lines before the clients table, so on an empty database the main schema transaction failed with 'relation \"clients\" does not exist' and Vault exited. The column is no longer named in CREATE TABLE ef_cases; it is added with ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS \"clientId\" INTEGER REFERENCES clients(id) ON DELETE SET NULL right after clients is created, beside the existing plans clientId lines. On existing databases the CREATE TABLE IF NOT EXISTS is skipped as before and the ALTER is a no-op. New test server/db.freshSchema.test.js creates a throwaway database on this machine, loads db.js against it in a child process (waits for \"[db] Schema ready\" or \"startup failed\", 4-minute limit), checks the table count, the links to clients and that ef_cases.clientId still points at clients, boots again to prove the schema stays idempotent, then drops the database.",
+   "filesImpacted": [
+    "server/db.js",
+    "server/db.freshSchema.test.js"
+   ],
+   "benefit": "A fresh database now builds all 259 tables on first boot, so test databases and a new or rebuilt server no longer need a copy of an old database to start. The new test catches the next table that points at one created later.",
+   "concerns": "Tested: the new test failed before the fix with the reported error and passes after it (first boot, schema checks, second boot). ef_cases on a fresh build was compared with the existing local database: same columns, types, NOT NULLs and constraint names (ef_cases_clientId_fkey, ON DELETE SET NULL); only the physical column position of \"clientId\" differs on new databases, and no code inserts into ef_cases by position. The local dev server restarted on the change and answers /api/health. Only this one ordering problem existed; nothing else in db.js was reordered. The test needs a local Postgres that can CREATE DATABASE and takes about a minute; there is no package.json script for it on purpose (fast deploys). Not tried on production, where the database already exists and the change is a no-op."
+  },
+  {
    "commit": "2942f977",
    "fullHash": "2942f977f47bba23bef036804d45dd09fff47155",
    "committedAt": "2026-11-19T06:13:53+10:00",
