@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d47b3ea4",
+   "fullHash": "d47b3ea4fa1521fdf4c42677178ce8513967744b",
+   "committedAt": "2026-11-18T12:23:01+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: linked scrolling between original and preview; website job starts with PDF -> HTML",
+   "filesChanged": 4,
+   "insertions": 56,
+   "deletions": 7,
+   "area": "PDF Tools",
+   "goal": "The owner asked for the original PDF and the preview to scroll together, and for the \"Put a PDF page on a website\" job to start with uploading the PDF rather than the rotate question.",
+   "whatChanged": "New Scroll linked / Scroll separately button (shown with the original and the Preview; on by default, remembered per browser as vault_pdf_html_link_scroll). Scrolling either side moves the other to the same share of the way down; an echo guard stops the two sides fighting. To do this the preview frame changed from sandbox=\"\" to sandbox=\"allow-same-origin\"; allow-scripts is still not given, so the built page cannot run anything, and cleanHtml still strips scripts and handlers. Job card steps swapped: 1. PDF → HTML, 2. Rotate Pages (only if the page came out sideways, then Continue with PDF → HTML). Docs and help updated.",
+   "filesImpacted": [
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "client/src/pages/pdf/pdfGoals.mjs",
+    "client/src/pages/PdfPage.jsx",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "Comparing the design with the built page no longer needs two separate scroll bars, and the website job opens on the upload.",
+   "concerns": "Security trade-off accepted by the owner: allow-same-origin gives the preview Vault's origin. It stays safe only while allow-scripts is NOT added; the docs say so. Scrolling is proportional, so sections line up only roughly when the web page and the PDF have different proportions. The swapped job puts Rotate after the conversion, so a sideways page means converting twice. Checked locally in a browser with a stand-in model (50% -> 50%, 90% -> 90%, off stops it; job card order)."
+  },
+  {
    "commit": "f6da2771",
    "fullHash": "f6da27712df8190bc89b3a57d32026eb0b709191",
    "committedAt": "2026-11-18T11:25:53+10:00",
