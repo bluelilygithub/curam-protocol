@@ -4567,7 +4567,13 @@
   "GET /api/code-map/briefing/claude-md": {
    "class": "admin"
   },
-  "GET /api/code-map/briefing/doc": {
+  "PUT /api/code-map/briefing/docs": {
+   "class": "admin"
+  },
+  "DELETE /api/code-map/briefing/docs": {
+   "class": "admin"
+  },
+  "POST /api/code-map/briefing/docs-copy": {
    "class": "admin"
   }
  }

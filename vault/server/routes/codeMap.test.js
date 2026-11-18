@@ -50,7 +50,19 @@ async function serve(jobs) {
   };
   const limiter = (req, res, next) => { limited.push(req.path); next(); };
   // Context tab: a fake store for briefings and notes; CLAUDE.md and the docs are read from disk by the real service
-  const real = require('../services/codeMap/briefing').createBriefingService({ pool: { query: async () => { throw new Error('no db in this test'); } } });
+  // the settings table in memory, enough for the docs choice (SELECT value / INSERT ... ON CONFLICT / DELETE by userId and key)
+  const settings = new Map();
+  const pool = {
+    async query(sql, params) {
+      const k = `${params[0]}:${params[1]}`;
+      if (/^SELECT value FROM settings/.test(sql)) return { rows: settings.has(k) ? [{ value: settings.get(k) }] : [] };
+      if (/^INSERT INTO settings/.test(sql)) { settings.set(k, params[2]); return { rows: [] }; }
+      if (/^DELETE FROM settings/.test(sql)) { settings.delete(k); return { rows: [] }; }
+      throw new Error(`unexpected query in this test: ${sql.slice(0, 40)}`);
+    },
+  };
+  serve.settings = settings;
+  const real = require('../services/codeMap/briefing').createBriefingService({ pool });
   const briefing = {
     built: [], notes: '',
     async build(userId) { this.built.push(userId); return { briefing: { id: 7, chars: 10, markdown: '<vault_briefing>x</vault_briefing>' }, sections: [], stats: { chars: 10, tokens: 3 }, rulesStale: [] }; },
@@ -58,8 +70,10 @@ async function serve(jobs) {
     async get(userId, id) { return id === 7 ? { id: 7, markdown: 'x' } : null; },
     async getNotes() { return this.notes; },
     async saveNotes(userId, text) { if (text.length > 5) throw Object.assign(new Error('Notes can be up to 5 characters.'), { status: 400 }); this.notes = text; return text; },
-    claudeMd: () => real.claudeMd(),
-    doc: (name) => real.doc(name),
+    claudeMd: (userId) => real.claudeMd(userId),
+    saveDocs: (userId, paths) => real.saveDocs(userId, paths),
+    resetDocs: (userId) => real.resetDocs(userId),
+    docsCopy: (userId, paths) => real.docsCopy(userId, paths),
   };
   serve.briefing = briefing;
   app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing }));
@@ -176,18 +190,44 @@ async function serve(jobs) {
       assert.ok(!limited.includes('/briefings'), 'no aiLimiter: no model call');
     });
 
-    await t('Context: CLAUDE.md and its docs; a doc only by a listed name, never a path', async () => {
+    await t('Context: CLAUDE.md, the docs on offer with sizes, and the default set ticked', async () => {
       const c = await s.call('GET', '/api/code-map/briefing/claude-md');
       assert.strictEqual(c.status, 200);
       assert.match(c.body.text, /^# Curam Vault/);
-      assert.ok(c.body.linked.includes('core-conventions.md') && c.body.linked.includes('deploy-speed.md'));
-      assert.ok(!c.body.others.some((n) => c.body.linked.includes(n)));
-      const d = await s.call('GET', '/api/code-map/briefing/doc?name=code-map.md');
-      assert.strictEqual(d.status, 200);
-      assert.match(d.body.text, /^# Code Map/);
-      for (const bad of ['../CLAUDE.md', '..%2F.env', 'CODE-MAP.md', 'code-map', '.env', 'nope-not-here.md', 'docs/code-map.md']) {
-        assert.strictEqual((await s.call('GET', `/api/code-map/briefing/doc?name=${bad}`)).status, 404, bad);
-      }
+      assert.deepStrictEqual(c.body.selected, ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md', 'docs/video-tools.md']);
+      assert.strictEqual(c.body.customised, false);
+      assert.deepStrictEqual(c.body.missing, []);
+      const finance = c.body.docs.find((d) => d.path === 'docs/finance.md');
+      assert.ok(finance && finance.tokens === Math.ceil(finance.chars / 4) && finance.note === 'holds real business figures');
+      for (const extra of ['client/DESIGN.md', 'ROADMAP.md', 'BACKUP.md', 'planner-core/README.md', 'room-planner/README.md']) assert.ok(c.body.docs.some((d) => d.path === extra), extra);
+      assert.ok(!c.body.docs.some((d) => d.path === 'CLAUDE.md'), 'CLAUDE.md is always in, not a choice');
+    });
+
+    await t('Context: the choice is saved per admin, unsafe paths dropped, Reset goes back to the defaults', async () => {
+      const saved = await s.call('PUT', '/api/code-map/briefing/docs', { paths: ['ROADMAP.md', '../CLAUDE.md', '/etc/passwd', 'server/db.js', 'docs\\finance.md', 'docs/finance.md'] });
+      assert.strictEqual(saved.status, 200);
+      assert.deepStrictEqual(saved.body.selected, ['ROADMAP.md', 'docs/finance.md']);
+      assert.deepStrictEqual(JSON.parse(serve.settings.get('3:code_map_briefing_docs')), ['ROADMAP.md', 'docs/finance.md']);
+      assert.deepStrictEqual((await s.call('GET', '/api/code-map/briefing/claude-md')).body.selected, ['ROADMAP.md', 'docs/finance.md']);
+      assert.strictEqual((await s.call('PUT', '/api/code-map/briefing/docs', { paths: 'ROADMAP.md' })).status, 400);
+      const reset = await s.call('DELETE', '/api/code-map/briefing/docs');
+      assert.strictEqual(reset.body.customised, false);
+      assert.ok(!serve.settings.has('3:code_map_briefing_docs'));
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefing/claude-md')).body.selected.length, 4);
+    });
+
+    await t('Context: the copy is built on the server from the allow-list only, ending with the not-included list', async () => {
+      const r = await s.call('POST', '/api/code-map/briefing/docs-copy', { paths: ['ROADMAP.md', '../.env', 'server/db.js'] });
+      assert.strictEqual(r.status, 200);
+      assert.deepStrictEqual(r.body.included, ['ROADMAP.md']);
+      assert.ok(r.body.text.startsWith('## File: CLAUDE.md'));
+      assert.ok(r.body.text.includes('## File: ROADMAP.md'));
+      assert.ok(!r.body.text.includes('## File: server/db.js') && !r.body.text.includes('## File: ../.env'));
+      assert.match(r.body.text, /## Docs not included in this copy\n[\s\S]*- client\/DESIGN\.md \(~[\d,]+ tokens\)/);
+      assert.ok(r.body.text.trim().endsWith('If the work needs any of these, ask me to include them next time.'));
+      assert.strictEqual((await s.call('POST', '/api/code-map/briefing/docs-copy', { paths: 'x' })).status, 400);
+      const byDefault = await s.call('POST', '/api/code-map/briefing/docs-copy', {});
+      assert.deepStrictEqual(byDefault.body.included, ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md', 'docs/video-tools.md']);
     });
   } finally {
     await s.close();

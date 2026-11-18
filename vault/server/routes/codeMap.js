@@ -108,18 +108,33 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing } = {}) {
     } catch (err) { fail(res, err, 'notes save'); }
   });
 
-  // CLAUDE.md read-only, the docs it links to and the other docs that can be copied with it
+  // CLAUDE.md read-only, every doc that can go with it (size, one-line summary), and which are ticked for this admin
   router.get('/briefing/claude-md', async (req, res) => {
     try {
-      res.json(B().claudeMd());
+      res.json(await B().claudeMd(req.user.id));
     } catch (err) { fail(res, err, 'claude-md'); }
   });
 
-  // one doc by name: only a name from the listing of docs/ (lowercase, ending .md), never a path
-  router.get('/briefing/doc', async (req, res) => {
+  // the ticked docs, saved per admin (only paths on the allow-list or in docs/ are kept); DELETE goes back to the defaults
+  router.put('/briefing/docs', async (req, res) => {
     try {
-      res.json(B().doc(req.query.name));
-    } catch (err) { fail(res, err, 'doc'); }
+      res.json(await B().saveDocs(req.user.id, (req.body || {}).paths));
+    } catch (err) { fail(res, err, 'docs save'); }
+  });
+
+  router.delete('/briefing/docs', async (req, res) => {
+    try {
+      res.json(await B().resetDocs(req.user.id));
+    } catch (err) { fail(res, err, 'docs reset'); }
+  });
+
+  // the block to copy: CLAUDE.md, the ticked docs and the "Docs not included in this copy" list, read on the server from the allow-list
+  router.post('/briefing/docs-copy', async (req, res) => {
+    const { paths } = req.body || {};
+    if (paths !== undefined && !Array.isArray(paths)) return res.status(400).json({ error: 'paths must be a list of doc paths.' });
+    try {
+      res.json(await B().docsCopy(req.user.id, paths));
+    } catch (err) { fail(res, err, 'docs copy'); }
   });
 
   router.get('/runs/:id', async (req, res) => {

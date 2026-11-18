@@ -210,4 +210,85 @@ t('doc fallback keeps the descriptive sentences and drops paths, routes and flag
   assert.strictEqual(purposeFrom('# X\n\nStatus: built.\n\n`/x`, flag x.\n\nShort.'), '');
 });
 
+// ── The docs picker (docs.js) ──────────────────────────────────────────────────────────────────────────────────────────────────
+const docs = require('./docs');
+
+t('every default doc exists', () => {
+  const missing = sources.DEFAULT_BRIEFING_DOCS.filter((p) => !docs.safePath(p));
+  assert.deepStrictEqual(missing, [], 'DEFAULT_BRIEFING_DOCS in sources.js lists a file that no longer exists');
+});
+
+t('the path guard: only plain relative paths that stay inside the repo', () => {
+  assert.ok(docs.safePath('docs/code-map.md'));
+  assert.ok(docs.safePath('planner-core/README.md'));
+  for (const bad of ['../CLAUDE.md', 'docs/../../x.md', '/etc/passwd', 'C:/Windows/win.ini', 'docs\\code-map.md', '', 'docs//code-map.md', 'docs/no-such-file.md', 'docs']) {
+    assert.strictEqual(docs.safePath(bad), null, bad);
+  }
+});
+
+t('selection: defaults when nothing is saved; a saved list keeps only docs on offer', () => {
+  const catalog = docs.docCatalog();
+  assert.deepStrictEqual(docs.resolveSelection(null, catalog), sources.DEFAULT_BRIEFING_DOCS);
+  assert.deepStrictEqual(docs.resolveSelection(['ROADMAP.md', '../CLAUDE.md', 'server/db.js', 'docs/finance.md', 'ROADMAP.md'], catalog), ['ROADMAP.md', 'docs/finance.md']);
+  assert.deepStrictEqual(docs.resolveSelection([], catalog), [], 'an empty saved list means nothing ticked, not the defaults');
+  const first = catalog.docs.slice(0, sources.DEFAULT_BRIEFING_DOCS.length).map((d) => d.path);
+  assert.deepStrictEqual(first, sources.DEFAULT_BRIEFING_DOCS, 'defaults are listed first, in order');
+  assert.strictEqual(catalog.docs.find((d) => d.path === 'docs/finance.md').note, 'holds real business figures');
+  for (const p of sources.EXTRA_BRIEFING_DOCS) assert.ok(catalog.docs.some((d) => d.path === p) || catalog.missing.includes(p), `${p} is offered or reported missing`);
+});
+
+/** The "Docs not included" section of a text, from its heading to the end. */
+const notIncludedPart = (text) => text.slice(text.indexOf(`## ${docs.NOT_INCLUDED_TITLE}`));
+
+/** A line from each doc's body that a contents leak would carry (long, not its title, not its summary). */
+function telltales(catalog) {
+  return catalog.docs.map((d) => {
+    const body = fs.readFileSync(docs.safePath(d.path), 'utf8').replace(/\r\n?/g, '\n');
+    const line = body.split('\n').map((l) => l.trim()).find((l) => l.length > 70 && !l.startsWith('#') && !d.summary.includes(l.slice(0, 40)));
+    return { path: d.path, line };
+  }).filter((x) => x.line);
+}
+
+t('the copy block: CLAUDE.md, the ticked docs, then a list of every unticked doc with no contents', () => {
+  const catalog = docs.docCatalog();
+  const selected = docs.resolveSelection(null, catalog);
+  const out = docs.copyBlock(selected, catalog);
+  assert.ok(out.text.startsWith('## File: CLAUDE.md\n\n# Curam Vault'));
+  for (const p of selected) assert.ok(out.text.includes(`## File: ${p}\n`), `${p} is in the copy`);
+  const part = notIncludedPart(out.text);
+  const unticked = catalog.docs.filter((d) => !selected.includes(d.path));
+  for (const d of unticked) assert.ok(part.includes(`- ${d.path} (~`), `${d.path} is listed as not included`);
+  for (const p of selected) assert.ok(!part.includes(`- ${p} (~`), `${p} is not listed as missing`);
+  assert.ok(part.trim().endsWith(docs.NOT_INCLUDED_END));
+  const leaked = telltales(catalog).filter((x) => !selected.includes(x.path) && part.includes(x.line));
+  assert.deepStrictEqual(leaked.map((x) => x.path), [], 'a doc\'s contents reached the not-included list');
+  assert.ok(!part.includes('## File:'), 'the list holds no files');
+  assert.strictEqual(out.tokens, Math.ceil(out.text.length / 4));
+});
+
+t('the briefing ends with the same list, for the docs the owner left unticked', () => {
+  const catalog = docs.docCatalog();
+  const selected = ['client/DESIGN.md'];
+  const leftOut = catalog.docs.filter((d) => !selected.includes(d.path));
+  const { markdown, sections } = buildBriefing(fixture({ docs: { included: selected, leftOut } }));
+  assert.strictEqual(sections.at(-1).id, 'docs');
+  const part = notIncludedPart(markdown);
+  assert.ok(part.length > 0 && markdown.indexOf('## 11. When we agree a design') < markdown.indexOf(`## ${docs.NOT_INCLUDED_TITLE}`), 'last section');
+  for (const d of leftOut) assert.ok(part.includes(`- ${d.path} (~`), d.path);
+  assert.ok(!part.includes('- client/DESIGN.md (~'));
+  assert.match(part, /CLAUDE\.md and client\/DESIGN\.md may come as a separate paste/);
+  assert.ok(part.includes(docs.NOT_INCLUDED_END));
+  const leaked = telltales(catalog).filter((x) => part.includes(x.line));
+  assert.deepStrictEqual(leaked.map((x) => x.path), []);
+  assert.ok(!buildBriefing(fixture()).sections.some((s) => s.id === 'docs'), 'no list when no docs data is given');
+});
+
+t('the docs list does not count towards the size limit, so it never trims the tool table', () => {
+  const leftOut = Array.from({ length: 400 }, (_, i) => ({ path: `docs/doc-${i}.md`, tokens: 1000, summary: 'A sentence long enough to make this list big on its own. '.repeat(2) }));
+  const out = buildBriefing(fixture({ docs: { included: [], leftOut } }), { maxChars: 20000 });
+  assert.ok(out.stats.docsListChars > 20000, 'the list alone is over the test limit');
+  assert.strictEqual(out.stats.trimmed, false);
+  assert.match(out.markdown, /\| Tool \| Group \|/);
+});
+
 console.log(`buildBriefing tests passed (${passed})`);

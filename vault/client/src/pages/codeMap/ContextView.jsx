@@ -173,49 +173,89 @@ function Report({ sections }) {
   );
 }
 
-/** CLAUDE.md read-only, with docs to copy alongside it. */
+const tokensLabel = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
+
+/**
+ * CLAUDE.md read-only, with the docs to copy alongside it. A short default set is ticked unless the admin unticks it; the choice is
+ * saved per admin (server: briefing/docs.js) and also decides the "Docs not included" list at the end of the briefing.
+ */
 function ClaudeMd({ info }) {
   const getIcon = useIcon();
-  const [picked, setPicked] = useState(() => new Set());
+  const [picked, setPicked] = useState(() => new Set(info?.selected || []));
+  const [customised, setCustomised] = useState(!!info?.customised);
   const [showOthers, setShowOthers] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!info) return <Skeleton lines={6} label="Loading CLAUDE.md" />;
-  const toggle = (n) => setPicked((p) => { const x = new Set(p); if (x.has(n)) x.delete(n); else x.add(n); return x; });
+
+  const defaults = info.docs.filter((d) => d.isDefault);
+  const featured = info.docs.filter((d) => !d.isDefault && (d.linked || d.extra));
+  const others = info.docs.filter((d) => !d.isDefault && !d.linked && !d.extra);
+  const tickedDocs = info.docs.filter((d) => picked.has(d.path));
+  // CLAUDE.md + the ticked docs + about one short line per doc left out
+  const estimate = info.tokens + tickedDocs.reduce((n, d) => n + d.tokens, 0) + (info.docs.length - tickedDocs.length) * 35;
+
+  const save = async (next) => {
+    setPicked(next);
+    try {
+      const d = await json(await api.put('/api/code-map/briefing/docs', { paths: [...next] }), 'Could not save your choice of docs');
+      setPicked(new Set(d.selected)); setCustomised(true);
+    } catch (err) { toast(err.message); }
+  };
+  const toggle = (p) => { const x = new Set(picked); if (x.has(p)) x.delete(p); else x.add(p); save(x); };
+  const reset = async () => {
+    try {
+      const d = await json(await api.delete('/api/code-map/briefing/docs'), 'Could not reset');
+      setPicked(new Set(d.selected)); setCustomised(false); toast('Back to the default docs', 'success');
+    } catch (err) { toast(err.message); }
+  };
   const copyAll = async () => {
     setBusy(true);
     try {
-      const docs = [];
-      for (const name of [...info.linked, ...info.others].filter((n) => picked.has(n))) {
-        const d = await json(await api.get(`/api/code-map/briefing/doc?name=${encodeURIComponent(name)}`), `Could not read ${name}`);
-        docs.push(`## File: docs/${d.name}\n\n${d.text.trim()}`);
-      }
-      await copyText([`## File: CLAUDE.md\n\n${info.text.trim()}`, ...docs].join('\n\n'), docs.length ? `CLAUDE.md and ${docs.length} doc${docs.length === 1 ? '' : 's'}` : 'CLAUDE.md');
+      const d = await json(await api.post('/api/code-map/briefing/docs-copy', { paths: [...picked] }), 'Could not build the copy');
+      await copyText(d.text, `CLAUDE.md and ${d.included.length} doc${d.included.length === 1 ? '' : 's'} (about ${tokensLabel(d.tokens)} tokens)`);
     } catch (err) { toast(err.message); } finally { setBusy(false); }
   };
-  const box = (n) => (
-    <label key={n} className="inline-flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
-      <input type="checkbox" checked={picked.has(n)} onChange={() => toggle(n)} style={{ accentColor: 'var(--color-primary)' }} />{n}
+
+  const box = (d) => (
+    <label key={d.path} className="flex items-start gap-2 text-xs cursor-pointer py-0.5" style={{ color: 'var(--color-text)' }}>
+      <input type="checkbox" checked={picked.has(d.path)} onChange={() => toggle(d.path)} className="mt-0.5" style={{ accentColor: 'var(--color-primary)' }} aria-describedby={`doc-size-${d.path}`} />
+      <Tooltip text={d.summary || d.path}>
+        <span className="min-w-0">
+          <span className="font-mono">{d.path}</span>{' '}
+          <span id={`doc-size-${d.path}`} style={{ color: 'var(--color-muted)' }}>{fmt(d.chars)} chars · ~{tokensLabel(d.tokens)} tokens</span>
+          {d.note && <span className="ml-1.5 px-1.5 py-0.5 rounded-full border text-[10px]" style={{ borderColor: '#f59e0b', color: '#b45309' }}>{d.note}</span>}
+        </span>
+      </Tooltip>
     </label>
   );
+  const head = 'text-xs font-semibold uppercase tracking-wide mt-2';
+
   return (
-    <Section title="CLAUDE.md" guide="claude-md" tip="The rules Claude Code follows in this project, read-only. Tick docs to copy them with it as one block, each under its own heading.">
-      <div className="flex flex-wrap items-center gap-3">
-        <Tooltip text={picked.size ? `Copy CLAUDE.md and the ${picked.size} ticked doc${picked.size === 1 ? '' : 's'} as one block, each under "## File: ..."` : 'Copy CLAUDE.md. Tick docs below to add them to the same block.'}>
-          <button type="button" onClick={copyAll} disabled={busy} className={BTN} style={btnStyle}>{getIcon('copy', { size: 14 })}{busy ? 'Copying…' : picked.size ? `Copy with ${picked.size} doc${picked.size === 1 ? '' : 's'}` : 'Copy'}</button>
+    <Section title="CLAUDE.md" guide="claude-md" tip="The rules Claude Code follows in this project, read-only. CLAUDE.md is always in the copy; tick the docs to copy with it. The copy ends with a list of the docs left out, so Claude can ask for them.">
+      <div className="flex flex-wrap items-center gap-3" data-guide="docs-picker">
+        <Tooltip text="Copy CLAUDE.md and the ticked docs as one block (each under '## File: <path>'), ending with a list of the docs not included so Claude can ask for them.">
+          <button type="button" onClick={copyAll} disabled={busy} className={BTN} style={btnStyle}>{getIcon('copy', { size: 14 })}{busy ? 'Copying…' : `Copy CLAUDE.md + ${picked.size} doc${picked.size === 1 ? '' : 's'}`}</button>
         </Tooltip>
-        {picked.size > 0 && (
-          <Tooltip text="Untick every doc."><button type="button" onClick={() => setPicked(new Set())} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>Clear</button></Tooltip>
-        )}
+        <Tooltip text="Size of the copy: CLAUDE.md, the ticked docs and the short list of the rest. Tokens are characters divided by 4.">
+          <span tabIndex={0} className="text-xs" style={{ color: 'var(--color-muted)' }}>about {tokensLabel(estimate)} tokens</span>
+        </Tooltip>
+        <Tooltip text="Tick the default set again (client/DESIGN.md, hardening, guide chat, video tools) and forget your own choice.">
+          <button type="button" onClick={reset} disabled={!customised} className="text-xs hover:opacity-70 transition-opacity duration-200 disabled:opacity-40" style={{ color: 'var(--color-primary)' }}>Reset to defaults</button>
+        </Tooltip>
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{customised ? 'Your choice is saved.' : 'Using the default set.'} It also sets the "not included" list in the briefing.</span>
       </div>
-      <div className="space-y-2">
-        <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Docs CLAUDE.md links to:</div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">{info.linked.map(box)}</div>
+      {info.missing?.length > 0 && <p className="text-xs" style={{ color: '#b45309' }}>Not found, so not offered: {info.missing.join(', ')}</p>}
+      <div className="space-y-1">
+        <div className={head} style={{ color: 'var(--color-muted)' }}>Always included (you can untick)</div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6">{defaults.map(box)}</div>
+        <div className={head} style={{ color: 'var(--color-muted)' }}>Optional</div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6">{featured.map(box)}</div>
         <Tooltip text="Show every other doc in docs/, to add any of them too.">
-          <button type="button" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>
-            {showOthers ? 'Hide other docs' : `Other docs (${info.others.length})`}
+          <button type="button" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers} className="text-xs hover:opacity-70 transition-opacity duration-200 mt-1" style={{ color: 'var(--color-primary)' }}>
+            {showOthers ? 'Hide other docs' : `Other docs (${others.length})`}
           </button>
         </Tooltip>
-        {showOthers && <div className="flex flex-wrap gap-x-4 gap-y-1.5 max-h-48 overflow-y-auto">{info.others.map(box)}</div>}
+        {showOthers && <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 max-h-72 overflow-y-auto">{others.map(box)}</div>}
       </div>
       <div className="rounded-xl border p-4 max-h-[36rem] overflow-y-auto text-sm prose-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{info.text}</ReactMarkdown>
@@ -357,7 +397,8 @@ export default function ContextView({ hasRun, onRunAnalysis, busy }) {
 
         {built?.sections && <Report sections={built.sections} />}
 
-        <ClaudeMd info={claude} />
+        {claude && <ClaudeMd key={claude.selected.join("|")} info={claude} />}
+        {!claude && <Skeleton lines={6} label="Loading CLAUDE.md" />}
       </div>
     </VoiceInputProvider>
   );

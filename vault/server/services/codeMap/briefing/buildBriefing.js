@@ -8,6 +8,9 @@
 // groups, sizes, scores, finding titles, changelog dates/areas/subjects/concerns, configured YES/NO, package names, Ponytail totals and the
 // owner's own notes. Test: node server/services/codeMap/briefing/buildBriefing.test.js
 
+// Only docs.js's formatting is used here; it reads files only when its catalog functions are called, so this module stays pure.
+const { notIncludedSection, NOT_INCLUDED_TITLE } = require('./docs');
+
 const MAX_CHARS = 60000;
 const TRIMMED_CHANGELOG_DAYS = 14;
 const MAX_CONCERN_CHARS = 300;
@@ -150,17 +153,34 @@ function buildBriefing(s, { maxChars = MAX_CHARS } = {}) {
     add('handoff', '11. When we agree a design',
       'Write it as a brief for Claude Code with these sections: Decisions already made (table), Data model (SQL), API (routes, auth, limits), UI (page, views, Vault UI rules), Conventions checklist, Milestones (one Claude Code session each), Tests. Follow the rules in section 3.');
 
+    // Last: the docs the owner left unticked, as a list (path, size, one sentence; never contents), so Claude can ask for them.
+    if (s.docs) {
+      const included = (s.docs.included || []).map((p) => clean(p, 120));
+      const leftOut = (s.docs.leftOut || []).map((d) => ({ path: clean(d.path, 120), tokens: Number(d.tokens) || 0, summary: clean(d.summary, 160), note: d.note ? clean(d.note, 80) : null }));
+      const lead = `This briefing holds no doc contents. CLAUDE.md${included.length ? ` and ${included.join(', ')}` : ''} may come as a separate paste.`;
+      const body = notIncludedSection(leftOut, { lead }).replace(/^## [^\n]*\n\n/, '');
+      add('docs', NOT_INCLUDED_TITLE, body, { included, leftOut });
+    }
+
     const markdown = `<vault_briefing>\n# Vault briefing (${date})\n\n${sec.map((x) => `## ${x.title}\n\n${x.body}`).join('\n\n')}\n</vault_briefing>\n`;
-    return { markdown, sections: sec };
+    // The "Docs not included" list is outside the size limit: it is a short line per doc (about 3,000 tokens for ~90 docs), and letting it
+    // count would trim the tool table, the part Claude needs most.
+    const docsSec = sec.find((x) => x.id === 'docs');
+    const docsChars = docsSec ? `## ${docsSec.title}\n\n${docsSec.body}\n\n`.length : 0;
+    return { markdown, sections: sec, docsChars };
   };
 
   let out = build(false);
   let trimmed = false;
-  if (out.markdown.length > maxChars) { out = build(true); trimmed = true; }
+  if (out.markdown.length - out.docsChars > maxChars) { out = build(true); trimmed = true; }
+  const counted = out.markdown.length - out.docsChars;
   return {
     markdown: out.markdown,
     sections: out.sections,
-    stats: { chars: out.markdown.length, tokens: Math.ceil(out.markdown.length / 4), trimmed, overLimit: out.markdown.length > maxChars, date, commit },
+    stats: {
+      chars: out.markdown.length, tokens: Math.ceil(out.markdown.length / 4), trimmed, overLimit: counted > maxChars,
+      docsListChars: out.docsChars, date, commit,
+    },
   };
 }
 

@@ -71,4 +71,5 @@ export const GUIDE_TOOLS = [
   { id: 'build-briefing', label: 'Build briefing', tool: 'context' },
   { id: 'owner-notes', label: 'Your notes for Claude', tool: 'context' },
   { id: 'claude-md', label: 'CLAUDE.md', tool: 'context' },
+  { id: 'docs-picker', label: 'Docs to include', tool: 'context' },
 ];

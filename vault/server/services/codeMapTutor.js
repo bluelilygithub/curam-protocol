@@ -63,8 +63,11 @@ const CATALOG = [
     does: 'On the Context tab: a box for your priorities, plans, things you have decided against and what you are unsure about. Save notes keeps them for your account; they go into the next briefing you build.',
     notes: 'Only what you type here goes in; nothing is added from your other tools.' },
   { id: 'claude-md', label: 'CLAUDE.md', group: G,
-    does: 'At the bottom of the Context tab: CLAUDE.md (the rules Claude Code follows in this project) shown read-only, with Copy. Tick docs it links to, such as core-conventions.md or deploy-speed.md, or any other doc, and Copy puts them all in one block, each under its own heading.',
+    does: 'At the bottom of the Context tab: CLAUDE.md (the rules Claude Code follows in this project) shown read-only. It is always in the copy. The copy button puts CLAUDE.md and the ticked docs in one block, each under its own heading, and ends with a list of the docs left out (path, size and one sentence each) so Claude can ask for them.',
     notes: 'A warning shows when CLAUDE.md has changed since the rules summary was written; the summary file then needs refreshing (see docs/code-map.md).' },
+  { id: 'docs-picker', label: 'Docs to include', group: G,
+    does: 'Above CLAUDE.md on the Context tab: the docs to copy with it. "Always included (you can untick)" holds the default set: client/DESIGN.md, docs/hardening.md, docs/guide-chat.md and docs/video-tools.md. "Optional" holds the docs CLAUDE.md links to and a few outside docs/ (ROADMAP.md, BACKUP.md, the planner READMEs), and Other docs opens the rest. Each shows its size in characters and about how many tokens. Your ticks are saved for your account; Reset to defaults goes back to the default set. The copy size is shown next to the copy button.',
+    notes: 'The same choice sets the "Docs not included in this copy" list at the end of the briefing. docs/video-tools.md is large (about 20,000 tokens), so untick it when the work is not about video. docs/finance.md holds real business figures.' },
 ];
 
 const RULES = [

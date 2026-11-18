@@ -11,6 +11,13 @@ const path = require('path');
 const HERE = __dirname;
 const VAULT_ROOT = path.join(__dirname, '../../../..');
 const RULE_SOURCES = ['CLAUDE.md', 'docs/core-conventions.md'];
+
+// The docs ticked by default in Context → CLAUDE.md (the owner can untick them; the choice is saved per admin). CLAUDE.md itself is always
+// in the copy and is not on this list. A test fails if any of these paths stops existing.
+const DEFAULT_BRIEFING_DOCS = ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md', 'docs/video-tools.md'];
+
+// Docs outside docs/ that may be offered: exact paths only, no wildcards (docs.js also checks each path stays inside the repo).
+const EXTRA_BRIEFING_DOCS = ['client/DESIGN.md', 'ROADMAP.md', 'BACKUP.md', 'planner-core/README.md', 'room-planner/README.md'];
 const HEADER_RX = /^<!--\s*sources:(.*?)-->\s*\r?\n?/;
 
 /** SHA-256 of a text file with its line endings made \n first: git turns them into \r\n on Windows checkouts and \n on Railway. */
@@ -50,4 +57,4 @@ function curated() {
   return { about: readCurated('about.md').trim(), rules: rulesWithHeader().body.trim(), buildingBlocks: readCurated('building-blocks.md').trim() };
 }
 
-module.exports = { VAULT_ROOT, RULE_SOURCES, textHash, curated, rulesWithHeader, staleRuleSources, currentRulesHeader, buildingBlockPaths };
+module.exports = { VAULT_ROOT, RULE_SOURCES, DEFAULT_BRIEFING_DOCS, EXTRA_BRIEFING_DOCS, textHash, curated, rulesWithHeader, staleRuleSources, currentRulesHeader, buildingBlockPaths };
