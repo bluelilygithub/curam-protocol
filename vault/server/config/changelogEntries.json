@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "53b4afc4",
+   "fullHash": "53b4afc494cdba13005371e823ad41f9bdb945eb",
+   "committedAt": "2026-11-18T10:27:59+10:00",
+   "author": "mrb",
+   "subject": "PDF Tools: \"Put a PDF page on a website\" job card and User Guide entry for PDF -> HTML",
+   "filesChanged": 2,
+   "insertions": 11,
+   "deletions": 0,
+   "area": "PDF Tools",
+   "goal": "Make the new PDF → HTML tool visible on the PDF Tools \"What do you want to do?\" screen, not only in the sidebar, and describe it in the User Guide.",
+   "whatChanged": "New job card \"Put a PDF page on a website\" (globe icon) with two steps: Rotate Pages (only if a page is sideways) then PDF → HTML. User Guide PDF Tools section gained a PDF → HTML line.",
+   "filesImpacted": [
+    "client/src/pages/pdf/pdfGoals.mjs",
+    "client/src/pages/UserGuidePage.jsx"
+   ],
+   "benefit": "The tool can be found from the PDF Tools start screen in plain words.",
+   "concerns": "The job card, its step 2 opening PDF → HTML and the /pdf?tool=pdftohtml link were checked locally in a browser; the conversion itself has still not been run against a real AI model (see the PDF → HTML entry)."
+  },
+  {
    "commit": "c6183f97",
    "fullHash": "c6183f97f12c3ac77d8b664fce093871ec3d0f33",
    "committedAt": "2026-11-18T10:25:22+10:00",
