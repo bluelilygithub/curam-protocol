@@ -374,6 +374,7 @@ async function start() {
   startBurnerMailPurge(); // removes burner addresses a day after they expire; sends nothing, so it runs everywhere
   startTopicResearchPurge(); // clears Topic Research page text kept over 30 days; sends nothing, so it runs everywhere
   startSerpTrackerPurge(); // empties SERP Tracker raw answers kept over 90 days; sends nothing, so it runs everywhere
+  require('./cron/codeMapCron').startCodeMapCron(); // Code Map analysis Sunday 03:17 Brisbane as the first admin; reads Vault's own files only, so it runs everywhere
   require('./cron/liveTvGuideCron').startLiveTvGuideCron(); // Live TV guide every 6 hours from free public files; sends nothing, so it runs everywhere
   // Memory log: a line every 5 minutes and extra detail on any jump of 300 MB (container total, what Railway bills, plus the biggest processes). See server/lib/memoryLog.js.
   require('./lib/memoryLog').startMemoryLog({ extra: () => ({ ocr: require('./services/translateOcrPool').status() }) });

@@ -6,6 +6,7 @@
 
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
+const { compareRuns } = require('../services/codeMap/compare');
 
 function createCodeMapRouter({ jobs } = {}) {
   const router = express.Router();
@@ -37,9 +38,21 @@ function createCodeMapRouter({ jobs } = {}) {
     } catch (err) { fail(res, err, 'latest'); }
   });
 
-  // drift between two runs: milestone 4
-  router.get('/compare', (req, res) => {
-    res.status(501).json({ error: 'Comparing runs is not built yet.' });
+  // drift between two finished runs: ?from=<older id>&to=<newer id> (server/services/codeMap/compare.js)
+  router.get('/compare', async (req, res) => {
+    const { from, to } = req.query;
+    if (!/^\d{1,9}$/.test(String(from || '')) || !/^\d{1,9}$/.test(String(to || ''))) {
+      return res.status(400).json({ error: 'Pick two runs to compare (from and to must be run ids).' });
+    }
+    try {
+      const [a, b] = await Promise.all([J().get(Number(from)), J().get(Number(to))]);
+      if (!a || !b) return res.status(404).json({ error: 'One of those runs is no longer here (the last 30 are kept).' });
+      if (a.status !== 'done' || b.status !== 'done' || !a.result || !b.result) {
+        return res.status(400).json({ error: 'Only finished runs can be compared.' });
+      }
+      const meta = (r) => ({ id: r.id, createdAt: r.createdAt, finishedAt: r.finishedAt, commitHint: r.commitHint, durationMs: r.durationMs });
+      res.json({ from: meta(a), to: meta(b), ...compareRuns(a.result, b.result) });
+    } catch (err) { fail(res, err, 'compare'); }
   });
 
   router.get('/runs/:id', async (req, res) => {

@@ -15,12 +15,12 @@ const sample = require('./__fixtures__/sample-data.json');
 
 const ROOT = path.resolve(__dirname, '../../..');
 // The Code Map's own code did not exist at 40bf883, so it is left out to compare like with like: its service folder, its route file
-// and test, its page, views and tour, and its single lines in shared files (blanked, so later line numbers stay the same): the mount in
-// server/index.js, the menu entry, the App.jsx import and route, and the icon name.
+// and test, its weekly cron, its page, views and tour, and its single lines in shared files (blanked, so later line numbers stay the same):
+// the mount and cron start in server/index.js, the menu entry, the App.jsx import and route, and the icon name.
 const OWN = 'server/services/codeMap/';
-const OWN_PREFIXES = [OWN, 'server/routes/codeMap', 'client/src/pages/CodeMapPage', 'client/src/pages/codeMap/', 'client/src/utils/tours/codeMapTour'];
+const OWN_PREFIXES = [OWN, 'server/routes/codeMap', 'server/cron/codeMapCron', 'client/src/pages/CodeMapPage', 'client/src/pages/codeMap/', 'client/src/utils/tours/codeMapTour'];
 const OWN_LINES = {
-  'server/index.js': (l) => l.includes("app.use('/api/code-map'"),
+  'server/index.js': (l) => l.includes("app.use('/api/code-map'") || l.includes("require('./cron/codeMapCron')"),
   'client/src/config/appNavigation.js': (l) => l.includes("id: 'codeMap'"),
   'client/src/App.jsx': (l) => l.includes('CodeMapPage'),
   'client/src/providers/iconMap.js': (l) => l.includes("'code-map':"),

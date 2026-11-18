@@ -8,7 +8,9 @@ The build brief, the Python prototype it was ported from and the prompts for eac
 
 - `server/services/codeMap/`: the analyzer. One module per stage: `files`, `imports`, `tools`, `mounts`, `ownership`, `rules`, `structure`, `findings`; `index.js` exports `analyze({ root })`. `run.js` runs it from the command line: `node server/services/codeMap/run.js [out.json]`.
 - `server/services/codeMap/jobs.js` + `worker.js`: runs are background jobs. The analysis (about 2 seconds of solid work) runs in a worker thread so other requests are not held up.
-- `server/routes/codeMap.js`: `/api/code-map`, mounted with `requireAdmin` and no `aiLimiter` (no model calls). `POST /runs` starts a run, `GET /runs` lists them, `GET /runs/latest` is the newest finished one, `GET /runs/:id` is polled while a run is going. `GET /compare` answers 501 until milestone 4.
+- `server/routes/codeMap.js`: `/api/code-map`, mounted with `requireAdmin` and no `aiLimiter` (no model calls). `POST /runs` starts a run, `GET /runs` lists them, `GET /runs/latest` is the newest finished one, `GET /runs/:id` is polled while a run is going. `GET /compare?from=<id>&to=<id>` compares two finished runs (400 for bad ids or unfinished runs, 404 when one is gone).
+- `server/services/codeMap/compare.js`: the drift between two run results (pure). See "Changes between runs" below.
+- `server/cron/codeMapCron.js`: the weekly run, Sunday 03:17 Australia/Brisbane.
 - Table `code_map_runs` (`server/db.js`): one row per run, the whole result as JSONB (about 115 KB). The last 30 are kept.
 - `client/src/pages/CodeMapPage.jsx` and `client/src/pages/codeMap/`: the page. Tour: `client/src/utils/tours/codeMapTour.js`.
 
@@ -19,6 +21,8 @@ node server/services/codeMap/codeMap.test.js
 node server/services/codeMap/codeMap.accuracy.test.js
 node server/services/codeMap/jobs.test.js
 node server/routes/codeMap.test.js
+node server/services/codeMap/compare.test.js
+node server/cron/codeMapCron.test.js
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
@@ -44,6 +48,25 @@ Each cell is one rule for one tool:
 A tool's score is the share of the rules that apply to it that it follows, rounded half to even. Open a cell (Conventions tab) or a tool (any tool name) to see the note and the evidence: file and line, with the matching text.
 
 Findings on the Overview are generated from the rules: one finding per rule that has failing or amber tools, plus three structural ones (a cron job that requires a route file, an import cycle across tools, leftover backups and possibly unused files). They are sorted by severity, then by how many tools they touch. Each high finding is also raised in the Suggestions inbox, once per rule and tool (fingerprint `codeMap:<ruleId>:<toolId>`), so a repeat run refreshes the item instead of adding another.
+
+## Changes between runs
+
+The **Changes** tab compares two finished runs, by default the latest and the one before. Git history is not in the deploy, so drift comes from comparing stored runs.
+
+A finding is split into items, so a change shows even when the finding as a whole is still there:
+
+- a rule finding gives one item per tool (matched by rule id and tool id);
+- an import cycle across tools is matched by its set of files, in any order;
+- a cron requiring a route file is matched by the cron file and the path it requires, not the line, so moving the line is not a change;
+- housekeeping gives one item per backup or possibly unused file (from the full lists, not the capped evidence).
+
+It shows new items (in the newer run only, high first), resolved items, items that moved from amber to red ("got worse") or back, each tool's score movement (biggest drop first), tools added or removed, and import cycles gained or lost (all cycles, not only cross-tool ones). The summary numbers (tools, lines, tests, gaps, findings, cycles) are shown as differences.
+
+Renaming a tool's id or a rule's id makes its items look resolved and new at once. A change to a rule (a new rule, a tighter regex) shows up as drift too, so note rule changes in the changelog.
+
+## Weekly run
+
+`server/cron/codeMapCron.js` runs the analysis every Sunday at 03:17 Brisbane as the first admin, through the same job as the button, inside `withCronLock('codeMap', ...)` held until the run ends. It skips the week if a run is already going. New high findings reach the inbox through the job, as for a manual run; findings already in the inbox are refreshed, not raised again. It reads only Vault's own files and calls nothing outside, so it runs on every server (it is not behind `DISABLE_EXTERNAL_CRON`). Each weekly run counts towards the 30 kept, so about seven months of weekly history are kept if nobody runs it by hand.
 
 ## The 14 rules
 

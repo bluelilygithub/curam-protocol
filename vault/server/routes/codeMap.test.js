@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * /api/code-map routes with a fake job service: start (202, 409 passed through), list, latest before /:id, compare is 501 for now,
+ * /api/code-map routes with a fake job service: start (202, 409 passed through), list, latest before /:id, compare,
  * bad and unknown ids. Who may call them (admin only) is checked by crossUser.test.js against server/testing/routeManifest.json.
  * Run: node server/routes/codeMap.test.js
  */
@@ -22,7 +22,17 @@ function fakeJobs() {
     async start(userId) { calls.push(['start', userId]); if (this.busy) throw Object.assign(new Error('A Code Map analysis is already running.'), { status: 409, runningId: 4 }); return 12; },
     async list() { calls.push(['list']); return [{ id: 12, status: 'done' }]; },
     async latest() { calls.push(['latest']); return this.none ? null : { id: 12, status: 'done', result: { findings: [] } }; },
-    async get(id) { calls.push(['get', id]); if (id === 500) throw new Error('db down'); return id === 12 ? { id: 12, status: 'running', stage: 'rules' } : null; },
+    async get(id) {
+      calls.push(['get', id]);
+      if (id === 500) throw new Error('db down');
+      if (id === 12) return { id: 12, status: 'running', stage: 'rules' };
+      const notes = (score) => ({ id: 'notes', label: 'Notes', score, checks: {} });
+      if (id === 20) return { id: 20, status: 'done', result: { tools: [notes(90)], findings: [] } };
+      if (id === 21) {
+        return { id: 21, status: 'done', result: { tools: [notes(80)], findings: [{ kind: 'rule', ruleId: 'docs', sev: 'low', tools: ['notes'], toolNotes: [{ tool: 'notes', status: 'fail', note: 'No docs file found.' }], evidence: [] }] } };
+      }
+      return null;
+    },
   };
 }
 
@@ -93,9 +103,20 @@ async function serve(jobs) {
       assert.doesNotMatch(r.body.error, /db down/);
     });
 
-    await t('GET /compare is not built yet (501)', async () => {
-      const r = await s.call('GET', '/api/code-map/compare?from=1&to=2');
-      assert.strictEqual(r.status, 501);
+    await t('GET /compare compares two finished runs', async () => {
+      const r = await s.call('GET', '/api/code-map/compare?from=20&to=21');
+      assert.strictEqual(r.status, 200);
+      assert.deepStrictEqual([r.body.from.id, r.body.to.id], [20, 21]);
+      assert.deepStrictEqual(r.body.scores, [{ id: 'notes', label: 'Notes', from: 90, to: 80, delta: -10 }]);
+      assert.deepStrictEqual(r.body.newFindings.map((n) => n.key), ['rule:docs:notes']);
+      assert.ok(!('result' in r.body.from), 'the full results are not sent back');
+    });
+
+    await t('GET /compare refuses bad ids, missing runs and unfinished runs', async () => {
+      assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=20')).status, 400);
+      assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=x&to=21')).status, 400);
+      assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=20&to=99')).status, 404);
+      assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=12&to=21')).status, 400); // 12 is still running
     });
   } finally {
     await s.close();

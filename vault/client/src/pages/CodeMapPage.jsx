@@ -13,6 +13,7 @@ import Overview from './codeMap/Overview';
 import ToolsView from './codeMap/ToolsView';
 import ConventionsView from './codeMap/ConventionsView';
 import StructureView from './codeMap/StructureView';
+import ChangesView from './codeMap/ChangesView';
 import ToolDetail from './codeMap/ToolDetail';
 import { fmtSecs, fmtWhen } from './codeMap/shared';
 
@@ -28,6 +29,7 @@ const VIEWS = [
   { id: 'conventions', label: 'Conventions', tip: 'Every tool against every rule, with the evidence for each cell.' },
   { id: 'map', label: 'Dependency map', tip: 'Which tools call each other\'s APIs or share code files.' },
   { id: 'structure', label: 'Structure', tip: 'Largest files, import cycles, shared foundations, separate packages and possibly unused files.' },
+  { id: 'changes', label: 'Changes', tip: 'What moved between two runs: new and resolved findings, and each tool\'s score.' },
 ];
 const POLL_MS = 1500;
 const toast = (message, type = 'error') => useToastStore.getState().addToast(message, type);
@@ -40,6 +42,7 @@ export default function CodeMapPage() {
   const [params, setParams] = useSearchParams();
   const view = VIEWS.some((v) => v.id === params.get('view')) ? params.get('view') : 'overview';
   const [run, setRun] = useState(null); // the latest finished run, with its result
+  const [runs, setRuns] = useState([]); // recent runs without results, newest first (for Changes)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [active, setActive] = useState(null); // the run in progress: { id, status, stage, stageLabel, stageStep, stageCount }
@@ -58,6 +61,7 @@ export default function CodeMapPage() {
       const list = await rr.json().catch(() => ({}));
       if (!lr.ok) throw new Error(latest.error || 'The Code Map could not be loaded.');
       setRun(latest.run || null);
+      setRuns(list.runs || []);
       const going = (list.runs || []).find(isActive);
       if (going) setActive(going);
       setError(null);
@@ -84,6 +88,8 @@ export default function CodeMapPage() {
         const x = d.run;
         if (isActive(x)) { setActive(x); timer = setTimeout(tick, POLL_MS); return; }
         setActive(null);
+        // refresh the run list for Changes; not tied to `stop`, since clearing `active` below ends this effect before the list arrives
+        api.get('/api/code-map/runs').then((lr) => (lr.ok ? lr.json() : null)).then((l) => { if (l) setRuns(l.runs || []); }).catch(() => {});
         if (x.status === 'done') {
           setRun(x);
           toast(`Analysis finished in ${fmtSecs(x.durationMs)}.`, 'success');
@@ -198,7 +204,7 @@ export default function CodeMapPage() {
         <ToolInfoModal title="How Code Map Works" onClose={info.close}>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>Code Map reads Vault's own source on the server (no git, no network, no AI) and works out which code belongs to which tool, then checks each tool against the rules in CLAUDE.md.</p>
           <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <p style={{ color: 'var(--color-text)' }}><strong>Run analysis</strong> reads the code as deployed now. It takes a few seconds and the last 30 runs are kept. High findings are also sent to your Suggestions inbox, once per tool, so a repeat run does not add them again.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>Run analysis</strong> reads the code as deployed now. It takes a few seconds and the last 30 runs are kept. High findings are also sent to your Suggestions inbox, once per tool, so a repeat run does not add them again. A run also happens by itself every Sunday at 3:17 am (Brisbane), and <strong>Changes</strong> compares any two runs.</p>
             <p style={{ color: 'var(--color-text)' }}><strong>Green</strong> follows the rule, <strong>amber</strong> is worth a look, <strong>red</strong> is a gap, <strong>grey</strong> means the rule does not apply. A tool's score is the share of the rules that apply to it that it follows.</p>
             <p style={{ color: 'var(--color-text)' }}>The checks match patterns in the code, so they can be wrong both ways. Read the evidence (file and line) before changing anything. Known false positives are listed in docs/code-map.md.</p>
             <p style={{ color: 'var(--color-text)' }}>A file reached by three or more tools counts as shared and belongs to none of them; the rest belongs to the tools that reach it.</p>
@@ -254,6 +260,7 @@ export default function CodeMapPage() {
               </Suspense>
             )}
             {view === 'structure' && <StructureView data={data} />}
+            {view === 'changes' && <ChangesView runs={runs} byId={byId} onOpenTool={setDetailId} />}
           </>
         )}
       </div>
