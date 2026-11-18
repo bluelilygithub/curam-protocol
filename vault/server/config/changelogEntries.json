@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7a336a88",
+   "fullHash": "7a336a882c9436ab2ee82381a49dbc47b879be58",
+   "committedAt": "2026-11-18T13:36:38+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: alert when a web page is ready (toast anywhere in Vault + Needs attention)",
+   "filesChanged": 12,
+   "insertions": 135,
+   "deletions": 10,
+   "area": "PDF Tools",
+   "goal": "The owner asked to be alerted when a background PDF → HTML page is ready, since they now leave the page while it works.",
+   "whatChanged": "New column pdf_html_jobs.\"seenAt\": NULL from when a run starts until the finished page is opened in the tool (existing rows count as seen). New GET /api/pdf/to-html/jobs/alerts (running count + unopened finished runs). New client/src/components/PdfHtmlWatcher.jsx, mounted once in Layout beside Toast: checks once when Vault opens and every 15 s while a job started in this browser may be running (flag in client/src/pages/pdf/pdfHtmlWatch.js), then shows one toast per finished run (\"... is ready as a web page. Open\", or \"did not finish\" with See why); quiet while the tool is on screen. The dashboard Needs attention list gains \"N web page(s) ready in PDF → HTML\" until opened (routes/attention.js, services/attention.js + test). The tool reopens an unopened finished page first. Route manifest and docs updated.",
+   "filesImpacted": [
+    "client/src/components/PdfHtmlWatcher.jsx",
+    "client/src/pages/pdf/pdfHtmlWatch.js",
+    "client/src/components/Layout.jsx",
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "server/services/pdfToHtmlJobs.js",
+    "server/routes/pdf.js",
+    "server/routes/attention.js",
+    "server/services/attention.js",
+    "server/services/attention.test.js",
+    "server/db.js",
+    "server/testing/routeManifest.json",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "The owner hears when the web page is ready wherever they are in Vault, and the dashboard reminds them until they look at it.",
+   "concerns": "The toast relies on a flag in the browser that started the job; a job started on another device is announced when Vault next opens there (the one check on load) or via Needs attention, not live. Vault must be open in a tab for the toast; there is no email or desktop notification. Checked locally in a browser with a stand-in model: toast on the dashboard about 15 s after finishing, Needs attention item, clicking it opens the page, item and toast gone after opening."
+  },
+  {
    "commit": "018a0d23",
    "fullHash": "018a0d23ac8ec04b4a30faeb43edd0cddca71362",
    "committedAt": "2026-11-18T13:30:34+10:00",
