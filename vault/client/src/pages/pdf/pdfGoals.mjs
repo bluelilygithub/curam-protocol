@@ -115,6 +115,16 @@ export const PDF_GOALS = [
     ],
   },
   {
+    id: 'web-page',
+    title: 'Put a PDF page on a website',
+    blurb: 'Turn a page into a phone-friendly web page with its pictures, ready to upload.',
+    icon: 'globe',
+    steps: [
+      { tool: 'rotate', note: 'Only if a page is sideways: turn it upright first. Otherwise skip.' },
+      { tool: 'pdftohtml', note: 'Pick the pages, check it at phone width, ask for changes, download the zip.' },
+    ],
+  },
+  {
     id: 'pictures',
     title: 'Get the pictures out',
     blurb: 'Save pages as pictures, or pull out the photos inside.',

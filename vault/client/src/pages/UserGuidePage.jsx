@@ -1360,6 +1360,7 @@ function UserGuidePage() {
           <LI><strong>Office ↔ PDF</strong> — DOCX/XLSX/PPTX/ODT/RTF/CSV/TXT to PDF and back, via LibreOffice.</LI>
           <LI><strong>Google Drive ↔ PDF</strong> — export a Google Doc/Sheet/Slide as PDF, or convert an Office file already in Drive, using your connected Drive account.</LI>
           <LI><strong>Image ↔ PDF</strong> — JPEG/PNG images into one PDF, or the reverse.</LI>
+          <LI><strong>PDF → HTML</strong> — turn one to five pages into a responsive web page. The AI model from Settings writes the HTML and the pictures inside the PDF are saved as image files it uses. Preview at phone, tablet and desktop width, ask for changes in plain words (Undo goes back), edit the code by hand, then download a zip with <code>index.html</code> and an <code>images</code> folder. Charts drawn with lines become a labelled placeholder. Nothing is kept, so download before you leave.</LI>
         </UL>
 
         <SubHeading>Fill, sign &amp; design forms</SubHeading>
