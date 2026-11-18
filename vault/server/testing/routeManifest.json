@@ -1,6 +1,18 @@
 {
  "_note": "Every route the app serves and who may call it: public (no sign-in, by design), admin, or authed (any signed-in user; ids are checked per owner). Add new routes with --update, then review.",
  "routes": {
+  "GET /api/pdf/to-html/model-config": {
+   "class": "authed"
+  },
+  "POST /api/pdf/to-html": {
+   "class": "authed"
+  },
+  "POST /api/pdf/to-html/model-config": {
+   "class": "authed"
+  },
+  "POST /api/pdf/to-html/revise": {
+   "class": "authed"
+  },
   "PUT /api/admin/accountants/:id": {
    "class": "admin"
   },

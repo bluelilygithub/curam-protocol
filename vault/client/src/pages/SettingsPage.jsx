@@ -39,6 +39,7 @@ import { TOUR_KEY as PASSWORD_VAULT_TOUR_KEY } from '../utils/tours/passwordVaul
 import { TOUR_KEY as TOPIC_RESEARCH_TOUR_KEY } from '../utils/tours/topicResearchTour';
 import TopicResearchModelCard from './topicResearch/TopicResearchModelCard';
 import EmailFollowUpModelCard from './emailFollowUp/EmailFollowUpModelCard';
+import PdfHtmlModelCard from './pdf/PdfHtmlModelCard';
 import { TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import { TOUR_KEY as MEMORY_TOUR_KEY } from '../utils/tours/memoryTour';
 import { TOUR_KEY as SHARES_TOUR_KEY } from '../utils/tours/sharesTour';
@@ -3280,6 +3281,8 @@ function SettingsPage() {
       {tab === 'Email Follow-Up' && (
         <EmailFollowUpModelCard choices={textModelChoices} defaultModel={defaultModel} />
       )}
+
+      {tab === 'PDF Tools' && <PdfHtmlModelCard />}
 
       {/* Mobile tab */}
       {tab === 'Mobile' && (

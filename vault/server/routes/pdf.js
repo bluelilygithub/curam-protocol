@@ -19,6 +19,7 @@ const { generateTextPdf } = require('../services/textToPdf');
 const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 const pdfTools = require('../services/pdfTools');
 const pdfToHtml = require('../services/pdfToHtml');
+const pdfToHtmlModel = require('../services/pdfToHtmlModel');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -1473,6 +1474,18 @@ router.post('/ocr-layer', async (req, res) => {
 
 // PDF → HTML (services/pdfToHtml.js): chosen pages → one responsive HTML file plus the pictures inside. Standard-tier model with
 // vision, logged as `pdf_html` / `pdf_html_revise`. Nothing stored: the browser keeps the HTML and pictures and builds the zip.
+// GET/POST /to-html/model-config { modelId }: which connected model (one that can see pictures) writes the page; '' = automatic.
+router.get('/to-html/model-config', async (req, res) => {
+  try { res.json(await pdfToHtmlModel.getPdfHtmlModelConfig(req.user.id)); } catch (err) { sendToolError(res, 'to-html/model-config', err, 'Could not load the model setting'); }
+});
+router.post('/to-html/model-config', async (req, res) => {
+  try {
+    const id = req.body?.modelId;
+    if (id !== undefined && id !== null && typeof id !== 'string') return res.status(400).json({ error: 'The model must be text.' });
+    res.json(await pdfToHtmlModel.savePdfHtmlModel(req.user.id, id));
+  } catch (err) { sendToolError(res, 'to-html/model-config', err, 'Could not save the model setting'); }
+});
+
 router.post('/to-html', aiLimiter, async (req, res) => {
   try {
     const buf = pdfBufFromDataUrl(req.body?.dataUrl);

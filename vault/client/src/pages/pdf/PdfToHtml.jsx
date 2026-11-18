@@ -2,7 +2,7 @@
 // and downloaded as a zip (index.html + images/). The browser renders each page and reads its text (pdfjs); the server pulls
 // the pictures out and has the standard-tier model write the HTML (POST /api/pdf/to-html, /to-html/revise). Nothing is stored
 // on the server: the HTML, the pictures and the undo list live in this component until the page is left.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
@@ -74,6 +74,13 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
   const [view, setView] = useState('desktop');
   const [tab, setTab] = useState('preview');
   const [note, setNote] = useState('');
+  const [modelCfg, setModelCfg] = useState(null); // which model will write the page (services/pdfToHtmlModel.js)
+
+  useEffect(() => {
+    let live = true;
+    api.get('/api/pdf/to-html/model-config').then((r) => r.json()).then((d) => { if (live && d && !d.error) setModelCfg(d); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   const reset = () => { setResult(null); setHtml(''); setHistory([]); setAsk(''); setNote(''); setError(''); setTab('preview'); };
 
@@ -177,9 +184,18 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
             </Tooltip>
           </div>
           <p className="text-xs mt-2" style={muted}>
-            The AI model chosen in Settings looks at each page and writes the web page. Pictures stored inside the PDF are saved as
+            An AI model looks at each page and writes the web page. Pictures stored inside the PDF are saved as
             files; charts drawn with lines are not pictures, so they become a labelled placeholder.
           </p>
+          {modelCfg && (
+            <Tooltip text="It needs a model that can look at pictures (Claude or Gemini). An admin can choose it in Settings → PDF Tools.">
+              <p className="text-xs mt-1" style={modelCfg.effectiveModel ? muted : { color: '#b45309' }}>
+                {modelCfg.effectiveModel
+                  ? <>Model: <strong>{modelCfg.effectiveModel}</strong>{modelCfg.modelId && modelCfg.assignmentValid !== false ? ' (chosen in Settings)' : (!modelCfg.standardCanSee && modelCfg.standard ? ` (automatic: the default, ${modelCfg.standard}, cannot see pictures)` : ' (automatic)')}</>
+                  : 'None of the connected AI models can look at pictures. Add a Claude or Gemini model in Settings → AI & Chat.'}
+              </p>
+            </Tooltip>
+          )}
           <ErrMsg msg={error} />
           <RunBtn onClick={convert} busy={busy} disabled={!file} label={html ? 'Start again from the PDF' : 'Make web page'} getIcon={getIcon} />
 
@@ -191,6 +207,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
                     ? `${result.images.length} picture${result.images.length !== 1 ? 's' : ''} saved, ${used.size} used on the page`
                     : 'No pictures inside these pages'}
                   {result.skipped ? ` · ${result.skipped} could not be saved` : ''}.
+                  {result.model ? <span style={muted}> Written by {result.model}.</span> : null}
                 </p>
                 {result.images.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">

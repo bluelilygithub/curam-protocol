@@ -158,10 +158,11 @@ function usedImageNames(html, images) {
 }
 
 async function callForHtml(userId, prompt, visionImages, feature, deps) {
-  const resolve = deps.getModels || require('./modelResolver').getModelsForUser;
+  // Settings → PDF Tools, or automatically a connected model that can look at pictures (services/pdfToHtmlModel.js).
+  const resolve = deps.resolveModel || require('./pdfToHtmlModel').resolvePdfHtmlModel;
   const call = deps.callModel || require('./callModel').callModel;
-  const { standard } = await resolve(userId);
-  if (!standard) throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
+  const { modelId: standard } = await resolve(userId);
+  if (!standard) throw Object.assign(new Error('None of the AI models connected in Settings → AI & Chat can look at pictures (DeepSeek and local models cannot). Add a Claude or Gemini model there, then try again.'), { status: 400 });
   let result;
   try {
     result = await call(standard, prompt, { system: SYSTEM, maxTokens: MAX_TOKENS, returnUsage: true, timeoutMs: TIMEOUT_MS, images: visionImages });

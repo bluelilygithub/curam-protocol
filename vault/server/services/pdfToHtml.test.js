@@ -14,7 +14,7 @@ const PAGE = `<!DOCTYPE html><html><head><meta name="viewport" content="width=de
 
 function stubDeps(reply, seen = {}) {
   return {
-    getModels: async () => ({ standard: 'claude-test', light: 'claude-light' }),
+    resolveModel: async () => ({ modelId: 'claude-test', auto: true, why: 'default' }),
     callModel: async (model, prompt, opts) => {
       Object.assign(seen, { model, prompt, opts });
       return { text: typeof reply === 'function' ? reply(prompt) : reply, inputTokens: 10, outputTokens: 20, model, diagnostics: { stopReason: 'end_turn' } };
