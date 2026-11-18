@@ -120,8 +120,8 @@ export const PDF_GOALS = [
     blurb: 'Turn a page into a phone-friendly web page with its pictures, ready to upload.',
     icon: 'globe',
     steps: [
-      { tool: 'rotate', note: 'Only if a page is sideways: turn it upright first. Otherwise skip.' },
       { tool: 'pdftohtml', note: 'Pick the pages, check it at phone width, ask for changes, download the zip.' },
+      { tool: 'rotate', note: 'Only if the page came out sideways: turn it upright, then Continue with PDF → HTML.' },
     ],
   },
   {

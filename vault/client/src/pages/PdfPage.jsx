@@ -267,7 +267,7 @@ const TOOL_HELP = {
       'Responsive: columns stack on phones; preview it at phone, tablet and desktop width',
       'Ask for changes in your own words (typed or spoken); Undo goes back a version',
       'Edit the HTML by hand in the Code view',
-      'Show original puts the PDF page beside the preview or the code, to compare them',
+      'Show original puts the PDF page beside the preview or the code, to compare them; their scrolling is linked',
       'Download a zip with index.html and the images folder',
       'Tall pages, such as a website mock-up saved as one long page, are read in slices from top to bottom',
       'Blank layers and thin strips (such as a browser toolbar in a mock-up) are kept in the zip but not offered to the AI',

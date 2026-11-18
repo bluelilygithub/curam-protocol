@@ -2,7 +2,7 @@
 // and downloaded as a zip (index.html + images/). The browser renders each page and reads its text (pdfjs); the server pulls
 // the pictures out and has the standard-tier model write the HTML (POST /api/pdf/to-html, /to-html/revise). Nothing is stored
 // on the server: the HTML, the pictures and the undo list live in this component until the page is left.
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
@@ -28,6 +28,12 @@ const VIEWS = [
 ];
 
 const SHOW_ORIGINAL_KEY = 'vault_pdf_html_show_original';
+const LINK_SCROLL_KEY = 'vault_pdf_html_link_scroll';
+
+// Scroll position as a share of how far it can scroll (0 = top, 1 = bottom), and the reverse. The PDF and the web page are different
+// heights, so "the same share of the way down" is how the two sides are kept roughly level.
+const scrollShare = (top, height, view) => (height - view > 0 ? top / (height - view) : 0);
+const scrollTo = (share, height, view) => Math.max(0, share * (height - view));
 
 const baseName = (f) => (f?.name || 'document').replace(/\.pdf$/i, '');
 
@@ -100,6 +106,40 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
   const [showOriginal, setShowOriginal] = useState(() => { try { return localStorage.getItem(SHOW_ORIGINAL_KEY) !== '0'; } catch { return true; } });
   const toggleOriginal = () => setShowOriginal((v) => { try { localStorage.setItem(SHOW_ORIGINAL_KEY, v ? '0' : '1'); } catch { /* not remembered */ } return !v; });
   const [modelCfg, setModelCfg] = useState(null); // which model will write the page (services/pdfToHtmlModel.js)
+  const [linkScroll, setLinkScroll] = useState(() => { try { return localStorage.getItem(LINK_SCROLL_KEY) !== '0'; } catch { return true; } });
+  const toggleLinkScroll = () => setLinkScroll((v) => { try { localStorage.setItem(LINK_SCROLL_KEY, v ? '0' : '1'); } catch { /* not remembered */ } return !v; });
+  const originalRef = useRef(null);
+  const frameRef = useRef(null);
+  const syncing = useRef(null); // which side is being moved by the other, so the echo of that move is ignored
+  const syncTimer = useRef(null);
+  const linked = showOriginal && linkScroll && tab === 'preview';
+
+  // Linked scrolling. The preview frame is sandboxed WITHOUT allow-scripts (nothing in the built page can run) but WITH allow-same-origin,
+  // which is what lets Vault read and set its scroll position.
+  const follow = (from) => {
+    if (!linked || syncing.current === from) { syncing.current = null; return; }
+    const box = originalRef.current;
+    const win = frameRef.current?.contentWindow;
+    const doc = win?.document?.scrollingElement;
+    if (!box || !win || !doc) return;
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => { syncing.current = null; }, 120); // a move that changed nothing sends no echo; do not wait for one
+    if (from === 'original') {
+      syncing.current = 'page';
+      win.scrollTo(0, scrollTo(scrollShare(box.scrollTop, box.scrollHeight, box.clientHeight), doc.scrollHeight, win.innerHeight));
+    } else {
+      syncing.current = 'original';
+      box.scrollTop = scrollTo(scrollShare(doc.scrollTop, doc.scrollHeight, win.innerHeight), box.scrollHeight, box.clientHeight);
+    }
+  };
+  const followRef = useRef(follow);
+  followRef.current = follow;
+  const onFrameLoad = () => {
+    const win = frameRef.current?.contentWindow;
+    if (!win) return;
+    win.addEventListener('scroll', () => followRef.current('page'), { passive: true });
+    followRef.current('original'); // a new version keeps the place the original is showing
+  };
 
   useEffect(() => {
     let live = true;
@@ -298,6 +338,13 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
                   <span className="inline-flex items-center gap-1">{getIcon('columns', { size: 12 })} {showOriginal ? 'Hide original' : 'Show original'}</span>
                 </button>
               </Tooltip>
+              {showOriginal && tab === 'preview' && (
+                <Tooltip text={linkScroll ? 'Scroll each side on its own.' : 'Scroll both sides together: the same share of the way down on each side.'}>
+                  <button type="button" onClick={toggleLinkScroll} aria-pressed={linkScroll} className={smallBtn} style={{ ...smallBtnStyle, ...(linkScroll ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)' } : {}) }}>
+                    <span className="inline-flex items-center gap-1">{getIcon('arrow-up-down', { size: 12 })} {linkScroll ? 'Scroll linked' : 'Scroll separately'}</span>
+                  </button>
+                </Tooltip>
+              )}
             </div>
             {tab === 'preview' && (
               <div className="flex gap-1">
@@ -315,7 +362,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
           {showOriginal && (
             <div className="border-b xl:border-b-0 xl:border-r" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
               <p className="text-xs px-3 pt-2" style={muted}>Original PDF{(result?.originals || []).length > 1 ? ` (${result.originals.length} pages)` : ''}</p>
-              <div className="overflow-y-auto p-3 space-y-3" style={{ height: '75vh' }}>
+              <div ref={originalRef} onScroll={() => follow('original')} className="overflow-y-auto p-3 space-y-3" style={{ height: '75vh' }}>
                 {(result?.originals || []).length ? result.originals.map((o) => (
                   <figure key={o.page} className="m-0">
                     {result.originals.length > 1 && <figcaption className="text-xs mb-1" style={muted}>Page {o.page}</figcaption>}
@@ -330,9 +377,11 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
           {tab === 'preview' ? (
             <div className="overflow-x-auto p-3" style={{ background: 'var(--color-bg)' }}>
               <iframe
+                ref={frameRef}
+                onLoad={onFrameLoad}
                 title="Web page preview"
                 srcDoc={previewDoc}
-                sandbox=""
+                sandbox="allow-same-origin"
                 referrerPolicy="no-referrer"
                 className="block mx-auto rounded border"
                 style={{ width: width ? `${width}px` : '100%', maxWidth: width ? 'none' : '100%', height: '75vh', background: '#fff', borderColor: 'var(--color-border)' }}
