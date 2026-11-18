@@ -4897,6 +4897,20 @@ async function initSchema() {
   await pool.query(`UPDATE code_map_runs SET status = 'failed', error = 'Stopped by a restart', "finishedAt" = NOW()
                       WHERE status IN ('queued', 'running') AND "createdAt" < $1`, [schemaStartedAt]);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_code_map_runs_one_active ON code_map_runs ((status IN ('queued', 'running'))) WHERE status IN ('queued', 'running')`);
+  // Code Map "Context": each briefing built for a Claude conversation (docs/code-map.md "Context"), so an earlier one can be copied again.
+  // The last 10 per admin are kept; older ones are deleted outright (they can be rebuilt in seconds, so they skip the recycle bin).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS code_map_briefings (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "generatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "commitHint"  TEXT,
+      "runId"       INTEGER,
+      markdown      TEXT NOT NULL,
+      chars         INTEGER NOT NULL
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_code_map_briefings_user ON code_map_briefings ("userId", "generatedAt" DESC)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (

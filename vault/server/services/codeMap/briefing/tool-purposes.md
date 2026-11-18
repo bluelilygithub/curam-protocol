@@ -1,0 +1,62 @@
+- `notes` — The foundation tool: write things down first, then file, search (also by meaning) and work on them; voice notes and to-dos inside notes.
+- `tasks` — Task list and Kanban board with due dates, effort estimates and focus mode; tasks can link to CRM clients and goals.
+- `chat` — Chat with Claude or Gemini, in projects with a brief, pinned files and URLs (RAG), or as quick chats.
+- `plans` — Named sets of steps with lengths in working days and "waits on" links, drawn as a Gantt; can belong to a client.
+- `talk` — Speak a question and hear the answer; at the end you get a note with a summary and the full conversation.
+- `memory` — Personal memory: facts captured, de-duplicated and recalled by meaning in chat (embeddings).
+- `suggestions` — The inbox where services, crons and agents raise anomalies, gaps and improvement ideas for triage.
+- `gmailIntel` — Read-only Gmail dashboard: recent inbox messages classified by Claude in one batch.
+- `expenseReview` — Invoice Review: supplier invoices and receipts from Gmail or Vault Shelf, checked and filed into Finance.
+- `clients` — CRM: clients, touchpoints, communications and cases, with a pipeline view.
+- `clientProjects` — Client work: projects that belong to a CRM client.
+- `finance` — Double-entry bookkeeping for a sole trader: accounts, journal, invoices, bank statements, GST/BAS.
+- `shares` — Share portfolio with quotes and news, and a thesis journal checked against the market.
+- `admin` — Admin dashboard: user accounts and workspace activity.
+- `pcHealth` — Report on the admin's own computer (drive space, memory, processes), compared scan to scan.
+- `changelog` — What each commit did, why, and its concerns, grouped by day, week or month, with search and "Ask the changelog".
+- `codeMap` — Reads Vault's own source: every tool, the code it owns, how it follows the house rules, ranked findings, and this briefing.
+- `documentRedaction` — Finds and redacts personal or sensitive details in documents before they are shared or sent to an AI.
+- `contractReview` — Upload a contract and get clause-by-clause risk flags, a plain-English summary, obligations and suggested redlines (not legal advice).
+- `pdf` — PDF toolkit: merge, split, convert, compress and edit PDFs; nothing is stored.
+- `fonts` — Customise Google Fonts (variable axes, subsets) and download them, with licence checks.
+- `restyle` — Style editor: load or paste a page and its CSS, see a live preview, click an element to change its look, export the CSS.
+- `graphics` — Image toolkit of about forty tools (generate, edit, upscale, remove backgrounds, convert) in a searchable sidebar.
+- `videos` — Video toolkit in the same layout: generate clips, edit, caption, transcribe and convert.
+- `drawings` — Diagrams: flowcharts and diagrams on an Excalidraw board, with "Draw it for me" and "What have I missed?".
+- `sketchbook` — Describe a scene or idea (typed or spoken) and the image model draws it as a cartoon.
+- `music` — Upload a video, pick a mood, get instrumental music options to fit it.
+- `roomPlanner` — Interior design room planner in 2D and 3D (its own app shown inside Vault).
+- `gardenPlanner` — Design an Australian garden to scale (beds, lawns, paths, plants) and check whether it will work as it grows.
+- `routeTracer` — Trace a path on a map, see the distance live, and save it as a named track.
+- `cellarPlanner` — Walk-in wine cellar configurator: glass enclosure, racking and joinery, priced from dimensions.
+- `seo` — On-page SEO crawl and audit of a site.
+- `searchConsole` — Google Search Console queries and pages for a connected site.
+- `serpTracker` — Daily Google rankings for the owner's own site, kept as history, with Search Console data.
+- `googleAds` — Google Ads campaign starter: build an initial Search campaign from a site's URL.
+- `domains` — Find domain names and check domain and brand availability.
+- `devicePreview` — See a page at phone, tablet and desktop sizes.
+- `html` — Page speed: Lighthouse (PageSpeed Insights) audits for mobile and desktop.
+- `aiVisibility` — Audits how AI assistants find, read and quote one public page.
+- `webExtractor` — Pulls text, pictures, links, tables, metadata or colours out of one web page (optionally in a real browser, optionally signed in).
+- `browserAgent` — An AI agent drives a real headless browser while you watch a live view.
+- `translate` — Translate documents: intake questions, a glossary, chunked translation, optional QA review, OCR for scans.
+- `guitar` — Learn songs, keep them sharp and practise the hard parts.
+- `recipes` — List what is in the fridge or pantry; get dish ideas and full recipes.
+- `measurements` — Unit converter for cooking, building and everyday measures (all in the browser).
+- `fitness` — Personal fitness planner with sessions, rest days and gentle tracking (not medical advice).
+- `burnerMail` — Throw-away email addresses on your own domain for sign-ups; codes and links arrive in Vault.
+- `dnsLookup` — See what a domain points to, where its email goes, and whether a DNS change has spread.
+- `emailFollowUp` — Email Follow-Up: a ledger of commitments in email threads (cases you open by hand) with drafted follow-ups.
+- `passwordVault` — Zero-knowledge store for logins, some linked to CRM clients.
+- `topicResearch` — Find what is already written about a topic, so the owner can write their own piece.
+- `youtube` — Search YouTube, watch in Vault, get transcripts and AI summaries, keep lists.
+- `productScout` — Amazon Search: Amazon search results scored for value by an AI, with alternatives.
+- `mood` — Log moods with intensity and where they are felt in the body.
+- `wellbeing` — Wellbeing and personality self-checks (a proof of concept).
+- `newsDigest` — News digest on chosen topics, with a chat about each topic.
+- `liveTv` — Free TV channels from around the world (the public iptv-org list), played in the person's own browser; Vault never relays video.
+- `propertyScenario` — Describe a mortgage or property move in plain English and get it worked through as a scenario.
+- `goals` — Goal setting built on the 7 Habits: a personal mission statement, roles and goals.
+- `student` — Quizzes and study help for a student.
+- `usage` — AI usage and cost by model and tool.
+- `ponytail` — Ponytail report: what each Claude Code task cost and reused, next to the code written each day.

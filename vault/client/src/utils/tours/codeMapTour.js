@@ -6,7 +6,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_code_map_completed';
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -76,11 +76,12 @@ export function startCodeMapTour(goView) {
   step(6, 'cm-map', 'Dependency map', "Circles are tools (bigger means more code, colour is the score). Solid lines are API calls, dashed lines shared code files. Click a tool to highlight its links and again to open it.", '[data-tour="cm-map"]', 'top', 'map');
   step(7, 'cm-structure', 'Structure', 'The code as a whole: largest files, import cycles, modules most tools depend on, separate packages, and files that look unused (check before deleting).', '[data-tour="cm-cycles"]', 'top', 'structure');
   step(8, 'cm-changes', 'Changes', 'Pick two runs (the latest and the one before by default) to see new and resolved findings, findings that got worse, and each tool\'s score movement, worst first. A run also happens by itself every Sunday at 3:17 am.', '[data-tour="cm-changes"]', 'bottom', 'changes');
+  step(9, 'cm-context', 'Context', 'Build briefing makes a description of how Vault is built (tools, rules, building blocks, recent changes, outside services as YES or NO) to paste into a new Claude conversation before designing the next tool. Add your own notes for Claude, and copy CLAUDE.md with the docs it links to at the bottom. It never includes what is in your tools.', '[data-tour="cm-context"]', 'bottom', 'context');
   tour.addStep({
     id: 'cm-end',
     title: 'Reading a check',
     text: 'The checks are pattern matches, not proof. Amber means worth a look; a red gap can still be a false positive. The (i) button explains each part, and docs/code-map.md lists the known false positives.',
-    when: { show() { injectStepCounter(9); } },
+    when: { show() { injectStepCounter(10); } },
     buttons: [btnBack(), { text: 'Finish Tour ✓', action() { done(); tour.complete(); } }],
   });
 

@@ -10,6 +10,7 @@ export const CODE_MAP_TOOLS = [
   { id: 'map', label: 'Dependency map', group: 'Code Map', icon: 'code-map' },
   { id: 'structure', label: 'Structure', group: 'Code Map', icon: 'code-map' },
   { id: 'changes', label: 'Changes', group: 'Code Map', icon: 'code-map' },
+  { id: 'context', label: 'Context', group: 'Code Map', icon: 'code-map' },
 ];
 
 export const GROUPS = ['Code Map'];
@@ -26,6 +27,7 @@ export const TOOL_TIPS = {
   map: "Which tools call each other's APIs or share code files.",
   structure: 'Largest files, import cycles, shared foundations, separate packages and possibly unused files.',
   changes: "What moved between two runs: new and resolved findings, and each tool's score.",
+  context: 'A briefing about how Vault is built, to paste into a new Claude conversation before designing the next tool. No AI call.',
 };
 
 export const TOOL_BLURBS = {
@@ -35,6 +37,7 @@ export const TOOL_BLURBS = {
   map: 'How tools link up.',
   structure: 'The code as a whole.',
   changes: 'Drift between two runs.',
+  context: 'A briefing for Claude.',
 };
 
 // The longer text for the (i) "How Code Map works" box.
@@ -45,6 +48,7 @@ export const HOW_IT_WORKS = [
   ['How sure it is', 'The checks match patterns in the code, so they can be wrong both ways. Read the evidence (file and line) before changing anything. Known false positives are listed in docs/code-map.md.'],
   ['Who owns what', 'A file reached by three or more tools counts as shared and belongs to none of them; the rest belongs to the tools that reach it.'],
   ['Explain and plan a fix', 'On a finding, Explain and plan a fix asks the AI model set in Settings to explain that finding and plan a fix, using only its evidence and the lines around it. It costs a model call, shows the files it read, and says "I could not tell" rather than guess.'],
+  ['Context', 'Build briefing makes a description of how Vault is built (tools, rules, building blocks, recent changes, outside services as YES or NO, your notes) to paste into a new Claude conversation or a Claude Project before designing the next tool. It uses no AI and never includes what is in your tools: no client names, amounts, notes or secret values. The last 10 are kept to copy again.'],
 ];
 
 // Everything the guide can point at: the tabs plus the controls on them. `tool` is the tab the Open button shows.
@@ -63,4 +67,8 @@ export const GUIDE_TOOLS = [
   { id: 'matrix-cell', label: 'Rule cells', tool: 'conventions' },
   { id: 'map-highlight', label: 'Highlight a tool', tool: 'map' },
   { id: 'run-pickers', label: 'Run pickers', tool: 'changes' },
+  { id: 'context', label: 'Context', tool: 'context' },
+  { id: 'build-briefing', label: 'Build briefing', tool: 'context' },
+  { id: 'owner-notes', label: 'Your notes for Claude', tool: 'context' },
+  { id: 'claude-md', label: 'CLAUDE.md', tool: 'context' },
 ];

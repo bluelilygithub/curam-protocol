@@ -4548,6 +4548,27 @@
   },
   "DELETE /api/ponytail/tasks/:id": {
    "class": "admin"
+  },
+  "POST /api/code-map/briefings": {
+   "class": "admin"
+  },
+  "GET /api/code-map/briefings": {
+   "class": "admin"
+  },
+  "GET /api/code-map/briefings/:id": {
+   "class": "admin"
+  },
+  "GET /api/code-map/briefing/notes": {
+   "class": "admin"
+  },
+  "PUT /api/code-map/briefing/notes": {
+   "class": "admin"
+  },
+  "GET /api/code-map/briefing/claude-md": {
+   "class": "admin"
+  },
+  "GET /api/code-map/briefing/doc": {
+   "class": "admin"
   }
  }
 }

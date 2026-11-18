@@ -49,7 +49,20 @@ async function serve(jobs) {
     return { explanation: 'ok', steps: [] };
   };
   const limiter = (req, res, next) => { limited.push(req.path); next(); };
-  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter }));
+  // Context tab: a fake store for briefings and notes; CLAUDE.md and the docs are read from disk by the real service
+  const real = require('../services/codeMap/briefing').createBriefingService({ pool: { query: async () => { throw new Error('no db in this test'); } } });
+  const briefing = {
+    built: [], notes: '',
+    async build(userId) { this.built.push(userId); return { briefing: { id: 7, chars: 10, markdown: '<vault_briefing>x</vault_briefing>' }, sections: [], stats: { chars: 10, tokens: 3 }, rulesStale: [] }; },
+    async list() { return [{ id: 7, chars: 10 }]; },
+    async get(userId, id) { return id === 7 ? { id: 7, markdown: 'x' } : null; },
+    async getNotes() { return this.notes; },
+    async saveNotes(userId, text) { if (text.length > 5) throw Object.assign(new Error('Notes can be up to 5 characters.'), { status: 400 }); this.notes = text; return text; },
+    claudeMd: () => real.claudeMd(),
+    doc: (name) => real.doc(name),
+  };
+  serve.briefing = briefing;
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -144,6 +157,37 @@ async function serve(jobs) {
       assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=x&to=21')).status, 400);
       assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=20&to=99')).status, 404);
       assert.strictEqual((await s.call('GET', '/api/code-map/compare?from=12&to=21')).status, 400); // 12 is still running
+    });
+    await t('Context: build, list, get one, notes', async () => {
+      const b = await s.call('POST', '/api/code-map/briefings');
+      assert.strictEqual(b.status, 201);
+      assert.match(b.body.briefing.markdown, /^<vault_briefing>/);
+      assert.deepStrictEqual(serve.briefing.built, [3], 'built for the signed-in admin');
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefings')).body.briefings.length, 1);
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefings/7')).status, 200);
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefings/8')).status, 404);
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefings/x')).status, 400);
+      assert.strictEqual((await s.call('PUT', '/api/code-map/briefing/notes', { notes: 'hi' })).body.notes, 'hi');
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefing/notes')).body.notes, 'hi');
+      assert.strictEqual((await s.call('PUT', '/api/code-map/briefing/notes', { notes: 42 })).status, 400);
+      const long = await s.call('PUT', '/api/code-map/briefing/notes', { notes: 'too long' });
+      assert.strictEqual(long.status, 400);
+      assert.match(long.body.error, /up to 5/);
+      assert.ok(!limited.includes('/briefings'), 'no aiLimiter: no model call');
+    });
+
+    await t('Context: CLAUDE.md and its docs; a doc only by a listed name, never a path', async () => {
+      const c = await s.call('GET', '/api/code-map/briefing/claude-md');
+      assert.strictEqual(c.status, 200);
+      assert.match(c.body.text, /^# Curam Vault/);
+      assert.ok(c.body.linked.includes('core-conventions.md') && c.body.linked.includes('deploy-speed.md'));
+      assert.ok(!c.body.others.some((n) => c.body.linked.includes(n)));
+      const d = await s.call('GET', '/api/code-map/briefing/doc?name=code-map.md');
+      assert.strictEqual(d.status, 200);
+      assert.match(d.body.text, /^# Code Map/);
+      for (const bad of ['../CLAUDE.md', '..%2F.env', 'CODE-MAP.md', 'code-map', '.env', 'nope-not-here.md', 'docs/code-map.md']) {
+        assert.strictEqual((await s.call('GET', `/api/code-map/briefing/doc?name=${bad}`)).status, 404, bad);
+      }
     });
   } finally {
     await s.close();

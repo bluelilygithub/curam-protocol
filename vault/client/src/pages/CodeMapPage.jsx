@@ -14,6 +14,7 @@ import ToolsView from './codeMap/ToolsView';
 import ConventionsView from './codeMap/ConventionsView';
 import StructureView from './codeMap/StructureView';
 import ChangesView from './codeMap/ChangesView';
+import ContextView from './codeMap/ContextView';
 import ToolDetail from './codeMap/ToolDetail';
 import CodeMapTutorChat from './codeMap/CodeMapTutorChat';
 import { CODE_MAP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './codeMap/codeMapTools.mjs';
@@ -244,6 +245,9 @@ export default function CodeMapPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-16" />)}</div>
             <Skeleton lines={6} className="h-10" label="Loading the Code Map" />
           </div>
+        ) : view === 'context' ? (
+          // works before the first run too: CLAUDE.md and notes do not need one; the briefing card says to run an analysis first
+          <ContextView hasRun={!!data} onRunAnalysis={startRun} busy={busy} />
         ) : !data ? (
           <EmptyState
             icon="code-map"

@@ -25,6 +25,7 @@ node server/services/codeMap/compare.test.js
 node server/cron/codeMapCron.test.js
 node server/services/codeMap/explain.test.js
 node server/services/codeMapTutor.test.js
+node server/services/codeMap/briefing/buildBriefing.test.js
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
@@ -78,6 +79,22 @@ A button under each finding on the Overview (with a tool picker when the finding
 - Code excerpts go to the model provider set in Settings. Nothing is stored and no code is changed.
 
 Test: `node server/services/codeMap/explain.test.js` (path restriction, grounding, model resolution).
+
+## Context (a briefing for Claude)
+
+The **Context** tab makes a briefing about how Vault is built, to start a conversation in the Claude app (not Claude Code) that has no memory of Vault, usually before designing the next tool. **Build briefing** produces one snapshot shown two ways: a report on the page (tiles, tool table with status pills, findings with severity stripes, services, recent direction) and Markdown for Claude, wrapped in `<vault_briefing>`, with **Copy for Claude**, **Download .md** and its size (characters, and tokens estimated as characters / 4). It makes no model call and needs a finished run (before one, the card says "Run analysis first"; CLAUDE.md and the notes still work).
+
+Code: `server/services/codeMap/briefing/` — `buildBriefing.js` (pure: snapshot in, `{ markdown, sections, stats }` out), `snapshot.js` (gathers the inputs), `sources.js` (the curated files and the hash check), `index.js` (store, notes, CLAUDE.md and docs). Routes in `server/routes/codeMap.js`, all behind the mount's `requireAdmin`, no `aiLimiter`: `POST /briefings` builds and stores one (a POST, not a GET, because it writes), `GET /briefings` (the last 10), `GET /briefings/:id`, `GET`/`PUT /briefing/notes`, `GET /briefing/claude-md`, `GET /briefing/doc?name=`. Table `code_map_briefings` keeps the last 10 per admin; older ones are deleted outright (rebuilt in seconds, so no recycle bin). Page: `client/src/pages/codeMap/ContextView.jsx`.
+
+**What goes in**, in this order: 0 how to use it (date in Brisbane time, commit or "unknown"), 1 about Vault (`about.md`), 2 architecture and the run's counts, 3 the rules every tool follows (`rules.md`), 4 building blocks (`building-blocks.md`) and the names of the installed packages, 5 every tool (name, group, ga / preview / parked / admin, purpose, lines, tests, score, linked tools), 6 outside services as YES / NO with what each is for, 7 the top 10 findings, import cycles, hotspots (always "not available" on Railway: no git history) and the largest files, 8 the changelog's last 30 days (date, area, subject) and open concerns (any age, not "None noted.", 300 characters each, at most 40), 9 a 30-day Ponytail summary (skipped if there is none), 10 the owner's notes, 11 how to write the agreed design up as a Claude Code brief. A tool's purpose is its line in `tool-purposes.md`, else the descriptive sentences of the first prose lines of its doc (paths, routes and flags dropped), else its menu name; add a line there for a new tool. Over about 60,000 characters, section 5 becomes one line per tool and section 8 the last 14 days, and the top says so.
+
+**What never goes in:** what is in Vault. No client names, contacts, amounts, note or email contents, task titles, file contents or secret values. The builder only reads named fields (tool names, sizes, scores, finding titles, changelog dates, areas, subjects and concerns, package names, Ponytail totals). Outside services are checked with `Boolean(process.env[name])`, so no value is ever copied (`snapshot.js` `SERVICES` lists the variable names; a test checks each is documented in `docs/env-vars.md` or read by server code). The one free text is your own notes. The test builds a briefing from fixture data holding a client name, an amount and an env value in the fields it must ignore, and checks none of them appear.
+
+**Owner notes** ("Your notes for Claude") are saved per admin in the `settings` table, key `code_map_briefing_notes`, up to 20,000 characters. Building a briefing saves unsaved notes first.
+
+**Refreshing rules.md when CLAUDE.md changes.** `rules.md` starts with a comment holding the SHA-256 of `CLAUDE.md` and `docs/core-conventions.md` as they were when it was written (line endings normalised, so Windows and Railway agree). When either file changes, the tab shows "The rules summary may be out of date" and `buildBriefing.test.js` fails, printing the new first line. Re-read the change, update the numbered rules if a rule changed, and replace the first line with the one the test prints. The same applies to `building-blocks.md` when a shared module moves: the test fails on any path that no longer exists.
+
+**Using it in Claude.** Paste the copied briefing as the first message of a new conversation, then describe what you want to build. For repeated work, make a Claude Project and add the downloaded `.md` as Project knowledge (rebuild and replace it after big changes). Section 11 asks Claude to write the agreed design as a brief for Claude Code. The **CLAUDE.md** part at the bottom shows CLAUDE.md read-only and copies it, with any ticked docs, as one block (each under `## File: docs/<name>`), for when Claude needs the full rules rather than the summary.
 
 ## Guide chat
 

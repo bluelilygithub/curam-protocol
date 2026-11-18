@@ -1,0 +1,27 @@
+- `server/middleware/auth.js` — `requireAuth`, `requireAdmin`, `requireFeature`, `loadFeatureAccess`: who may call a route.
+- `server/config/featureAccess.js` + `client/src/utils/featureAccess.js` — feature flags, defaults and lifecycle (must match).
+- `client/src/config/appNavigation.js` — the one navigation catalog: menu, sidebar, top bar, trail and Ctrl+K.
+- `server/db.js` — the pool and every table, as idempotent DDL run on boot.
+- `server/services/modelResolver.js` — `getModelsForUser()`: the `standard`, `light`, Gemini and DeepSeek model for a person.
+- `server/middleware/aiRateLimit.js` — `aiLimiter` for any route that calls a model.
+- `server/services/guideCore.js` + `server/routes/guideRouter.js` + `server/config/guides.js` — a tool's guide chat on the server; `client/src/components/tutor/TutorChat.jsx` on the page.
+- `server/services/SuggestionService.js` — `capture()` / `captureIf()`: raise a finding in the Suggestions inbox.
+- `server/services/recycleBin/` — `moveToBin()` and restore adapters for the shared 30-day recycle bin.
+- `server/utils/cronLock.js` — `withCronLock(name, fn)` for crons with side effects.
+- `server/utils/safeFetch.js` + `server/services/htmlFetch.js` — SSRF-guarded fetching of outside URLs.
+- `server/lib/logger.js` — pino logger; `getLogger()` from `server/middleware/requestContext.js` in routes.
+- `server/utils/attachments.js` — file attachments with per-user quota.
+- `server/services/chunker.js` + `server/services/embeddings.js` — RAG: split text and embed it for pgvector search.
+- `server/services/restyle/renderPage.js` — load a page in headless Chromium (Playwright) with SSRF checks.
+- `client/src/utils/apiClient.js` — authenticated fetch for every `/api/` call (JSON, form uploads, downloads, streams).
+- `client/src/providers/IconProvider.jsx` + `client/src/providers/iconMap.js` — `getIcon(name)` and the semantic icon map.
+- `client/src/components/Dialog.jsx` — the one modal shell.
+- `client/src/components/Tooltip.jsx` — the shared hover tip for every control.
+- `client/src/components/ToolInfoModal.jsx` — the (i) "how it works" box.
+- `client/src/components/Skeleton.jsx` + `client/src/components/EmptyState.jsx` — loading and empty states.
+- `client/src/components/voiceInput/VoiceInput.jsx` — text field with a microphone.
+- `client/src/components/ProcessingModal.jsx` + `client/src/store/processingStore.js` — blocking overlay for slow operations.
+- `client/src/store/toastStore.js` — toasts for quick feedback.
+- `client/src/hooks/useDraggable.js` — make a floating button or panel draggable.
+- `client/src/store/popupStore.js` + `client/src/hooks/usePopupSlot.js` — self-appearing popups take turns.
+- `client/src/utils/mdComponents.jsx` — shared renderers for Markdown shown with react-markdown.

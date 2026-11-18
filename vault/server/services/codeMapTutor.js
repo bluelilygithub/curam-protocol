@@ -53,6 +53,18 @@ const CATALOG = [
   { id: 'run-pickers', label: 'Run pickers', group: G,
     does: 'On the Changes tab: From and to lists of the finished runs (number, date and time, commit) and a Swap button.',
     notes: 'Pick two different runs.' },
+  { id: 'context', label: 'Context', group: G,
+    does: 'A briefing about how Vault is built, for starting a conversation in the Claude app that knows nothing about Vault (for example to design the next tool). It is built from the latest run, the feature flags and navigation, the last 30 days of the changelog and its open concerns, a Ponytail summary, which outside services are set up (YES or NO only), the installed packages, and three short curated files (about Vault, the rules every tool follows, the shared building blocks). The page shows it as a report and as Markdown for Claude.',
+    notes: 'It describes how Vault is built, never what is in it: no client names, amounts, notes, emails, task titles or secret values. It makes no AI call. It needs a finished analysis run first.' },
+  { id: 'build-briefing', label: 'Build briefing', group: G,
+    does: 'On the Context tab: builds a new briefing from the latest run and keeps it (the last 10 are listed under Earlier briefings, each with Copy). Copy for Claude puts the Markdown on the clipboard; Download .md saves it. The size in characters and an estimate in tokens are shown next to Copy.',
+    notes: 'Paste it as the first message of a new Claude conversation, or add the .md file to a Claude Project as knowledge. A briefing over about 60,000 characters is shortened and says so at the top.' },
+  { id: 'owner-notes', label: 'Your notes for Claude', group: G,
+    does: 'On the Context tab: a box for your priorities, plans, things you have decided against and what you are unsure about. Save notes keeps them for your account; they go into the next briefing you build.',
+    notes: 'Only what you type here goes in; nothing is added from your other tools.' },
+  { id: 'claude-md', label: 'CLAUDE.md', group: G,
+    does: 'At the bottom of the Context tab: CLAUDE.md (the rules Claude Code follows in this project) shown read-only, with Copy. Tick docs it links to, such as core-conventions.md or deploy-speed.md, or any other doc, and Copy puts them all in one block, each under its own heading.',
+    notes: 'A warning shows when CLAUDE.md has changed since the rules summary was written; the summary file then needs refreshing (see docs/code-map.md).' },
 ];
 
 const RULES = [
