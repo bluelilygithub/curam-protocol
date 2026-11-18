@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "018a0d23",
+   "fullHash": "018a0d23ac8ec04b4a30faeb43edd0cddca71362",
+   "committedAt": "2026-11-18T13:30:34+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML runs in the background with a progress bar; leave the page and come back",
+   "filesChanged": 11,
+   "insertions": 603,
+   "deletions": 110,
+   "area": "PDF Tools",
+   "goal": "Sonnet gives much better pages but takes minutes. The owner asked for the work to run in the background with a progress bar, so the page can be left while it grows.",
+   "whatChanged": "New table pdf_html_jobs (one row per web page, kept 7 days) and server/services/pdfToHtmlJobs.js. Making a page and each change request are background jobs: POST /api/pdf/to-html/jobs answers at once; the tool checks GET /jobs/:id?light=1 every 2 seconds and shows the stage, a progress bar (3/8/12% while preparing, then 12–95% by characters written against an estimate, 100% when done), the characters written, and the page growing in the preview. Stop aborts the streamed model call (callModel gains onText and signal); a stopped change keeps the previous version. Hand edits and Undo are saved with the job (PUT /jobs/:id/html). Coming back to PDF → HTML reopens the running job or the last one opened; a list shows the last 10. One running job per person. On start-up db.js marks jobs cut off by a restart as stopped and deletes rows older than 7 days. The one-shot /to-html and /to-html/revise routes are removed; route manifest, guide wording, help and docs updated.",
+   "filesImpacted": [
+    "server/services/pdfToHtmlJobs.js",
+    "server/services/pdfToHtmlJobs.test.js",
+    "server/db.js",
+    "server/routes/pdf.js",
+    "server/services/callModel.js",
+    "server/services/pdfToHtml.js",
+    "server/services/pdfTutor.js",
+    "server/testing/routeManifest.json",
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "client/src/pages/PdfPage.jsx",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "Long, high-quality conversions no longer hit the gateway's five-minute limit or tie up the page; progress is visible and the result waits for the owner.",
+   "concerns": "PDF Tools stored nothing on the server before; this keeps each web page (with its pictures and page images, several MB) for 7 days in the database. A Vault deploy during a run stops that job (it says so; start again). The progress percentage is an estimate from the expected length. Nothing tells the owner the job finished while they are elsewhere in Vault; they see it when they come back. Checked locally in a browser with a stand-in streaming model and the local database: progress rising, leaving mid-run and coming back (bar picks up), finished page, change request, Stop, Undo kept after reload. Not run with a real model."
+  },
+  {
    "commit": "354adbd0",
    "fullHash": "354adbd025f6778503f785198312d04ad1c7429e",
    "committedAt": "2026-11-18T12:38:06+10:00",
