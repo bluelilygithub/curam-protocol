@@ -73,5 +73,5 @@ Delete (in a task's detail) moves the row to the shared recycle bin for 30 days 
 
 - `node server/services/ponytailTasks.test.js` — validation and CSV parsing, no database.
 - `node client/src/pages/ponytail/ponytailFormat.test.mjs` — formatting and Brisbane days.
-- `DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_xuser node server/routes/ponytail.test.js` — the real app on a local throwaway database: keys, ingest (update not duplicate, Brisbane time, empty name, 401/400), CSV import and re-import, filters, member 403, delete and restore. A brand-new empty database currently fails Vault's own boot ("relation clients does not exist"), so use the existing `vault_xuser` one.
+- `DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_xuser node server/routes/ponytail.test.js` — the real app on a local throwaway database: keys, ingest (update not duplicate, Brisbane time, empty name, 401/400), CSV import and re-import, filters, member 403, delete and restore. Any local test database works, including a brand-new empty one (fixed in 35518bba; `server/db.freshSchema.test.js` guards it).
 - Routes are classified in `server/testing/routeManifest.json` (ingest `public`, the rest `admin`); `crossUser.test.js` checks them.
