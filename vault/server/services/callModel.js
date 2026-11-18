@@ -14,6 +14,8 @@
  *   Only Anthropic and Gemini models can look at pictures; any other model throws.
  * @param {boolean} [opts.stream=false] - Anthropic only: stream the answer and return it whole when done. The SDK refuses a long
  *   non-streamed answer (max_tokens over about 21,000), so long outputs (PDF → HTML) set this. Other providers ignore it.
+ * @param {(delta:string)=>void} [opts.onText] - with `stream`: called with each piece of text as it arrives (progress for long jobs).
+ * @param {AbortSignal} [opts.signal] - with `stream`: abort the request (a cancelled background job).
  * @returns {Promise<string|{text:string,inputTokens:number,outputTokens:number,diagnostics?:object}>}
  */
 
@@ -37,10 +39,10 @@ function summarizeAnthropicContent(content) {
   }));
 }
 
-async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0, images = null, stream = false } = {}) {
+async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0, images = null, stream = false, onText = null, signal = null } = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
 
-  const run = () => callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage, images, stream });
+  const run = () => callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage, images, stream, onText, signal });
 
   if (!timeoutMs || timeoutMs <= 0) return run();
 
@@ -60,7 +62,7 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
   }
 }
 
-async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, images = null, stream = false } = {}) {
+async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, images = null, stream = false, onText = null, signal = null } = {}) {
   const promptLen = String(userPrompt || '').length;
   const hasImages = Array.isArray(images) && images.length > 0;
   if (hasImages && !(modelId.startsWith('gemini-') || !/^(ollama:|deepseek-)/.test(modelId))) {
@@ -226,7 +228,14 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
     : userPrompt;
   const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content }] };
   if (system) params.system = system;
-  const response = stream ? await client.messages.stream(params).finalMessage() : await client.messages.create(params);
+  let response;
+  if (stream) {
+    const s = client.messages.stream(params, signal ? { signal } : undefined);
+    if (typeof onText === 'function') s.on('text', (delta) => { try { onText(delta); } catch { /* a progress hook must never break the call */ } });
+    response = await s.finalMessage();
+  } else {
+    response = await client.messages.create(params);
+  }
   // Prefer all text blocks — content[0] may be thinking/tool_use on newer models.
   const blocks = response.content || [];
   const text = blocks

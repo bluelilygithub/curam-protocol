@@ -20,6 +20,7 @@ const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 const pdfTools = require('../services/pdfTools');
 const pdfToHtml = require('../services/pdfToHtml');
 const pdfToHtmlModel = require('../services/pdfToHtmlModel');
+const pdfToHtmlJobs = require('../services/pdfToHtmlJobs');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -1472,8 +1473,8 @@ router.post('/ocr-layer', async (req, res) => {
   } catch (err) { sendToolError(res, 'ocr-layer', err, 'OCR failed'); }
 });
 
-// PDF → HTML (services/pdfToHtml.js): chosen pages → one responsive HTML file plus the pictures inside. Standard-tier model with
-// vision, logged as `pdf_html` / `pdf_html_revise`. Nothing stored: the browser keeps the HTML and pictures and builds the zip.
+// PDF → HTML (services/pdfToHtml.js): chosen pages → one responsive HTML file plus the pictures inside, written by a model that can see
+// pictures (pdfToHtmlModel.js), logged as `pdf_html` / `pdf_html_revise`. Runs as a background job kept 7 days in pdf_html_jobs.
 // GET/POST /to-html/model-config { modelId }: which connected model (one that can see pictures) writes the page; '' = automatic.
 router.get('/to-html/model-config', async (req, res) => {
   try { res.json(await pdfToHtmlModel.getPdfHtmlModelConfig(req.user.id)); } catch (err) { sendToolError(res, 'to-html/model-config', err, 'Could not load the model setting'); }
@@ -1486,31 +1487,45 @@ router.post('/to-html/model-config', async (req, res) => {
   } catch (err) { sendToolError(res, 'to-html/model-config', err, 'Could not save the model setting'); }
 });
 
-router.post('/to-html', aiLimiter, async (req, res) => {
+// Background jobs (services/pdfToHtmlJobs.js): start answers at once with an id; the page checks on it (?light=1 while it runs) and can
+// be left. A change request runs on the same job. Named routes come before /:id.
+const jobId = (req) => { const n = Number(req.params.id); if (!Number.isInteger(n) || n < 1) throw Object.assign(new Error('Not found.'), { status: 404 }); return n; };
+
+router.get('/to-html/jobs', async (req, res) => {
+  try { res.json({ jobs: await pdfToHtmlJobs.list(req.user.id) }); } catch (err) { sendToolError(res, 'to-html/jobs', err, 'Could not load your web pages'); }
+});
+
+router.post('/to-html/jobs', aiLimiter, async (req, res) => {
   try {
     const buf = pdfBufFromDataUrl(req.body?.dataUrl);
     if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
-    const pages = Array.isArray(req.body?.pages) ? req.body.pages.map(Number) : [];
-    const out = await pdfToHtml.createHtml(req.user.id, {
-      pdfBuf: buf, pages,
-      pageImages: Array.isArray(req.body?.pageImages) ? req.body.pageImages : [],
-      pageTexts: Array.isArray(req.body?.pageTexts) ? req.body.pageTexts.map((t) => String(t || '')) : [],
+    const id = await pdfToHtmlJobs.startCreate(req.user.id, {
+      pdfBuf: buf,
+      pages: Array.isArray(req.body?.pages) ? req.body.pages.map(Number) : [],
+      pageImages: Array.isArray(req.body?.pageImages) ? req.body.pageImages.slice(0, 20) : [],
+      pageTexts: Array.isArray(req.body?.pageTexts) ? req.body.pageTexts.slice(0, 20).map((t) => String(t || '')) : [],
       slices: Array.isArray(req.body?.slices) ? req.body.slices.slice(0, 20) : [],
+      originals: Array.isArray(req.body?.originals) ? req.body.originals.slice(0, 5).map((o) => ({ page: Number(o?.page) || 1, dataUrl: /^data:image\/(jpeg|png);base64,/.test(String(o?.dataUrl)) ? String(o.dataUrl) : '' })).filter((o) => o.dataUrl) : [],
       title: req.body?.filename ? String(req.body.filename).replace(/\.pdf$/i, '') : '',
     });
-    res.json(out);
-  } catch (err) { sendToolError(res, 'to-html', err, 'Could not build the web page'); }
+    res.status(202).json({ id });
+  } catch (err) { sendToolError(res, 'to-html/jobs', err, 'Could not start the web page'); }
 });
 
-router.post('/to-html/revise', aiLimiter, async (req, res) => {
-  try {
-    const out = await pdfToHtml.reviseHtml(req.user.id, {
-      html: req.body?.html, instruction: req.body?.instruction,
-      images: Array.isArray(req.body?.images) ? req.body.images : [],
-      pageImages: Array.isArray(req.body?.pageImages) ? req.body.pageImages : [],
-    });
-    res.json(out);
-  } catch (err) { sendToolError(res, 'to-html/revise', err, 'Could not change the web page'); }
+router.get('/to-html/jobs/:id', async (req, res) => {
+  try { res.json(await pdfToHtmlJobs.get(req.user.id, jobId(req), { light: req.query.light === '1' })); } catch (err) { sendToolError(res, 'to-html/jobs/:id', err, 'Could not load that web page'); }
+});
+
+router.post('/to-html/jobs/:id/revise', aiLimiter, async (req, res) => {
+  try { await pdfToHtmlJobs.startRevise(req.user.id, jobId(req), req.body?.instruction); res.status(202).json({ ok: true }); } catch (err) { sendToolError(res, 'to-html/jobs/:id/revise', err, 'Could not start that change'); }
+});
+
+router.post('/to-html/jobs/:id/cancel', async (req, res) => {
+  try { res.json({ stopped: await pdfToHtmlJobs.cancel(req.user.id, jobId(req)) }); } catch (err) { sendToolError(res, 'to-html/jobs/:id/cancel', err, 'Could not stop it'); }
+});
+
+router.put('/to-html/jobs/:id/html', async (req, res) => {
+  try { await pdfToHtmlJobs.saveHtml(req.user.id, jobId(req), req.body?.html, req.body?.history, pdfToHtml.MAX_HTML_IN); res.json({ ok: true }); } catch (err) { sendToolError(res, 'to-html/jobs/:id/html', err, 'Could not save the web page'); }
 });
 
 // Spoken or typed directions for a PDF tool: text in, validated setting values out. JSON only; no file is sent, and passwords are

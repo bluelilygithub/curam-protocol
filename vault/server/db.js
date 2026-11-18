@@ -4778,6 +4778,43 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_translate_lessons_log_user ON translate_lessons_log ("userId", "createdAt" DESC)`);
 
+  // PDF Tools → PDF → HTML runs as a background job (services/pdfToHtmlJobs.js): the page can be left while the AI writes, and the result,
+  // its pictures and its undo list are here when the person comes back. One row per web page; change requests update the same row.
+  // Kept 7 days (temporary working copies, like Graphics' job results; the person downloads the zip). See docs/pdf-agent.md.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pdf_html_jobs (
+      id                SERIAL PRIMARY KEY,
+      "userId"          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      filename          TEXT NOT NULL DEFAULT '',
+      kind              TEXT NOT NULL DEFAULT 'create',
+      status            TEXT NOT NULL DEFAULT 'running',
+      stage             TEXT,
+      progress          INTEGER NOT NULL DEFAULT 0,
+      "charsWritten"    INTEGER NOT NULL DEFAULT 0,
+      "partialHtml"     TEXT,
+      html              TEXT,
+      "historyJson"     JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "imagesJson"      JSONB,
+      "pageImagesJson"  JSONB,
+      "originalsJson"   JSONB,
+      "slicesJson"      JSONB,
+      instruction       TEXT,
+      model             TEXT,
+      skipped           INTEGER NOT NULL DEFAULT 0,
+      "errorMessage"    TEXT,
+      "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finishedAt"      TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_pdf_html_jobs_user ON pdf_html_jobs ("userId", "createdAt" DESC)`);
+  // A job cannot survive a restart (the model call lived in the old process): say so instead of showing it running for ever.
+  await pool.query(`UPDATE pdf_html_jobs SET status = CASE WHEN html IS NULL THEN 'failed' ELSE 'done' END,
+                      "errorMessage" = 'Stopped part-way because the server restarted (usually a Vault update). ' || CASE WHEN html IS NULL THEN 'Start it again.' ELSE 'The page is as it was before that change; ask again.' END,
+                      stage = NULL, "partialHtml" = NULL, "finishedAt" = NOW()
+                    WHERE status = 'running'`);
+  await pool.query(`DELETE FROM pdf_html_jobs WHERE "createdAt" < NOW() - INTERVAL '7 days'`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (
       id                  SERIAL PRIMARY KEY,

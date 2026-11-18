@@ -219,9 +219,11 @@ async function callForHtml(userId, prompt, visionImages, feature, deps) {
   const resolve = deps.resolveModel || require('./pdfToHtmlModel').resolvePdfHtmlModel;
   const call = deps.callModel || require('./callModel').callModel;
   const { modelId: standard } = await resolve(userId);
+  if (deps.onModel) deps.onModel(standard);
   if (!standard) throw Object.assign(new Error('None of the AI models connected in Settings → AI & Chat can look at pictures (DeepSeek and local models cannot). Add a Claude or Gemini model there, then try again.'), { status: 400 });
   let result;
-  const ask = (maxTokens) => call(standard, prompt, { system: SYSTEM, maxTokens, returnUsage: true, timeoutMs: TIMEOUT_MS, images: visionImages, stream: true });
+  // deps.onText / deps.signal: progress and cancelling for a background job (services/pdfToHtmlJobs.js)
+  const ask = (maxTokens) => call(standard, prompt, { system: SYSTEM, maxTokens, returnUsage: true, timeoutMs: TIMEOUT_MS, images: visionImages, stream: true, onText: deps.onText, signal: deps.signal });
   try {
     try {
       result = await ask(MAX_TOKENS);
@@ -232,6 +234,7 @@ async function callForHtml(userId, prompt, visionImages, feature, deps) {
       result = await ask(lower);
     }
   } catch (err) {
+    if (deps.signal && deps.signal.aborted) throw Object.assign(new Error('Stopped.'), { status: 499, cancelled: true });
     if (/cannot look at pictures/.test(err.message)) throw Object.assign(new Error(`The model ${standard} cannot look at pictures. Choose a Claude or Gemini model in Settings → PDF Tools.`), { status: 400 });
     console.error('[pdfToHtml] model call failed:', standard, err.status || '', err.message, `pictures=${(visionImages || []).length}`, `promptChars=${String(prompt).length}`);
     throw modelFailure(err, standard);
@@ -310,18 +313,24 @@ async function createHtml(userId, { pdfBuf, pages, pageImages, pageTexts, slices
   if (!list.length) throw Object.assign(new Error('Choose at least one page.'), { status: 400 });
   if (list.length > MAX_PAGES) throw Object.assign(new Error(`Up to ${MAX_PAGES} pages at a time.`), { status: 400 });
   if (Array.isArray(pageImages) && pageImages.length > MAX_SLICES) throw Object.assign(new Error(`Too many page slices (at most ${MAX_SLICES}). Choose fewer pages.`), { status: 400 });
+  const stage = (name) => { if (deps.onStage) deps.onStage(name); };
+  stage('Preparing the page pictures');
   const seen = await pageVision(pageImages);
   if (seen.length < list.length || (Array.isArray(pageImages) && seen.length !== pageImages.length)) throw Object.assign(new Error('The page pictures did not arrive. Try again.'), { status: 400 });
   const info = sliceInfo(slices, seen.length, list);
+  stage('Pulling out the pictures');
   const { bytes } = await subsetPdf(pdfBuf, list);
   const { images, skipped, skippedReasons } = await collectImages(bytes);
   const usable = images.filter((im) => !im.aiSkip);
   const sheets = await contactSheets(usable, Math.max(0, MAX_VISION_TOTAL - seen.length));
+  const webImages = images.map((im) => ({ name: im.name, mime: im.mime, width: im.width, height: im.height, aiSkip: im.aiSkip, dataUrl: `data:${im.mime};base64,${im.bytes.toString('base64')}` }));
+  if (deps.onImages) await deps.onImages(webImages, info);
+  stage('The AI is reading the page');
   const prompt = buildCreatePrompt({ slices: info, images, sheets, pageTexts: (pageTexts || []).slice(0, seen.length), title: String(title || '').slice(0, 120) });
   const out = await callForHtml(userId, prompt, [...seen, ...sheets.map((x) => x.image)], 'pdf_html', deps);
   return {
     html: out.html,
-    images: images.map((im) => ({ name: im.name, mime: im.mime, width: im.width, height: im.height, aiSkip: im.aiSkip, dataUrl: `data:${im.mime};base64,${im.bytes.toString('base64')}` })),
+    images: webImages,
     used: usedImageNames(out.html, images),
     skipped, skippedReasons, model: out.model, pageCount: list.length, slices: info,
   };
@@ -338,10 +347,11 @@ async function reviseHtml(userId, { html, instruction, images, pageImages }, dep
     name: String(im?.name || '').replace(/[^a-z0-9._-]/gi, '').slice(0, 60), width: Number(im?.width) || 0, height: Number(im?.height) || 0,
     aiSkip: im?.aiSkip ? String(im.aiSkip).slice(0, 10) : null,
   })).filter((im) => im.name);
+  if (deps.onStage) deps.onStage('The AI is reading the page and your request');
   const vision = await pageVision(pageImages);
   const prompt = buildRevisePrompt({ html: current, instruction: ask, images: list, pageCount: Math.max(1, vision.length) });
   const out = await callForHtml(userId, prompt, vision, 'pdf_html_revise', deps);
   return { html: out.html, used: usedImageNames(out.html, list), model: out.model };
 }
 
-module.exports = { createHtml, reviseHtml, cleanHtml, providerReason, modelFailure, buildCreatePrompt, buildRevisePrompt, subsetPdf, collectImages, contactSheets, notContent, usedImageNames, SYSTEM, MAX_PAGES, MAX_SLICES };
+module.exports = { MAX_HTML_IN, createHtml, reviseHtml, cleanHtml, providerReason, modelFailure, buildCreatePrompt, buildRevisePrompt, subsetPdf, collectImages, contactSheets, notContent, usedImageNames, SYSTEM, MAX_PAGES, MAX_SLICES };
