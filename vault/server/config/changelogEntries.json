@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f21c04bc",
+   "fullHash": "f21c04bcfcf1f8f438719ca01ea1333c715d295b",
+   "committedAt": "2026-11-18T16:03:41+10:00",
+   "author": "mrb",
+   "subject": "Cost tables: current Claude prices (Opus 5.5, Sonnet 5.5, Fable, Haiku 5.5)",
+   "filesChanged": 3,
+   "insertions": 54,
+   "deletions": 14,
+   "area": "Usage & Cost",
+   "goal": "The owner is weighing Opus 5.5 against Sonnet for PDF → HTML; Vault's cost figures had no prices for the current Claude models and old prices for Opus and Haiku.",
+   "whatChanged": "server/services/costCalculator.js: added Fable 5.2/5.1/5, Opus 5.5/5/4.8/4.7, Sonnet 5.5/5, Haiku 5.5 and dated aliases; Opus 4.5/4.6 corrected from $15/$75 to $5/$25 and Haiku 4.5 from $0.80/$4 to $1/$5. Unknown ids now fall back by family at the higher rate (Fable/Mythos $10/$50, Opus $5/$25, Sonnet $3/$15, Haiku $1/$5); before, an unknown Opus id was priced at $15/$75 and a Fable id at a generic $1/$5. client/src/utils/pricing.js got the same prices and family fallback. The Browser Agent's live cost readout (browserAgentSession.js) now uses costCalculator for known ids and the same family fallback.",
+   "filesImpacted": [
+    "server/services/costCalculator.js",
+    "client/src/utils/pricing.js",
+    "server/services/browserAgent/browserAgentSession.js"
+   ],
+   "benefit": "Usage & Cost, estimates and the Browser Agent readout show close-to-real dollars for Opus 5.5, Sonnet 5.5 and Fable from now on, and new Opus usage is no longer logged at about three times its price.",
+   "concerns": "Only new usage rows use the new prices; costs already logged keep the figure worked out at the time. List prices only: cache and batch discounts are not modelled, and Haiku 5.5's higher rate for prompts over 100K tokens is not applied. Prices were taken from Anthropic's model reference as of 2026-11-18, not from a bill. Checked by computing sample costs in Node; no screen checked."
+  },
+  {
    "commit": "7a336a88",
    "fullHash": "7a336a882c9436ab2ee82381a49dbc47b879be58",
    "committedAt": "2026-11-18T13:36:38+10:00",
