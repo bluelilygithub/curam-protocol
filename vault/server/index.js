@@ -87,6 +87,9 @@ app.use(helmet({
 // mounted before requireAuth. It is also before the 30 MB body parser below on purpose: the router checks the key first and then reads its own,
 // much smaller, body (2 MB of JSON or one 10 MB picture).
 app.use('/api/quick-ingest', require('./routes/quickIngest').ingestRouter);
+// Ponytail report: the Ponytail plugin in Claude Code posts one task row per turn with its own key (routes/ponytail.js). Same reasons: before
+// requireAuth, and before the body parser so the key is checked before its 16 KB body is read.
+app.use('/api/ponytail/ingest', require('./routes/ponytailRoutes').ingestRouter);
 
 app.use(require('./lib/memoryLog').largeRequestLogger()); // notes any request with a body of 5 MB or more (path only), so an upload can be matched to a memory spike
 app.use(express.json({ limit: '30mb' }));
@@ -261,6 +264,7 @@ app.use('/api/ai-visibility', requireFeature('aiVisibility'), require('./routes/
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)
 app.use('/api/changelog', requireAdmin, aiLimiter, require('./routes/changelog')); // admin changelog: what each commit did; POST /ask calls the standard model
+app.use('/api/ponytail', requireAdmin, require('./routes/ponytailRoutes').adminRouter); // Ponytail report: keys, tasks, summary, CSV backfill (no model calls, so no aiLimiter)
 app.use('/api/code-map-tutor', requireAdmin, aiLimiter, require('./routes/codeMapTutor')); // the Code Map guide chat (sees no code, run or finding)
 app.use('/api/code-map', requireAdmin, require('./routes/codeMap')); // Code Map: analysis of Vault's own source (admin only; the analysis makes no model calls, so no aiLimiter on the mount; POST /findings/explain has it in the route file)
 app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Health agent (admin only, read-only report on the admin's own PC)

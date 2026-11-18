@@ -4518,6 +4518,36 @@
   },
   "POST /api/live-tv/shows": {
    "class": "authed"
+  },
+  "POST /api/ponytail/ingest": {
+   "class": "public"
+  },
+  "GET /api/ponytail/tokens": {
+   "class": "admin"
+  },
+  "POST /api/ponytail/tokens": {
+   "class": "admin"
+  },
+  "DELETE /api/ponytail/tokens/:id": {
+   "class": "admin"
+  },
+  "GET /api/ponytail/summary": {
+   "class": "admin"
+  },
+  "GET /api/ponytail/code-written": {
+   "class": "admin"
+  },
+  "POST /api/ponytail/import": {
+   "class": "admin"
+  },
+  "GET /api/ponytail/tasks": {
+   "class": "admin"
+  },
+  "GET /api/ponytail/tasks/:id": {
+   "class": "admin"
+  },
+  "DELETE /api/ponytail/tasks/:id": {
+   "class": "admin"
   }
  }
 }

@@ -23,9 +23,9 @@ const SCOPE_NAMES = Object.keys(SCOPES);
 
 const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 
-/** A new key: { token, tokenHash, prefix, last4 }. prefix + last4 are what the list shows, enough to tell keys apart. */
-function newToken() {
-  const token = `vsh_${crypto.randomBytes(32).toString('hex')}`;
+/** A new key: { token, tokenHash, prefix, last4 }. prefix + last4 are what the list shows, enough to tell keys apart. The Ponytail report uses 'pty'. */
+function newToken(kind = 'vsh') {
+  const token = `${kind}_${crypto.randomBytes(32).toString('hex')}`;
   return { token, tokenHash: hashToken(token), prefix: token.slice(0, 8), last4: token.slice(-4) };
 }
 

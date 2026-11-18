@@ -3691,6 +3691,57 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_changelog_committed ON changelog_entries ("committedAt" DESC)`);
   try { await require('./services/changelog').seedChangelog(); } catch (err) { console.warn('[changelog] seed skipped:', err.message); }
 
+  // ── Ponytail report (admin; docs/ponytail-report.md) ──────────────────────
+  // The Ponytail plugin in Claude Code posts one task row per turn with a Bearer key. Only the key's SHA-256 is stored (shown once).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ponytail_tokens (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      label        TEXT NOT NULL,
+      "tokenHash"  TEXT NOT NULL UNIQUE,
+      prefix       TEXT NOT NULL,
+      last4        TEXT NOT NULL,
+      "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "lastUsedAt" TIMESTAMPTZ,
+      "revokedAt"  TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ponytail_tokens_user ON ponytail_tokens("userId")`);
+  // One row per Ponytail task (a session, or the part after a /clear), replaced on every turn. source: 'webhook' rows are never
+  // overwritten by a CSV import ('csv' rows have no token split, session or last turn).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ponytail_tasks (
+      id                 SERIAL PRIMARY KEY,
+      "userId"           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key                TEXT NOT NULL,
+      started            TIMESTAMPTZ NOT NULL,
+      project            TEXT NOT NULL DEFAULT '',
+      name               TEXT NOT NULL DEFAULT '',
+      session            TEXT,
+      level              TEXT NOT NULL DEFAULT '',
+      model              TEXT NOT NULL DEFAULT '',
+      cost               NUMERIC NOT NULL DEFAULT 0,
+      "lastTurn"         NUMERIC,
+      turns              INTEGER NOT NULL DEFAULT 0,
+      "agentMs"          BIGINT NOT NULL DEFAULT 0,
+      "tokensInput"      BIGINT NOT NULL DEFAULT 0,
+      "tokensOutput"     BIGINT NOT NULL DEFAULT 0,
+      "tokensCacheRead"  BIGINT NOT NULL DEFAULT 0,
+      "tokensCacheWrite" BIGINT NOT NULL DEFAULT 0,
+      reuse              INTEGER,
+      reused             INTEGER NOT NULL DEFAULT 0,
+      created            INTEGER NOT NULL DEFAULT 0,
+      "callersOpen"      INTEGER NOT NULL DEFAULT 0,
+      tests              TEXT NOT NULL DEFAULT '',
+      source             TEXT NOT NULL DEFAULT 'webhook',
+      "updatesReceived"  INTEGER NOT NULL DEFAULT 1,
+      "firstSeenAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "lastSeenAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE ("userId", key)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ponytail_tasks_user_started ON ponytail_tasks("userId", started DESC)`);
+
   // ── Shares thesis journal (docs/shares-thesis.md) ─────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_theses (

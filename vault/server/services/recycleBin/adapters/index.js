@@ -18,3 +18,4 @@ require('./drawings'); // saved Excalidraw drawings
 require('./sketchbook'); // Sketchbook cartoon pictures
 require('./plans'); // Plans (with their steps, dependencies and links)
 require('./translate'); // Translate: translations (with their files) and glossaries
+require('./ponytailTasks'); // Ponytail report tasks (admin)
