@@ -1,0 +1,1 @@
+exports.callModel = async () => 'ok';

@@ -1,0 +1,1 @@
+exports.safeFetch = async () => ({});

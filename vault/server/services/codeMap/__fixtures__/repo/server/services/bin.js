@@ -1,0 +1,1 @@
+exports.moveToBin = async () => true;
