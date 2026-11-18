@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "631a11a7",
+   "fullHash": "631a11a70503adf0a02b8e0c04e9697fda9234e4",
+   "committedAt": "2026-11-19T07:35:19+10:00",
+   "author": "mrb",
+   "subject": "Briefing docs: video-tools optional, DESIGN.md brought in line, better summaries",
+   "filesChanged": 9,
+   "insertions": 93,
+   "deletions": 24,
+   "area": "Code Map",
+   "goal": "Act on a review of the first default docs bundle sent to Claude: drop the large doc that added little, stop sending a design doc that contradicted the rules, and make the \"not included\" descriptions usable.",
+   "whatChanged": "DEFAULT_BRIEFING_DOCS (briefing/sources.js) is now client/DESIGN.md, docs/hardening.md and docs/guide-chat.md; docs/video-tools.md is optional with the note \"tick only for a media-heavy tool or one with background jobs\", and docs that carry a note are shown in Optional rather than under Other docs. client/DESIGN.md corrected to match CLAUDE.md and docs/core-conventions.md and the code: four themes (warm-sand, dark-slate, midnight-blue, paper-white), warm-sand primary #9B5B46 (darkened from #CC785C), --color-on-primary in the token table and for primary buttons and active tabs instead of #fff, inputs without a bare outline-none (a visible focus replacement as VoiceInput has; text inputs are not covered by the global focus ring), new Accessibility and Every new tool sections, Dialog, Tooltip, ToolInfoModal, Skeleton, EmptyState, VoiceInput, JobStart and the popup queue added to the shared components table, more Don'ts, and a line that CLAUDE.md and core-conventions win on conflict. docs/guide-chat.md: \"Adding a guide\" step 1 and the overview table now point to guideCore.js / guideRouter.js (with usageTutor and codeMapTutor as examples and guideTestKit for tests) and say not to copy pdfTutor.js; the Code Map guide line lists seven tabs. docs.js DOC_SUMMARIES gains 20 written lines (the six named in the review plus 14 other docs whose first sentence was a status, date or fragment) and summaries may run to 180 characters. Tests: route test and the guide catalogue updated for three defaults; new briefing tests that no summary starts with a status, date or lower-case fragment and that video-tools is optional with its note. docs/code-map.md updated.",
+   "filesImpacted": [
+    "client/DESIGN.md",
+    "docs/guide-chat.md",
+    "docs/code-map.md",
+    "client/src/pages/codeMap/ContextView.jsx",
+    "server/services/codeMap/briefing/docs.js",
+    "server/services/codeMap/briefing/sources.js",
+    "server/services/codeMap/briefing/buildBriefing.test.js",
+    "server/routes/codeMap.test.js",
+    "server/services/codeMapTutor.js"
+   ],
+   "benefit": "The default copy drops from about 38,300 to about 19,100 tokens while keeping the conventions it needs, the UI doc sent every time no longer contradicts CLAUDE.md, the guide recipe points at the current pattern, and every line in the \"not included\" list says what the doc covers.",
+   "concerns": "An admin who already saved their own ticks keeps video-tools ticked until they press Reset to defaults (the saved choice wins over the new default). The review suggested putting the new descriptions in tool-purposes.md; they went into DOC_SUMMARIES in docs.js instead, because tool-purposes.md is keyed by menu entries (and tested that way) and these docs are not tools. DESIGN.md was checked against themes.js, index.css, JobStart.jsx and the popup store, not against every page. A few charts, PDFs and font effects still hard-code #CC785C as a colour; they are app code and were not changed. The new summary test fails when a new doc opens with a status or date line, which needs a written line in DOC_SUMMARIES. Tested: briefing tests (24), route tests (13), guide and guides tests, and the picker on the local app (three ticked, video-tools in Optional with its note, about 19.0K tokens)."
+  },
+  {
    "commit": "8682f9fb",
    "fullHash": "8682f9fba664609c5770e8fe9d13b18ae79f4eb5",
    "committedAt": "2026-11-19T07:23:33+10:00",
