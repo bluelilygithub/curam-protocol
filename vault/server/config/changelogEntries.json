@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "565ff4c5",
+   "fullHash": "565ff4c562cf257e8a925faf6fce8d6bf8d71f4a",
+   "committedAt": "2026-11-18T17:04:11+10:00",
+   "author": "mrb",
+   "subject": "Code Map: saved runs, background job, API and inbox alerts (milestone 2)",
+   "filesChanged": 10,
+   "insertions": 692,
+   "deletions": 12,
+   "area": "Code Map",
+   "goal": "Milestone 2 of the admin Code Map: run the analysis as a background job, keep the results so runs can be compared later, serve them to the coming page, and raise high findings in the suggestions inbox.",
+   "whatChanged": "New table code_map_runs (server/db.js) as the brief specifies, with a partial unique index so only one run is queued or running at a time; on boot, runs from before the restart are marked failed ('Stopped by a restart'). New server/services/codeMap/jobs.js (start, list, latest, get) and worker.js: the analysis runs in a worker thread so other requests are not held up, and the current stage is kept in memory for polling. After a successful run the last 30 runs are kept (older ones deleted outright, not recycle-binned, as they are analysis output) and each high finding is raised per tool through SuggestionService.captureIf (source codeMap, category alert, fingerprint codeMap:<ruleId>:<toolId>). New server/routes/codeMap.js at /api/code-map behind requireAdmin, no aiLimiter: POST /runs, GET /runs, /runs/latest, /runs/:id, and /compare answering 501 until milestone 4; the five routes are classed admin in server/testing/routeManifest.json. analyze() gained an onStage callback.",
+   "filesImpacted": [
+    "server/db.js",
+    "server/index.js",
+    "server/testing/routeManifest.json",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/services/codeMap/jobs.js",
+    "server/services/codeMap/jobs.test.js",
+    "server/services/codeMap/worker.js",
+    "server/services/codeMap/index.js",
+    "server/services/codeMap/codeMap.accuracy.test.js"
+   ],
+   "benefit": "An admin can start an analysis over the API and poll it; results are kept for comparison, and the high findings (AI routes without a rate limit, hardcoded model ids, a cron requiring route files) land in the inbox once, not again on every run.",
+   "concerns": "Nothing in the menu uses it until milestone 3, so it is reachable only through the API. The first run on the live site will put about 14 high items in the inbox of the admin who runs it (7 rate-limit, 4 model-id, 3 cron/route), from regex checks that can be wrong. Checked on the local database with the real app: a run took about 2 seconds, the health endpoint stayed responsive, the result is stored at about 113 KB, a second start got 409, a stale row was reset on restart, and a second run did not duplicate the inbox items; also passed crossUser, crossUserOwnership and auth tests. Not yet run on Railway. The worker thread's memory use on the live container is unmeasured. The fixed 'one run at a time' is per workspace, so two admins share it."
+  },
+  {
    "commit": "6e787af8",
    "fullHash": "6e787af87d39e3f1a4bf83b81a9617381a117d93",
    "committedAt": "2026-11-18T16:49:49+10:00",
