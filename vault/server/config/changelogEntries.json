@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "354adbd0",
+   "fullHash": "354adbd025f6778503f785198312d04ad1c7429e",
+   "committedAt": "2026-11-18T12:38:06+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: room for long pages (32k tokens, streamed), compact code, honest \"ran out of room\" message",
+   "filesChanged": 4,
+   "insertions": 39,
+   "deletions": 12,
+   "area": "PDF Tools",
+   "goal": "The owner's one-page website mock-up failed on Haiku with \"The web page was too long to finish in one go. Try fewer pages.\": the answer hit the 16,000-token cap.",
+   "whatChanged": "PDF → HTML now allows 32,000 output tokens and 8 minutes. Claude answers are streamed through a new opt-in callModel option (stream: true, Anthropic only; uses messages.stream().finalMessage()), because the SDK refuses a non-streamed request above about 21,000 max_tokens; every other caller is unchanged. If a model reports a lower output limit (\"max_tokens: 32000 > N\") the call is retried once at N. The system prompt asks for compact code (no comments, shared classes, CSS variables for brand colours, one @media block per breakpoint). The out-of-room message names the model and how many tokens it wrote, and suggests trying again or another model instead of \"fewer pages\". Tests and docs updated.",
+   "filesImpacted": [
+    "server/services/callModel.js",
+    "server/services/pdfToHtml.js",
+    "server/services/pdfToHtml.test.js",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "Long single pages such as website mock-ups can be finished in one answer, and the message no longer gives wrong advice.",
+   "concerns": "Not run against a real model (local keys invalid); the streamed request was checked to pass the SDK and reach Anthropic (it stopped at the invalid local key). A 32,000-token answer costs about twice the old maximum and can take several minutes, especially on Sonnet. Whether Railway keeps an HTTP request open for up to 8 minutes was not checked."
+  },
+  {
    "commit": "d47b3ea4",
    "fullHash": "d47b3ea4fa1521fdf4c42677178ce8513967744b",
    "committedAt": "2026-11-18T12:23:01+10:00",
