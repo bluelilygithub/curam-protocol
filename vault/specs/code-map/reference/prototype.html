@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Curam Vault Code Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a code-review console. Summary first, then tools as a grid, a convention matrix, a dependency map and raw structure. */
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --ink: #16202c; --muted: #5a6577; --line: #dce1e8; --accent: #2f55d4; --accent-soft: #e6ecfc;
+  --pass: #1d8a4e; --warn: #b77b00; --fail: #cf3d3d; --na: #b6bdc8;
+  --pass-bg: #e3f4ea; --warn-bg: #fbf0d6; --fail-bg: #fbe5e5;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131a; --surface: #161d27; --ink: #e5eaf1; --muted: #9aa5b5; --line: #273141; --accent: #7d96ff; --accent-soft: #1e2a4d;
+    --pass: #4cc283; --warn: #e5ad3a; --fail: #f07070; --na: #4a5568;
+    --pass-bg: #15301f; --warn-bg: #352a10; --fail-bg: #3a1a1a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131a; --surface: #161d27; --ink: #e5eaf1; --muted: #9aa5b5; --line: #273141; --accent: #7d96ff; --accent-soft: #1e2a4d;
+  --pass: #4cc283; --warn: #e5ad3a; --fail: #f07070; --na: #4a5568;
+  --pass-bg: #15301f; --warn-bg: #352a10; --fail-bg: #3a1a1a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+button { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { background: var(--surface); border-bottom: 1px solid var(--line); }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 18px 0 10px; }
+.brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.brand .meta { color: var(--muted); font-size: 13px; }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; }
+nav.tabs a { padding: 10px 14px; text-decoration: none; color: var(--muted); border-bottom: 2px solid transparent; font-weight: 500; white-space: nowrap; }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-color: var(--accent); }
+nav.tabs a:hover { color: var(--ink); }
+main.wrap { padding-top: 24px; padding-bottom: 60px; }
+section.view { display: none; }
+section.view.active { display: block; }
+.lede { color: var(--muted); max-width: 70ch; margin: 0 0 20px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.tile .n { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.tile .l { color: var(--muted); font-size: 13px; }
+
+h2.sec { font-size: 17px; margin: 0 0 12px; }
+.findings { display: grid; gap: 12px; }
+.finding { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--na); border-radius: 8px; padding: 14px 18px; }
+.finding.high { border-left-color: var(--fail); }
+.finding.medium { border-left-color: var(--warn); }
+.finding.low { border-left-color: var(--na); }
+.finding .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.finding h3 { font-size: 16px; font-weight: 600; }
+.finding p { margin: 0 0 8px; max-width: 95ch; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.04em; }
+.pill.high { background: var(--fail-bg); color: var(--fail); }
+.pill.medium { background: var(--warn-bg); color: var(--warn); }
+.pill.low { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.pill.preview { background: var(--warn-bg); color: var(--warn); }
+.pill.parked { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.pill.off { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.area { color: var(--muted); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chip { border: 1px solid var(--line); background: var(--bg); border-radius: 99px; padding: 2px 10px; font-size: 13px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.evidence { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.evidence li { font-family: var(--font-mono); font-size: 12.5px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; overflow-x: auto; white-space: pre; }
+.evidence .loc { color: var(--accent); }
+.evidence .txt { color: var(--muted); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+.toolbar input, .toolbar select { font: inherit; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+.toolbar input { min-width: 220px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.card { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; cursor: pointer; display: grid; gap: 8px; }
+.card:hover { border-color: var(--accent); }
+.card .t { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.card .name { font-weight: 600; }
+.card .grp { color: var(--muted); font-size: 12.5px; }
+.bar { height: 6px; background: var(--bg); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.bar > span { display: block; height: 100%; }
+.stats { display: flex; gap: 12px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.dots { display: flex; gap: 3px; flex-wrap: wrap; }
+.dot { width: 10px; height: 10px; border-radius: 3px; background: var(--na); }
+.s-pass { background: var(--pass); } .s-warn { background: var(--warn); } .s-fail { background: var(--fail); } .s-na { background: var(--line); }
+
+.matrix-wrap { overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; max-height: 75vh; }
+table.matrix { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+table.matrix th, table.matrix td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: center; background: var(--surface); }
+table.matrix thead th { position: sticky; top: 0; z-index: 2; font-weight: 600; font-size: 12px; vertical-align: bottom; }
+table.matrix thead th .cnt { display: block; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+table.matrix th.rowh { position: sticky; left: 0; z-index: 1; text-align: left; white-space: nowrap; font-weight: 500; cursor: pointer; }
+table.matrix thead th.rowh { z-index: 3; }
+table.matrix td button { width: 22px; height: 22px; border-radius: 5px; border: 0; cursor: pointer; }
+table.matrix td.score { font-variant-numeric: tabular-nums; color: var(--muted); }
+.cellinfo { margin-top: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; min-height: 52px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; align-items: center; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+
+.mapbox { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; position: relative; height: 72vh; min-height: 480px; overflow: hidden; }
+.mapbox svg { width: 100%; height: 100%; display: block; }
+.mapbox .hint { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 12.5px; background: var(--surface); padding: 2px 6px; border-radius: 4px; }
+.node text { font-size: 11px; fill: var(--ink); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.link { stroke: var(--muted); stroke-opacity: 0.35; }
+.link.code { stroke-dasharray: 4 3; stroke: var(--accent); stroke-opacity: 0.5; }
+.faded { opacity: 0.12; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
+.panel h3 { font-size: 15px; margin-bottom: 4px; }
+.panel .sub { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+table.list { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.list td, table.list th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.list th { color: var(--muted); font-weight: 500; font-size: 12px; }
+table.list td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hbar { height: 8px; background: var(--accent); border-radius: 2px; opacity: 0.7; }
+.cycle { font-family: var(--font-mono); font-size: 12px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; }
+.cycle b { font-family: var(--font-body); font-size: 12.5px; }
+
+.drawer-bg { position: fixed; inset: 0; background: rgba(10, 15, 25, 0.35); z-index: 40; display: none; }
+.drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(640px, 100%); background: var(--surface); border-left: 1px solid var(--line); z-index: 41; overflow-y: auto; transform: translateX(100%); transition: transform 200ms; padding: 20px 22px 40px; }
+.drawer.open { transform: none; }
+.drawer-bg.open { display: block; }
+.drawer .close { float: right; border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.drawer h2 { font-size: 20px; }
+.drawer h4 { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.drawer .evidence li { white-space: pre-wrap; word-break: break-all; }
+.check { display: grid; grid-template-columns: 14px 120px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.check .dot { margin-top: 4px; }
+.check .k { font-weight: 500; }
+.filelist { font-family: var(--font-mono); font-size: 12px; columns: 1; margin: 0; padding-left: 16px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+@media (max-width: 520px) { .two { grid-template-columns: 1fr; } .check { grid-template-columns: 14px 1fr; } .check .n { grid-column: 2; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Curam Vault code map</h1>
+      <span class="meta" id="meta"></span>
+    </div>
+    <nav class="tabs" aria-label="Views">
+      <a href="#overview" data-v="overview">Overview</a>
+      <a href="#tools" data-v="tools">Tools</a>
+      <a href="#conventions" data-v="conventions">Conventions</a>
+      <a href="#map" data-v="map">Dependency map</a>
+      <a href="#structure" data-v="structure">Structure</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <section class="view" id="v-overview">
+    <p class="lede">A static read of the <code>vault</code> app: every tool in the navigation catalog, the code it owns, how it follows the rules in CLAUDE.md, and where the structure could improve. Findings are ranked; click a tool name to open its detail.</p>
+    <div class="tiles" id="tiles"></div>
+    <h2 class="sec">What to improve, in order</h2>
+    <div class="findings" id="findings"></div>
+  </section>
+
+  <section class="view" id="v-tools">
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Filter tools" aria-label="Filter tools">
+      <select id="sort" aria-label="Sort tools">
+        <option value="score">Sort: convention score (lowest first)</option>
+        <option value="size">Sort: size (largest first)</option>
+        <option value="churn">Sort: recent changes (most first)</option>
+        <option value="name">Sort: name</option>
+      </select>
+    </div>
+    <div class="chips" id="groups" style="margin-bottom:14px"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section class="view" id="v-conventions">
+    <p class="lede">Each column is a rule from CLAUDE.md, checked against the code each tool owns. Click a cell to see the evidence, or a tool name for its full detail. Amber cells are worth a look, not necessarily wrong.</p>
+    <div class="legend" style="margin-bottom:10px">
+      <span><i class="dot s-pass"></i>follows</span><span><i class="dot s-warn"></i>check</span><span><i class="dot s-fail"></i>gap</span><span><i class="dot s-na"></i>not applicable</span>
+    </div>
+    <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+    <div class="cellinfo" id="cellinfo"><span class="area">Click a cell to see what was found.</span></div>
+  </section>
+
+  <section class="view" id="v-map">
+    <div class="toolbar">
+      <div class="legend">
+        <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="currentColor" stroke-opacity=".5"/></svg>calls its API</span>
+        <span><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="var(--accent)" stroke-dasharray="4 3"/></svg>shares code files</span>
+        <span>circle size = lines of code · colour = convention score</span>
+      </div>
+      <label class="area"><input type="checkbox" id="hideIso"> Hide tools with no links</label>
+    </div>
+    <div class="mapbox" id="mapbox"><div class="hint">Drag to move · scroll to zoom · click a tool to highlight its links</div></div>
+  </section>
+
+  <section class="view" id="v-structure">
+    <div class="two">
+      <div class="panel"><h3>Hotspots</h3><p class="sub">Large files that changed often in the last 600 commits. Splitting these pays off first.</p><table class="list" id="hot"></table></div>
+      <div class="panel"><h3>Largest files</h3><p class="sub">Non-test source files by line count.</p><table class="list" id="largest"></table></div>
+      <div class="panel"><h3>Import cycles</h3><p class="sub">Files that import each other in a loop. Lazy requires inside functions still run, but the loop makes ownership unclear.</p><div id="cycles"></div></div>
+      <div class="panel"><h3>Shared foundations</h3><p class="sub">Core modules and how many of the tools reach them. A change here touches all of those tools.</p><table class="list" id="core"></table></div>
+      <div class="panel"><h3>Separate packages</h3><p class="sub">Sub-apps beside client and server, not included in the tool checks.</p><table class="list" id="pkgs"></table></div>
+      <div class="panel"><h3>Possibly unused</h3><p class="sub">No importers and no string references. Verify before deleting.</p><table class="list" id="orph"></table></div>
+    </div>
+  </section>
+</main>
+
+<div class="drawer-bg" id="dbg"></div>
+<aside class="drawer" id="drawer" aria-label="Tool detail" aria-hidden="true"></aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+const CHECKS = [
+  ['flag', 'Flag'], ['lifecycle', 'Lifecycle'], ['guide', 'Guide chat'], ['docs', 'Docs'], ['models', 'No hardcoded models'],
+  ['modelResolver', 'Model resolver'], ['rateLimit', 'AI rate limit'], ['apiClient', 'apiClient'], ['icons', 'getIcon'],
+  ['modals', 'Shared Dialog'], ['recycleBin', 'Recycle bin'], ['logging', 'Logger'], ['ssrf', 'SSRF guard'], ['tests', 'Tests']
+];
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = n => Number(n).toLocaleString('en-AU');
+let D, TOOLS, BY;
+
+function scoreColor(s) { return s >= 90 ? 'var(--pass)' : s >= 70 ? 'var(--warn)' : 'var(--fail)'; }
+function scoreHex(s) {
+  const css = getComputedStyle(document.documentElement);
+  return css.getPropertyValue(s >= 90 ? '--pass' : s >= 70 ? '--warn' : '--fail').trim();
+}
+function evList(ev) {
+  if (!ev || !ev.length) return '';
+  return '<ul class="evidence">' + ev.map(e => `<li><span class="loc">${esc(e.file)}${e.line ? ':' + e.line : ''}</span>${e.text ? '  <span class="txt">' + esc(e.text) + '</span>' : ''}</li>`).join('') + '</ul>';
+}
+function toolChip(id) { const t = BY[id]; return t ? `<button class="chip" data-tool="${id}">${esc(t.label)}</button>` : ''; }
+
+function renderOverview() {
+  const s = D.summary;
+  const lines = s.locServer + s.locClient;
+  const gaps = TOOLS.reduce((a, t) => a + t.fails, 0);
+  document.getElementById('meta').innerHTML = `<code>${esc(D.repo)}</code> · branch <code>${esc(D.branch)}</code> · commit <code>${esc(D.commit)}</code> · history ${esc(s.historyFrom)} to ${esc(s.historyTo)}`;
+  const tiles = [
+    [s.tools, 'tools in the navigation'], [fmt(lines), 'lines of app code (server + client)'], [s.tests, `test files (${fmt(s.locTests)} lines)`],
+    [s.mounts, 'API mounts in server/index.js'], [D.cycles.length, 'import cycles'], [gaps, 'convention gaps across tools']
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(([n, l]) => `<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  document.getElementById('findings').innerHTML = D.findings.map((f, i) => `
+    <article class="finding ${f.sev}">
+      <div class="head"><span class="pill ${f.sev}">${f.sev}</span><h3>${i + 1}. ${esc(f.title)}</h3><span class="area">${esc(f.area)}</span></div>
+      <p>${esc(f.body)}</p>
+      ${f.tools.length ? '<div class="chips">' + f.tools.map(toolChip).join('') + '</div>' : ''}
+      ${f.evidence.length ? `<details><summary>Evidence (${f.evidence.length})</summary>${evList(f.evidence)}</details>` : ''}
+    </article>`).join('');
+}
+
+let activeGroup = 'All';
+function renderTools() {
+  const groups = ['All', ...new Set(TOOLS.map(t => t.group))];
+  document.getElementById('groups').innerHTML = groups.map(g => `<button class="chip" data-group="${esc(g)}" aria-pressed="${g === activeGroup}">${esc(g)}</button>`).join('');
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const sort = document.getElementById('sort').value;
+  let list = TOOLS.filter(t => (activeGroup === 'All' || t.group === activeGroup) && (!q || (t.label + ' ' + t.id + ' ' + (t.featureKey || '')).toLowerCase().includes(q)));
+  const size = t => t.locClient + t.locServer;
+  list.sort(sort === 'score' ? (a, b) => a.score - b.score || b.fails - a.fails : sort === 'size' ? (a, b) => size(b) - size(a) : sort === 'churn' ? (a, b) => b.churn - a.churn : (a, b) => a.label.localeCompare(b.label));
+  document.getElementById('grid').innerHTML = list.map(t => {
+    const pill = t.lifecycle !== 'ga' ? `<span class="pill ${t.lifecycle}">${t.lifecycle}</span>` : (!t.defaultOn ? '<span class="pill off">off</span>' : '');
+    return `<button class="card" data-tool="${t.id}">
+      <div class="t"><span class="name">${esc(t.label)}</span>${pill}</div>
+      <div class="grp">${esc(t.group)}${t.featureKey ? ' · <code>' + esc(t.featureKey) + '</code>' : ''}${t.adminOnly ? ' · admin' : ''}</div>
+      <div class="bar" title="Convention score ${t.score}%"><span style="width:${t.score}%;background:${scoreColor(t.score)}"></span></div>
+      <div class="stats"><span>${t.score}% rules</span><span>${fmt(size(t))} lines</span><span>${t.tests.length} tests</span><span>${t.churn} edits</span></div>
+      <div class="dots" aria-label="${t.fails} gaps, ${t.warns} to check">${CHECKS.map(([k, l]) => `<i class="dot s-${t.checks[k].status}" title="${esc(l)}: ${esc(t.checks[k].note)}"></i>`).join('')}</div>
+    </button>`;
+  }).join('') || '<p class="area">No tools match.</p>';
+}
+
+function renderMatrix() {
+  const rows = [...TOOLS].sort((a, b) => a.score - b.score || a.label.localeCompare(b.label));
+  const counts = k => { const c = { pass: 0, warn: 0, fail: 0 }; TOOLS.forEach(t => { const s = t.checks[k].status; if (c[s] !== undefined) c[s]++; }); return c; };
+  let h = '<thead><tr><th class="rowh">Tool</th><th>Score</th>' + CHECKS.map(([k, l]) => { const c = counts(k); return `<th>${esc(l)}<span class="cnt">${c.fail} gap · ${c.warn} check</span></th>`; }).join('') + '</tr></thead><tbody>';
+  h += rows.map(t => `<tr><th class="rowh" data-tool="${t.id}">${esc(t.label)}</th><td class="score">${t.score}%</td>` +
+    CHECKS.map(([k, l]) => `<td><button class="s-${t.checks[k].status}" data-cell="${t.id}|${k}" aria-label="${esc(t.label)}, ${esc(l)}: ${t.checks[k].status}"></button></td>`).join('') + '</tr>').join('');
+  document.getElementById('matrix').innerHTML = h + '</tbody>';
+}
+function showCell(id, k) {
+  const t = BY[id], c = t.checks[k], label = CHECKS.find(x => x[0] === k)[1];
+  document.getElementById('cellinfo').innerHTML = `<div class="head" style="display:flex;gap:8px;align-items:center"><i class="dot s-${c.status}"></i><b>${esc(t.label)} · ${esc(label)}</b> ${toolChip(id).replace('>' + esc(t.label) + '<', '>Open tool<')}</div><p style="margin:6px 0 0">${esc(c.note)}</p>${evList(c.evidence)}`;
+}
+
+function openTool(id) {
+  const t = BY[id]; if (!t) return;
+  const dr = document.getElementById('drawer');
+  const links = D.edges.filter(e => e.a === id || e.b === id).map(e => {
+    const o = e.a === id ? e.b : e.a;
+    const dir = e.api.map(x => x.split('->')).map(([a, b]) => a === id ? 'calls its API' : 'is called by it');
+    return `<li>${toolChip(o)} <span class="area">${[...new Set(dir)].join(', ')}${e.n ? (dir.length ? ', ' : '') + e.n + ' shared file' + (e.n > 1 ? 's' : '') : ''}</span></li>`;
+  });
+  const platform = t.calls.filter(c => c.startsWith('platform:')).map(c => '<code>/api/' + esc(c.slice(9)) + '</code>');
+  dr.innerHTML = `
+    <button class="close" id="closeD">Close</button>
+    <h2>${esc(t.label)}</h2>
+    <p class="area">${esc(t.group)} · page <code>${esc(t.path)}</code>${t.featureKey ? ' · flag <code>' + esc(t.featureKey) + '</code>' : ''} · ${t.lifecycle}${t.defaultOn ? '' : ', off by default'}</p>
+    <div class="stats" style="margin:8px 0"><span>${t.score}% of rules</span><span>${fmt(t.locClient)} client lines</span><span>${fmt(t.locServer)} server lines</span><span>${t.tests.length} test files</span><span>${t.churn} edits in 600 commits</span></div>
+    <h4>Rules</h4>
+    ${CHECKS.map(([k, l]) => { const c = t.checks[k]; return `<div class="check"><i class="dot s-${c.status}"></i><span class="k">${esc(l)}</span><span class="n">${esc(c.note)}${evList(c.evidence)}</span></div>`; }).join('')}
+    <h4>API it owns</h4>
+    ${t.mounts.length ? '<ul class="evidence">' + t.mounts.map(m => `<li><span class="loc">${esc(m.path)}</span>  <span class="txt">server/index.js:${m.line}${m.aiLimiter ? ' · aiLimiter' : ''}${m.public ? ' · before requireAuth' : ''}${m.admin ? ' · admin' : ''}</span></li>`).join('') + '</ul>' : '<p class="area">None of its own; it uses other tools’ APIs.</p>'}
+    <h4>Linked tools</h4>
+    ${links.length ? '<ul style="padding-left:18px;margin:0">' + links.join('') + '</ul>' : '<p class="area">No links to other tools.</p>'}
+    ${platform.length ? '<p class="area">Platform APIs used: ' + platform.join(', ') + '</p>' : ''}
+    <h4>Biggest files</h4>
+    <table class="list">${t.biggest.map(b => `<tr><td class="mono">${esc(b.file)}</td><td class="num">${fmt(b.loc)}</td></tr>`).join('')}</table>
+    <h4>Files it owns (${t.ownedClient.length + t.ownedServer.length})</h4>
+    <details><summary>Client (${t.ownedClient.length})</summary><ul class="filelist">${t.ownedClient.map(f => '<li>' + esc(f) + '</li>').join('')}</ul></details>
+    <details><summary>Server (${t.ownedServer.length})</summary><ul class="filelist">${t.ownedServer.map(f => '<li>' + esc(f) + '</li>').join('')}</ul></details>
+    <details><summary>Tests (${t.tests.length})</summary><ul class="filelist">${t.tests.map(f => '<li>' + esc(f) + '</li>').join('')}</ul></details>
+    <p class="area" style="margin-top:12px">Also uses ${t.sharedClientCount} shared client files and ${t.sharedServerCount} shared server files (reached by three or more tools).</p>`;
+  dr.classList.add('open'); dr.setAttribute('aria-hidden', 'false');
+  document.getElementById('dbg').classList.add('open');
+  document.getElementById('closeD').focus();
+}
+function closeTool() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'true');
+  document.getElementById('dbg').classList.remove('open');
+}
+
+let mapBuilt = false;
+function buildMap() {
+  if (mapBuilt || !window.d3) return; mapBuilt = true;
+  const box = document.getElementById('mapbox');
+  const W = box.clientWidth, H = box.clientHeight;
+  const hideIso = document.getElementById('hideIso').checked;
+  const linked = new Set(D.edges.flatMap(e => [e.a, e.b]));
+  const nodes = TOOLS.filter(t => !hideIso || linked.has(t.id)).map(t => ({ id: t.id, label: t.label, score: t.score, size: t.locClient + t.locServer }));
+  const ids = new Set(nodes.map(n => n.id));
+  const links = D.edges.filter(e => ids.has(e.a) && ids.has(e.b)).map(e => ({ source: e.a, target: e.b, code: e.n > 0 && !e.api.length, w: e.api.length + Math.min(e.n, 6) }));
+  const r = d3.scaleSqrt().domain([0, d3.max(nodes, n => n.size)]).range([5, 30]);
+  box.querySelector('svg')?.remove();
+  const svg = d3.select(box).insert('svg', ':first-child').attr('viewBox', [0, 0, W, H]);
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.3, 4]).on('zoom', ev => g.attr('transform', ev.transform)));
+  const link = g.append('g').selectAll('line').data(links).join('line').attr('class', d => 'link' + (d.code ? ' code' : '')).attr('stroke-width', d => 1 + Math.min(d.w, 4) * 0.5);
+  const node = g.append('g').selectAll('g').data(nodes).join('g').attr('class', 'node').style('cursor', 'pointer');
+  node.append('circle').attr('r', d => r(d.size)).attr('fill', d => scoreHex(d.score)).attr('fill-opacity', 0.85).attr('stroke', 'var(--surface)').attr('stroke-width', 1.5);
+  node.append('text').text(d => d.label).attr('x', d => r(d.size) + 3).attr('y', 4);
+  node.append('title').text(d => `${d.label}: ${d.score}% of rules, ${fmt(d.size)} lines`);
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(120).strength(0.35))
+    .force('charge', d3.forceManyBody().strength(-320))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide(d => r(d.size) + 22))
+    .force('x', d3.forceX(W / 2).strength(0.05)).force('y', d3.forceY(H / 2).strength(0.07));
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { sim.stop(); for (let i = 0; i < 300; i++) sim.tick(); }
+  const tick = () => { link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y); node.attr('transform', d => `translate(${d.x},${d.y})`); };
+  sim.on('tick', tick); tick();
+  node.call(d3.drag().on('start', (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; }).on('end', (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+  let sel = null;
+  node.on('click', (ev, d) => {
+    if (sel === d.id) { openTool(d.id); return; }
+    sel = d.id;
+    const nb = new Set([d.id]); links.forEach(l => { if (l.source.id === d.id) nb.add(l.target.id); if (l.target.id === d.id) nb.add(l.source.id); });
+    node.classed('faded', n => !nb.has(n.id)); link.classed('faded', l => l.source.id !== d.id && l.target.id !== d.id);
+  });
+  svg.on('click', ev => { if (ev.target.tagName === 'svg') { sel = null; node.classed('faded', false); link.classed('faded', false); } });
+}
+
+function renderStructure() {
+  const maxH = Math.max(...D.hotspots.map(h => h.changes));
+  document.getElementById('hot').innerHTML = '<tr><th>File</th><th>Lines</th><th>Edits</th><th></th></tr>' + D.hotspots.map(h => `<tr><td class="mono">${esc(h.file)}</td><td class="num">${fmt(h.loc)}</td><td class="num">${h.changes}</td><td style="width:90px"><div class="hbar" style="width:${(h.changes / maxH) * 100}%"></div></td></tr>`).join('');
+  const maxL = D.largest[0].loc;
+  document.getElementById('largest').innerHTML = '<tr><th>File</th><th>Lines</th><th></th></tr>' + D.largest.map(h => `<tr><td class="mono">${esc(h.file)}</td><td class="num">${fmt(h.loc)}</td><td style="width:90px"><div class="hbar" style="width:${(h.loc / maxL) * 100}%"></div></td></tr>`).join('');
+  document.getElementById('cycles').innerHTML = [...D.cycles].sort((a, b) => b.length - a.length).map(c => `<div class="cycle"><b>${c.length} files</b><br>${c.slice(0, 6).map(esc).join('<br>')}${c.length > 6 ? '<br>… and ' + (c.length - 6) + ' more' : ''}</div>`).join('');
+  document.getElementById('core').innerHTML = '<tr><th>Module</th><th>Tools</th><th>Importers</th><th>Lines</th></tr>' + [...D.core].sort((a, b) => b.n - a.n).map(c => `<tr><td class="mono">${esc(c.file)}</td><td class="num">${c.n}</td><td class="num">${c.importers}</td><td class="num">${fmt(c.loc)}</td></tr>`).join('');
+  document.getElementById('pkgs').innerHTML = '<tr><th>Package</th><th>Files</th><th>Lines</th></tr>' + D.packages.map(p => `<tr><td class="mono">${esc(p.name)}/</td><td class="num">${p.files}</td><td class="num">${fmt(p.loc)}</td></tr>`).join('');
+  document.getElementById('orph').innerHTML = '<tr><th>File</th><th>Lines</th></tr>' + [...D.backups.map(b => ({ file: b, loc: 'backup copy' })), ...D.orphans].map(o => `<tr><td class="mono">${esc(o.file)}</td><td class="num">${typeof o.loc === 'number' ? fmt(o.loc) : o.loc}</td></tr>`).join('');
+}
+
+const VIEWS = ['overview', 'tools', 'conventions', 'map', 'structure'];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
+  document.querySelectorAll('section.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v));
+  document.querySelectorAll('nav.tabs a').forEach(a => { if (a.dataset.v === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  if (v === 'map') requestAnimationFrame(buildMap);
+}
+
+document.addEventListener('click', e => {
+  const tb = e.target.closest('[data-tool]'); if (tb) { openTool(tb.dataset.tool); return; }
+  const gb = e.target.closest('[data-group]'); if (gb) { activeGroup = gb.dataset.group; renderTools(); return; }
+  const cb = e.target.closest('[data-cell]'); if (cb) { const [id, k] = cb.dataset.cell.split('|'); showCell(id, k); return; }
+  if (e.target.id === 'closeD' || e.target.id === 'dbg') closeTool();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTool(); });
+document.getElementById('q').addEventListener('input', renderTools);
+document.getElementById('sort').addEventListener('change', renderTools);
+document.getElementById('hideIso').addEventListener('change', () => { mapBuilt = false; buildMap(); });
+window.addEventListener('hashchange', route);
+
+fetch('data.json').then(r => r.json()).then(data => {
+  D = data; TOOLS = D.tools; BY = Object.fromEntries(TOOLS.map(t => [t.id, t]));
+  renderOverview(); renderTools(); renderMatrix(); renderStructure(); route();
+}).catch(err => { document.querySelector('main').innerHTML = '<p>The analysis data could not be loaded (' + esc(err.message) + '). Reload the page to try again.</p>'; });
+</script>
+</body>
+</html>
