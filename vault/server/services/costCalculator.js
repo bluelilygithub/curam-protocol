@@ -1,12 +1,28 @@
-// Pricing per 1M tokens (USD) — update as providers change rates
+// Pricing per 1M tokens (USD) — update as providers change rates.
+// Anthropic list prices checked 2026-11-18. Thinking tokens bill as output. Cache and batch discounts are not modelled.
 const PRICING = {
-  // Anthropic
-  'claude-haiku-4-5-20251001':  { input: 0.80,  output: 4.00  },
-  'claude-haiku-4-5':           { input: 0.80,  output: 4.00  },
+  // Anthropic — Fable (most capable, most expensive)
+  'claude-fable-5-2':           { input: 8.00,  output: 40.00 },
+  'claude-fable-5-1':           { input: 10.00, output: 50.00 },
+  'claude-fable-5':             { input: 10.00, output: 50.00 },
+  // Anthropic — Opus
+  'claude-opus-5-5':            { input: 4.00,  output: 20.00 },
+  'claude-opus-5':              { input: 5.00,  output: 25.00 },
+  'claude-opus-4-8':            { input: 5.00,  output: 25.00 },
+  'claude-opus-4-7':            { input: 5.00,  output: 25.00 },
+  'claude-opus-4-6':            { input: 5.00,  output: 25.00 },
+  'claude-opus-4-5':            { input: 5.00,  output: 25.00 },
+  'claude-opus-4-5-20251101':   { input: 5.00,  output: 25.00 },
+  // Anthropic — Sonnet
+  'claude-sonnet-5-5':          { input: 2.00,  output: 10.00 },
+  'claude-sonnet-5':            { input: 2.00,  output: 10.00 },
   'claude-sonnet-4-6':          { input: 3.00,  output: 15.00 },
   'claude-sonnet-4-5':          { input: 3.00,  output: 15.00 },
-  'claude-opus-4-6':            { input: 15.00, output: 75.00 },
-  'claude-opus-4-5':            { input: 15.00, output: 75.00 },
+  'claude-sonnet-4-5-20250929': { input: 3.00,  output: 15.00 },
+  // Anthropic — Haiku. Haiku 5.5 costs $0.50 / $2.50 when one prompt is over 100K tokens; the lower rate is used here.
+  'claude-haiku-5-5':           { input: 0.10,  output: 0.50  },
+  'claude-haiku-4-5-20251001':  { input: 1.00,  output: 5.00  },
+  'claude-haiku-4-5':           { input: 1.00,  output: 5.00  },
   'claude-3-5-sonnet-20241022': { input: 3.00,  output: 15.00 },
   'claude-3-5-haiku-20241022':  { input: 0.80,  output: 4.00  },
   // Google Gemini
@@ -21,9 +37,11 @@ const PRICING = {
 // Fallback: substring match for unknown model IDs
 function lookupBySubstring(modelId) {
   const id = modelId.toLowerCase();
-  if (id.includes('opus'))   return { input: 15.00, output: 75.00 };
+  // Unknown versions get the higher price of their family, so a new id is not under-counted.
+  if (id.includes('fable') || id.includes('mythos')) return { input: 10.00, output: 50.00 };
+  if (id.includes('opus'))   return { input: 5.00,  output: 25.00 };
   if (id.includes('sonnet')) return { input: 3.00,  output: 15.00 };
-  if (id.includes('haiku'))  return { input: 0.80,  output: 4.00  };
+  if (id.includes('haiku'))  return { input: 1.00,  output: 5.00  };
   if (id.includes('pro'))    return { input: 1.25,  output: 10.00 };
   if (id.includes('flash'))  return { input: 0.10,  output: 0.40  };
   return { input: 1.00, output: 5.00 }; // safe generic fallback

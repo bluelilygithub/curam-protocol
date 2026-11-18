@@ -10,6 +10,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { chromium } = require('playwright');
 const { normaliseHttpUrl, checkSsrf } = require('../htmlFetch');
+const { hasPricing, calculateCost } = require('../costCalculator');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -19,15 +20,19 @@ const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // close the Chromium context after 10 m
 
 // Rough Claude pricing for the live cost readout — same "hardcoded id/price is fine
 // for cost display, not for which model ran" exception as costCalculator.js.
+// Exact ids are priced from costCalculator.js; this is only the family fallback (prices checked 2026-11-18).
 const MODEL_PRICE_PER_MTOK = {
   default: { input: 3, output: 15 }, // Sonnet-tier fallback
-  haiku: { input: 0.8, output: 4 },
-  opus: { input: 15, output: 75 },
+  haiku: { input: 1, output: 5 },
+  opus: { input: 5, output: 25 },
+  fable: { input: 10, output: 50 },
 };
 function priceFor(model) {
+  if (hasPricing(model)) return { input: calculateCost(model, 1_000_000, 0), output: calculateCost(model, 0, 1_000_000) };
   const id = String(model || '').toLowerCase();
   if (id.includes('haiku')) return MODEL_PRICE_PER_MTOK.haiku;
   if (id.includes('opus')) return MODEL_PRICE_PER_MTOK.opus;
+  if (id.includes('fable') || id.includes('mythos')) return MODEL_PRICE_PER_MTOK.fable;
   return MODEL_PRICE_PER_MTOK.default;
 }
 
