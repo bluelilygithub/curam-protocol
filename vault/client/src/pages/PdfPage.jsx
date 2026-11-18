@@ -248,11 +248,13 @@ const TOOL_HELP = {
   },
   pdftooffice: {
     title: 'PDF → Word',
-    what: 'Convert a PDF to an editable Word document (.docx) or plain-text file using LibreOffice.',
+    what: 'Convert a PDF to an editable Word document (.docx), OpenDocument (.odt) or plain-text file.',
     features: [
-      'Best for text-heavy PDFs — layout fidelity varies for complex designs',
-      'Outputs .docx (Word), .odt (OpenDocument), or .txt (plain text)',
-      'Uses LibreOffice — no cloud service, no file size restrictions beyond server memory',
+      'Word and OpenDocument are rebuilt with pdf2docx: real paragraphs, tables and pictures, a new page for each PDF page',
+      'Fixes common problems from browser-printed PDFs, such as missing spaces between words',
+      'Plain text (.txt) is extracted with LibreOffice',
+      'Runs on Vault\'s own server: no cloud service',
+      'Complex designs (overlapping boxes, text on pictures) may not match the PDF exactly',
       'Result downloads immediately',
     ],
   },
@@ -3128,7 +3130,7 @@ export default function PdfPage() {
               </p>
               <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 <p style={{ color: 'var(--color-text)' }}><strong>Organise</strong> — Merge, Split (real page-range syntax, <code>1-3,5,7-9</code>), Rotate, Organize Pages (reorder, delete, reverse, insert, extract), Remove Blank Pages, Pages per Sheet.</p>
-                <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> — Images and Text to PDF, Office to PDF and PDF to Word (real LibreOffice conversion), Google Drive to PDF, Extract Text, Pages to Images, Extract Images, and OCR to make scans searchable.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> — Images and Text to PDF, Office to PDF, PDF to Word, PDF to HTML (a responsive web page written by AI), Google Drive to PDF, Extract Text, Pages to Images, Extract Images, and OCR to make scans searchable.</p>
                 <p style={{ color: 'var(--color-text)' }}><strong>Edit</strong> — Watermark, Page Numbers, Header and Footer, Crop, Compress, Password Protect and Remove Password.</p>
                 <p style={{ color: 'var(--color-text)' }}><strong>Forms</strong> — Inspect Fields, Fill Form, Fill and Sign, Annotate, Flatten, and the field designer. Flattening, or Fill Form with flatten on (the default), stamps a value as permanent page content, which is the fix for custom fonts silently showing as Helvetica in Chrome and Adobe Reader.</p>
                 <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> — Metadata (read and write), File Info, and Compare (two PDFs side by side).</p>
@@ -3984,7 +3986,7 @@ export default function PdfPage() {
                   {!pto_file && (
                     <div className="rounded-xl border p-4 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
                       <p className="font-medium mb-1" style={{ color: 'var(--color-text)' }}>Conversion quality</p>
-                      <p className="text-xs">Best for text-heavy PDFs. Complex layouts (columns, images, advanced formatting) may not convert perfectly — this is a LibreOffice limitation, not a bug.</p>
+                      <p className="text-xs">Paragraphs, tables and pictures come through as real Word content, one page per PDF page. Complex designs (overlapping boxes, text on top of pictures) may not match exactly. Scans have no text to convert: run OCR first.</p>
                     </div>
                   )}
                 </div>

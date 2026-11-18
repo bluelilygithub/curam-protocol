@@ -4,7 +4,8 @@ The PDF Tools page is a PDF toolkit mounted in Vault at **`/pdf`**. Stateless �
 
 **Frontend:** `vault/client/src/pages/PdfPage.jsx`
 **Backend:** `vault/server/routes/pdf.js` (mounted at `/api/pdf`)
-**Office conversion:** `vault/server/services/officeConvert.js` (LibreOffice headless)
+**Office conversion:** `vault/server/services/officeConvert.js` (LibreOffice headless: Office → PDF, PDF → .txt)
+**PDF → Word:** `vault/server/services/pdfToWord/` (pdf2docx in Python, `pdf_to_docx.py`; LibreOffice only as fallback)
 **Password protect/remove:** `vault/server/services/pdfCrypto.js` (qpdf headless — see **Password Protect / Remove Password** below)
 **Text → PDF:** `vault/server/services/textToPdf.js`
 **PDF manipulation:** `pdf-lib` · **Image handling:** `sharp` · **Text extraction (Compare's text-diff tab):** `pdf-parse` · **Google Drive:** `googleapis` (reuses `gmail_tokens` OAuth)
@@ -33,7 +34,7 @@ Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon
 | `POST /addfields` | Draw new AcroForm fields (text/checkbox/dropdown) at PDF-point coordinates — see **Field designer** below |
 | `POST /metadata` | Read/write Title/Author/Subject/Keywords/Creator |
 | `POST /office-to-pdf` | DOCX/DOC/ODT/RTF/XLSX/XLS/ODS/CSV/PPTX/PPT/ODP/TXT → PDF via LibreOffice |
-| `POST /pdf-to-office` | PDF → DOCX/ODT/TXT via LibreOffice (no Drive equivalent this direction) |
+| `POST /pdf-to-office` | PDF → DOCX via pdf2docx (real paragraphs, tables, pictures, a page per PDF page); ODT = that DOCX converted by LibreOffice; TXT via LibreOffice. If pdf2docx is missing on the image (`PDF2DOCX_MISSING`) it falls back to LibreOffice, which stacks every page onto page 1. No Drive equivalent this direction |
 | `POST /google-to-pdf` | Google Docs/Sheets/Slides/Drive file URL → PDF, via the user's connected Drive |
 | `POST /organize` | Reorder/delete/insert/extract pages — see **Organize Pages** below |
 | `POST /sign` | Stamp a signature/date/initials onto page content — see **Fill & Sign** below |
@@ -50,7 +51,7 @@ Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon
 | `POST /to-html` | Chosen pages (max 5) → one responsive HTML file + the pictures inside those pages — see **PDF → HTML** below |
 | `POST /to-html/revise` | Rewrite that HTML with a change the person asked for |
 
-`office-to-pdf`/`pdf-to-office` return `500` with an explicit message if LibreOffice isn't on the server image (`err.code === 'ENOENT'`). `google-to-pdf` checks the stored OAuth scope string for `drive.readonly` before calling the API and returns `needsReconnect: true` if it's missing.
+`office-to-pdf`/`pdf-to-office` return `500` with an explicit message if LibreOffice (or, for PDF → Word, both pdf2docx and LibreOffice) isn't on the server image (`err.code === 'ENOENT'`). `google-to-pdf` checks the stored OAuth scope string for `drive.readonly` before calling the API and returns `needsReconnect: true` if it's missing.
 
 ---
 

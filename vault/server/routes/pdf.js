@@ -845,7 +845,7 @@ router.post('/pdf-to-office', async (req, res) => {
   } catch (err) {
     console.error('PDF pdf-to-office:', err);
     if (err.code === 'ENOENT')
-      return res.status(500).json({ error: 'PDF → Word conversion requires LibreOffice, which is not available on this server. This feature is coming soon.' });
+      return res.status(500).json({ error: 'PDF → Word needs pdf2docx or LibreOffice on the server, and neither is available right now. The server image may still be deploying: try again in a few minutes.' });
     res.status(500).json({ error: err.message || 'Conversion failed.' });
   }
 });

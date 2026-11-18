@@ -1357,7 +1357,8 @@ function UserGuidePage() {
           <LI><strong>Split</strong> — extract a page range (e.g. <code>1-3,5,7-9</code>).</LI>
           <LI><strong>Rotate</strong> — rotate all or selected pages by any angle.</LI>
           <LI><strong>Organize pages</strong> — drag-and-drop thumbnail grid to reorder, delete, or insert pages from a second PDF at any position.</LI>
-          <LI><strong>Office ↔ PDF</strong> — DOCX/XLSX/PPTX/ODT/RTF/CSV/TXT to PDF and back, via LibreOffice.</LI>
+          <LI><strong>Office → PDF</strong> — DOCX/XLSX/PPTX/ODT/RTF/CSV/TXT to PDF, via LibreOffice.</LI>
+          <LI><strong>PDF → Word</strong> — PDF to an editable .docx or .odt with real paragraphs, tables and pictures (pdf2docx), or to plain .txt.</LI>
           <LI><strong>Google Drive ↔ PDF</strong> — export a Google Doc/Sheet/Slide as PDF, or convert an Office file already in Drive, using your connected Drive account.</LI>
           <LI><strong>Image ↔ PDF</strong> — JPEG/PNG images into one PDF, or the reverse.</LI>
           <LI><strong>PDF → HTML</strong> — turn one to five pages into a responsive web page. The AI model from Settings writes the HTML and the pictures inside the PDF are saved as image files it uses. Preview at phone, tablet and desktop width, ask for changes in plain words (Undo goes back), edit the code by hand, then download a zip with <code>index.html</code> and an <code>images</code> folder. Charts drawn with lines become a labelled placeholder. Nothing is kept, so download before you leave.</LI>
