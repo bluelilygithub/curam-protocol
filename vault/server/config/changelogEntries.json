@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "c6183f97",
+   "fullHash": "c6183f97f12c3ac77d8b664fce093871ec3d0f33",
+   "committedAt": "2026-11-18T10:25:22+10:00",
+   "author": "mrb",
+   "subject": "PDF Tools: PDF -> HTML with picture extraction, preview, change requests and zip",
+   "filesChanged": 9,
+   "insertions": 691,
+   "deletions": 4,
+   "area": "PDF Tools",
+   "goal": "Turn a PDF page (or up to 5 pages) into a responsive static web page that uses the pictures inside the PDF, let the owner preview it and ask for changes, and download it as a zip.",
+   "whatChanged": "New Convert tool PDF → HTML. The browser renders each chosen page (about 1400 px) and reads its text; POST /api/pdf/to-html copies only those pages into a small PDF, extracts their pictures with the existing Extract Images code (JPEG 2000 converted to PNG), names them image-01.jpg, image-02.png …, and sends the page pictures, up to 20 extracted pictures and the text to the standard-tier model with vision, which writes one HTML file with its CSS built in. Preview in a sandboxed iframe at Phone (390), Tablet (768) or Desktop width; Ask for a change (typed or spoken) calls /to-html/revise, which rewrites the whole page; Undo keeps 20 versions; Code view allows hand edits; Download zip (index.html + images/) is built in the browser. Model output is cleaned: scripts, frames, link/base tags, meta refresh, on* handlers and javascript: links removed. Provider errors are returned as 502, so a provider 401 cannot sign the person out. Registered in MODES, groups, tips, help and the PDF guide catalogue (HTML removed from its not-possible list); three icons added; this tool gets a 1700px panel. Logged as pdf_html / pdf_html_revise. Docs updated.",
+   "filesImpacted": [
+    "server/services/pdfToHtml.js",
+    "server/services/pdfToHtml.test.js",
+    "server/routes/pdf.js",
+    "server/services/pdfTutor.js",
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "client/src/pages/PdfPage.jsx",
+    "client/src/providers/iconMap.js",
+    "docs/pdf-agent.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "A PDF flyer or page can become a phone-friendly web page with its images in minutes, refined in plain words, without hand-coding.",
+   "concerns": "Not verified with a real AI model: the local Claude and Gemini keys were invalid, so the browser flow (upload, convert, phone/tablet/desktop preview, change, undo, code view, zip) was checked locally with a stand-in model only; real output quality and timing are unproven until the first live run. Each convert or change is one standard-tier vision call (cost not measured; up to 16,000 output tokens, 4-minute timeout). Charts and logos drawn as vector lines are not extracted and become a labelled placeholder. Results are not stored; leaving the page loses them. A default model without vision (DeepSeek, Ollama) gets a clear error."
+  },
+  {
    "commit": "570b84c9",
    "fullHash": "570b84c91ca29e735cad3c59bfc0335963400165",
    "committedAt": "2026-11-18T09:36:14+10:00",
