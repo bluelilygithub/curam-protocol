@@ -27,6 +27,8 @@ const VIEWS = [
   { id: 'desktop', label: 'Desktop', width: null, icon: 'monitor', tip: 'Show the page as wide as this panel.' },
 ];
 
+const SHOW_ORIGINAL_KEY = 'vault_pdf_html_show_original';
+
 const baseName = (f) => (f?.name || 'document').replace(/\.pdf$/i, '');
 
 // Each chosen page rendered about 1400 px wide. A tall page (a website mock-up) is cut into slices top to bottom so the model can read
@@ -38,6 +40,7 @@ async function renderPagesForModel(dataUrl, pageNumbers) {
   const pageImages = [];
   const pageTexts = [];
   const slices = [];
+  const originals = []; // each whole page as one picture, for the "Show original" pane (not sent to the server)
   for (const [idx, n] of pageNumbers.entries()) {
     const page = await doc.getPage(n);
     const base = page.getViewport({ scale: 1 });
@@ -68,9 +71,10 @@ async function renderPagesForModel(dataUrl, pageNumbers) {
       slices.push({ page: n, part: i + 1, parts: bands.length });
       part.width = part.height = 0;
     }
+    originals.push({ page: n, dataUrl: canvas.toDataURL('image/jpeg', 0.8) });
     canvas.width = canvas.height = 0;
   }
-  return { pageImages, pageTexts, slices };
+  return { pageImages, pageTexts, slices, originals };
 }
 
 // The preview iframe cannot reach images/… (it has no files), so each path is swapped for the picture's data URL.
@@ -93,6 +97,8 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
   const [view, setView] = useState('desktop');
   const [tab, setTab] = useState('preview');
   const [note, setNote] = useState('');
+  const [showOriginal, setShowOriginal] = useState(() => { try { return localStorage.getItem(SHOW_ORIGINAL_KEY) !== '0'; } catch { return true; } });
+  const toggleOriginal = () => setShowOriginal((v) => { try { localStorage.setItem(SHOW_ORIGINAL_KEY, v ? '0' : '1'); } catch { /* not remembered */ } return !v; });
   const [modelCfg, setModelCfg] = useState(null); // which model will write the page (services/pdfToHtmlModel.js)
 
   useEffect(() => {
@@ -124,11 +130,11 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
     setBusy(true); reset();
     startProcessing('Building the web page…', `${pages.length} page${pages.length !== 1 ? 's' : ''} of ${file.name}. This usually takes one to two minutes.`);
     try {
-      const { pageImages, pageTexts, slices } = await renderPagesForModel(file.dataUrl, pages);
+      const { pageImages, pageTexts, slices, originals } = await renderPagesForModel(file.dataUrl, pages);
       const res = await api.post('/api/pdf/to-html', { dataUrl: file.dataUrl, pages, pageImages, pageTexts, slices, filename: file.name });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not build the web page.');
-      setResult({ images: data.images || [], pageImages, skipped: data.skipped || 0, model: data.model });
+      setResult({ images: data.images || [], pageImages, originals, skipped: data.skipped || 0, model: data.model });
       setHtml(data.html);
     } catch (err) {
       setError(err.message || 'Could not build the web page.');
@@ -287,6 +293,11 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
                   <span className="inline-flex items-center gap-1">{getIcon('file-code', { size: 12 })} Code</span>
                 </button>
               </Tooltip>
+              <Tooltip text={showOriginal ? 'Hide the original PDF page.' : 'Show the original PDF page beside the web page or the code, to compare them.'}>
+                <button type="button" onClick={toggleOriginal} aria-pressed={showOriginal} className={smallBtn} style={{ ...smallBtnStyle, ...(showOriginal ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)' } : {}) }}>
+                  <span className="inline-flex items-center gap-1">{getIcon('columns', { size: 12 })} {showOriginal ? 'Hide original' : 'Show original'}</span>
+                </button>
+              </Tooltip>
             </div>
             {tab === 'preview' && (
               <div className="flex gap-1">
@@ -300,6 +311,22 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
               </div>
             )}
           </div>
+          <div className={showOriginal ? 'grid grid-cols-1 xl:grid-cols-2' : ''}>
+          {showOriginal && (
+            <div className="border-b xl:border-b-0 xl:border-r" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs px-3 pt-2" style={muted}>Original PDF{(result?.originals || []).length > 1 ? ` (${result.originals.length} pages)` : ''}</p>
+              <div className="overflow-y-auto p-3 space-y-3" style={{ height: '75vh' }}>
+                {(result?.originals || []).length ? result.originals.map((o) => (
+                  <figure key={o.page} className="m-0">
+                    {result.originals.length > 1 && <figcaption className="text-xs mb-1" style={muted}>Page {o.page}</figcaption>}
+                    <img src={o.dataUrl} alt={`Page ${o.page} of the original PDF`} className="block w-full h-auto rounded border" style={{ borderColor: 'var(--color-border)', background: '#fff' }} />
+                  </figure>
+                )) : (
+                  <PdfPagePreview dataUrl={file?.dataUrl} />
+                )}
+              </div>
+            </div>
+          )}
           {tab === 'preview' ? (
             <div className="overflow-x-auto p-3" style={{ background: 'var(--color-bg)' }}>
               <iframe
@@ -321,6 +348,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
               style={{ height: '75vh', background: 'var(--color-bg)', color: 'var(--color-text)', resize: 'vertical' }}
             />
           )}
+          </div>
         </div>
       )}
     </section>
