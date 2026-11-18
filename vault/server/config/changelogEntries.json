@@ -2,6 +2,50 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "66a0b497",
+   "fullHash": "66a0b497992ea472e474d10d48351eb41df9899b",
+   "committedAt": "2026-11-18T11:19:55+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: read tall pages in slices, text in reading order, pictures as contact sheets, skip non-content layers",
+   "filesChanged": 8,
+   "insertions": 297,
+   "deletions": 70,
+   "area": "PDF Tools",
+   "goal": "The owner's website mock-up (one 612 × 4535 pt page) came out badly: the model saw the page about 210 px wide, got the text out of order, missed most logos and used blank layers and a toolbar strip as pictures.",
+   "whatChanged": "Browser (new client/src/pages/pdf/pdfToHtmlLayout.mjs + test): a page taller than 1.6 × its width is cut into about 1400 px square slices top to bottom (40 px overlap, at most 14), each with its own text in reading order (items sorted by position into lines; a wide gap on one line kept apart with \" │ \"). Server (pdfToHtml.js): accepts slices with page/part labels; extracted pictures go to the model as 1024 px contact sheets of 16 on mid grey (white logos visible), each tile named in the prompt, within the 20-picture limit; pictures that are not content (plain one-colour layer, or a strip thinner than 24 px or 12 × longer than wide) are marked aiSkip, kept in the zip but not offered to the model, and the tool says so on hover. Prompt now says: layout, order and colours from the pictures, words from the text, no invented sections or menus, every logo in a logo grid, exact phone numbers and emails. Help text and docs updated.",
+   "filesImpacted": [
+    "client/src/pages/pdf/pdfToHtmlLayout.mjs",
+    "client/src/pages/pdf/pdfToHtmlLayout.test.mjs",
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "client/src/pages/PdfPage.jsx",
+    "server/services/pdfToHtml.js",
+    "server/services/pdfToHtml.test.js",
+    "server/routes/pdf.js",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "Long website mock-ups and similar tall pages reach the model readable and in order, with every logo and photo, so the page it builds can follow the design.",
+   "concerns": "Checked locally with the owner's PDF in a browser: 8 readable slices, text in page order, 31 pictures on 2 sheets, the 3 non-content pictures held back. The model's answer was NOT checked (local AI keys invalid), so the improvement in the built page is expected, not seen. Each request is larger (8 slices + 2 sheets, about 4.7 MB from the browser), so cost per conversion rises. Automatic still picks the first Claude model (Haiku in production); Sonnet is likely to do better on a page this size."
+  },
+  {
+   "commit": "a265a062",
+   "fullHash": "a265a062af10c3aa3a39f6c0ec58e39d2a18966c",
+   "committedAt": "2026-11-18T11:19:46+10:00",
+   "author": "mrb",
+   "subject": "Extract Images: follow indirect colour spaces (palette logos and CMYK photos were skipped or left unconverted)",
+   "filesChanged": 2,
+   "insertions": 18,
+   "deletions": 3,
+   "area": "PDF Tools",
+   "goal": "Stop Extract Images (and PDF → HTML, which uses it) skipping pictures whose colour space is stored as a reference to another object.",
+   "whatChanged": "rebuildRaster now reads /ColorSpace with lookup instead of get, so a palette (Indexed) picture whose colour space is an indirect reference is rebuilt as PNG instead of being skipped as \"special colour format\". The JPEG branch also follows the reference and treats a 4-channel ICC profile as CMYK, so those JPEGs are converted to RGB. On the owner's website mock-up PDF, 21 of 34 pictures (all the client logos) were skipped before; now all 34 come out. New test in pdfTools.test.js (fails without the fix).",
+   "filesImpacted": [
+    "server/services/pdfTools.js",
+    "server/services/pdfTools.test.js"
+   ],
+   "benefit": "Logos and other palette pictures from design tools now come out of Extract Images and reach PDF → HTML.",
+   "concerns": "The CMYK-by-reference JPEG path is covered by reasoning only, not by its own test."
+  },
+  {
    "commit": "e1761d50",
    "fullHash": "e1761d50162281585a1c714387cfd570e911123d",
    "committedAt": "2026-11-18T10:56:26+10:00",
