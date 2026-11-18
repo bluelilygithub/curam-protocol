@@ -16,7 +16,11 @@ const sharp = require('sharp');
 const pdfTools = require('./pdfTools');
 
 const MAX_PAGES = 5;
-const MAX_VISION_IMAGES = 20; // extracted pictures shown to the model; the rest are listed by name and size only
+// Picture limits, kept well inside what Claude and Gemini accept (Claude: over 20 pictures in one request and every picture must be
+// 2000 px or less; it shrinks anything over about 1568 px anyway). Same idea as Graphics (1024 px) and Video Tools (512 px, 24 pictures).
+const MAX_VISION_TOTAL = 20; // page pictures + extracted pictures shown to the model; the rest are listed by name and size only
+const PAGE_MAX_SIDE = 1568; // each page picture, longest side
+const IMAGE_MAX_SIDE = 512; // each extracted picture's copy for the model (the zip keeps the originals)
 const MAX_TEXT_PER_PAGE = 12000;
 const MAX_HTML_IN = 200000; // a change request sends the current HTML back
 const MAX_INSTRUCTION = 2000;
@@ -77,7 +81,7 @@ async function collectImages(subsetBuf) {
 // A smaller copy for the model to look at (transparent areas on white).
 async function visionCopy(img) {
   try {
-    const buf = await sharp(img.bytes).resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
+    const buf = await sharp(img.bytes).resize({ width: IMAGE_MAX_SIDE, height: IMAGE_MAX_SIDE, fit: 'inside', withoutEnlargement: true })
       .flatten({ background: '#ffffff' }).jpeg({ quality: 75 }).toBuffer();
     return { mimeType: 'image/jpeg', data: buf.toString('base64') };
   } catch { return null; }
@@ -167,10 +171,9 @@ async function callForHtml(userId, prompt, visionImages, feature, deps) {
   try {
     result = await call(standard, prompt, { system: SYSTEM, maxTokens: MAX_TOKENS, returnUsage: true, timeoutMs: TIMEOUT_MS, images: visionImages });
   } catch (err) {
-    if (/cannot look at pictures/.test(err.message)) throw Object.assign(new Error(`The default model (${standard}) cannot look at pictures. Choose a Claude or Gemini model as the default in Settings.`), { status: 400 });
-    // Never pass the provider's own status on: a 401 from the AI provider would sign the person out of Vault.
-    console.error('[pdfToHtml] model call failed:', err.status || '', err.message);
-    throw Object.assign(new Error(/timed out/i.test(err.message) ? 'The AI model took too long. Try fewer pages.' : 'The AI model could not be reached. Try again in a minute.'), { status: 502 });
+    if (/cannot look at pictures/.test(err.message)) throw Object.assign(new Error(`The model ${standard} cannot look at pictures. Choose a Claude or Gemini model in Settings → PDF Tools.`), { status: 400 });
+    console.error('[pdfToHtml] model call failed:', standard, err.status || '', err.message, `pictures=${(visionImages || []).length}`, `promptChars=${String(prompt).length}`);
+    throw modelFailure(err, standard);
   }
   (deps.logUsage || require('../utils/logUsage').logUsage)({ userId, model: result.model || standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature });
   const stop = result.diagnostics?.stopReason || result.diagnostics?.finishReason;
@@ -178,8 +181,49 @@ async function callForHtml(userId, prompt, visionImages, feature, deps) {
   return { html: cleanHtml(result.text), model: result.model || standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens };
 }
 
-function pageVision(pageImages) {
-  return (pageImages || []).slice(0, MAX_PAGES).map(dataUrlParts).filter((p) => p && /^image\/(jpeg|png|webp)$/.test(p.mimeType));
+// The browser's page pictures, re-made here at most PAGE_MAX_SIDE px as JPEG whatever size arrived (a tall page could be over 2000 px).
+async function pageVision(pageImages) {
+  const out = [];
+  for (const p of (pageImages || []).slice(0, MAX_PAGES).map(dataUrlParts)) {
+    if (!p || !/^image\/(jpeg|png|webp)$/.test(p.mimeType)) continue;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const buf = await sharp(Buffer.from(p.data, 'base64')).resize({ width: PAGE_MAX_SIDE, height: PAGE_MAX_SIDE, fit: 'inside', withoutEnlargement: true })
+        .flatten({ background: '#ffffff' }).jpeg({ quality: 82 }).toBuffer();
+      out.push({ mimeType: 'image/jpeg', data: buf.toString('base64') });
+    } catch { out.push({ mimeType: p.mimeType, data: p.data }); /* could not be resized here: send it as it came (the browser already sends ~1400 px) */ }
+  }
+  return out;
+}
+
+// The provider's own reason in plain words, e.g. "400: image dimensions exceed …" (Anthropic JSON body, or Gemini's "[400 Bad Request] …").
+function providerReason(err) {
+  const raw = String((err && err.message) || err || '');
+  const at = raw.indexOf('{');
+  if (at >= 0) {
+    try {
+      const data = JSON.parse(raw.slice(at));
+      const msg = (data.error && (data.error.message || data.error.type)) || data.message;
+      const status = err.status || (raw.slice(0, at).trim().match(/^\d{3}/) || [])[0];
+      if (msg) return `${status ? `${status}: ` : ''}${msg}`.slice(0, 300);
+    } catch { /* not JSON */ }
+  }
+  const gemini = raw.match(/\[(\d{3})[^\]]*\]\s*([^[]+)/);
+  if (gemini) return `${gemini[1]}: ${gemini[2].trim()}`.slice(0, 300);
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
+// What the person sees when the model call fails. Never the provider's own status code: a 401 from it would sign the person out of Vault.
+function modelFailure(err, modelId) {
+  const why = providerReason(err);
+  const status = Number(err && err.status) || Number((why.match(/^(\d{3}):/) || [])[1]) || 0;
+  let lead = `The AI model (${modelId}) returned an error.`;
+  if (/timed out/i.test(why)) lead = `The AI model (${modelId}) took too long. Try fewer pages.`;
+  else if (status === 529 || status === 503 || /overloaded/i.test(why)) lead = `The AI model (${modelId}) is busy right now. Try again in a minute.`;
+  else if (status === 429) lead = `Too many requests to the AI model (${modelId}) just now. Try again in a minute.`;
+  else if (status === 401 || status === 403) lead = `The AI provider rejected Vault's key for ${modelId}. An admin needs to check the API key.`;
+  else if (status === 404) lead = `The AI provider does not know the model ${modelId}. An admin can choose another in Settings → PDF Tools.`;
+  return Object.assign(new Error(why ? `${lead} Reason: ${why}` : lead), { status: 502 });
 }
 
 /**
@@ -190,13 +234,13 @@ async function createHtml(userId, { pdfBuf, pages, pageImages, pageTexts, title 
   const list = (Array.isArray(pages) ? pages : []).slice(0, MAX_PAGES + 1);
   if (!list.length) throw Object.assign(new Error('Choose at least one page.'), { status: 400 });
   if (list.length > MAX_PAGES) throw Object.assign(new Error(`Up to ${MAX_PAGES} pages at a time.`), { status: 400 });
-  const pagesSeen = pageVision(pageImages);
+  const pagesSeen = await pageVision(pageImages);
   if (pagesSeen.length !== list.length) throw Object.assign(new Error('The page pictures did not arrive. Try again.'), { status: 400 });
   const { bytes } = await subsetPdf(pdfBuf, list);
   const { images, skipped, skippedReasons } = await collectImages(bytes);
   const shown = [];
   const vision = [...pagesSeen];
-  for (const im of images.slice(0, MAX_VISION_IMAGES)) {
+  for (const im of images.slice(0, Math.max(0, MAX_VISION_TOTAL - pagesSeen.length))) {
     // eslint-disable-next-line no-await-in-loop
     const v = await visionCopy(im);
     if (v) { shown.push(im); vision.push(v); }
@@ -221,10 +265,10 @@ async function reviseHtml(userId, { html, instruction, images, pageImages }, dep
   const list = (Array.isArray(images) ? images : []).slice(0, 500).map((im) => ({
     name: String(im?.name || '').replace(/[^a-z0-9._-]/gi, '').slice(0, 60), width: Number(im?.width) || 0, height: Number(im?.height) || 0,
   })).filter((im) => im.name);
-  const vision = pageVision(pageImages);
+  const vision = await pageVision(pageImages);
   const prompt = buildRevisePrompt({ html: current, instruction: ask, images: list, pageCount: Math.max(1, vision.length) });
   const out = await callForHtml(userId, prompt, vision, 'pdf_html_revise', deps);
   return { html: out.html, used: usedImageNames(out.html, list), model: out.model };
 }
 
-module.exports = { createHtml, reviseHtml, cleanHtml, buildCreatePrompt, buildRevisePrompt, subsetPdf, collectImages, usedImageNames, SYSTEM, MAX_PAGES };
+module.exports = { createHtml, reviseHtml, cleanHtml, providerReason, modelFailure, buildCreatePrompt, buildRevisePrompt, subsetPdf, collectImages, usedImageNames, SYSTEM, MAX_PAGES };

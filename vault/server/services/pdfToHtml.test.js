@@ -7,9 +7,9 @@
 const assert = require('assert');
 const { PDFDocument } = require('pdf-lib');
 const sharp = require('sharp');
-const { createHtml, reviseHtml, cleanHtml, usedImageNames, SYSTEM, MAX_PAGES } = require('./pdfToHtml');
+const { createHtml, reviseHtml, cleanHtml, usedImageNames, providerReason, modelFailure, SYSTEM, MAX_PAGES } = require('./pdfToHtml');
 
-const PAGE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+let PAGE_PNG = ''; // a small valid PNG, made by sharp at the start (a hand-typed one was rejected now and then by libspng)
 const PAGE = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>img{max-width:100%;height:auto}</style></head><body><main><h1>Hi</h1><img src="images/image-01.jpg" alt="Blue"></main></body></html>`;
 
 function stubDeps(reply, seen = {}) {
@@ -24,6 +24,7 @@ function stubDeps(reply, seen = {}) {
 }
 
 (async () => {
+  PAGE_PNG = `data:image/png;base64,${(await sharp({ create: { width: 4, height: 4, channels: 3, background: '#ffffff' } }).png().toBuffer()).toString('base64')}`;
   // ---- cleanHtml: fences, chatter, scripts, handlers and javascript: links go; the page's own words stay ----
   {
     const raw = 'Here you go:\n```html\n<html><head><script src="x.js"></script><link rel="stylesheet" href="https://x/y.css"></head>'
@@ -73,8 +74,9 @@ function stubDeps(reply, seen = {}) {
 
     // the AI provider's own 401 must not reach the browser (it would sign the person out)
     const down = stubDeps(PAGE);
-    down.callModel = async () => { throw Object.assign(new Error('invalid x-api-key'), { status: 401 }); };
-    await assert.rejects(createHtml('u1', { pdfBuf, pages: [1], pageImages: [PAGE_PNG], pageTexts: [] }, down), (e) => e.status === 502 && /could not be reached/.test(e.message));
+    down.callModel = async () => { throw Object.assign(new Error('401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'), { status: 401 }); };
+    await assert.rejects(createHtml('u1', { pdfBuf, pages: [1], pageImages: [PAGE_PNG], pageTexts: [] }, down),
+      (e) => e.status === 502 && /rejected Vault's key for claude-test/.test(e.message) && /Reason: 401: invalid x-api-key/.test(e.message));
 
     // a cut-off answer is reported, not shown
     const cut = stubDeps(PAGE);
@@ -95,6 +97,42 @@ function stubDeps(reply, seen = {}) {
     assert.strictEqual(seen.logged.feature, 'pdf_html_revise');
     await assert.rejects(reviseHtml('u1', { html: PAGE, instruction: '  ' }, stubDeps(next)), /Say what to change/);
     await assert.rejects(reviseHtml('u1', { html: '', instruction: 'x' }, stubDeps(next)), /no web page/);
+  }
+
+  // ---- the provider's real reason is shown, in plain words ----
+  assert.strictEqual(providerReason(Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"image too big"}}'), { status: 400 })), '400: image too big');
+  assert.strictEqual(providerReason(new Error('[GoogleGenerativeAI Error]: Error fetching from https://x: [400 Bad Request] API key not valid.')), '400: API key not valid.');
+  assert.match(modelFailure(Object.assign(new Error('529 {"error":{"type":"overloaded_error","message":"Overloaded"}}'), { status: 529 }), 'm1').message, /m1\) is busy right now.*Reason: 529: Overloaded/);
+  assert.match(modelFailure(new Error('Model call timed out after 240s (m1)'), 'm1').message, /took too long/);
+  assert.match(modelFailure(Object.assign(new Error('404 {"error":{"message":"model: x"}}'), { status: 404 }), 'm1').message, /does not know the model m1/);
+
+  // ---- pictures stay inside the providers' limits: a tall page is shrunk, and never more than 20 pictures in one request ----
+  {
+    const tall = `data:image/jpeg;base64,${(await sharp({ create: { width: 1400, height: 4200, channels: 3, background: '#ffffff' } }).jpeg().toBuffer()).toString('base64')}`;
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([600, 1800]);
+    for (let i = 0; i < 30; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const jpg = await sharp({ create: { width: 900 + i, height: 700, channels: 3, background: { r: i * 8, g: 100, b: 200 } } }).jpeg().toBuffer();
+      // eslint-disable-next-line no-await-in-loop
+      page.drawImage(await doc.embedJpg(jpg), { x: 10, y: i * 50, width: 40, height: 30 });
+    }
+    const pdfBuf = Buffer.from(await doc.save());
+    const seen = {};
+    const out = await createHtml('u1', { pdfBuf, pages: [1], pageImages: [tall], pageTexts: [''] }, stubDeps(PAGE, seen));
+    assert.strictEqual(out.images.length, 30, 'every picture is still in the zip');
+    assert.strictEqual(seen.opts.images.length, 20, 'at most 20 pictures go to the model');
+    for (const im of seen.opts.images) {
+      // eslint-disable-next-line no-await-in-loop
+      const meta = await sharp(Buffer.from(im.data, 'base64')).metadata();
+      assert.ok(Math.max(meta.width, meta.height) <= 1568, `picture ${meta.width}x${meta.height} is within limits`);
+      assert.strictEqual(im.mimeType, 'image/jpeg');
+    }
+    const first = await sharp(Buffer.from(seen.opts.images[0].data, 'base64')).metadata();
+    assert.strictEqual(first.height, 1568, 'the tall page was shrunk to 1568 px');
+    const second = await sharp(Buffer.from(seen.opts.images[1].data, 'base64')).metadata();
+    assert.ok(Math.max(second.width, second.height) <= 512, 'extracted picture copies are 512 px or less');
+    assert.match(seen.prompt, /image-30\.jpg \(929×700 px\) \(not shown\)/, 'pictures not shown are still listed');
   }
 
   console.log('pdfToHtml tests passed');
