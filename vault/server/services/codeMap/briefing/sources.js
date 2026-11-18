@@ -14,7 +14,9 @@ const RULE_SOURCES = ['CLAUDE.md', 'docs/core-conventions.md'];
 
 // The docs ticked by default in Context → CLAUDE.md (the owner can untick them; the choice is saved per admin). CLAUDE.md itself is always
 // in the copy and is not on this list. A test fails if any of these paths stops existing.
-const DEFAULT_BRIEFING_DOCS = ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md', 'docs/video-tools.md'];
+// docs/video-tools.md was a default until 2026-11-19: about 20,000 tokens, mostly ffmpeg detail, with its conventions already covered by
+// these three and CLAUDE.md, so it is optional now (with a note on when to tick it).
+const DEFAULT_BRIEFING_DOCS = ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md'];
 
 // Docs outside docs/ that may be offered: exact paths only, no wildcards (docs.js also checks each path stays inside the repo).
 const EXTRA_BRIEFING_DOCS = ['client/DESIGN.md', 'ROADMAP.md', 'BACKUP.md', 'planner-core/README.md', 'room-planner/README.md'];

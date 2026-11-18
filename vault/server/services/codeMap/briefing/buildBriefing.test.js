@@ -291,4 +291,18 @@ t('the docs list does not count towards the size limit, so it never trims the to
   assert.match(out.markdown, /\| Tool \| Group \|/);
 });
 
+t('every doc summary says what the doc covers, not its status, date or a fragment', () => {
+  const weak = docs.docCatalog().docs.filter((d) => !d.summary || /^[a-z]/.test(d.summary) || /^(Status|Scoped|Written|Works as of|Decision record|Added|Built|Renamed|Moved)/.test(d.summary));
+  assert.deepStrictEqual(weak.map((d) => `${d.path}: ${d.summary}`), [], 'add a line to DOC_SUMMARIES in docs.js (or tool-purposes.md for a tool doc)');
+  for (const p of ['docs/crm-deals-schema.md', 'docs/ponytail-report.md', 'docs/gmail-routing-removed.md', 'docs/brand-from-url.md', 'docs/vault-shelf.md', 'docs/email-follow-up-case-model.md']) {
+    assert.ok(docs.docCatalog().docs.find((d) => d.path === p).summary.length > 60, `${p} has a written summary`);
+  }
+});
+
+t('docs/video-tools.md is optional, shown with its note', () => {
+  const v = docs.docCatalog().docs.find((d) => d.path === 'docs/video-tools.md');
+  assert.strictEqual(v.isDefault, false);
+  assert.match(v.note, /media-heavy/);
+});
+
 console.log(`buildBriefing tests passed (${passed})`);

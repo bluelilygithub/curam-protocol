@@ -194,7 +194,8 @@ async function serve(jobs) {
       const c = await s.call('GET', '/api/code-map/briefing/claude-md');
       assert.strictEqual(c.status, 200);
       assert.match(c.body.text, /^# Curam Vault/);
-      assert.deepStrictEqual(c.body.selected, ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md', 'docs/video-tools.md']);
+      assert.deepStrictEqual(c.body.selected, ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md']);
+      assert.strictEqual(c.body.docs.find((d) => d.path === 'docs/video-tools.md').isDefault, false, 'video-tools is optional');
       assert.strictEqual(c.body.customised, false);
       assert.deepStrictEqual(c.body.missing, []);
       const finance = c.body.docs.find((d) => d.path === 'docs/finance.md');
@@ -213,7 +214,7 @@ async function serve(jobs) {
       const reset = await s.call('DELETE', '/api/code-map/briefing/docs');
       assert.strictEqual(reset.body.customised, false);
       assert.ok(!serve.settings.has('3:code_map_briefing_docs'));
-      assert.strictEqual((await s.call('GET', '/api/code-map/briefing/claude-md')).body.selected.length, 4);
+      assert.strictEqual((await s.call('GET', '/api/code-map/briefing/claude-md')).body.selected.length, 3);
     });
 
     await t('Context: the copy is built on the server from the allow-list only, ending with the not-included list', async () => {
@@ -227,7 +228,7 @@ async function serve(jobs) {
       assert.ok(r.body.text.trim().endsWith('If the work needs any of these, ask me to include them next time.'));
       assert.strictEqual((await s.call('POST', '/api/code-map/briefing/docs-copy', { paths: 'x' })).status, 400);
       const byDefault = await s.call('POST', '/api/code-map/briefing/docs-copy', {});
-      assert.deepStrictEqual(byDefault.body.included, ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md', 'docs/video-tools.md']);
+      assert.deepStrictEqual(byDefault.body.included, ['client/DESIGN.md', 'docs/hardening.md', 'docs/guide-chat.md']);
     });
   } finally {
     await s.close();

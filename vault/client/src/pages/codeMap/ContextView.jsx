@@ -188,8 +188,8 @@ function ClaudeMd({ info }) {
   if (!info) return <Skeleton lines={6} label="Loading CLAUDE.md" />;
 
   const defaults = info.docs.filter((d) => d.isDefault);
-  const featured = info.docs.filter((d) => !d.isDefault && (d.linked || d.extra));
-  const others = info.docs.filter((d) => !d.isDefault && !d.linked && !d.extra);
+  const featured = info.docs.filter((d) => !d.isDefault && (d.linked || d.extra || d.note));
+  const others = info.docs.filter((d) => !d.isDefault && !d.linked && !d.extra && !d.note);
   const tickedDocs = info.docs.filter((d) => picked.has(d.path));
   // CLAUDE.md + the ticked docs + about one short line per doc left out
   const estimate = info.tokens + tickedDocs.reduce((n, d) => n + d.tokens, 0) + (info.docs.length - tickedDocs.length) * 35;
@@ -239,7 +239,7 @@ function ClaudeMd({ info }) {
         <Tooltip text="Size of the copy: CLAUDE.md, the ticked docs and the short list of the rest. Tokens are characters divided by 4.">
           <span tabIndex={0} className="text-xs" style={{ color: 'var(--color-muted)' }}>about {tokensLabel(estimate)} tokens</span>
         </Tooltip>
-        <Tooltip text="Tick the default set again (client/DESIGN.md, hardening, guide chat, video tools) and forget your own choice.">
+        <Tooltip text="Tick the default set again (client/DESIGN.md, hardening, guide chat) and forget your own choice.">
           <button type="button" onClick={reset} disabled={!customised} className="text-xs hover:opacity-70 transition-opacity duration-200 disabled:opacity-40" style={{ color: 'var(--color-primary)' }}>Reset to defaults</button>
         </Tooltip>
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{customised ? 'Your choice is saved.' : 'Using the default set.'} It also sets the "not included" list in the briefing.</span>

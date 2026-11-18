@@ -13,8 +13,12 @@ const { VAULT_ROOT, DEFAULT_BRIEFING_DOCS, EXTRA_BRIEFING_DOCS } = require('./so
 const { purposeFrom, curatedPurposes } = require('./snapshot');
 
 const SETTINGS_KEY = 'code_map_briefing_docs';
-const DOC_NOTES = { 'docs/finance.md': 'holds real business figures' };
-const MAX_SUMMARY = 140;
+const DOC_NOTES = {
+  'docs/finance.md': 'holds real business figures',
+  // Mostly ffmpeg detail for single tools; the conventions it shows are already in CLAUDE.md, client/DESIGN.md and docs/guide-chat.md.
+  'docs/video-tools.md': 'tick only for a media-heavy tool or one with background jobs',
+};
+const MAX_SUMMARY = 180;
 const DOCS_NAME_RX = /^[A-Za-z0-9][\w.-]*\.md$/;
 const NOT_INCLUDED_TITLE = 'Docs not included in this copy';
 const NOT_INCLUDED_END = 'If the work needs any of these, ask me to include them next time.';
@@ -65,6 +69,27 @@ const DOC_SUMMARIES = {
   'planner-core/README.md': 'Code shared by Room Planner and Garden Planner (and speech and OCR for Vault\'s client), imported by alias rather than as a package.',
   'room-planner/README.md': 'The Room Planner app: a professional interior-design planner built as its own app and shown inside Vault.',
   'ROADMAP.md': 'The agreed plan and decisions for the Shares app, with its status.',
+  // Docs whose first sentence is a status line, a date or a fragment (named by the owner's review, 2026-11-19, and found alongside them)
+  'docs/crm-deals-schema.md': 'CRM phase 3 schema: deals, contact roles, activity and tasks on top of the clients tables, with what is built and the scoping decisions.',
+  'docs/ponytail-report.md': 'The admin Ponytail report: what the Claude Code plugin sends per task, what Vault stores, the hashed key, the CSV backfill and the day-matching caveat.',
+  'docs/gmail-routing-removed.md': 'A Gmail shop/deliveries routing feature that was added and removed on 2026-10-31, and why; nothing in Vault uses it.',
+  'docs/brand-from-url.md': 'Reads a website\'s brand (colours, fonts, logo) from its address so the Graphics text tools, Batch, Pipeline and saved recipes can use it.',
+  'docs/vault-shelf.md': 'Vault Shelf, a Windows clipboard companion that sends chosen clips into Vault (notes, Invoice Review, CRM, redaction checks): the Vault side and the app milestones.',
+  'docs/email-follow-up-case-model.md': 'The locked case model (v1.0.1) for the commitments-ledger product behind Email Follow-Up: the rules and the assertions its fixtures must pass.',
+  'docs/crm-migration.md': 'The merge of the CRM clients table and Finance\'s fin_clients into one canonical clients table, done with a bridge so no data was deleted.',
+  'docs/email-follow-up-use-cases.md': 'Ten industries where the Email Follow-Up engine applies (extract an obligation, anchor it, compare, draft a cited nudge) and what differs in each.',
+  'docs/email-follow-up-context.md': 'The context and decision record for Email Follow-Up: why it was designed as it was and which decisions the built version overrides.',
+  'docs/email-follow-up-fixture-plan.md': 'The plan for turning the Email Follow-Up case model\'s 22 assertions into runnable fixtures (none executed yet).',
+  'docs/email-follow-up-risk-register.md': 'Ten risks in the Email Follow-Up design, the mitigation kept, the one rejected and what each still fails to cover.',
+  'docs/fitness-library-review.md': 'A review sheet for the 47 exercises in the Fitness library, generated from the seed file, for an experienced trainer to approve or change.',
+  'docs/local-database-recovery.md': 'Old notes for a Mac Mini setup with a Docker PostgreSQL container; no longer used (local development now runs on Windows).',
+  'docs/local-dev-windows.md': 'How to run Vault locally on the Windows machine: a private PostgreSQL cluster on port 15433 and npm run dev.',
+  'docs/music-plan.md': 'A staged plan (not built yet) to give Music the same look as Video Tools and extend it with sound effects and voiceover.',
+  'docs/project-naming.md': 'A decision record on the six different meanings of "project" in Vault and the wording chosen for each.',
+  'docs/shares-statement-import.md': 'Uploading broker statements to Shares and reconciling them, narrowed to dividends after trade matching proved unreliable.',
+  'docs/vault-shelf-release.md': 'The runbook for releasing and installing a new Vault Shelf version, step by step.',
+  'docs/voice-notes.md': 'Recording voice notes in Notes: the recorder, what is kept (words by default, audio optional), the limits, and that it is not a legal record.',
+  'docs/cross-user-test.md': 'The test that boots the real app and checks every route against one member reaching another member\'s data, and how to run it.',
 };
 // Sentences that say where a doc came from rather than what it covers.
 const META = /\b(moved (out|here)|referenced from|can ignore|read this before|holds the short rules|started \d{4}|added \d{4}|renamed \d{4})\b|^(see|also)\b/i;
@@ -109,8 +134,8 @@ function docCatalog(root = VAULT_ROOT) {
       isDefault: DEFAULT_BRIEFING_DOCS.includes(rel), linked: linked.has(rel), extra: EXTRA_BRIEFING_DOCS.includes(rel), note: DOC_NOTES[rel] || null,
     });
   }
-  // defaults first (in their listed order), then docs CLAUDE.md links to, then the extras, then the rest by name
-  const rank = (d) => (d.isDefault ? 0 : d.linked ? 1 : d.extra ? 2 : 3);
+  // defaults first (in their listed order), then docs CLAUDE.md links to or that carry a note, then the extras, then the rest by name
+  const rank = (d) => (d.isDefault ? 0 : d.linked || d.note ? 1 : d.extra ? 2 : 3);
   docs.sort((a, b) => rank(a) - rank(b) || (a.isDefault ? DEFAULT_BRIEFING_DOCS.indexOf(a.path) - DEFAULT_BRIEFING_DOCS.indexOf(b.path) : a.path.localeCompare(b.path)));
   return { claude, claudeChars: claude.length, docs, missing };
 }
