@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f6da2771",
+   "fullHash": "f6da27712df8190bc89b3a57d32026eb0b709191",
+   "committedAt": "2026-11-18T11:25:53+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: \"Show original\" puts the PDF page beside the preview or the code",
+   "filesChanged": 3,
+   "insertions": 33,
+   "deletions": 3,
+   "area": "PDF Tools",
+   "goal": "Let the owner compare the built web page (or its code) with the original PDF without leaving the tool.",
+   "whatChanged": "New Show original / Hide original button in the PDF → HTML preview bar. When on, the panel splits: the original page(s) on the left (a whole-page picture the browser renders while converting; kept in memory, not sent to the server), and the Preview or the Code on the right. Side by side on wide screens (xl), stacked on narrower ones. On by default; the choice is remembered per browser (localStorage vault_pdf_html_show_original). Help text and docs updated.",
+   "filesImpacted": [
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "client/src/pages/PdfPage.jsx",
+    "docs/pdf-agent.md"
+   ],
+   "benefit": "Mistakes in the built page are easy to spot against the design, and change requests can be written while looking at both.",
+   "concerns": "The two sides scroll separately: the preview frame is sandboxed without same-origin (so nothing in the built page can run or reach Vault), which also stops Vault reading its scroll position to keep them in step. Checked locally in a browser with the owner's PDF (split with Preview and Code, hide, remembered after reload) using a stand-in model."
+  },
+  {
    "commit": "66a0b497",
    "fullHash": "66a0b497992ea472e474d10d48351eb41df9899b",
    "committedAt": "2026-11-18T11:19:55+10:00",
