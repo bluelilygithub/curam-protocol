@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "096e2d82",
+   "fullHash": "096e2d82515aab2fbc0a308812043b703cf870fc",
+   "committedAt": "2026-11-18T19:28:10+10:00",
+   "author": "mrb",
+   "subject": "Admin changelog page: search, filters and Ask the changelog",
+   "filesChanged": 11,
+   "insertions": 970,
+   "deletions": 38,
+   "area": "Changelog",
+   "goal": "Make the admin Changelog queryable now it has over 130 entries: find updates by words, area, date, concerns or file, and ask plain questions such as 'What changed in Finance this week?' with answers that cite the entries.",
+   "whatChanged": "Search and filters (browser only, no new API): a search box across subject, area, goal, what changed, benefit, concerns and commit hash (every word must match, quoted phrases kept together, matches highlighted), an area picker built from the entries (combined areas count under each part), From and To dates, a Has concerns toggle (same rule as the Concerns tag) and a file filter matching any part of a path. The match count shows under the bar, Expand all acts on what is shown, and the filters live in the URL query so a filtered view can be linked. Logic in client/src/pages/changelog/filterEntries.mjs with a node test. Ask the changelog: a question box above the list (shared mic, Tooltip, example questions) calls POST /api/changelog/ask. server/services/changelogAsk.js first picks the relevant entries without a model (date words in Australia/Brisbane time such as this week, since Monday, since 10 Nov, last 3 days, in October; area names; file names; concern words; keyword scoring), at most 40, newest first, then asks getModelsForUser(userId).standard through callModel with a prompt that allows only the given entries, requires a [hash] citation per claim, says so when the entries do not answer, and never calls a concern resolved unless a later entry says so. Usage is logged as changelog_ask; no model call is made when nothing matches. Each [hash] it was given becomes a link that opens and scrolls to that entry (clearing filters that hide it); hashes it was not given are left as text with a warning; 'Based on N updates' lists what was sent. aiLimiter added to the /api/changelog mount; the route file is now injectable and logs through getLogger. The (i) box explains search, filters and Ask. Docs: changelog.md (Ask covers the guide chat; only a tour is left unbuilt) and key-files.md; the new route classed admin in routeManifest.json.",
+   "filesImpacted": [
+    "server/services/changelogAsk.js",
+    "server/services/changelogAsk.test.js",
+    "server/routes/changelog.js",
+    "server/index.js",
+    "server/testing/routeManifest.json",
+    "client/src/pages/ChangelogPage.jsx",
+    "client/src/pages/changelog/AskChangelog.jsx",
+    "client/src/pages/changelog/filterEntries.mjs",
+    "client/src/pages/changelog/filterEntries.test.mjs",
+    "docs/changelog.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "Questions like 'everything that touched db.js' or 'which updates had untested concerns' take one filter or one question instead of scrolling through every entry, and a filtered view can be shared by link. Ask answers only from the record and points at the entries it used, so each claim can be checked in one click.",
+   "concerns": "No real model answer has been seen: the local database has no AI model set in Settings (the route answered a clean 503 'No AI model is set up') and the local Anthropic key is invalid, so the prompt's grounding and citation style are untested against a real model. The page itself was built (vite build passes) but not looked at in a browser. Covered: the ask test with a fake model (10 checks: Brisbane date ranges, area and file matching, concerns, the 40 cap, citations, the route), the filter test, the grouping test, the cross-user route test (1506 routes classified, 48 admin routes refuse a member) and a local smoke test of GET and POST on the running server. Entry selection is keyword rules, not search by meaning, so a question that names no date, area or file and shares few words with the entries falls back to the 40 newest, and the model is told when more matched than were sent. Each question is a paid call carrying up to 40 shortened entries (roughly 10-20K input tokens). aiLimiter on the mount also counts the page's one GET per load, which is harmless at 30 a minute."
+  },
+  {
    "commit": "16f5b4aa",
    "fullHash": "16f5b4aa408da59abc5fa78a8cb4ffc0c080ea01",
    "committedAt": "2026-11-18T19:10:49+10:00",
