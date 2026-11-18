@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "30fbd240",
+   "fullHash": "30fbd2406995cc1232a87e0e0e6f09971ea8c973",
+   "committedAt": "2026-11-18T16:40:21+10:00",
+   "author": "mrb",
+   "subject": "Code Map kit: brief, prompts, Python reference",
+   "filesChanged": 7,
+   "insertions": 1331,
+   "deletions": 0,
+   "area": "Code Map",
+   "goal": "Keep the build kit for the planned admin Code Map tool in the repo, so each milestone session reads the same brief and the Node port can be checked against the Python reference.",
+   "whatChanged": "New folder specs/code-map/: the brief (code-map-brief.md), copy-paste prompts per milestone, a README, and reference/ with the Python analysis (analyze.py, slim.py), the prototype page and the sample data taken from commit 40bf883.",
+   "filesImpacted": [
+    "specs/code-map/code-map-brief.md",
+    "specs/code-map/prompts.md",
+    "specs/code-map/README.md",
+    "specs/code-map/reference/analyze.py",
+    "specs/code-map/reference/slim.py",
+    "specs/code-map/reference/prototype.html",
+    "specs/code-map/reference/sample-data.json"
+   ],
+   "benefit": "The spec and its reference data are versioned with the code they describe.",
+   "concerns": "Docs only; nothing runs in the app. The folder is copied into the container by COPY . . (about 330 KB), which is harmless."
+  },
+  {
    "commit": "f21c04bc",
    "fullHash": "f21c04bcfcf1f8f438719ca01ea1333c715d295b",
    "committedAt": "2026-11-18T16:03:41+10:00",
