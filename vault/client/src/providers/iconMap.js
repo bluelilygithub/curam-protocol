@@ -231,6 +231,7 @@ export const semanticMap = {
   'grid-2x2': { lucide: 'Grid2x2' },
   'arrow-up-down': { lucide: 'ArrowUpDown' },
   'file-code': { lucide: 'FileCode' },
+  'code-map': { lucide: 'Network' },
   monitor: { lucide: 'Monitor' },
   tablet: { lucide: 'Tablet' },
 };

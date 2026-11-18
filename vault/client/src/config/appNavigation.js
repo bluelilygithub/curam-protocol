@@ -43,6 +43,7 @@ export const APP_NAV_GROUPS = [
       { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
       { id: 'pcHealth', label: 'PC Health', path: '/pc-health', icon: 'cpu', featureKey: null, adminOnly: true },
       { id: 'changelog', label: 'Changelog', path: '/changelog', icon: 'history', featureKey: null, adminOnly: true },
+      { id: 'codeMap', label: 'Code Map', path: '/code-map', icon: 'code-map', featureKey: null, adminOnly: true, aliases: 'code map source analysis conventions rules dependencies cycles tools audit' },
     ],
   },
   {

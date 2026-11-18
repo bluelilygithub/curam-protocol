@@ -40,6 +40,7 @@ import RecipesPage from './pages/RecipesPage';
 import MeasurementsPage from './pages/MeasurementsPage';
 import PcHealthPage from './pages/PcHealthPage';
 import ChangelogPage from './pages/ChangelogPage';
+import CodeMapPage from './pages/CodeMapPage';
 import PdfPage from './pages/PdfPage';
 import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
@@ -221,6 +222,7 @@ function App() {
               <Route path="/topic-research" element={<TopicResearchPage />} />
               <Route path="/pc-health" element={<PcHealthPage />} />
               <Route path="/changelog" element={<ChangelogPage />} />
+              <Route path="/code-map" element={<CodeMapPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
               <Route path="/product-scout" element={<ProductScoutPage />} />

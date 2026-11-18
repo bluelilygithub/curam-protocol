@@ -60,6 +60,7 @@ Core files:
 - `server/services/modelResolver.js` — `getModelsForUser()`: `light` / `standard` / Gemini / DeepSeek
 - `server/services/SuggestionService.js` — all services/crons/agents emit inbox findings through it
 - `server/config/changelogEntries.json` + `client/src/pages/ChangelogPage.jsx` — the admin Changelog; **add an entry for every commit** (see the CHANGELOG rule above and `docs/changelog.md`)
+- `server/services/codeMap/` + `client/src/pages/CodeMapPage.jsx` — admin Code Map: checks every tool against these rules; a new convention is one entry in `codeMap/rules.js` (`docs/code-map.md`)
 - `server/utils/cronLock.js` — `withCronLock(name, fn)` for every cron that sends mail, creates records or calls a paid API
 - `server/utils/safeFetch.js` + `server/services/htmlFetch.js` — SSRF guards; write every user-URL fetcher on them
 - `server/services/recycleBin/` — shared 30-day recycle bin; any tool that deletes uses `moveToBin()` (`docs/recycle-bin.md`)
