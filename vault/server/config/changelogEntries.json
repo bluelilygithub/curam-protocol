@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "6e787af8",
+   "fullHash": "6e787af87d39e3f1a4bf83b81a9617381a117d93",
+   "committedAt": "2026-11-18T16:49:49+10:00",
+   "author": "mrb",
+   "subject": "Code Map: analyzer service and tests (milestone 1)",
+   "filesChanged": 67,
+   "insertions": 1908,
+   "deletions": 0,
+   "area": "Code Map",
+   "goal": "Milestone 1 of the admin Code Map tool: a Node analyzer that reads Vault's own source and reports each tool's code, links, convention checks and ranked findings, replacing the Python prototype.",
+   "whatChanged": "New server/services/codeMap/, one module per stage: files.js (walk server/ and client/src/), imports.js (relative-import graph with index-file and lazy-import resolution), tools.js (tools from appNavigation.js plus Tasks and Chat, entry pages from App.jsx), mounts.js (app.use('/api/...') lines in server/index.js, including requireAnyFeature and router objects), ownership.js (mount owner table, reach, shared at 3+ tools, tool links), rules.js (the 14 checks as declarative entries with severity, why and fix), structure.js (iterative Tarjan cycles, largest files, fan-in, possibly unused files, backups, planner packages), findings.js (one finding per rule plus cron-requires-route, cross-tool cycles and housekeeping, sorted by severity then tools affected). index.js exports analyze({ root }); run.js prints a summary and writes the JSON. Tests: codeMap.test.js (27 cases on a fixture repo in __fixtures__/repo) and codeMap.accuracy.test.js (this repo against the prototype's sample-data.json). Nothing calls it yet: no route, table or page.",
+   "filesImpacted": [
+    "server/services/codeMap/index.js",
+    "server/services/codeMap/rules.js",
+    "server/services/codeMap/ownership.js",
+    "server/services/codeMap/structure.js",
+    "server/services/codeMap/findings.js",
+    "server/services/codeMap/tools.js",
+    "server/services/codeMap/mounts.js",
+    "server/services/codeMap/imports.js",
+    "server/services/codeMap/files.js",
+    "server/services/codeMap/run.js",
+    "server/services/codeMap/codeMap.test.js",
+    "server/services/codeMap/codeMap.accuracy.test.js",
+    "server/services/codeMap/__fixtures__/"
+   ],
+   "benefit": "Run with node, the analyzer matches the Python prototype exactly on this repo: 60 tools, 145 mounts, 11 cycles, 404 test files, and every tool's score, checks, owned files, tests and links are identical. It takes about 3 seconds, makes no model or network calls and adds no packages, so the deploy stays fast.",
+   "concerns": "Not wired into the app yet (milestone 2 adds the table, API and job). Regex-based like the prototype, so it inherits its false positives (for example the SSRF and model-resolver checks are heuristics). Planner package counts differ from the prototype on this machine because of local, git-ignored build folders (cellar-planner dist-lite and upload copies, shelf host/setup); in the container they should match. Git churn and hotspots are left out because the container has no .git. The accuracy test compares the repo without the analyzer's own folder; it will start failing as Vault's tools and mounts change, by design, and must then be read rather than tuned. Fixture files under __fixtures__/repo are copied into the container (about 60 tiny files) and are skipped by the analyzer."
+  },
+  {
    "commit": "30fbd240",
    "fullHash": "30fbd2406995cc1232a87e0e0e6f09971ea8c973",
    "committedAt": "2026-11-18T16:40:21+10:00",
