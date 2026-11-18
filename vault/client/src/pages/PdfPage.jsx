@@ -268,6 +268,8 @@ const TOOL_HELP = {
       'Ask for changes in your own words (typed or spoken); Undo goes back a version',
       'Edit the HTML by hand in the Code view',
       'Download a zip with index.html and the images folder',
+      'Tall pages, such as a website mock-up saved as one long page, are read in slices from top to bottom',
+      'Blank layers and thin strips (such as a browser toolbar in a mock-up) are kept in the zip but not offered to the AI',
       'Charts or logos drawn with lines are not pictures, so they become a labelled placeholder',
     ],
   },

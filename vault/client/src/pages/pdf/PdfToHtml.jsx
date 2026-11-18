@@ -12,6 +12,7 @@ import {
   readFileAsDataUrl, dataUrlToUint8Array, initPdfjsWorker, getPdfPageCount, downloadFile,
 } from '../PdfPage';
 import { parsePageRange } from './PdfExtraTools';
+import { renderScale, planSlices, sliceBudget, textLines, linesPerSlice, SLICE_OVERLAP } from './pdfToHtmlLayout.mjs';
 
 const MAX_PAGES = 5; // matches server/services/pdfToHtml.js
 const lbl = 'block text-xs font-medium mb-1';
@@ -28,17 +29,19 @@ const VIEWS = [
 
 const baseName = (f) => (f?.name || 'document').replace(/\.pdf$/i, '');
 
-// Each chosen page as a picture (about 1400 px wide, JPEG) and its text, for the model.
+// Each chosen page rendered about 1400 px wide. A tall page (a website mock-up) is cut into slices top to bottom so the model can read
+// it; each slice comes with its own text in reading order (pdfToHtmlLayout.mjs). Returns one entry per slice.
 async function renderPagesForModel(dataUrl, pageNumbers) {
   const pdfjsLib = await import('pdfjs-dist');
   await initPdfjsWorker(pdfjsLib);
   const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
   const pageImages = [];
   const pageTexts = [];
-  for (const n of pageNumbers) {
+  const slices = [];
+  for (const [idx, n] of pageNumbers.entries()) {
     const page = await doc.getPage(n);
     const base = page.getViewport({ scale: 1 });
-    const vp = page.getViewport({ scale: Math.min(2.5, 1400 / base.width) });
+    const vp = page.getViewport({ scale: renderScale(base.width, base.height) });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(vp.width));
     canvas.height = Math.max(1, Math.floor(vp.height));
@@ -46,12 +49,28 @@ async function renderPagesForModel(dataUrl, pageNumbers) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    pageImages.push(canvas.toDataURL('image/jpeg', 0.85));
-    canvas.width = canvas.height = 0;
+
     const tc = await page.getTextContent();
-    pageTexts.push(tc.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+\n/g, '\n').trim());
+    const items = tc.items.map((it) => {
+      const t = pdfjsLib.Util.transform(vp.transform, it.transform);
+      return { str: it.str, x: t[4], y: t[5], w: (it.width || 0) * vp.scale, h: Math.hypot(t[2], t[3]) };
+    });
+    const bands = planSlices(canvas.width, canvas.height, sliceBudget(pageImages.length, pageNumbers.length - idx));
+    const texts = linesPerSlice(textLines(items), bands);
+    for (const [i, b] of bands.entries()) {
+      const bottom = i < bands.length - 1 ? Math.min(canvas.height, b.bottom + SLICE_OVERLAP) : b.bottom;
+      const part = document.createElement('canvas');
+      part.width = canvas.width;
+      part.height = Math.max(1, bottom - b.top);
+      part.getContext('2d').drawImage(canvas, 0, b.top, canvas.width, part.height, 0, 0, canvas.width, part.height);
+      pageImages.push(part.toDataURL('image/jpeg', 0.85));
+      pageTexts.push(texts[i]);
+      slices.push({ page: n, part: i + 1, parts: bands.length });
+      part.width = part.height = 0;
+    }
+    canvas.width = canvas.height = 0;
   }
-  return { pageImages, pageTexts };
+  return { pageImages, pageTexts, slices };
 }
 
 // The preview iframe cannot reach images/… (it has no files), so each path is swapped for the picture's data URL.
@@ -105,8 +124,8 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
     setBusy(true); reset();
     startProcessing('Building the web page…', `${pages.length} page${pages.length !== 1 ? 's' : ''} of ${file.name}. This usually takes one to two minutes.`);
     try {
-      const { pageImages, pageTexts } = await renderPagesForModel(file.dataUrl, pages);
-      const res = await api.post('/api/pdf/to-html', { dataUrl: file.dataUrl, pages, pageImages, pageTexts, filename: file.name });
+      const { pageImages, pageTexts, slices } = await renderPagesForModel(file.dataUrl, pages);
+      const res = await api.post('/api/pdf/to-html', { dataUrl: file.dataUrl, pages, pageImages, pageTexts, slices, filename: file.name });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not build the web page.');
       setResult({ images: data.images || [], pageImages, skipped: data.skipped || 0, model: data.model });
@@ -126,7 +145,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
     try {
       const res = await api.post('/api/pdf/to-html/revise', {
         html, instruction,
-        images: result.images.map(({ name, width, height }) => ({ name, width, height })),
+        images: result.images.map(({ name, width, height, aiSkip }) => ({ name, width, height, aiSkip })),
         pageImages: result.pageImages,
       });
       const data = await res.json();
@@ -212,7 +231,7 @@ export default function PdfToHtmlTool({ getIcon, onHelp }) {
                 {result.images.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {result.images.map((im) => (
-                      <Tooltip key={im.name} text={`images/${im.name}, ${im.width}×${im.height} px. ${used.has(im.name) ? 'Used on the page.' : 'Not used on the page, but still in the zip.'}`}>
+                      <Tooltip key={im.name} text={`images/${im.name}, ${im.width}×${im.height} px. ${used.has(im.name) ? 'Used on the page.' : im.aiSkip ? `Not offered to the AI: ${im.aiSkip === 'strip' ? 'a thin strip' : 'a plain one-colour layer'}, not content. Still in the zip.` : 'Not used on the page, but still in the zip.'}`}>
                         <img src={im.dataUrl} alt={im.name} className="rounded border" style={{ height: 48, borderColor: used.has(im.name) ? 'var(--color-primary)' : 'var(--color-border)', opacity: used.has(im.name) ? 1 : 0.5 }} />
                       </Tooltip>
                     ))}

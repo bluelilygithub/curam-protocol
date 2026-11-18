@@ -1495,6 +1495,7 @@ router.post('/to-html', aiLimiter, async (req, res) => {
       pdfBuf: buf, pages,
       pageImages: Array.isArray(req.body?.pageImages) ? req.body.pageImages : [],
       pageTexts: Array.isArray(req.body?.pageTexts) ? req.body.pageTexts.map((t) => String(t || '')) : [],
+      slices: Array.isArray(req.body?.slices) ? req.body.slices.slice(0, 20) : [],
       title: req.body?.filename ? String(req.body.filename).replace(/\.pdf$/i, '') : '',
     });
     res.json(out);

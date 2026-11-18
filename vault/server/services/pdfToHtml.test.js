@@ -7,7 +7,7 @@
 const assert = require('assert');
 const { PDFDocument } = require('pdf-lib');
 const sharp = require('sharp');
-const { createHtml, reviseHtml, cleanHtml, usedImageNames, providerReason, modelFailure, SYSTEM, MAX_PAGES } = require('./pdfToHtml');
+const { createHtml, reviseHtml, cleanHtml, usedImageNames, providerReason, modelFailure, contactSheets, SYSTEM, MAX_PAGES } = require('./pdfToHtml');
 
 let PAGE_PNG = ''; // a small valid PNG, made by sharp at the start (a hand-typed one was rejected now and then by libspng)
 const PAGE = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>img{max-width:100%;height:auto}</style></head><body><main><h1>Hi</h1><img src="images/image-01.jpg" alt="Blue"></main></body></html>`;
@@ -47,8 +47,9 @@ function stubDeps(reply, seen = {}) {
 
   // ---- createHtml: page 2 only → only page 2's picture is extracted, named and shown to the model ----
   {
-    const red = await sharp({ create: { width: 60, height: 40, channels: 3, background: '#cc0000' } }).jpeg().toBuffer();
-    const blue = await sharp({ create: { width: 50, height: 50, channels: 3, background: '#0033cc' } }).jpeg().toBuffer();
+    const dot = Buffer.from('<svg width="20" height="20"><circle cx="10" cy="10" r="9" fill="#fff"/></svg>'); // some detail, so they are not "plain"
+    const red = await sharp({ create: { width: 60, height: 40, channels: 3, background: '#cc0000' } }).composite([{ input: dot, left: 5, top: 5 }]).jpeg().toBuffer();
+    const blue = await sharp({ create: { width: 50, height: 50, channels: 3, background: '#0033cc' } }).composite([{ input: dot, left: 5, top: 5 }]).jpeg().toBuffer();
     const doc = await PDFDocument.create();
     const p1 = doc.addPage([300, 300]); p1.drawImage(await doc.embedJpg(red), { x: 10, y: 10, width: 60, height: 40 });
     const p2 = doc.addPage([300, 300]); p2.drawImage(await doc.embedJpg(blue), { x: 10, y: 10, width: 50, height: 50 });
@@ -106,33 +107,62 @@ function stubDeps(reply, seen = {}) {
   assert.match(modelFailure(new Error('Model call timed out after 240s (m1)'), 'm1').message, /took too long/);
   assert.match(modelFailure(Object.assign(new Error('404 {"error":{"message":"model: x"}}'), { status: 404 }), 'm1').message, /does not know the model m1/);
 
-  // ---- pictures stay inside the providers' limits: a tall page is shrunk, and never more than 20 pictures in one request ----
+  // ---- a tall page arrives as slices; pictures go as labelled contact sheets; never more than 20 pictures in one request ----
   {
-    const tall = `data:image/jpeg;base64,${(await sharp({ create: { width: 1400, height: 4200, channels: 3, background: '#ffffff' } }).jpeg().toBuffer()).toString('base64')}`;
+    const slice = `data:image/jpeg;base64,${(await sharp({ create: { width: 1400, height: 1440, channels: 3, background: '#ffffff' } }).jpeg().toBuffer()).toString('base64')}`;
     const doc = await PDFDocument.create();
-    const page = doc.addPage([600, 1800]);
+    const page = doc.addPage([600, 4400]);
     for (let i = 0; i < 30; i += 1) {
       // eslint-disable-next-line no-await-in-loop
-      const jpg = await sharp({ create: { width: 900 + i, height: 700, channels: 3, background: { r: i * 8, g: 100, b: 200 } } }).jpeg().toBuffer();
+      const jpg = await sharp({ create: { width: 900 + i, height: 700, channels: 3, background: { r: i * 8, g: 100, b: 200 } } }).composite([{ input: Buffer.from(`<svg width="40" height="40"><rect width="40" height="40" fill="#fff"/></svg>`), left: 5, top: 5 }]).jpeg().toBuffer();
       // eslint-disable-next-line no-await-in-loop
       page.drawImage(await doc.embedJpg(jpg), { x: 10, y: i * 50, width: 40, height: 30 });
     }
+    // not content: a browser-toolbar strip and a plain white layer
+    page.drawImage(await doc.embedPng(await sharp({ create: { width: 2040, height: 75, channels: 3, background: '#eeeeee' } }).composite([{ input: Buffer.from('<svg width="300" height="20"><rect width="300" height="20" fill="#c00"/></svg>'), left: 10, top: 20 }]).png().toBuffer()), { x: 0, y: 4300, width: 600, height: 20 });
+    page.drawImage(await doc.embedPng(await sharp({ create: { width: 800, height: 450, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 0.5 } } }).png().toBuffer()), { x: 0, y: 4000, width: 600, height: 300 });
     const pdfBuf = Buffer.from(await doc.save());
+
+    const slices = Array.from({ length: 8 }, (_, i) => ({ page: 1, part: i + 1, parts: 8 }));
     const seen = {};
-    const out = await createHtml('u1', { pdfBuf, pages: [1], pageImages: [tall], pageTexts: [''] }, stubDeps(PAGE, seen));
-    assert.strictEqual(out.images.length, 30, 'every picture is still in the zip');
-    assert.strictEqual(seen.opts.images.length, 20, 'at most 20 pictures go to the model');
+    const out = await createHtml('u1', {
+      pdfBuf, pages: [1], pageImages: slices.map(() => slice), pageTexts: slices.map((_, i) => `Text of part ${i + 1}`), slices,
+    }, stubDeps(PAGE, seen));
+    assert.strictEqual(out.images.length, 32, 'every picture is still in the zip');
+    const skipped = out.images.filter((im) => im.aiSkip);
+    assert.deepStrictEqual(skipped.map((im) => im.aiSkip).sort(), ['plain', 'strip'], 'the strip and the plain layer are marked');
+    assert.strictEqual(seen.opts.images.length, 8 + 2, 'eight slices + two contact sheets (30 pictures, 16 a sheet)');
+    assert.ok(seen.opts.images.length <= 20);
     for (const im of seen.opts.images) {
       // eslint-disable-next-line no-await-in-loop
       const meta = await sharp(Buffer.from(im.data, 'base64')).metadata();
       assert.ok(Math.max(meta.width, meta.height) <= 1568, `picture ${meta.width}x${meta.height} is within limits`);
       assert.strictEqual(im.mimeType, 'image/jpeg');
     }
-    const first = await sharp(Buffer.from(seen.opts.images[0].data, 'base64')).metadata();
-    assert.strictEqual(first.height, 1568, 'the tall page was shrunk to 1568 px');
-    const second = await sharp(Buffer.from(seen.opts.images[1].data, 'base64')).metadata();
-    assert.ok(Math.max(second.width, second.height) <= 512, 'extracted picture copies are 512 px or less');
-    assert.match(seen.prompt, /image-30\.jpg \(929×700 px\) \(not shown\)/, 'pictures not shown are still listed');
+    const sheet = await sharp(Buffer.from(seen.opts.images[8].data, 'base64')).metadata();
+    assert.deepStrictEqual([sheet.width, sheet.height], [1024, 1024], 'a full sheet is 4 × 4 tiles of 256 px');
+    assert.match(seen.prompt, /Picture 1: page 1, part 1 of 8 \(top to bottom\)/);
+    assert.match(seen.prompt, /--- Page 1, part 3 of 8 \(picture 3\) ---\nText of part 3/);
+    assert.match(seen.prompt, /Picture 9: a contact sheet .*1 = images\/image-01\.jpg/);
+    assert.match(seen.prompt, /Picture 10: a contact sheet .*14 = images\/image-30\.jpg/);
+    for (const im of skipped) assert.ok(!seen.prompt.includes(`images/${im.name}`), `${im.name} (${im.aiSkip}) is not offered to the model`);
+    assert.match(seen.prompt, /Do not invent sections/);
+
+    // a change request also leaves the marked pictures out
+    const seen2 = {};
+    await reviseHtml('u1', { html: PAGE, instruction: 'bigger logos', images: out.images.map(({ name, width, height, aiSkip }) => ({ name, width, height, aiSkip })), pageImages: [slice] }, stubDeps(PAGE, seen2));
+    for (const im of skipped) assert.ok(!seen2.prompt.includes(`images/${im.name}`));
+    await assert.rejects(createHtml('u1', { pdfBuf, pages: [1], pageImages: Array(15).fill(slice), pageTexts: [] }, stubDeps(PAGE)), /at most 14/);
+  }
+
+  // white logos on a transparent background are visible on the sheet (grey, not white)
+  {
+    const whiteLogo = await sharp({ create: { width: 200, height: 80, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .composite([{ input: Buffer.from('<svg width="200" height="80"><rect x="20" y="20" width="160" height="40" fill="#fff"/></svg>') }]).png().toBuffer();
+    const [sh] = await contactSheets([{ name: 'logo.png', bytes: whiteLogo }], 1);
+    const { data, info } = await sharp(Buffer.from(sh.image.data, 'base64')).raw().toBuffer({ resolveWithObject: true });
+    const px = (x, y) => data[(y * info.width + x) * info.channels];
+    assert.ok(px(10, 60) < 160 && px(128, 128) > 230, 'grey around, white logo visible');
   }
 
   console.log('pdfToHtml tests passed');

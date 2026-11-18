@@ -18,9 +18,13 @@ const pdfTools = require('./pdfTools');
 const MAX_PAGES = 5;
 // Picture limits, kept well inside what Claude and Gemini accept (Claude: over 20 pictures in one request and every picture must be
 // 2000 px or less; it shrinks anything over about 1568 px anyway). Same idea as Graphics (1024 px) and Video Tools (512 px, 24 pictures).
-const MAX_VISION_TOTAL = 20; // page pictures + extracted pictures shown to the model; the rest are listed by name and size only
-const PAGE_MAX_SIDE = 1568; // each page picture, longest side
-const IMAGE_MAX_SIDE = 512; // each extracted picture's copy for the model (the zip keeps the originals)
+const MAX_VISION_TOTAL = 20; // page slices + picture sheets in one request
+const MAX_SLICES = 14; // a tall page (a website mock-up) arrives from the browser cut into readable slices, top to bottom
+const PAGE_MAX_SIDE = 1568; // each page slice, longest side
+const SHEET_COLS = 4; // extracted pictures are shown to the model as contact sheets, 16 to a sheet
+const SHEET_PER = 16;
+const TILE = 248; // each tile's picture area (px); cells are 256 with an 8 px gap
+const TILE_BG = '#8c8c8c'; // mid grey, so white logos on a transparent background are visible (on white they vanish)
 const MAX_TEXT_PER_PAGE = 12000;
 const MAX_HTML_IN = 200000; // a change request sends the current HTML back
 const MAX_INSTRUCTION = 2000;
@@ -60,6 +64,8 @@ async function subsetPdf(buf, pageNumbers) {
 }
 
 // Pictures as web files. JPEG 2000 does not show in most browsers, so it becomes PNG (skipped if sharp cannot read it).
+// Each picture also gets `aiSkip` when it is not content: a plain one-colour layer (a white fade overlay) or a thin strip (a browser
+// toolbar in a mock-up). Those stay in the zip but are not offered to the model, which otherwise uses them as photos or logos.
 async function collectImages(subsetBuf) {
   const { images, skipped, skippedReasons } = await pdfTools.extractImages(subsetBuf);
   const out = [];
@@ -73,49 +79,93 @@ async function collectImages(subsetBuf) {
       } catch { skippedJp2 += 1; continue; }
     }
     const name = `image-${String(out.length + 1).padStart(2, '0')}.${ext}`;
-    out.push({ name, mime, width: img.width, height: img.height, bytes });
+    // eslint-disable-next-line no-await-in-loop
+    out.push({ name, mime, width: img.width, height: img.height, bytes, aiSkip: await notContent(bytes, img.width, img.height) });
   }
   return { images: out, skipped: skipped + skippedJp2, skippedReasons: skippedJp2 ? { ...skippedReasons, jp2: skippedJp2 } : skippedReasons };
 }
 
-// A smaller copy for the model to look at (transparent areas on white).
-async function visionCopy(img) {
+// 'strip' | 'plain' | null. A strip is very thin for its length; plain means every colour channel is (almost) flat, ignoring transparency.
+async function notContent(bytes, width, height) {
+  const w = Number(width) || 0; const h = Number(height) || 0;
+  if (w && h && (Math.min(w, h) < 24 || Math.max(w, h) / Math.min(w, h) > 12)) return 'strip';
   try {
-    const buf = await sharp(img.bytes).resize({ width: IMAGE_MAX_SIDE, height: IMAGE_MAX_SIDE, fit: 'inside', withoutEnlargement: true })
-      .flatten({ background: '#ffffff' }).jpeg({ quality: 75 }).toBuffer();
-    return { mimeType: 'image/jpeg', data: buf.toString('base64') };
-  } catch { return null; }
+    const { channels } = await sharp(bytes).resize({ width: 256, height: 256, fit: 'inside' }).removeAlpha().stats();
+    if (channels.every((c) => c.stdev < 3)) return 'plain';
+  } catch { /* unreadable here: leave it to the model */ }
+  return null;
 }
 
-function imageListText(images, shownNames) {
-  if (!images.length) return 'There are NO picture files. Use no <img> tags; rebuild drawn shapes with CSS.';
-  return images.map((im) => `- images/${im.name} (${im.width}×${im.height} px)${shownNames && !shownNames.has(im.name) ? ' (not shown)' : ''}`).join('\n');
+// Pictures for the model as contact sheets: up to 16 per sheet in a 4-column grid, read left to right, top to bottom, each on mid grey.
+// One sheet counts as one picture, so a page full of client logos fits in the request instead of being left out.
+async function contactSheets(images, maxSheets) {
+  const sheets = [];
+  for (let s = 0; s < maxSheets && s * SHEET_PER < images.length; s += 1) {
+    const group = images.slice(s * SHEET_PER, (s + 1) * SHEET_PER);
+    const rows = Math.ceil(group.length / SHEET_COLS);
+    const parts = [];
+    for (const [i, im] of group.entries()) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const tile = await sharp(im.bytes).resize({ width: TILE, height: TILE, fit: 'contain', background: TILE_BG }).flatten({ background: TILE_BG }).png().toBuffer();
+        parts.push({ input: tile, left: (i % SHEET_COLS) * (TILE + 8) + 4, top: Math.floor(i / SHEET_COLS) * (TILE + 8) + 4 });
+      } catch { /* an unreadable picture leaves its cell empty; the prompt still lists it */ }
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const buf = await sharp({ create: { width: SHEET_COLS * (TILE + 8), height: rows * (TILE + 8), channels: 3, background: '#3a3a3a' } })
+      .composite(parts).jpeg({ quality: 80 }).toBuffer();
+    sheets.push({ image: { mimeType: 'image/jpeg', data: buf.toString('base64') }, names: group.map((im) => im.name) });
+  }
+  return sheets;
 }
 
-function pageTextBlock(pageTexts) {
-  return (pageTexts || []).map((t, i) => `--- Page ${i + 1} text ---\n${String(t || '').slice(0, MAX_TEXT_PER_PAGE) || '(no text layer: read the words from the page picture)'}`).join('\n\n');
+function imageListText(images) {
+  const usable = images.filter((im) => !im.aiSkip);
+  if (!usable.length) return 'There are NO picture files. Use no <img> tags; rebuild drawn shapes with CSS.';
+  return usable.map((im) => `- images/${im.name} (${im.width}×${im.height} px)`).join('\n');
 }
 
-function buildCreatePrompt({ pageCount, images, shown, pageTexts, title }) {
+// One block per slice: "--- Page 1, part 3 of 8 (picture 3) ---" then its lines, top to bottom. The browser sends lines in reading
+// position; " │ " marks a wide gap on one line (side-by-side columns or boxes).
+function pageTextBlock(pageTexts, slices) {
+  return (pageTexts || []).map((t, i) => {
+    const sl = slices[i];
+    const label = sl && sl.parts > 1 ? `Page ${sl.page}, part ${sl.part} of ${sl.parts}` : `Page ${sl ? sl.page : i + 1}`;
+    return `--- ${label} (picture ${i + 1}) ---\n${String(t || '').slice(0, MAX_TEXT_PER_PAGE) || '(no text layer here: read the words from the picture)'}`;
+  }).join('\n\n');
+}
+
+function slicePhrase(slices) {
+  const pages = [...new Set(slices.map((s) => s.page))];
+  const tall = slices.some((s) => s.parts > 1);
+  return `${pages.length === 1 ? 'one PDF page' : `${pages.length} PDF pages (one continuous web page, in page order)`}${tall ? ', cut into slices from top to bottom because it is tall (neighbouring slices overlap by a few pixels; do not repeat what appears twice at a seam)' : ''}`;
+}
+
+function buildCreatePrompt({ slices, images, sheets, pageTexts, title }) {
   const order = [
-    ...Array.from({ length: pageCount }, (_, i) => `Picture ${i + 1}: page ${i + 1} of the PDF, as it looks.`),
-    ...shown.map((im, i) => `Picture ${pageCount + i + 1}: the file images/${im.name}.`),
+    ...slices.map((sl, i) => `Picture ${i + 1}: ${sl.parts > 1 ? `page ${sl.page}, part ${sl.part} of ${sl.parts} (top to bottom)` : `page ${sl.page}`}, as it looks.`),
+    ...sheets.map((sh, k) => `Picture ${slices.length + k + 1}: a contact sheet of picture files on grey, 4 per row, read left to right then down: ${sh.names.map((n, j) => `${j + 1} = images/${n}`).join(', ')}.`),
   ];
-  return `Build the web page for ${pageCount === 1 ? 'this PDF page' : `these ${pageCount} PDF pages (one continuous web page, in page order)`}${title ? `, from a document called "${title}"` : ''}.
+  return `Build the web page for ${slicePhrase(slices)}${title ? `, from a document called "${title}"` : ''}.
 
 Pictures attached, in this order:
 ${order.join('\n')}
 
-Picture files available for <img> (use these exact paths):
-${imageListText(images, new Set(shown.map((s) => s.name)))}
+Picture files available for <img> (use these exact paths; every one listed is real content):
+${imageListText(images)}
 
-Match each picture file to where it appears on the page pictures. A picture that fills a whole page behind the text is a background: use it as a CSS background or a full-width figure, as fits.
+How to work:
+- Take the LAYOUT, the order of sections, the colours and which picture goes where from the page pictures. Go through them in order and build every section you see, top to bottom. Do not invent sections, menus or links that are not on the page.
+- Take the WORDS from the text below: the words are exact, but the line order can be rough. Put each line where the page pictures show it.
+- Find each picture file on the page pictures by comparing it with the contact sheets, and use it in that spot. A row of logos is a logo grid with every logo in it. Photos of people go with their names.
+- Brand colours: match the page pictures (for example the exact blues), not generic ones.
+- Phone numbers and email addresses: copy them exactly from the text; tel: links use the same digits.
 
-${pageTextBlock(pageTexts)}`;
+${pageTextBlock(pageTexts, slices)}`;
 }
 
 function buildRevisePrompt({ html, instruction, images, pageCount }) {
-  return `Here is the current web page, built from ${pageCount === 1 ? 'the PDF page' : `${pageCount} PDF pages`} shown in the attached pictures.
+  return `Here is the current web page, built from the PDF shown in the attached pictures (${pageCount} picture${pageCount === 1 ? '' : 's'}, top to bottom).
 
 Picture files available for <img> (use these exact paths):
 ${imageListText(images)}
@@ -181,10 +231,10 @@ async function callForHtml(userId, prompt, visionImages, feature, deps) {
   return { html: cleanHtml(result.text), model: result.model || standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens };
 }
 
-// The browser's page pictures, re-made here at most PAGE_MAX_SIDE px as JPEG whatever size arrived (a tall page could be over 2000 px).
+// The browser's page slices, re-made here at most PAGE_MAX_SIDE px as JPEG whatever size arrived.
 async function pageVision(pageImages) {
   const out = [];
-  for (const p of (pageImages || []).slice(0, MAX_PAGES).map(dataUrlParts)) {
+  for (const p of (pageImages || []).slice(0, MAX_SLICES).map(dataUrlParts)) {
     if (!p || !/^image\/(jpeg|png|webp)$/.test(p.mimeType)) continue;
     try {
       // eslint-disable-next-line no-await-in-loop
@@ -194,6 +244,17 @@ async function pageVision(pageImages) {
     } catch { out.push({ mimeType: p.mimeType, data: p.data }); /* could not be resized here: send it as it came (the browser already sends ~1400 px) */ }
   }
   return out;
+}
+
+// Which page and part each slice is. A browser that loaded the page before slicing existed sends none: one slice per page, in order.
+function sliceInfo(slices, count, pageList) {
+  return Array.from({ length: count }, (_, i) => {
+    const sl = Array.isArray(slices) ? slices[i] : null;
+    const page = Number(sl?.page) || Number(pageList[i]) || i + 1;
+    const parts = Math.max(1, Math.min(MAX_SLICES, Number(sl?.parts) || 1));
+    const part = Math.max(1, Math.min(parts, Number(sl?.part) || 1));
+    return { page, part, parts };
+  });
 }
 
 // The provider's own reason in plain words, e.g. "400: image dimensions exceed …" (Anthropic JSON body, or Gemini's "[400 Bad Request] …").
@@ -227,31 +288,29 @@ function modelFailure(err, modelId) {
 }
 
 /**
- * First conversion. `pages` are 1-based page numbers; `pageImages`/`pageTexts` are the browser's render and text of each, same order.
- * @returns {{ html, images: [{name,mime,width,height,dataUrl}], skipped, skippedReasons, used, model, pageCount }}
+ * First conversion. `pages` are 1-based page numbers. `pageImages`/`pageTexts` are the browser's slices of those pages (a normal page is
+ * one slice, a tall one several) with the text of each slice in reading order; `slices` says which page and part each one is.
+ * @returns {{ html, images: [{name,mime,width,height,dataUrl,aiSkip}], skipped, skippedReasons, used, model, pageCount, slices }}
  */
-async function createHtml(userId, { pdfBuf, pages, pageImages, pageTexts, title }, deps = {}) {
+async function createHtml(userId, { pdfBuf, pages, pageImages, pageTexts, slices, title }, deps = {}) {
   const list = (Array.isArray(pages) ? pages : []).slice(0, MAX_PAGES + 1);
   if (!list.length) throw Object.assign(new Error('Choose at least one page.'), { status: 400 });
   if (list.length > MAX_PAGES) throw Object.assign(new Error(`Up to ${MAX_PAGES} pages at a time.`), { status: 400 });
-  const pagesSeen = await pageVision(pageImages);
-  if (pagesSeen.length !== list.length) throw Object.assign(new Error('The page pictures did not arrive. Try again.'), { status: 400 });
+  if (Array.isArray(pageImages) && pageImages.length > MAX_SLICES) throw Object.assign(new Error(`Too many page slices (at most ${MAX_SLICES}). Choose fewer pages.`), { status: 400 });
+  const seen = await pageVision(pageImages);
+  if (seen.length < list.length || (Array.isArray(pageImages) && seen.length !== pageImages.length)) throw Object.assign(new Error('The page pictures did not arrive. Try again.'), { status: 400 });
+  const info = sliceInfo(slices, seen.length, list);
   const { bytes } = await subsetPdf(pdfBuf, list);
   const { images, skipped, skippedReasons } = await collectImages(bytes);
-  const shown = [];
-  const vision = [...pagesSeen];
-  for (const im of images.slice(0, Math.max(0, MAX_VISION_TOTAL - pagesSeen.length))) {
-    // eslint-disable-next-line no-await-in-loop
-    const v = await visionCopy(im);
-    if (v) { shown.push(im); vision.push(v); }
-  }
-  const prompt = buildCreatePrompt({ pageCount: list.length, images, shown, pageTexts: (pageTexts || []).slice(0, list.length), title: String(title || '').slice(0, 120) });
-  const out = await callForHtml(userId, prompt, vision, 'pdf_html', deps);
+  const usable = images.filter((im) => !im.aiSkip);
+  const sheets = await contactSheets(usable, Math.max(0, MAX_VISION_TOTAL - seen.length));
+  const prompt = buildCreatePrompt({ slices: info, images, sheets, pageTexts: (pageTexts || []).slice(0, seen.length), title: String(title || '').slice(0, 120) });
+  const out = await callForHtml(userId, prompt, [...seen, ...sheets.map((x) => x.image)], 'pdf_html', deps);
   return {
     html: out.html,
-    images: images.map((im) => ({ name: im.name, mime: im.mime, width: im.width, height: im.height, dataUrl: `data:${im.mime};base64,${im.bytes.toString('base64')}` })),
+    images: images.map((im) => ({ name: im.name, mime: im.mime, width: im.width, height: im.height, aiSkip: im.aiSkip, dataUrl: `data:${im.mime};base64,${im.bytes.toString('base64')}` })),
     used: usedImageNames(out.html, images),
-    skipped, skippedReasons, model: out.model, pageCount: list.length,
+    skipped, skippedReasons, model: out.model, pageCount: list.length, slices: info,
   };
 }
 
@@ -264,6 +323,7 @@ async function reviseHtml(userId, { html, instruction, images, pageImages }, dep
   if (!ask) throw Object.assign(new Error('Say what to change.'), { status: 400 });
   const list = (Array.isArray(images) ? images : []).slice(0, 500).map((im) => ({
     name: String(im?.name || '').replace(/[^a-z0-9._-]/gi, '').slice(0, 60), width: Number(im?.width) || 0, height: Number(im?.height) || 0,
+    aiSkip: im?.aiSkip ? String(im.aiSkip).slice(0, 10) : null,
   })).filter((im) => im.name);
   const vision = await pageVision(pageImages);
   const prompt = buildRevisePrompt({ html: current, instruction: ask, images: list, pageCount: Math.max(1, vision.length) });
@@ -271,4 +331,4 @@ async function reviseHtml(userId, { html, instruction, images, pageImages }, dep
   return { html: out.html, used: usedImageNames(out.html, list), model: out.model };
 }
 
-module.exports = { createHtml, reviseHtml, cleanHtml, providerReason, modelFailure, buildCreatePrompt, buildRevisePrompt, subsetPdf, collectImages, usedImageNames, SYSTEM, MAX_PAGES };
+module.exports = { createHtml, reviseHtml, cleanHtml, providerReason, modelFailure, buildCreatePrompt, buildRevisePrompt, subsetPdf, collectImages, contactSheets, notContent, usedImageNames, SYSTEM, MAX_PAGES, MAX_SLICES };
