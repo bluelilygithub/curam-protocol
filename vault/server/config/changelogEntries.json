@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "532d3d1a",
+   "fullHash": "532d3d1aed53841a73ac39bb3a3437987b330135",
+   "committedAt": "2026-11-18T18:57:53+10:00",
+   "author": "mrb",
+   "subject": "Code Map: compare runs, Changes tab and weekly run (milestone 4)",
+   "filesChanged": 13,
+   "insertions": 662,
+   "deletions": 17,
+   "area": "Code Map",
+   "goal": "Milestone 4 of the admin Code Map: show drift between runs, so a new gap or a falling score is noticed early, and run the analysis every week without anyone pressing the button.",
+   "whatChanged": "New server/services/codeMap/compare.js (pure) compares two stored run results. Findings are split into items: rule findings per tool (matched by rule id and tool id), cross-tool import cycles by their set of files, cron-requires-route by the cron file and the path it requires (so a moved line is not a change), housekeeping per backup or unused file. It returns new and resolved items (high first), items that moved between amber and red, per-tool score changes (biggest drop first), tools added or removed, all import cycles gained or lost, and summary deltas. GET /api/code-map/compare?from=&to= replaces the 501 (400 for bad ids or unfinished runs, 404 when a run is gone; the full results are not sent back). New Changes tab on the page with two run pickers (latest and the one before by default), a swap button, counts, summary deltas and sections for scores that dropped, new findings, got worse, resolved, got better, and tools and cycles; the tour gains a step and the (i) box mentions it. New server/cron/codeMapCron.js runs the analysis every Sunday at 03:17 Australia/Brisbane as the first admin inside withCronLock('codeMap'), waits for the run to finish, and skips the week if a run is already going; started in server/index.js with the jobs that run on every server. Docs updated (Changes between runs, Weekly run).",
+   "filesImpacted": [
+    "server/services/codeMap/compare.js",
+    "server/services/codeMap/compare.test.js",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/cron/codeMapCron.js",
+    "server/cron/codeMapCron.test.js",
+    "server/index.js",
+    "server/services/codeMap/codeMap.accuracy.test.js",
+    "client/src/pages/CodeMapPage.jsx",
+    "client/src/pages/codeMap/ChangesView.jsx",
+    "client/src/utils/tours/codeMapTour.js",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "The admin can see what got worse or better since the last run, tool by tool, with the worst regressions first, and a run happens every week so there is always a recent one to compare with; new high findings from that run reach the inbox.",
+   "concerns": "Tests pass (compare 11, cron 5, routes 8, and the earlier analyzer, accuracy and job tests). Checked on the local app in a headless browser: the Changes tab with two real runs, a phone-width view, no console errors, and, with a temporary hand-edited older run (removed afterwards), a new high finding, a got-worse item, a resolved backup, two score drops and a new cycle all showed. Found and fixed during that check: the run list did not refresh after a run finished. The weekly cron has not fired for real yet (first run Sunday 03:17 Brisbane after deploy); it runs on every server, including staging if staging has its own database, and puts its high findings in the first admin's inbox. Each weekly run counts towards the 30 kept runs. Changing a rule or renaming a tool or rule id shows up as drift (resolved and new at once). The compare reads two full results from the database (about 115 KB each) per request."
+  },
+  {
    "commit": "043254a7",
    "fullHash": "043254a7e4aff2ef4ed068c0d23139d77a305454",
    "committedAt": "2026-11-18T18:32:10+10:00",
