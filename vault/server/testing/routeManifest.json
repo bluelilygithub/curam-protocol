@@ -4360,6 +4360,12 @@
   "GET /api/code-map/runs/:id": {
    "class": "admin"
   },
+  "POST /api/code-map/findings/explain": {
+   "class": "admin"
+  },
+  "POST /api/code-map-tutor": {
+   "class": "admin"
+  },
   "DELETE /api/plans/:id/steps/:stepId/deps/:blockedByStepId": {
    "class": "authed"
   },

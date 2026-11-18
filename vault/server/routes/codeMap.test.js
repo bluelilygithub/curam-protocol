@@ -36,15 +36,25 @@ function fakeJobs() {
   };
 }
 
+const explained = [];
+const limited = [];
 async function serve(jobs) {
   const app = express();
+  app.use(express.json());
   app.use((req, res, next) => { req.user = { id: 3, isAdmin: true }; next(); }); // requireAdmin runs before this router in server/index.js
-  app.use('/api/code-map', createCodeMapRouter({ jobs }));
+  const explain = async (userId, input) => {
+    explained.push([userId, input]);
+    if (input.ruleId === 'gone') throw Object.assign(new Error('That finding is not in this run for that tool.'), { status: 404 });
+    if (input.ruleId === 'nomodel') throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
+    return { explanation: 'ok', steps: [] };
+  };
+  const limiter = (req, res, next) => { limited.push(req.path); next(); };
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const call = async (method, p) => {
-    const res = await fetch(base + p, { method });
+  const call = async (method, p, body) => {
+    const res = await fetch(base + p, { method, ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
     return { status: res.status, body: await res.json() };
   };
   return { call, close: () => new Promise((r) => server.close(r)) };
@@ -110,6 +120,23 @@ async function serve(jobs) {
       assert.deepStrictEqual(r.body.scores, [{ id: 'notes', label: 'Notes', from: 90, to: 80, delta: -10 }]);
       assert.deepStrictEqual(r.body.newFindings.map((n) => n.key), ['rule:docs:notes']);
       assert.ok(!('result' in r.body.from), 'the full results are not sent back');
+    });
+
+    await t('POST /findings/explain passes the finding to the explainer, behind the AI limiter (and only it)', async () => {
+      limited.length = 0;
+      const r = await s.call('POST', '/api/code-map/findings/explain', { runId: '20', ruleId: 'docs', toolId: 'notes', findingId: 'rule:docs' });
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(r.body.explanation, 'ok');
+      assert.deepStrictEqual(explained.at(-1), [3, { runId: 20, ruleId: 'docs', toolId: 'notes', findingId: 'rule:docs' }]);
+      assert.deepStrictEqual(limited, ['/findings/explain']);
+      await s.call('GET', '/api/code-map/runs');
+      assert.deepStrictEqual(limited, ['/findings/explain'], 'the other routes are not rate limited');
+      const gone = await s.call('POST', '/api/code-map/findings/explain', { runId: 20, ruleId: 'gone' });
+      assert.strictEqual(gone.status, 404);
+      assert.match(gone.body.error, /not in this run/);
+      const noModel = await s.call('POST', '/api/code-map/findings/explain', { runId: 20, ruleId: 'nomodel' });
+      assert.strictEqual(noModel.status, 503);
+      assert.match(noModel.body.error, /No AI model is set up/, 'a deliberate 503 keeps its message');
     });
 
     await t('GET /compare refuses bad ids, missing runs and unfinished runs', async () => {

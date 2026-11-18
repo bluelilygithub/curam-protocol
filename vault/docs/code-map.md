@@ -1,6 +1,6 @@
 # Code Map
 
-Admin-only tool at `/code-map` (menu: Business, next to Changelog). It reads Vault's own source on the server and shows every tool, the code it owns, how each tool follows the rules in `CLAUDE.md`, and a ranked list of what to improve, with file and line evidence. It only reads. It makes no model calls, needs no git and no network, and costs nothing to run.
+Admin-only tool at `/code-map` (menu: Business, next to Changelog). It reads Vault's own source on the server and shows every tool, the code it owns, how each tool follows the rules in `CLAUDE.md`, and a ranked list of what to improve, with file and line evidence. It only reads. The analysis makes no model calls, needs no git and no network, and costs nothing to run; the two optional AI parts (the guide chat and Explain and plan a fix) each cost one model call per question.
 
 The build brief, the Python prototype it was ported from and the prompts for each milestone are in `specs/code-map/`.
 
@@ -23,6 +23,8 @@ node server/services/codeMap/jobs.test.js
 node server/routes/codeMap.test.js
 node server/services/codeMap/compare.test.js
 node server/cron/codeMapCron.test.js
+node server/services/codeMap/explain.test.js
+node server/services/codeMapTutor.test.js
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
@@ -63,6 +65,23 @@ A finding is split into items, so a change shows even when the finding as a whol
 It shows new items (in the newer run only, high first), resolved items, items that moved from amber to red ("got worse") or back, each tool's score movement (biggest drop first), tools added or removed, and import cycles gained or lost (all cycles, not only cross-tool ones). The summary numbers (tools, lines, tests, gaps, findings, cycles) are shown as differences.
 
 Renaming a tool's id or a rule's id makes its items look resolved and new at once. A change to a rule (a new rule, a tighter regex) shows up as drift too, so note rule changes in the changelog.
+
+## Explain and plan a fix
+
+A button under each finding on the Overview (with a tool picker when the finding names several tools). It calls `POST /api/code-map/findings/explain` with `{ runId, ruleId, toolId, findingId }`, the only Code Map route behind `aiLimiter` (set on the route in `server/routes/codeMap.js`, since the mount has none). `server/services/codeMap/explain.js`:
+
+- Reads the finding from the stored run: for a rule finding, that tool's check (note and full evidence); for a structural finding, its evidence.
+- Reads excerpts from disk around each evidence line: up to 200 lines per location (100 either side, or the first 200 lines when the evidence has no line), overlapping windows merged, at most 8 files and 800 lines in all.
+- **Only paths inside `server/` and `client/src/` are read.** Absolute paths, `..`, backslashes, other folders, `node_modules`, `.env*`, and anything whose real path (after symlinks) is outside those folders are refused and listed as "not read". The model never sees a file that is not in the finding's evidence.
+- Asks `getModelsForUser(userId).standard` through `callModel` (no hardcoded model id; 503 "No AI model is set up" when there is none), logs usage as `code_map_explain`.
+- The prompt asks for a short explanation and a step-by-step fix citing file:line, to say "I could not tell" rather than guess, and to say so when the finding looks like a false positive. The answer is treated as untrusted JSON: references that do not point into an excerpt it was shown are dropped (the page says how many).
+- Code excerpts go to the model provider set in Settings. Nothing is stored and no code is changed.
+
+Test: `node server/services/codeMap/explain.test.js` (path restriction, grounding, model resolution).
+
+## Guide chat
+
+The round button at the bottom right is the Code Map guide (`guideId` `code-map`, `POST /api/code-map-tutor`, `requireAdmin` and `aiLimiter`, `server/services/codeMapTutor.js` on `guideCore.js`, `server/routes/codeMapTutor.js` on `guideRouter.js`, wrapper `client/src/pages/codeMap/CodeMapTutorChat.jsx`). It explains how to read the page and what each rule means, and its Open buttons switch tab and scroll to the part. It sees no code, run, finding or score. `client/src/pages/codeMap/codeMapTools.mjs` is the list the page and the guide share (the tabs, their tips, the (i) box text and the controls the guide can point at); `node server/services/codeMapTutor.test.js` fails if it and the catalogue drift, or if a rule in `rules.js` is not explained in the guide's RULES. When a tab, control or rule changes, update `codeMapTools.mjs`, `CATALOG` and `RULES` together.
 
 ## Weekly run
 
@@ -131,5 +150,5 @@ Older runs are deleted outright once there are more than 30. They are analysis o
 - A restart marks a queued or running run as failed ("Stopped by a restart"). Only runs created before this boot's schema setup are touched, because the server answers requests before setup finishes.
 - The current stage of a run is kept in memory, not in the table, so it is only known to the server process running it.
 - The commit hint comes from `RAILWAY_GIT_COMMIT_SHA`; locally it is empty.
-- Hotspots (big files that change often) need git history, which is not in the deploy. The panel stays empty until change history is added (brief milestone 5).
+- Hotspots (big files that change often) need git history, which is not in the deploy. The panel stays empty. Churn from the GitHub API was an optional part of the brief's milestone 5 and has not been built (it would need a GITHUB_TOKEN and safeFetch).
 - The Dependency map loads `react-force-graph-2d` only when its tab is opened.

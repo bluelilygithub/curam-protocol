@@ -142,7 +142,7 @@ export default function ChangesView({ runs, byId, onOpenTool }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2" data-tour="cm-changes">
+      <div className="flex flex-wrap items-center gap-2" data-tour="cm-changes" data-guide="run-pickers">
         <span className="text-sm" style={{ color: 'var(--color-muted)' }}>From</span>
         {select(fromId, setFromId, 'Older run', 'The run to compare from (usually the older one).')}
         <span className="text-sm" style={{ color: 'var(--color-muted)' }}>to</span>

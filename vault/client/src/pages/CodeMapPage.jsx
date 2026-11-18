@@ -15,6 +15,8 @@ import ConventionsView from './codeMap/ConventionsView';
 import StructureView from './codeMap/StructureView';
 import ChangesView from './codeMap/ChangesView';
 import ToolDetail from './codeMap/ToolDetail';
+import CodeMapTutorChat from './codeMap/CodeMapTutorChat';
+import { CODE_MAP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './codeMap/codeMapTools.mjs';
 import { fmtSecs, fmtWhen } from './codeMap/shared';
 
 // Admin Code Map: a static read of Vault's own source. Every tool, the code it owns, how it follows the rules in CLAUDE.md, and a ranked
@@ -23,14 +25,8 @@ import { fmtSecs, fmtWhen } from './codeMap/shared';
 
 const DependencyMap = lazy(() => import('./codeMap/DependencyMap')); // the graph library loads only when the map tab opens
 
-const VIEWS = [
-  { id: 'overview', label: 'Overview', tip: 'Summary numbers and the ranked list of what to improve.' },
-  { id: 'tools', label: 'Tools', tip: 'One card per tool: score, size, tests and a dot per rule.' },
-  { id: 'conventions', label: 'Conventions', tip: 'Every tool against every rule, with the evidence for each cell.' },
-  { id: 'map', label: 'Dependency map', tip: 'Which tools call each other\'s APIs or share code files.' },
-  { id: 'structure', label: 'Structure', tip: 'Largest files, import cycles, shared foundations, separate packages and possibly unused files.' },
-  { id: 'changes', label: 'Changes', tip: 'What moved between two runs: new and resolved findings, and each tool\'s score.' },
-];
+// the tabs are the page's "tools" in codeMapTools.mjs, shared with the guide
+const VIEWS = CODE_MAP_TOOLS.map((t) => ({ id: t.id, label: t.label, tip: TOOL_TIPS[t.id] }));
 const POLL_MS = 1500;
 const toast = (message, type = 'error') => useToastStore.getState().addToast(message, type);
 const isActive = (r) => r && (r.status === 'queued' || r.status === 'running');
@@ -129,6 +125,20 @@ export default function CodeMapPage() {
     setTimeout(() => startCodeMapTour(setView), 300);
   }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the guide's Open button: show the tab, then scroll to the part marked data-guide="<id>" (codeMapTools.mjs GUIDE_TOOLS)
+  const openGuideTarget = (id) => {
+    const target = GUIDE_TOOLS.find((g) => g.id === id);
+    if (!target) return;
+    setDetailId(null);
+    setView(target.tool);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-guide="${id}"]`);
+      let still = false;
+      try { still = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { /* old browser */ }
+      if (el) el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+    }, 350);
+  };
+
   const startTour = () => {
     try { localStorage.removeItem(CODE_MAP_TOUR_KEY); } catch (_) { /* ignore */ }
     setDetailId(null);
@@ -176,7 +186,7 @@ export default function CodeMapPage() {
             ) : loading ? 'Loading… ' : 'Not run yet. '}Only admins can see this page.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3" data-tour="cm-run">
+        <div className="flex flex-wrap items-center gap-3" data-tour="cm-run" data-guide="run-analysis">
           {active && (
             <div className="min-w-[220px]" role="status" aria-live="polite">
               <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
@@ -202,12 +212,10 @@ export default function CodeMapPage() {
 
       {info.show && (
         <ToolInfoModal title="How Code Map Works" onClose={info.close}>
-          <p className="text-sm" style={{ color: 'var(--color-text)' }}>Code Map reads Vault's own source on the server (no git, no network, no AI) and works out which code belongs to which tool, then checks each tool against the rules in CLAUDE.md.</p>
           <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <p style={{ color: 'var(--color-text)' }}><strong>Run analysis</strong> reads the code as deployed now. It takes a few seconds and the last 30 runs are kept. High findings are also sent to your Suggestions inbox, once per tool, so a repeat run does not add them again. A run also happens by itself every Sunday at 3:17 am (Brisbane), and <strong>Changes</strong> compares any two runs.</p>
-            <p style={{ color: 'var(--color-text)' }}><strong>Green</strong> follows the rule, <strong>amber</strong> is worth a look, <strong>red</strong> is a gap, <strong>grey</strong> means the rule does not apply. A tool's score is the share of the rules that apply to it that it follows.</p>
-            <p style={{ color: 'var(--color-text)' }}>The checks match patterns in the code, so they can be wrong both ways. Read the evidence (file and line) before changing anything. Known false positives are listed in docs/code-map.md.</p>
-            <p style={{ color: 'var(--color-text)' }}>A file reached by three or more tools counts as shared and belongs to none of them; the rest belongs to the tools that reach it.</p>
+            {HOW_IT_WORKS.map(([head, text]) => (
+              <p key={head} style={{ color: 'var(--color-text)' }}><strong>{head}.</strong> {text}</p>
+            ))}
           </div>
         </ToolInfoModal>
       )}
@@ -251,7 +259,7 @@ export default function CodeMapPage() {
           />
         ) : (
           <>
-            {view === 'overview' && <Overview data={data} byId={byId} onOpenTool={setDetailId} />}
+            {view === 'overview' && <Overview data={data} byId={byId} onOpenTool={setDetailId} runId={run?.id} />}
             {view === 'tools' && <ToolsView data={data} rules={rules} onOpenTool={setDetailId} />}
             {view === 'conventions' && <ConventionsView data={data} rules={rules} byId={byId} onOpenTool={setDetailId} />}
             {view === 'map' && (
@@ -268,6 +276,8 @@ export default function CodeMapPage() {
       {detailId && byId[detailId] && (
         <ToolDetail key={detailId} tool={byId[detailId]} data={data} rules={rules} byId={byId} onOpenTool={setDetailId} onClose={() => setDetailId(null)} />
       )}
+
+      <CodeMapTutorChat currentTool={view} onOpenTool={openGuideTarget} />
     </div>
   );
 }

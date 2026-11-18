@@ -33,7 +33,7 @@ export default function ToolsView({ data, rules, onOpenTool }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3" data-tour="cm-tools-filter">
+      <div className="flex flex-wrap items-center gap-3" data-tour="cm-tools-filter" data-guide="tools-filter">
         <Tooltip text="Filter by name, id, feature flag or page path. You can also speak.">
           <div className="w-full sm:w-72"><VoiceInput value={q} onChange={setQ} placeholder="Filter tools" label="Filter tools" /></div>
         </Tooltip>
@@ -66,7 +66,7 @@ export default function ToolsView({ data, rules, onOpenTool }) {
       {!list.length ? (
         <EmptyState icon="search" title="No tools match" body="Clear the filter or pick another group." />
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+        <div className="grid gap-3" data-guide="tool-panel" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
           {list.map((t) => (
             <Tooltip key={t.id} text={`Open ${t.label}: each rule with its evidence, its APIs, linked tools and files.`}>
               <button

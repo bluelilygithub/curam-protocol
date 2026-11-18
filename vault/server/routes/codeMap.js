@@ -1,21 +1,25 @@
 'use strict';
 
 // /api/code-map: the admin Code Map (analysis of Vault's own source). Mounted behind requireAdmin in server/index.js, with no aiLimiter
-// because the analysis makes no model calls. Runs are background jobs (server/services/codeMap/jobs.js). Named routes before /:id.
-// Injectable (jobs) so the route test needs no database.
+// on the mount because the analysis makes no model calls; the one route that does (POST /findings/explain) has aiLimiter itself.
+// Runs are background jobs (server/services/codeMap/jobs.js). Named routes before /:id.
+// Injectable (jobs, explain, limiter) so the route test needs no database or model.
 
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const { compareRuns } = require('../services/codeMap/compare');
 
-function createCodeMapRouter({ jobs } = {}) {
+function createCodeMapRouter({ jobs, explain, limiter } = {}) {
   const router = express.Router();
   const J = () => jobs || require('../services/codeMap/jobs');
+  const ask = explain || ((userId, input) => require('../services/codeMap/explain').explainFinding(userId, input));
+  const ai = limiter || require('../middleware/aiRateLimit').aiLimiter;
 
   const fail = (res, err, what) => {
     const status = err.status || 500;
     if (status >= 500) getLogger().error({ err }, `[codeMap] ${what}`);
-    res.status(status).json({ error: status >= 500 ? 'Something went wrong. Try again.' : err.message, ...(err.runningId ? { runningId: err.runningId } : {}) });
+    // our own errors carry a status and a message meant for the admin (e.g. 503 "No AI model is set up"); anything else is hidden
+    res.status(status).json({ error: err.status ? err.message : 'Something went wrong. Try again.', ...(err.runningId ? { runningId: err.runningId } : {}) });
   };
 
   // start a run; answers at once with its id (409 while another run is going)
@@ -53,6 +57,15 @@ function createCodeMapRouter({ jobs } = {}) {
       const meta = (r) => ({ id: r.id, createdAt: r.createdAt, finishedAt: r.finishedAt, commitHint: r.commitHint, durationMs: r.durationMs });
       res.json({ from: meta(a), to: meta(b), ...compareRuns(a.result, b.result) });
     } catch (err) { fail(res, err, 'compare'); }
+  });
+
+  // "Explain and plan a fix" for one finding: the only route here that calls a model, so the only one behind aiLimiter
+  // (server/services/codeMap/explain.js reads the run's evidence and excerpts from server/ and client/src/ only)
+  router.post('/findings/explain', ai, async (req, res) => {
+    const { runId, ruleId, toolId, findingId } = req.body || {};
+    try {
+      res.json(await ask(req.user.id, { runId: Number(runId), ruleId, toolId, findingId }));
+    } catch (err) { fail(res, err, 'explain'); }
   });
 
   router.get('/runs/:id', async (req, res) => {

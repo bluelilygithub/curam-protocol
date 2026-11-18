@@ -25,7 +25,7 @@ export default function ConventionsView({ data, rules, byId, onOpenTool }) {
         Each column is a rule from CLAUDE.md, checked against the code each tool owns. Click a cell for what was found, or a tool name for its full detail. Amber cells are worth a look, not necessarily wrong.
       </p>
       <Legend />
-      <div className="overflow-auto rounded-xl border max-h-[70vh]" style={card} data-tour="cm-matrix">
+      <div className="overflow-auto rounded-xl border max-h-[70vh]" style={card} data-tour="cm-matrix" data-guide="matrix-cell">
         <table className="text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
             <tr>

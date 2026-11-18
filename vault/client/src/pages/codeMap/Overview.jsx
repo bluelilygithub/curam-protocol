@@ -1,6 +1,7 @@
 import React from 'react';
 import EmptyState from '../../components/EmptyState';
 import { Evidence, Pill, SEV_COLOR, SEV_TIP, ToolChip, Collapsible, card, fmt } from './shared';
+import ExplainFix from './ExplainFix';
 
 // Overview: the summary tiles and the ranked findings (severity first, then how many tools each touches; built in server/services/codeMap/findings.js).
 
@@ -13,7 +14,7 @@ function Tile({ n, label }) {
   );
 }
 
-export default function Overview({ data, byId, onOpenTool }) {
+export default function Overview({ data, byId, onOpenTool, runId }) {
   const s = data.summary || {};
   const tiles = [
     [fmt(s.tools), 'tools in the navigation'],
@@ -34,7 +35,7 @@ export default function Overview({ data, byId, onOpenTool }) {
         {!findings.length ? (
           <EmptyState icon="check" title="Nothing to improve" body="Every rule passes for every tool, and the structure checks found nothing." />
         ) : (
-          <ol className="space-y-3">
+          <ol className="space-y-3" data-guide="findings">
             {findings.map((f, i) => {
               const tools = (f.tools || []).map((id) => byId[id]).filter(Boolean);
               const total = f.evidenceTotal || (f.evidence || []).length;
@@ -59,6 +60,7 @@ export default function Overview({ data, byId, onOpenTool }) {
                       </Collapsible>
                     </div>
                   )}
+                  {runId ? <ExplainFix runId={runId} finding={f} byId={byId} /> : null}
                 </li>
               );
             })}

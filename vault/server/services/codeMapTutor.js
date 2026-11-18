@@ -1,0 +1,101 @@
+'use strict';
+
+// The Code Map guide (the round button on the admin /code-map page): the admin says what they want to know ("what does amber mean", "why
+// is Mood red on Logger", "what changed since last week") and the guide points at the real tabs and controls, in order, and explains what
+// each rule means. It only knows what is written here: it sees no code, no run, no finding and no score. Built on guideCore.js; the ids are
+// the page's own, listed in client/src/pages/codeMap/codeMapTools.mjs (a test keeps the two in step). See docs/guide-chat.md and
+// docs/code-map.md.
+
+const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
+
+const G = 'Code Map';
+
+const CATALOG = [
+  { id: 'overview', label: 'Overview', group: G,
+    does: 'The first tab: six numbers (tools, lines of app code, test files, API mounts, import cycles, rule gaps) and What to improve, the ranked findings.',
+    notes: 'Findings are ranked high first, then by how many tools they touch.' },
+  { id: 'tools', label: 'Tools', group: G,
+    does: 'One card per tool in the menu: its group, a preview/parked/off pill, a score bar, lines of code, test files and one dot per rule. Filter by menu group, search by name (or speak), and sort by score, size or name. Click a card for the tool detail panel.',
+    notes: 'The score is the share of the rules that apply to the tool that it follows.' },
+  { id: 'conventions', label: 'Conventions', group: G,
+    does: 'A table with the tools down the side and the 14 rules across the top. Hover a rule name for why it matters; click a cell to see what was found, the usual fix and the evidence underneath.',
+    notes: 'Tools are listed lowest score first. The header and first column stay in place while scrolling.' },
+  { id: 'map', label: 'Dependency map', group: G,
+    does: "A picture of the tools: each circle is a tool (bigger means more code, the colour is its score: green 90 and over, amber 70 and over, red below 70). A solid line means one tool calls the other's API; a dashed line means they share code files. Click a tool to highlight its links, click it again to open its detail. Drag to move, scroll to zoom.",
+    notes: 'Hide tools with no links leaves out the ones that stand alone.' },
+  { id: 'structure', label: 'Structure', group: G,
+    does: 'The code as a whole: Largest files, Import cycles (files that import each other in a loop), Shared foundations (modules most tools depend on), Separate packages (sub-apps beside client and server), and Possibly unused files and backup copies.',
+    notes: 'Hotspots (big files that change often) stay empty: they need git history, which the deployed server does not have. Check a possibly unused file before deleting it: it can be loaded by a path built at runtime.' },
+  { id: 'changes', label: 'Changes', group: G,
+    does: "Compares two finished runs (the latest and the one before unless picked otherwise): how many findings are new, resolved, got worse or got better; the change in the summary numbers; scores that dropped (biggest first); new findings (high first); findings that moved from amber to red or back; tools added or removed; import cycles gained or lost.",
+    notes: 'It needs two finished runs. A change to a rule itself, or a renamed tool, shows up as drift too.' },
+  { id: 'run-analysis', label: 'Run analysis', group: G,
+    does: 'The button at the top right. It reads the code as deployed now, in a few seconds, showing each step, and the page stays usable. The line beside the title says when the last run was, how long it took and which commit it saw.',
+    notes: 'One run at a time for the whole workspace. The last 30 runs are kept. A run also happens by itself every Sunday at 3:17 am Brisbane time. High findings from a run go to the Suggestions inbox, once per rule and tool.' },
+  { id: 'findings', label: 'What to improve', group: G,
+    does: 'The ranked list on the Overview. Each finding has a severity (high, medium, low), says why it matters and the usual fix, names the tools it affects as buttons that open each tool, and has the evidence (file and line) behind a small Evidence link.',
+    notes: 'One finding per rule that has amber or red tools, plus three about structure: a cron job that requires a route file, an import cycle across tools, and leftover backups or possibly unused files.' },
+  { id: 'explain-fix', label: 'Explain and plan a fix', group: G,
+    does: "A button on each finding (pick the tool first when it names several). It asks the AI model chosen in Settings to explain that finding in that tool and give a step-by-step fix plan, citing file and line. The answer shows under the finding with the files it read.",
+    notes: 'It uses only the finding, its evidence and up to 200 lines around each evidence line, from server/ and client/src/ only, and says "I could not tell" rather than guess. It costs one model call each time and counts towards the AI rate limit. It does not change any code.' },
+  { id: 'tool-panel', label: 'Tool detail panel', group: G,
+    does: "Opens on the right when a tool is clicked anywhere on the page: every rule with its note, the usual fix and the evidence, the APIs the tool owns (with its line in server/index.js, and whether it has the AI rate limit, comes before sign-in or is admin only), linked tools, its biggest files, and the files it owns. Close it with the cross or Escape.",
+    notes: 'Files reached by three or more tools are shared and are not listed as owned.' },
+  { id: 'tools-filter', label: 'Filter and sort tools', group: G,
+    does: 'On the Tools tab: a filter box (name, id, feature flag or page path; it has a microphone), a sort list (rules score lowest first, size largest first, or name) and a row of menu group buttons.',
+    notes: '' },
+  { id: 'matrix-cell', label: 'Rule cells', group: G,
+    does: 'On the Conventions tab: each coloured square is one rule for one tool. Clicking it shows the note, the usual fix and the evidence in the box under the table, with a button to open the tool.',
+    notes: '' },
+  { id: 'map-highlight', label: 'Highlight a tool', group: G,
+    does: "On the Dependency map: a list to pick a tool and highlight its links (the same as clicking it on the map, for the keyboard), an Open button for the highlighted tool, and Hide tools with no links.",
+    notes: '' },
+  { id: 'run-pickers', label: 'Run pickers', group: G,
+    does: 'On the Changes tab: From and to lists of the finished runs (number, date and time, commit) and a Swap button.',
+    notes: 'Pick two different runs.' },
+];
+
+const RULES = [
+  'Code Map reads the code as it is deployed, on the server. It makes no AI call except Explain and plan a fix, and never changes code.',
+  'Colours: green follows the rule, amber is worth a look (not necessarily wrong), red is a gap, grey means the rule does not apply to that tool.',
+  'The checks are pattern matches in the code, so they can be wrong both ways: always read the evidence before changing anything. docs/code-map.md lists the known false positives.',
+  'A file reached by three or more tools is shared and belongs to none of them; a problem in a shared file is not charged to any tool.',
+  'The 14 rules: Feature flag parity (the tool\'s flag is in both featureAccess.js lists with the same default). Lifecycle entry (a flag that ships off has a preview or parked entry on both sides). AI rate limit (routes that call a model have aiLimiter). No hardcoded model ids (models come from Settings). Model resolver (code that calls a model picks it through getModelsForUser). apiClient (no raw fetch to /api from the page). SSRF guard (a web address typed by a person is fetched only through safeFetch or htmlFetch). Tests (at least one test file covers the tool, two if it is over 3,000 lines). Guide chat (the tool has a guide). Docs (docs/<tool>.md exists). Recycle bin (its deletes go to the recycle bin). getIcon (icons through getIcon). Shared Dialog (no hand-written full-screen overlay). Logger (five or fewer console calls in its server code).',
+  'Severity: high means fix soon (also raised in the Suggestions inbox), medium means fix when next working on the tool, low is housekeeping.',
+  'The Open buttons in this chat only switch to a tool (they show a tab or scroll to a part of it); they never run an analysis, explain a finding or change anything.',
+];
+
+const NOT_POSSIBLE = [
+  'Fixing the code: Code Map only reports. Explain and plan a fix writes a plan; a person makes the change.',
+  'Seeing code, runs, findings or scores in this chat: the guide cannot see any of them. Open the tab or the tool panel instead.',
+  'Hotspots and change history: git history is not on the server, so files that change often are not shown.',
+  'Checking the separate packages (cellar planner, shelf and the other sub-apps): they are listed but not checked against the rules.',
+  'Switching a rule off, or marking one finding as a false positive so it stops showing: a rule is changed in server/services/codeMap/rules.js.',
+  'Keeping more than the last 30 runs, or running two analyses at once.',
+  'Choosing the model Explain and plan a fix uses on this page: it uses the standard model set in Settings.',
+];
+
+const SYSTEM = `You are the guide to Code Map in Vault, an admin page that reads Vault's own source code and checks each tool against the project's rules. The admin says, in everyday words, what they want to know or do. You point them to the right tabs and controls, in order, explain what each part and each rule means, and how to read a check.
+
+Rules:
+- Use ONLY the tools and rules given below. Never invent a button or a feature, and never promise something the notes say this page cannot do.
+- You cannot see any code, run, finding, score or tool result. Never state or guess why a particular tool fails a rule, what a finding says, or what a score is: send them to the place on the page that shows it, or to Explain and plan a fix.
+- Be plain and short. The admin knows the app but explain any check in a sentence.
+- Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
+- The checks are pattern matches and can be wrong: when someone asks whether to trust a result, say to read the evidence first.
+- If you need one more fact to answer, ask ONE short question and give no steps.
+${VERDICT_HELP}
+
+${REPLY_FORMAT}`;
+
+const guide = createGuide({
+  name: 'Code Map guide', feature: 'code_map_guide', catalog: CATALOG, rules: RULES, notPossible: NOT_POSSIBLE, system: SYSTEM,
+  toolWord: 'tool', sectionTitle: 'CODE MAP TABS AND CONTROLS',
+  fallbackAnswer: 'Sorry, I could not work that out. Could you say again what you want to know about Code Map, in a sentence?',
+});
+
+module.exports = {
+  CATALOG, RULES, NOT_POSSIBLE, SYSTEM, VERDICTS: guide.VERDICTS,
+  buildTutorPrompt: guide.buildPrompt, cleanMessages: guide.cleanMessages, normalizeTutorReply: guide.normalizeReply,
+  askCodeMapTutor: guide.ask,
+};

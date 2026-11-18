@@ -102,7 +102,7 @@ export default function DependencyMap({ data, onOpenTool }) {
           <span>circle size = lines of code · colour = rules score (
             <span style={{ color: STATUS_COLOR.pass }}>90+</span>, <span style={{ color: STATUS_COLOR.warn }}>70+</span>, <span style={{ color: STATUS_COLOR.fail }}>below 70</span>)</span>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3" data-guide="map-highlight">
           <Tooltip text="Highlight one tool's links, the same as clicking it on the map (for the keyboard).">
             <select
               value={sel || ''} onChange={(e) => setSel(e.target.value || null)} aria-label="Highlight a tool"

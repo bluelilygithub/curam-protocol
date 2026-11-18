@@ -261,7 +261,8 @@ app.use('/api/ai-visibility', requireFeature('aiVisibility'), require('./routes/
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)
 app.use('/api/changelog', requireAdmin, require('./routes/changelog')); // admin changelog: what each commit did (read-only)
-app.use('/api/code-map', requireAdmin, require('./routes/codeMap')); // Code Map: analysis of Vault's own source (admin only; no model calls, so no aiLimiter)
+app.use('/api/code-map-tutor', requireAdmin, aiLimiter, require('./routes/codeMapTutor')); // the Code Map guide chat (sees no code, run or finding)
+app.use('/api/code-map', requireAdmin, require('./routes/codeMap')); // Code Map: analysis of Vault's own source (admin only; the analysis makes no model calls, so no aiLimiter on the mount; POST /findings/explain has it in the route file)
 app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Health agent (admin only, read-only report on the admin's own PC)
 app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)
 app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burnerMail'));
