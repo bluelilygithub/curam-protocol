@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8682f9fb",
+   "fullHash": "8682f9fba664609c5770e8fe9d13b18ae79f4eb5",
+   "committedAt": "2026-11-19T07:23:33+10:00",
+   "author": "mrb",
+   "subject": "Code Map Context: default docs, saved choice and a \"not included\" list",
+   "filesChanged": 12,
+   "insertions": 470,
+   "deletions": 74,
+   "area": "Code Map",
+   "goal": "Send Claude a short, sensible set of docs every time, keep the rest optional, and tell Claude which docs it was not given so it can ask for them.",
+   "whatChanged": "New server/services/codeMap/briefing/docs.js: the docs on offer are DEFAULT_BRIEFING_DOCS (client/DESIGN.md, docs/hardening.md, docs/guide-chat.md, docs/video-tools.md, in briefing/sources.js), EXTRA_BRIEFING_DOCS (exact paths: client/DESIGN.md, ROADMAP.md, BACKUP.md, planner-core/README.md, room-planner/README.md; all five exist) and docs/*.md. A path is used only if relative, without \"..\", backslash or drive, and its real path is a file inside the repo. Each doc carries its size (characters, ~tokens = characters / 4), a one-sentence summary (hand-written DOC_SUMMARIES for 15 general docs, else the tool line from tool-purposes.md, else the first real prose sentence) and a note for docs/finance.md (\"holds real business figures\"). The ticked set is saved per admin in settings key code_map_briefing_docs (JSON list; only paths on offer kept); with nothing saved the defaults are ticked. Routes: GET /briefing/claude-md now returns the docs and the ticked paths; new PUT and DELETE /briefing/docs (save, reset to defaults); new POST /briefing/docs-copy builds the copy on the server (CLAUDE.md, the ticked docs under \"## File: <path>\", then the list); GET /briefing/doc removed. Both the copy and the briefing end with \"## Docs not included in this copy\": one line per unticked doc (path, ~tokens, one sentence, no contents), then \"If the work needs any of these, ask me to include them next time.\"; in the briefing it follows section 11, names the docs in the separate CLAUDE.md copy, and is left out of the 60,000-character limit so it cannot trim the tool table. ContextView.jsx: groups \"Always included (you can untick)\" and \"Optional\" (linked docs, then the extras, then Other docs), size beside each box, the finance note, the copy size, Reset to defaults, tooltips. Guide CATALOG and codeMapTools.mjs gain \"Docs to include\"; routeManifest.json updated; docs/code-map.md has a Docs to include part.",
+   "filesImpacted": [
+    "server/services/codeMap/briefing/docs.js",
+    "server/services/codeMap/briefing/sources.js",
+    "server/services/codeMap/briefing/index.js",
+    "server/services/codeMap/briefing/buildBriefing.js",
+    "server/services/codeMap/briefing/buildBriefing.test.js",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/services/codeMapTutor.js",
+    "server/testing/routeManifest.json",
+    "client/src/pages/codeMap/ContextView.jsx",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "docs/code-map.md"
+   ],
+   "benefit": "One click now gives Claude the UI rules, the hardening checklist and the guide-chat and Video Tools patterns alongside CLAUDE.md, and an honest list of everything else with sizes, so it can ask for a doc instead of guessing. The choice sticks per admin.",
+   "concerns": "The default copy grows from about 4,450 tokens (CLAUDE.md alone) to about 38,300; docs/video-tools.md alone is about 20,500 of that, so it is worth unticking when the work is not about video. The briefing grows from about 13,000 to about 16,100 tokens because the list (about 3,000 tokens for ~90 docs) is added outside the 60,000-character limit; counting it would have trimmed the tool table. Summaries for docs without a hand-written or tool line come from the first usable sentence and can be weak. The choice applies to the briefing only when it is built after the change is saved (each tick saves at once). Tested: briefing tests (22, incl. default paths exist, path guard, the not-included list holds every unticked doc and none of their contents in both outputs, the list not trimming), route tests (13, incl. unsafe paths dropped, reset, server-built copy), guide test, cross-user (1525 routes, 66 admin routes refuse a member), ownership and auth; the picker was driven in the local app (save survives reload, copy contents, reset). Not tried on Railway."
+  },
+  {
    "commit": "4806d085",
    "fullHash": "4806d085a103b94a378bfea162a68366967c92ca",
    "committedAt": "2026-11-19T06:57:26+10:00",
