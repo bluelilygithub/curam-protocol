@@ -89,6 +89,19 @@ const rawPixels = async (png) => { const { data, info } = await sharp(png).raw()
     assert.deepStrictEqual(at(px[3], 0), [0, 255, 255], 'pure cyan CMYK becomes RGB cyan');
   }
 
+  // ---- a colour space stored as a reference to another object (how InDesign/Illustrator logos are often written) ----
+  {
+    const doc = await PDFDocument.create();
+    const palette = doc.context.register(doc.context.obj(['Indexed', 'DeviceRGB', 1, PDFHexString.of('FFFFFF00AA00')]));
+    addImage(doc, flate(Buffer.from(Array.from({ length: 16 * 16 }, (_, i) => i % 2))), { Width: 16, Height: 16, BitsPerComponent: 8, Filter: 'FlateDecode', ColorSpace: palette });
+    const { images, skipped } = await extractImages(await save(doc));
+    assert.strictEqual(images.length, 1, 'a palette picture whose colour space is a reference is extracted (it was skipped as "special colour format")');
+    assert.strictEqual(skipped, 0);
+    const p = await rawPixels(images[0].bytes);
+    assert.deepStrictEqual([...p.data.subarray(0, 3)], [255, 255, 255]);
+    assert.deepStrictEqual([...p.data.subarray(p.info.channels, p.info.channels + 3)], [0, 170, 0]);
+  }
+
   // ---- JPEG 2000 is copied unchanged as .jp2; fax/JBIG2, stencil masks and tiny pictures are handled honestly ----
   {
     const doc = await PDFDocument.create();

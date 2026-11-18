@@ -261,7 +261,7 @@ async function rebuildRaster(obj, doc) {
   if (!width || !height) return { skip: 'invalid' };
   if (width * height > MAX_PIXELS) return { skip: 'tooBig' };
   if (dict.lookup(PDFName.of('ImageMask')) === PDFBool.True) return { skip: 'mask' };
-  const cs = csInfo(dict.get(PDFName.of('ColorSpace')), doc.context);
+  const cs = csInfo(dict.lookup(PDFName.of('ColorSpace')), doc.context); // lookup: the colour space is often an indirect reference
   if (!cs) return { skip: 'colourSpace' };
   const bpc = numberOf(dict, 'BitsPerComponent', 8);
   if (![1, 2, 4, 8, 16].includes(bpc)) return { skip: 'colourSpace' };
@@ -362,8 +362,10 @@ async function extractImages(buf) {
     let made = null;
     try {
       if (filters.length === 1 && filters[0] === '/DCTDecode') {
-        const cs = String(dict.get(PDFName.of('ColorSpace')) || '');
-        if (/CMYK/i.test(cs) || numberOf(dict, 'Colors', 0) === 4) {
+        // lookup, not get: the colour space is often an indirect reference (an ICC profile with 4 channels is CMYK too)
+        const csObj = dict.lookup(PDFName.of('ColorSpace'));
+        const cs = String(csObj || '');
+        if (/CMYK/i.test(cs) || csInfo(csObj, doc.context)?.type === 'cmyk' || numberOf(dict, 'Colors', 0) === 4) {
           // CMYK JPEGs show wrongly in browsers; convert once to an ordinary RGB JPEG
           const bytes = await sharp(Buffer.from(obj.contents)).toColourspace('srgb').jpeg({ quality: 92 }).toBuffer();
           made = { bytes, ext: 'jpg', mime: 'image/jpeg', format: 'jpeg', width, height, converted: true };
