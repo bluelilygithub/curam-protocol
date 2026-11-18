@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "3ecc38aa",
+   "fullHash": "3ecc38aaa32c448af0707f70166b91759403055f",
+   "committedAt": "2026-11-18T10:30:10+10:00",
+   "author": "mrb",
+   "subject": "PDF Tools: correct PDF -> Word help, panel note, User Guide and docs (pdf2docx, not LibreOffice)",
+   "filesChanged": 4,
+   "insertions": 15,
+   "deletions": 11,
+   "area": "PDF Tools",
+   "goal": "Make the PDF → Word wording match how it really works since commit e18fdb5c (pdf2docx), instead of saying LibreOffice.",
+   "whatChanged": "PDF → Word help box now says Word and OpenDocument are rebuilt with pdf2docx (real paragraphs, tables, pictures, a page per PDF page), browser-printed PDF fixes, plain text via LibreOffice. The panel note no longer blames LibreOffice and tells people to OCR scans first. The PDF Tools info box summary mentions PDF to HTML and drops \"real LibreOffice conversion\". User Guide splits Office → PDF (LibreOffice) from PDF → Word (pdf2docx). docs/pdf-agent.md endpoint row and error note corrected. The server error when neither converter is installed no longer says \"coming soon\".",
+   "filesImpacted": [
+    "client/src/pages/PdfPage.jsx",
+    "client/src/pages/UserGuidePage.jsx",
+    "docs/pdf-agent.md",
+    "server/routes/pdf.js"
+   ],
+   "benefit": "People see an accurate description of what PDF → Word does.",
+   "concerns": "Wording only; no behaviour change. Help box and panel note checked in a local browser."
+  },
+  {
    "commit": "53b4afc4",
    "fullHash": "53b4afc494cdba13005371e823ad41f9bdb945eb",
    "committedAt": "2026-11-18T10:27:59+10:00",
