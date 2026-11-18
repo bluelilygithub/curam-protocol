@@ -14,10 +14,13 @@ const { collectFiles } = require('./files');
 const sample = require('./__fixtures__/sample-data.json');
 
 const ROOT = path.resolve(__dirname, '../../..');
-// The analyzer's own folder did not exist at 40bf883, so it is left out to compare like with like.
+// The Code Map's own code did not exist at 40bf883, so it is left out to compare like with like: its service folder, its route file
+// and test, and its mount line in server/index.js (blanked, so later line numbers stay the same).
 const OWN = 'server/services/codeMap/';
+const OWN_PREFIXES = [OWN, 'server/routes/codeMap'];
 const all = collectFiles(ROOT);
-const files = Object.fromEntries(Object.entries(all).filter(([f]) => !f.startsWith(OWN)));
+const files = Object.fromEntries(Object.entries(all).filter(([f]) => !OWN_PREFIXES.some((p) => f.startsWith(p))));
+files['server/index.js'] = files['server/index.js'].split('\n').map((l) => (l.includes("app.use('/api/code-map'") ? '' : l)).join('\n');
 const full = analyze({ root: ROOT, files: all, log: null });
 const r = analyze({ root: ROOT, files, log: null });
 console.log(`Whole repo now: ${full.summary.files} files, ${full.summary.tests} tests, ${full.summary.tools} tools, ${full.summary.mounts} mounts, ${full.cycles.length} cycles`);

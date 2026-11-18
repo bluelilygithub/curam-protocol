@@ -4345,6 +4345,21 @@
   "GET /api/changelog": {
    "class": "admin"
   },
+  "POST /api/code-map/runs": {
+   "class": "admin"
+  },
+  "GET /api/code-map/runs": {
+   "class": "admin"
+  },
+  "GET /api/code-map/runs/latest": {
+   "class": "admin"
+  },
+  "GET /api/code-map/compare": {
+   "class": "admin"
+  },
+  "GET /api/code-map/runs/:id": {
+   "class": "admin"
+  },
   "DELETE /api/plans/:id/steps/:stepId/deps/:blockedByStepId": {
    "class": "authed"
   },

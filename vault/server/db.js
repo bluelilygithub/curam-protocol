@@ -127,6 +127,8 @@ const PARTY_ROLE_KEYS = [
 // ── Schema initialisation ──────────────────────────────────────────────────────
 
 async function initSchema() {
+  // the database's clock when this boot's schema set-up began: jobs created before it belong to an earlier process (see code_map_runs)
+  const { rows: [{ now: schemaStartedAt }] } = await pool.query('SELECT NOW() AS now');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -4817,6 +4819,30 @@ async function initSchema() {
                       stage = NULL, "partialHtml" = NULL, "finishedAt" = NOW()
                     WHERE status = 'running'`);
   await pool.query(`DELETE FROM pdf_html_jobs WHERE "createdAt" < NOW() - INTERVAL '7 days'`);
+
+  // Code Map (admin): each analysis of Vault's own source is a background run (services/codeMap/jobs.js). Workspace-wide, so "userId" is
+  // only who started it. The job keeps the last 30 runs and deletes older ones outright: they are analysis output, not user content, so
+  // they skip the recycle bin on purpose. The partial unique index allows one queued/running run at a time, even for two clicks at once.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS code_map_runs (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status        TEXT NOT NULL DEFAULT 'queued',
+      "commitHint"  TEXT,
+      summary       JSONB,
+      result        JSONB,
+      error         TEXT,
+      "durationMs"  INTEGER,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finishedAt"  TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_code_map_runs_created ON code_map_runs ("createdAt" DESC)`);
+  // a run cannot survive a restart (the worker lived in the old process); this runs before the one-active index so old rows never block it.
+  // Only runs from before this boot: the server already answers while the schema is set up, so a run started in those seconds is live.
+  await pool.query(`UPDATE code_map_runs SET status = 'failed', error = 'Stopped by a restart', "finishedAt" = NOW()
+                      WHERE status IN ('queued', 'running') AND "createdAt" < $1`, [schemaStartedAt]);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_code_map_runs_one_active ON code_map_runs ((status IN ('queued', 'running'))) WHERE status IN ('queued', 'running')`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (

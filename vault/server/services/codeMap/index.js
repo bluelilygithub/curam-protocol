@@ -37,44 +37,52 @@ function readDocs(root) {
 /**
  * analyze({ root }) -> result object. `root` is the vault directory (holds server/, client/src/, docs/).
  * Options for tests: `files` (a { relPath: source } map instead of reading disk), `rules`.
+ * `onStage(name)` is called as each stage starts (files, imports, tools, mounts, ownership, rules, structure, findings).
  */
-function analyze({ root, files: givenFiles, rules = RULES, log = logger() } = {}) {
+function analyze({ root, files: givenFiles, rules = RULES, log = logger(), onStage = null } = {}) {
   const t0 = Date.now();
   const timings = {};
-  const lap = (name, since) => { timings[name] = Date.now() - since; return Date.now(); };
+  let current = null;
   let t = Date.now();
+  const stage = (name) => {
+    if (current) timings[current] = Date.now() - t;
+    current = name;
+    t = Date.now();
+    if (onStage) onStage(name);
+  };
 
+  stage('files');
   const files = givenFiles || collectFiles(root);
   const loc = buildLoc(files);
-  t = lap('files', t);
 
+  stage('imports');
   const { deps, importers } = buildGraph(files);
-  t = lap('imports', t);
 
+  stage('tools');
   const tools = buildTools(files);
-  t = lap('tools', t);
 
+  stage('mounts');
   const mounts = parseMounts(files);
-  t = lap('mounts', t);
 
+  stage('ownership');
   const reach = computeOwnership({ files, loc, deps, tools, mounts });
-  t = lap('ownership', t);
 
+  stage('rules');
   const ctx = buildRuleContext(files, {
     docs: root ? readDocs(root) : new Set(),
     keyfiles: root ? readText(path.join(root, 'docs/key-files.md')) : '',
   });
   for (const tool of tools) applyRules(tool, ctx, rules);
-  t = lap('rules', t);
 
+  stage('structure');
   const edges = buildEdges(tools);
   const core = buildCore(files, loc, importers, tools, reach);
   const sharedModules = buildSharedModules(files, loc, importers, reach);
   const structure = buildStructure({ root, files, loc, deps, importers });
-  t = lap('structure', t);
 
+  stage('findings');
   const findings = buildFindings({ files, tools, structure, rules });
-  lap('findings', t);
+  timings.findings = Date.now() - t;
 
   const names = Object.keys(files);
   const summary = {
