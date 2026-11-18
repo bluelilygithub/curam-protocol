@@ -1912,7 +1912,7 @@ async function initSchema() {
         aliases     JSONB NOT NULL DEFAULT '[]',
         governing   JSONB NOT NULL DEFAULT '[]',
         ledger      JSONB NOT NULL DEFAULT '[]',
-        "clientId"  INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+        -- "clientId" (REFERENCES clients) is added further down, after the clients table exists: naming it here broke a fresh database.
         "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL,
         "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -2506,6 +2506,9 @@ async function initSchema() {
     await client.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS "clientProjectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_client ON plans ("userId", "clientId")`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_client_project ON plans ("userId", "clientProjectId")`);
+    // Email Follow-Up cases can name a CRM client. ef_cases is created earlier in this file, before clients, so the column is added here
+    // (a no-op on databases that already have it). Test: node server/db.freshSchema.test.js
+    await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
 
     // Password Vault: zero-knowledge. The browser derives the key from a master password and encrypts every entry (AES-256-GCM); the server
     // keeps only the key settings (salt, iteration count, a check blob) and ciphertext. "clientId" is the one plain field: it is how an entry
