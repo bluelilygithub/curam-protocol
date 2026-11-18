@@ -680,6 +680,11 @@ function extractStyled(html, url) {
 
 const MAX_SOURCE_CHARS = 2 * 1024 * 1024; // the page as fetched, sent back for the HTML source view of Exact scrape
 const TEXT_ONLY_NOTICE = 'The website would not give us its page, so this text comes from a reading service and may be missing parts.';
+const NO_FORM_NOTICE = 'No sign-in form was found on the page. If the site asks for the password in a browser pop-up, that was answered; otherwise the page was read as it came. If the site signs in on another page, put that page in "Sign-in page".';
+const LANDING_NOTICE = 'The address you gave is the sign-in page itself, so this is the page the site showed after signing in.';
+const RENDERED_THIN_NOTICE = 'Very little came back, even with the page loaded in a real browser. It may need a sign-in, or it blocked the request.';
+const SIGNED_IN_THIN_NOTICE = 'Very little came back from this page, even signed in.';
+const RENDERED_EMPTY_NOTICE = 'None found, even with the page loaded in a real browser.';
 
 /**
  * Reads a page and runs one tool on it.
@@ -687,7 +692,8 @@ const TEXT_ONLY_NOTICE = 'The website would not give us its page, so this text c
  * The page is fetched the way the CSS tool fetches one (restyle/pageFetch.js: other identities when a site's firewall refuses the first,
  * never a text-only copy). Only Article content makes do with the old text-only fallbacks, because words are all it needs; every other tool
  * needs the real markup, and for those a refusal is an honest error rather than a page of unstyled text pretending to be the site.
- * `deps` replaces the network in tests.
+ * `options.render` (or a sign-in, `options.login` {username, password, loginUrl}) loads the page in a headless browser instead
+ * (restyle/renderPage.js), with no text-only fallback. `deps` replaces the network in tests.
  */
 async function runExtraction(rawUrl, mode, customExcludes = [], options = {}, deps = {}) {
   const url = normaliseHttpUrl(rawUrl);
@@ -698,16 +704,31 @@ async function runExtraction(rawUrl, mode, customExcludes = [], options = {}, de
   let body;
   let pageUrl = url;
   let notice = '';
-  try {
-    const got = await fetcher(url);
-    body = got.body;
-    pageUrl = got.finalUrl || url;
-  } catch (err) {
-    if (mode !== 'article') throw err;
-    const got = await (deps.fetchHtml || fetchHtml)(url);
-    if (got.statusCode >= 400) throw err;
-    body = got.body;
-    if (got.via && got.via !== 'direct') notice = TEXT_ONLY_NOTICE;
+  const login = options.login && options.login.password ? options.login : null;
+  const rendered = !!(options.render || login);
+  let signedIn = false;
+  if (rendered) {
+    // A real browser runs the page's scripts (and signs in when asked). Only the page itself comes from it: style files, pictures and the
+    // Colour palette's extra pages are still fetched plainly, without the sign-in.
+    const render = deps.render || require('./restyle/renderPage').renderPage;
+    const out = await render(url, { login: login ? { ...login, loginUrl: login.loginUrl ? normaliseHttpUrl(login.loginUrl) : '' } : null });
+    body = out.html;
+    pageUrl = out.finalUrl || url;
+    signedIn = !!out.signedIn;
+    if (login && !signedIn) notice = NO_FORM_NOTICE;
+    if (out.readLanding) notice = LANDING_NOTICE;
+  } else {
+    try {
+      const got = await fetcher(url);
+      body = got.body;
+      pageUrl = got.finalUrl || url;
+    } catch (err) {
+      if (mode !== 'article') throw err;
+      const got = await (deps.fetchHtml || fetchHtml)(url);
+      if (got.statusCode >= 400) throw err;
+      body = got.body;
+      if (got.via && got.via !== 'direct') notice = TEXT_ONLY_NOTICE;
+    }
   }
 
   let result;
@@ -734,8 +755,13 @@ async function runExtraction(rawUrl, mode, customExcludes = [], options = {}, de
     result = extractArticle(body, pageUrl, customExcludes, options);
     mode = 'article'; // eslint-disable-line no-param-reassign
   }
+  // The "this tool cannot run JavaScript" hints are wrong once a real browser has run it.
+  if (rendered && /JavaScript/.test(result.notice || '')) {
+    if (mode !== 'article') result.notice = RENDERED_EMPTY_NOTICE;
+    else result.notice = login ? SIGNED_IN_THIN_NOTICE : RENDERED_THIN_NOTICE;
+  }
   if (notice) result.notice = result.notice ? `${notice} ${result.notice}` : notice;
-  return { url: pageUrl, requestedUrl: url, mode, ...result };
+  return { url: pageUrl, requestedUrl: url, mode, rendered, signedIn, ...result };
 }
 
 module.exports = { runExtraction, extractArticle, extractImages, extractStyled, extractLinks, extractTables, extractMetadata, fetchBinary, rewriteCssUrls, pickFromSrcset };

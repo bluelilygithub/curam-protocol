@@ -1,6 +1,6 @@
 # Web Extractor
 
-`/web-extractor`, flag `webExtractor`. Pulls content out of one public web page. Stateless: nothing is saved.
+`/web-extractor`, flag `webExtractor`. Pulls content out of one web page (optionally loaded in a real browser, optionally signed in). Stateless: nothing is saved.
 
 ## Layout (same as Graphics and Video Tools)
 
@@ -35,7 +35,18 @@ When a tool or button is added, changed or removed, update `webExtractorTools.mj
 - **Exact scrape** (`restyle/selfContainedPage.js`, `npm run test:restyle-selfcontained`) now returns ONE self-contained page: addresses made complete, scripts removed, each linked style file fetched (12, 1.5 MB each) and placed as a `<style>` where its `<link>` was (print-only files dropped, others wrapped in `@media`), then pictures copied in as `data:` addresses (the preview inherits Vault's CSP, whose `img-src` only allows its own, `data:` and `blob:`; before this the pictures were empty boxes). A picture over 2.5 MB, or past 12 MB in all, stays a link. The response also carries the page as fetched (`sourceHtml`, 2 MB cap), `stats` and a `notice` for anything that could not be loaded. The page has a **Preview / HTML source** switch (the same viewer as the CSS tool: as fetched, or the copy with long `data:` addresses shortened for reading).
 - **Exact scrape (older description)** - original HTML with every address made absolute (also inside `<style>` and `style=""`, `@import`, `<base>` honoured then removed), scripts and `<meta refresh>` removed, blur-up placeholders replaced by the real picture. Shown in `sandbox=""` iframe.
 
-A thin result says why (`notice`): pages built by JavaScript are not run.
+A thin result says why (`notice`): without the real browser, pages built by JavaScript are not run.
+
+## Load with a real browser, and Sign in (2026-11-18)
+
+Under the address box, on every tool: a **Load with a real browser** tick box (`render: true`) and a **Page needs a sign-in?** link that opens Username or email, Password and an optional Sign-in page (`username`, `password`, `loginUrl` on `POST /extract`). A password turns the browser on by itself (the tick box shows ticked and locked). Either one shows the progress window (`scrapeProgress('read' | 'exact', { render, signIn })`), and the result carries `rendered` and `signedIn`, shown as a small line above the result.
+
+- The browser is the CSS tool's renderer, `restyle/renderPage.js` (Playwright, already in the base image; `renderPage(url, { login })`). Every request is SSRF-checked, and the address it ends on is checked again (added for both tools). One render at a time, queue of two. Per person: 12 browser loads an hour (`RENDERS_PER_HOUR` in the route; the CSS tool keeps its own 8).
+- Only the page itself comes from the browser. Style files, pictures (Exact scrape, Extract images downloads) and the Colour palette's extra pages are still fetched plainly, **without the sign-in**. No text-only fallback in browser mode.
+- **Sign-in:** the browser's own password pop-up (HTTP Basic/Digest) is answered through `httpCredentials`, limited to the page's own origin. A form: the first visible password box is filled, with the name box in the same form, and sent; then the page asked for is opened. With a Sign-in page, the browser goes there first, and a name-then-password two-screen form is also tried (only there, because on an ordinary page the only email box is usually a newsletter). If the page asked for still shows a password box: when the form had gone away after sending, the address given was the sign-in page itself, so the page the site showed next is read and a notice says so; otherwise 422 "Sign-in did not work…". A wrong Basic password is a 401 from the site, shown as "still refused the page after signing in". With a password, only one browser identity is tried, so a wrong password is not sent four times (account lockout).
+- **The password** is used for that request and dropped: React state only on the page (no storage, no mic on the box), never logged (the route logs a scrubbed message only, and `scrub()` removes the password from any error text), never in the result. Playwright errors inside the sign-in are replaced by our own words.
+- Not possible: code (two-factor) sign-ins, CAPTCHAs, "Sign in with Google/Microsoft/Apple" pop-ups, cookie-consent walls that hide the form. When no form is found, the notice says the page was read as it came (a pop-up password would have been answered; Playwright gives no clean signal that it was).
+- Tested live 2026-11-18 (practice sites made for automation tests): quotes.toscrape.com/js (empty without, full with the browser), the-internet.herokuapp.com form login (right, wrong, and the login page as the address) and Basic auth (right, wrong). `node server/services/webExtractorService.test.js` covers the wiring with a fake renderer.
 
 ## Limits and safety
 
@@ -47,4 +58,4 @@ A thin result says why (`notice`): pages built by JavaScript are not run.
 
 ## Not done
 
-No headless browser, so JavaScript-built pages stay empty. No crawling (the Colour palette reads up to six pages, not a site), history or saved results. No broken-link check, no contact-info or media (video/audio/file) listing, no XPath or point-and-click selection, no Markdown/DOCX output: ideas from the feature wish-list that were left for later.
+The headless browser is opt-in per read (see above); no clicking around a page beyond its sign-in form, and no saved sign-ins. No crawling (the Colour palette reads up to six pages, not a site), history or saved results. No broken-link check, no contact-info or media (video/audio/file) listing, no XPath or point-and-click selection, no Markdown/DOCX output: ideas from the feature wish-list that were left for later.

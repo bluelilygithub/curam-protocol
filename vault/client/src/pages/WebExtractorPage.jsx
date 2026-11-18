@@ -47,6 +47,13 @@ export default function WebExtractorPage() {
   const [excludeTerms, setExcludeTerms] = useState('');
   const [selector, setSelector] = useState('');
   const [palettePages, setPalettePages] = useState(1);
+  // Page options for every tool. The sign-in details live only in this page's memory: never saved, gone when you leave.
+  const [renderJs, setRenderJs] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginUrl, setLoginUrl] = useState('');
+  const signingIn = signInOpen && !!password;
   const [paletteAll, setPaletteAll] = useState(false); // the Colour palette shows its main colours until this is turned on
   const [linkType, setLinkType] = useState('all');
   const [linkQuery, setLinkQuery] = useState('');
@@ -108,15 +115,19 @@ export default function WebExtractorPage() {
       const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
       const stop = new AbortController();
       const ask = async () => {
-        const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim(), pages: palettePages }, { signal: stop.signal });
+        const signIn = signInOpen && password ? { username: username.trim(), password, loginUrl: loginUrl.trim() } : {};
+        const res = await api.post('/api/web-extractor/extract', {
+          url: url.trim(), mode: runMode, excludeSections, selector: selector.trim(), pages: palettePages, render: renderJs, ...signIn,
+        }, { signal: stop.signal });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || 'Extraction failed');
         return body;
       };
-      // Exact scrape fetches the style files and copies the pictures in, which can take a while: it gets the progress window.
+      // Exact scrape, and anything loaded in the real browser, can take a while: they get the progress window.
       // The other tools answer in a moment and keep their own spinner.
-      const progress = scrapeProgress('exact', { url });
-      const data = runMode === 'styled'
+      const inBrowser = renderJs || signingIn;
+      const progress = scrapeProgress(runMode === 'styled' ? 'exact' : 'read', { url, render: inBrowser, signIn: signingIn });
+      const data = runMode === 'styled' || inBrowser
         ? await runWithStepLog(useProcessingStore.getState(), progress.title, progress.detail, progress.steps, ask, { onCancel: () => stop.abort() })
         : await ask();
       if (myRequest === requestId.current) setResults((r) => ({ ...r, [runMode]: data }));
@@ -363,6 +374,95 @@ export default function WebExtractorPage() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2" data-guide="page-options">
+            <Tooltip text="Opens the page in a real browser and lets its JavaScript run before reading it, for pages that come back empty or thin (many shops, apps and modern sites). Slower: up to about a minute, and 12 an hour. Works with every tool.">
+              <label className="inline-flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }} data-guide="render-js">
+                <input
+                  type="checkbox"
+                  checked={renderJs || signingIn}
+                  disabled={signingIn}
+                  onChange={(e) => setRenderJs(e.target.checked)}
+                  style={{ accentColor: 'var(--color-primary)' }}
+                />
+                Load with a real browser <span style={{ color: 'var(--color-muted)' }}>(for pages built with JavaScript)</span>
+              </label>
+            </Tooltip>
+            <Tooltip text="For a page that needs you to sign in. Give the username and password the site gave you; the browser fills in the site's sign-in form (or its password pop-up) and then reads the page. Nothing is saved.">
+              <button
+                type="button"
+                onClick={() => setSignInOpen((v) => !v)}
+                aria-expanded={signInOpen}
+                className="inline-flex items-center gap-1.5 text-xs transition-opacity duration-200 hover:opacity-70"
+                style={{ color: 'var(--color-primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                data-guide="sign-in"
+              >
+                {getIcon('lock', { size: 12 })}
+                {signInOpen ? 'Hide sign-in' : 'Page needs a sign-in?'}
+              </button>
+            </Tooltip>
+          </div>
+
+          {signInOpen && (
+            <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label htmlFor="web-extractor-username" className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Username or email</label>
+                  <Tooltip text="The name or email you sign in to that website with. Leave it empty if the site only asks for a password.">
+                    <div>
+                      <VoiceInput
+                        id="web-extractor-username"
+                        value={username}
+                        onChange={setUsername}
+                        placeholder="you@example.com"
+                        label="Username or email"
+                        autoComplete="off"
+                        spellCheck={false}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleExtract(); }}
+                      />
+                    </div>
+                  </Tooltip>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="web-extractor-password" className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Password</label>
+                  <Tooltip text="Used once to sign in for this read, then dropped. It is not saved in Vault or in your browser, and it is never written to a log. No microphone here, so it is not spoken aloud.">
+                    <input
+                      id="web-extractor-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleExtract(); }}
+                      className="w-full px-3 py-2.5 rounded-xl border text-sm transition-all duration-200 focus:border-[var(--color-primary)]"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                    />
+                  </Tooltip>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="web-extractor-login-url" className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+                  Sign-in page <span>(optional: only if the page above does not show the sign-in form itself)</span>
+                </label>
+                <Tooltip text="The address of the site's sign-in page, such as https://www.example.com/login. The browser signs in there first, then opens the page above. Also needed for sign-ins that ask for the email on one screen and the password on the next.">
+                  <div>
+                    <VoiceInput
+                      id="web-extractor-login-url"
+                      value={loginUrl}
+                      onChange={setLoginUrl}
+                      parse={parseSpokenUrl}
+                      placeholder="https://www.example.com/login"
+                      label="Sign-in page"
+                      spellCheck={false}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleExtract(); }}
+                    />
+                  </div>
+                </Tooltip>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Signing in always uses the real browser. Only use an account you are allowed to use this way. Sites that send a code, show a CAPTCHA or use &ldquo;Sign in with Google&rdquo; cannot be signed in to. Only the page itself is read signed in: pictures you download, and the extra pages of the Colour palette, are fetched without it.
+              </p>
+            </div>
+          )}
+
           {mode === 'article' && (
             <div className="space-y-1">
               <label htmlFor="web-extractor-exclude" className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
@@ -428,6 +528,13 @@ export default function WebExtractorPage() {
           {loading && (
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{mode === 'palette' && palettePages > 1 ? 'Reading the pages and their style files… this can take up to a minute.' : 'Fetching the page…'}</p>
           )}
+
+          {result?.rendered ? (
+            <p className="text-xs inline-flex items-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
+              {getIcon(result.signedIn ? 'lock' : 'globe', { size: 12 })}
+              {result.signedIn ? 'Signed in and read in a real browser.' : 'Read in a real browser, with the page’s JavaScript run.'}
+            </p>
+          ) : null}
 
           {result?.notice ? (
             <p className="text-sm rounded-xl border px-4 py-3" style={NOTICE_STYLE} role="status">{result.notice}</p>

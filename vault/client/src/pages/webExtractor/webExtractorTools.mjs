@@ -51,7 +51,9 @@ export const HOW_IT_WORKS = [
   ['Metadata', 'The page\'s title, description, canonical address, author, dates, language, share-card tags, structured data (JSON-LD) and the outline of its headings, with a note if it has no single main heading.'],
   ['Colour palette', 'Reads the style files of the page and counts every colour they use, so you get the website’s real palette, not a guess from a screenshot. At first only the main colours are shown: the ones that carry real weight on the site, with near-identical shades joined into one and the platform’s built-in defaults (WordPress, Bootstrap and Tailwind ship dozens of preset colours that no one uses) left out. A button shows the less-used colours too. They are split into Brand colours and Greys, whites and blacks, most used first, each with its hex code, RGB, how often it is used, and whether it is used for text, backgrounds, borders or something else. A suggested primary, accent, background and text colour are picked out. A website’s style files cover the whole site, so one page is usually enough; choose "This page and 2 more" or "and 5 more" to also read other pages linked from it (the menu links first, spread across the site). Copy the hex codes, copy them as CSS variables, or download a CSV.'],
   ['Exact scrape', 'Shows the page as the website has it, with its style files and pictures copied in so the copy stands on its own. It is a still snapshot: nothing on it can run, and the page may look a little different from the live site. The HTML source switch shows the page as the website sent it, or the copy; Copy HTML gives you the copy\'s code. If a website refuses automatic visitors you get a clear message, not a words-only copy.'],
-  ['What it cannot do', 'It reads the page the way a search engine does, so pages that build themselves with JavaScript, sit behind a sign-in, or block automatic visitors come back empty or thin. It only reads public pages, one at a time (the Colour palette can read up to six, but it does not crawl a whole site). Colours inside pictures, such as a logo or a photo, are not read; only colours written in the page’s styles are.'],
+  ['Load with a real browser', 'Normally the page is read the way a search engine does, without running its JavaScript, which is quick. Some pages (many shops, apps and modern sites) build themselves with JavaScript and come back empty or thin. Tick "Load with a real browser" under the address and the page is opened in a real browser first, so its content is there. It is slower (up to about a minute) and limited to 12 an hour. It works with every tool.'],
+  ['Sign in', 'For a page you need to sign in to, press "Page needs a sign-in?" and give the username and password. The browser fills in the site\'s sign-in form (or answers its password pop-up) and then reads the page. If the sign-in form is on a different page, put that address in "Sign-in page". The password is used for that one read and dropped: it is not saved anywhere. Sites that send a code, show a CAPTCHA or use "Sign in with Google" cannot be signed in to.'],
+  ['What it cannot do', 'Without the real browser it reads the page the way a search engine does, so pages that build themselves with JavaScript come back empty or thin. Pages that block automatic visitors can refuse even the real browser. It only reads one page at a time (the Colour palette can read up to six, but it does not crawl a whole site). Colours inside pictures, such as a logo or a photo, are not read; only colours written in the page’s styles are.'],
 ];
 
 // Everything the guide can point at: the tools plus the controls inside them.
@@ -75,6 +77,9 @@ export const GUIDE_TOOLS = [
   { id: 'download-tables', label: 'Download tables', mode: 'tables' },
   { id: 'copy-metadata', label: 'Copy metadata', mode: 'metadata' },
   { id: 'copy-html', label: 'Copy HTML', mode: 'styled' },
+  // Page options under the address box: on every tool, so Open just shows the first one.
+  { id: 'render-js', label: 'Load with a real browser', mode: 'article' },
+  { id: 'sign-in', label: 'Sign in', mode: 'article' },
 ];
 
 /**

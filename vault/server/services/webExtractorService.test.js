@@ -236,4 +236,35 @@ const longText = (word) => Array.from({ length: 40 }, () => `${word} sentence ab
   assert.deepStrictEqual(r.icons, ['https://example.com/fav.ico']);
 }
 
-console.log('webExtractorService tests passed');
+// ---- "Load with a real browser" and Sign in go through the renderer, never the plain fetcher ----
+(async () => {
+  const { runExtraction } = require('./webExtractorService');
+  const noFetch = { fetcher: async () => { throw new Error('plain fetch must not be used'); } };
+  const page = `<html><body><article><p>${longText('Rendered')}</p></article></body></html>`;
+
+  let seen = null;
+  const render = async (url, opts) => { seen = { url, opts }; return { html: page, finalUrl: 'https://example.com/after', signedIn: !!(opts.login) }; };
+  const r = await runExtraction('example.com/a', 'article', [], { render: true }, { ...noFetch, render });
+  assert.strictEqual(seen.url, 'https://example.com/a');
+  assert.strictEqual(seen.opts.login, null, 'no sign-in without a password');
+  assert.match(r.text, /Rendered sentence/);
+  assert.strictEqual(r.rendered, true);
+  assert.strictEqual(r.signedIn, false);
+  assert.strictEqual(r.url, 'https://example.com/after', 'addresses resolve against where the browser ended up');
+
+  // a password turns on the browser by itself, and the sign-in page address is made complete
+  const s = await runExtraction('https://example.com/a', 'links', [], { login: { username: 'jo', password: 'pw', loginUrl: 'example.com/login' } }, { ...noFetch, render });
+  assert.deepStrictEqual(seen.opts.login, { username: 'jo', password: 'pw', loginUrl: 'https://example.com/login' });
+  assert.strictEqual(s.signedIn, true);
+  assert.ok(!JSON.stringify(s).includes('"pw"'), 'the password is not in the result');
+
+  // no sign-in form found: read as it came, and say so
+  const n = await runExtraction('https://example.com/a', 'article', [], { login: { password: 'pw' } }, { ...noFetch, render: async () => ({ html: page, finalUrl: 'https://example.com/a', signedIn: false }) });
+  assert.match(n.notice, /No sign-in form was found/);
+
+  // the "cannot run JavaScript" hint is replaced once the browser has run it
+  const e = await runExtraction('https://example.com/a', 'tables', [], { render: true }, { ...noFetch, render: async () => ({ html: page, finalUrl: 'https://example.com/a' }) });
+  assert.ok(!/cannot see/.test(e.notice) && /real browser/.test(e.notice), e.notice);
+
+  console.log('webExtractorService tests passed');
+})().catch((err) => { console.error(err); process.exit(1); });

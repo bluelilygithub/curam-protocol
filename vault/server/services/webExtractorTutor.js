@@ -11,7 +11,7 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 const CATALOG = [
   { id: 'article', label: 'Article content', group: 'Text',
     does: 'Paste a web address at the top and press Extract. You get the readable words of the page with its headings, a word count and a reading time, in a box you can read, copy or save as a PDF. The menus, header and footer, adverts, sidebars, comments, "most read" and "related stories" boxes, forms and all pictures are left out.',
-    notes: 'Only public pages. A page that builds itself with JavaScript, needs a sign-in, or blocks automatic visitors can come back empty or thin, and the tool says so.' },
+    notes: 'A page that builds itself with JavaScript or blocks automatic visitors can come back empty or thin, and the tool says so: try Load with a real browser. A page behind a sign-in needs Sign in.' },
   { id: 'css-selector', label: 'Only extract inside', group: 'Text',
     does: 'In Article content, the box "Only extract inside…" takes a CSS selector such as .product-card or #story or article p. Only the text inside the boxes that match is returned, in page order, with a count of the boxes found. You can say it with the microphone ("dot product dash card"). Leave it empty to read the whole article.',
     notes: 'It needs a CSS selector, which means knowing the class or id names used in the page (right-click the page and choose Inspect to see them). With a selector the automatic clean-up of menus and "related" boxes is skipped, because you chose the boxes. A selector that matches nothing says so; one that is not valid is refused.' },
@@ -64,21 +64,27 @@ const CATALOG = [
   { id: 'copy-html', label: 'Copy HTML', group: 'Page',
     does: 'The Copy HTML button above the preview puts the snapshot\'s code on the clipboard, with its addresses made complete so pictures and styles still load when pasted somewhere else.',
     notes: 'Scripts are removed from the copy.' },
+  { id: 'render-js', label: 'Load with a real browser', group: 'Page options',
+    does: 'The tick box "Load with a real browser" under the web address box, on every tool. The page is opened in a real browser and its JavaScript is run before the tool reads it, so a page that builds itself with JavaScript (many shops, apps and modern sites) comes back with its content. Use it when a tool comes back empty or thin.',
+    notes: 'Slower: up to about a minute, with a progress window. Limited to 12 an hour per person. A website that turns away automatic visitors can still refuse it. Exact scrape is still a still snapshot with scripts removed.' },
+  { id: 'sign-in', label: 'Sign in', group: 'Page options',
+    does: 'The "Page needs a sign-in?" link under the web address box, on every tool, opens boxes for Username or email, Password, and an optional Sign-in page address. The real browser fills in the site\'s sign-in form (or answers the password pop-up the browser shows) and then reads the page. Put the address of the site\'s login page in Sign-in page when the page itself does not show the form, or when the site asks for the email on one screen and the password on the next.',
+    notes: 'The password is used for that one read and dropped; it is not saved and the password box has no microphone. It cannot sign in where the site sends a code, shows a CAPTCHA, or uses "Sign in with Google" or similar. Only the page itself is read signed in: downloaded pictures and the Colour palette\'s extra pages are fetched without the sign-in. Only use an account the person is allowed to use this way.' },
 ];
 
 const RULES = [
   'Every tool starts the same way: paste or speak a web address in the box at the top, choose the tool in the list on the left, then press Extract.',
   'The web address box, the sections box, the selector box and the filter boxes all have a microphone button. Spoken addresses work as "example dot com slash news" and selectors as "dot product dash card".',
   'Each tool keeps its own result while you switch between them, so you can run Article content, then Extract images, on the same address without pasting it again.',
-  'It reads the page like a search engine does: the page text as the website sends it. It does not run JavaScript, sign in, click anything or scroll.',
-  'Only public web addresses work. Addresses on a private network or the person\'s own computer are refused.',
+  'Normally it reads the page like a search engine does: the page text as the website sends it, without running JavaScript. Ticking "Load with a real browser" (render-js) runs the page\'s JavaScript first; "Page needs a sign-in?" (sign-in) signs in with the person\'s username and password first. Neither clicks around the page beyond the sign-in form.',
+  'Only web addresses on the public internet work. Addresses on a private network or the person\'s own computer are refused.',
   'Nothing is saved. Results are on the screen until the page is left; copy or download what is needed.',
   'The Open buttons in this chat only switch to a tool; they never extract anything by themselves.',
 ];
 
 const NOT_POSSIBLE = [
-  'Pages that need a sign-in, a paywall, or a CAPTCHA to open, or that block automatic visitors.',
-  'Pages that build their content with JavaScript after they load (many apps, some shops and news sites): they come back empty or thin.',
+  'A sign-in that sends a code (two-factor), show a CAPTCHA, or use "Sign in with Google", Microsoft, Apple or similar; paywalls with no account; websites that block automatic visitors even in a real browser.',
+  'Pages that build their content with JavaScript come back empty or thin UNLESS "Load with a real browser" is ticked.',
   'Taking a whole website: it reads one page at a time, with no crawling and no scheduled or repeated runs. The only exception is Colour palette, which can also read up to five more pages linked from the first.',
   'Saving results inside Vault: there is no history or library, so copy or download them before leaving the page.',
   'Rewriting, summarising or translating what it extracts. Nothing here uses AI on the page; the text can be taken to chat or other tools to do that.',
@@ -97,7 +103,8 @@ Rules:
 - Be plain and short, as to a friend who is not technical. Avoid jargon.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
 - Be clear about which tool fits the job: Article content for the words (with a CSS selector for one part of the page), Extract images for the pictures, Links for the links, Tables for the tables, Metadata for the title, description, dates, share tags and headings, Exact scrape for how the page looks or its code.
-- If they want something the page cannot give (a sign-in page, a page built with JavaScript, a whole website), say so plainly and say what they could do instead.
+- For a page that came back empty or thin, or is built with JavaScript, point to render-js. For a page behind a sign-in, point to sign-in.
+- If they want something the page cannot give (a code or CAPTCHA sign-in, a whole website), say so plainly and say what they could do instead.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}
 

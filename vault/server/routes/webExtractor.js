@@ -6,6 +6,7 @@ const { runExtraction, fetchBinary } = require('../services/webExtractorService'
 const { normaliseHttpUrl } = require('../services/htmlFetch');
 const { generateArticlePdf, winAnsiSafe } = require('../services/webExtractorPdf');
 const { getLogger } = require('../middleware/requestContext');
+const { renderAvailable } = require('../services/restyle/renderPage');
 
 const router = express.Router();
 
@@ -64,8 +65,29 @@ async function fetchImage(src) {
 const MODES = new Set(['article', 'images', 'styled', 'links', 'tables', 'metadata', 'palette']);
 const MAX_SELECTOR_CHARS = 200;
 
+// Loading a page in the real browser starts Chromium, so it is limited per person (the CSS tool keeps its own count).
+const RENDERS_PER_HOUR = 12;
+const renderHits = new Map(); // userId -> [timestamps]
+function renderAllowed(userId) {
+  const now = Date.now();
+  const recent = (renderHits.get(userId) || []).filter((t) => now - t < 60 * 60 * 1000);
+  if (recent.length >= RENDERS_PER_HOUR) { renderHits.set(userId, recent); return false; }
+  recent.push(now);
+  renderHits.set(userId, recent);
+  return true;
+}
+
+const SIGN_IN_REFUSED = 'The website still refused the page after signing in (it answered "not allowed"). Check the username and password, and that this account can open that page.';
+const RENDERED_REFUSED = 'That website refused the page even in a real browser (it turns away automatic visitors).';
+
+/** The password must never reach a log or an error message, whatever a library put in its text. */
+function scrub(message, secret) {
+  const m = String(message || '');
+  return secret && secret.length >= 3 ? m.split(secret).join('***') : m;
+}
+
 router.post('/extract', async (req, res) => {
-  const { url, mode, excludeSections, selector, pages } = req.body || {};
+  const { url, mode, excludeSections, selector, pages, render, username, password, loginUrl } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url is required' });
   }
@@ -73,14 +95,36 @@ router.post('/extract', async (req, res) => {
   const customExcludes = Array.isArray(excludeSections)
     ? excludeSections.map((s) => String(s || '').trim().slice(0, 80)).filter(Boolean).slice(0, 20)
     : [];
+  // Sign-in details are used for this one request and dropped: never saved, never logged.
+  const pass = typeof password === 'string' ? password.slice(0, 500) : '';
+  const user = typeof username === 'string' ? username.trim().slice(0, 300) : '';
+  const signInPage = typeof loginUrl === 'string' ? loginUrl.trim().slice(0, 2000) : '';
+  if (!pass && (user || signInPage)) return res.status(400).json({ error: 'Type the password too, or clear the sign-in boxes.' });
+  const login = pass ? { username: user, password: pass, loginUrl: signInPage } : null;
+  const useBrowser = !!(render || login);
+  if (useBrowser && !renderAvailable()) {
+    return res.status(400).json({ error: 'Loading pages in a real browser (and signing in) is not set up on this server.' });
+  }
+  if (useBrowser && !renderAllowed(req.user.id)) {
+    return res.status(429).json({ error: `You can load ${RENDERS_PER_HOUR} pages in the real browser an hour. Untick it to read the page normally, or wait a little.` });
+  }
   try {
     const cssSelector = typeof selector === 'string' ? selector.trim().slice(0, MAX_SELECTOR_CHARS) : '';
-    const result = await runExtraction(url, chosenMode, customExcludes, { selector: cssSelector, pages: Number(pages) || 1 });
+    const result = await runExtraction(url, chosenMode, customExcludes, {
+      selector: cssSelector, pages: Number(pages) || 1, render: !!render, login,
+    });
     res.json(result);
   } catch (err) {
-    getLogger().error({ err }, '[web-extractor/extract]');
-    const refused = /Server returned (202|401|403|406|429)\b/.test(String(err.message));
-    res.status(statusFor(err)).json({ error: refused ? REFUSED_MESSAGE : err.message });
+    const message = scrub(err && err.message, pass);
+    getLogger().error({ err: { message, name: err && err.name } }, '[web-extractor/extract]');
+    const refused = /Server returned (202|401|403|406|429)\b/.test(message);
+    let error = message;
+    let status = statusFor({ message });
+    if (/^Sign-in/.test(message)) status = 422;
+    else if (/busy/i.test(message)) status = 503;
+    else if (/Connection dropped/i.test(message)) status = 502;
+    if (refused) error = login ? SIGN_IN_REFUSED : useBrowser ? RENDERED_REFUSED : `${REFUSED_MESSAGE} Ticking "Load with a real browser" sometimes gets in.`;
+    res.status(status).json({ error });
   }
 });
 
