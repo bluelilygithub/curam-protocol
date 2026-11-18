@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "971c7123",
+   "fullHash": "971c71238a8075bd26ae8d7d3101ee101e5a1791",
+   "committedAt": "2026-11-19T06:21:31+10:00",
+   "author": "mrb",
+   "subject": "Ponytail report doc: a fresh database now boots, any local test DB works",
+   "filesChanged": 1,
+   "insertions": 1,
+   "deletions": 1,
+   "area": "Ponytail report",
+   "goal": "Remove a note in the Ponytail report doc that became wrong when the empty-database boot was fixed.",
+   "whatChanged": "docs/ponytail-report.md no longer says a brand-new database fails to boot and that the route test must use vault_xuser; it says any local test database works and points at the fix (35518bba) and server/db.freshSchema.test.js.",
+   "filesImpacted": [
+    "docs/ponytail-report.md"
+   ],
+   "benefit": "The doc matches the code, so nobody avoids a fresh test database for a reason that no longer exists.",
+   "concerns": "None noted. Docs only."
+  },
+  {
    "commit": "35518bba",
    "fullHash": "35518bbaf70a49b0f3e9cc3555d7d4e27109044c",
    "committedAt": "2026-11-19T06:19:23+10:00",
