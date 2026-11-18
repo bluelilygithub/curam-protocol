@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "81ddf543",
+   "fullHash": "81ddf543ca8b9f03e5403091334a3163621ea92e",
+   "committedAt": "2026-11-18T19:58:17+10:00",
+   "author": "mrb",
+   "subject": "Web Extractor: load with a real browser, and sign in",
+   "filesChanged": 9,
+   "insertions": 390,
+   "deletions": 54,
+   "area": "Web Extractor",
+   "goal": "Let the Web Extractor read pages that build themselves with JavaScript, and pages that need a username and password.",
+   "whatChanged": "Under the address box, on every tool: a \"Load with a real browser\" tick box (render: true on POST /api/web-extractor/extract) and a \"Page needs a sign-in?\" link opening Username or email, Password (plain input, no mic) and an optional Sign-in page (username, password, loginUrl). A password turns the browser on by itself. Browser loads show the progress window (scrapeProgress gains a read kind and signIn steps) and results carry rendered and signedIn, shown as a small line above the result. The CSS tool's renderer restyle/renderPage.js gains renderPage(url, { login }): Basic/Digest auth via Playwright httpCredentials limited to the page origin; a sign-in form is filled (first visible password box, name box in the same form) and sent, then the page asked for is opened; a two-screen email-then-password form is tried only on a given Sign-in page; if the address given was the sign-in page itself, the page shown after sign-in is read with a notice; otherwise a password box still showing is a 422 \"Sign-in did not work\". With a password only one browser identity is tried (no repeated wrong passwords). The renderer now re-checks the final address with checkSsrf (applies to the CSS tool too). Route: 12 browser loads an hour per person, password capped and scrubbed from any error text, only a scrubbed message logged. Thin-page notices that said \"cannot run JavaScript\" are reworded when the browser ran it. Guide catalogue gains render-js and sign-in; how-it-works text, RULES and NOT_POSSIBLE updated; docs/web-extractor.md has a new section.",
+   "filesImpacted": [
+    "client/src/pages/WebExtractorPage.jsx",
+    "client/src/pages/webExtractor/webExtractorTools.mjs",
+    "client/src/utils/scrapeProgress.mjs",
+    "docs/web-extractor.md",
+    "server/routes/webExtractor.js",
+    "server/services/restyle/renderPage.js",
+    "server/services/webExtractorService.js",
+    "server/services/webExtractorService.test.js",
+    "server/services/webExtractorTutor.js"
+   ],
+   "benefit": "Shops, apps and modern sites that came back empty now return their content, and member-only pages can be read with the owner's own account, without saving the password anywhere.",
+   "concerns": "Tested live locally against practice sites (quotes.toscrape.com/js; the-internet.herokuapp.com form login right/wrong/login-page-as-address and Basic auth right/wrong) and the page was checked in a browser with the API mocked; not yet tried on Railway or on a real member site. Only the page itself is read signed in: downloaded pictures, Exact scrape style files and the Colour palette extra pages are fetched without the sign-in. Code (two-factor), CAPTCHA, cookie walls hiding the form and Sign in with Google/Microsoft do not work. A Basic-auth success cannot be confirmed (Playwright gives no signal), so the notice says no form was found and a pop-up would have been answered. The form detection is heuristic and could fill the wrong box on unusual forms. The password is sent to the site the browser lands on, including a single sign-on host if the site redirects there. Each browser load starts Chromium (one at a time, queue of two); the 12-an-hour limit is in memory and resets on deploy. The added final-address SSRF re-check also runs for the CSS tool."
+  },
+  {
    "commit": "096e2d82",
    "fullHash": "096e2d82515aab2fbc0a308812043b703cf870fc",
    "committedAt": "2026-11-18T19:28:10+10:00",
