@@ -82,7 +82,19 @@ function stubDeps(reply, seen = {}) {
     // a cut-off answer is reported, not shown
     const cut = stubDeps(PAGE);
     cut.callModel = async () => ({ text: '<html><body>', inputTokens: 1, outputTokens: 1, diagnostics: { stopReason: 'max_tokens' } });
-    await assert.rejects(createHtml('u1', { pdfBuf, pages: [1], pageImages: [PAGE_PNG], pageTexts: [] }, cut), /too long/);
+    cut.callModel = async () => ({ text: '<html><body>', inputTokens: 1, outputTokens: 32000, diagnostics: { stopReason: 'max_tokens' } });
+    await assert.rejects(createHtml('u1', { pdfBuf, pages: [1], pageImages: [PAGE_PNG], pageTexts: [] }, cut), (e) => /ran out of room/.test(e.message) && /32,000 tokens/.test(e.message) && !/fewer pages\.$/.test(e.message));
+
+    // long answers: streamed, 32,000 tokens of room; a model with a lower limit is retried once at its limit
+    const calls = [];
+    const older = stubDeps(PAGE);
+    older.callModel = async (model, prompt, opts) => {
+      calls.push({ maxTokens: opts.maxTokens, stream: opts.stream });
+      if (opts.maxTokens > 8192) throw Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"max_tokens: 32000 > 8192, which is the maximum allowed number of output tokens for claude-old"}}'), { status: 400 });
+      return { text: PAGE, inputTokens: 1, outputTokens: 1, model, diagnostics: { stopReason: 'end_turn' } };
+    };
+    await createHtml('u1', { pdfBuf, pages: [1], pageImages: [PAGE_PNG], pageTexts: [] }, older);
+    assert.deepStrictEqual(calls, [{ maxTokens: 32000, stream: true }, { maxTokens: 8192, stream: true }]);
   }
 
   // ---- reviseHtml: sends the current page, the request and the picture names; returns the new page ----
