@@ -230,4 +230,7 @@ export const semanticMap = {
   'panel-top': { lucide: 'PanelTop' },
   'grid-2x2': { lucide: 'Grid2x2' },
   'arrow-up-down': { lucide: 'ArrowUpDown' },
+  'file-code': { lucide: 'FileCode' },
+  monitor: { lucide: 'Monitor' },
+  tablet: { lucide: 'Tablet' },
 };

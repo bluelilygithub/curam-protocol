@@ -18,6 +18,7 @@ const { interpretPdfVoiceCommand } = require('../services/pdfVoiceCommand');
 const { generateTextPdf } = require('../services/textToPdf');
 const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 const pdfTools = require('../services/pdfTools');
+const pdfToHtml = require('../services/pdfToHtml');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -1468,6 +1469,34 @@ router.post('/ocr-layer', async (req, res) => {
     })));
     res.json({ dataUrl: pdfDataUrl(out.bytes), words: out.words, pagesDone: out.pagesDone });
   } catch (err) { sendToolError(res, 'ocr-layer', err, 'OCR failed'); }
+});
+
+// PDF → HTML (services/pdfToHtml.js): chosen pages → one responsive HTML file plus the pictures inside. Standard-tier model with
+// vision, logged as `pdf_html` / `pdf_html_revise`. Nothing stored: the browser keeps the HTML and pictures and builds the zip.
+router.post('/to-html', aiLimiter, async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const pages = Array.isArray(req.body?.pages) ? req.body.pages.map(Number) : [];
+    const out = await pdfToHtml.createHtml(req.user.id, {
+      pdfBuf: buf, pages,
+      pageImages: Array.isArray(req.body?.pageImages) ? req.body.pageImages : [],
+      pageTexts: Array.isArray(req.body?.pageTexts) ? req.body.pageTexts.map((t) => String(t || '')) : [],
+      title: req.body?.filename ? String(req.body.filename).replace(/\.pdf$/i, '') : '',
+    });
+    res.json(out);
+  } catch (err) { sendToolError(res, 'to-html', err, 'Could not build the web page'); }
+});
+
+router.post('/to-html/revise', aiLimiter, async (req, res) => {
+  try {
+    const out = await pdfToHtml.reviseHtml(req.user.id, {
+      html: req.body?.html, instruction: req.body?.instruction,
+      images: Array.isArray(req.body?.images) ? req.body.images : [],
+      pageImages: Array.isArray(req.body?.pageImages) ? req.body.pageImages : [],
+    });
+    res.json(out);
+  } catch (err) { sendToolError(res, 'to-html/revise', err, 'Could not change the web page'); }
 });
 
 // Spoken or typed directions for a PDF tool: text in, validated setting values out. JSON only; no file is sent, and passwords are

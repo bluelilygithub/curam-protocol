@@ -47,6 +47,8 @@ Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon
 | `POST /nup` | 2/4/6/9 pages per A4 or Letter sheet |
 | `POST /extract-images` | Pull embedded pictures out (JPEG unchanged, raw pictures as PNG, JPEG 2000 as .jp2), returned as a zip |
 | `POST /ocr-layer` | Draw invisible OCR words (boxes measured in the browser) onto the original PDF |
+| `POST /to-html` | Chosen pages (max 5) → one responsive HTML file + the pictures inside those pages — see **PDF → HTML** below |
+| `POST /to-html/revise` | Rewrite that HTML with a change the person asked for |
 
 `office-to-pdf`/`pdf-to-office` return `500` with an explicit message if LibreOffice isn't on the server image (`err.code === 'ENOENT'`). `google-to-pdf` checks the stored OAuth scope string for `drive.readonly` before calling the API and returns `needsReconnect: true` if it's missing.
 
@@ -189,6 +191,17 @@ Not built (from the PDFCraft comparison): other OCR languages for PDF OCR (Engli
 - **Continue with…** (chaining): the result window (`PdfResultModal`) has a menu listing every tool that starts from a PDF (not Images/Text/Office/Google to PDF). Choosing one calls `continueWith` in `PdfPage.jsx`, which turns the result into a `File` and stores `{ mode, file, nonce }` in `PdfFlowContext`; the first `PdfUpload` of the target tool claims it and runs the tool's normal `onChange`, exactly as if the person had picked the file. Compress and Add Fields show their result in the page first; their View Result button opens the same window. The guide knows about the menu (`RULES` in `pdfTutor.js`).
 - **Tell it what to do**: `VoiceCommandBar` (`client/src/pages/pdf/PdfVoice.jsx`) under Split, Rotate, Watermark, Page Numbers, Header & Footer, Crop, Pages per Sheet, Compress, Pages to Images, OCR, Metadata and Images to PDF. The browser turns speech into text (the page wraps everything in `VoiceInputProvider`); `POST /api/pdf/voice-command` (`server/services/pdfVoiceCommand.js`, shared field rules in `server/utils/voiceFields.js`) sends only the person's words and the tool's settings list to the **light-tier model from Settings**, then re-validates the answer against the tool's schema (clamped, typed, page ranges checked), logged as `pdf_voice`. Nothing runs until the person presses the tool's own button. **Password Protect, Remove Password, Fill, Sign and the other tools that touch secrets or need drawing have no box: a password is never sent to a model.** Tools that keep their own state register a receiver with `useVoiceTarget`. `npm run test:pdf-voice`.
 
+
+## PDF → HTML (`to-html`, added 2026-11-18)
+
+Client `client/src/pages/pdf/PdfToHtml.jsx`; server `server/services/pdfToHtml.js` (test: `node server/services/pdfToHtml.test.js`, no database, stub model).
+
+- **Flow:** the browser renders each chosen page (pdfjs, ~1400 px JPEG) and reads its text, then posts `{ dataUrl, pages, pageImages, pageTexts, filename }`. The server copies only those pages into a small PDF (`subsetPdf`, so only their pictures are found), runs the same `extractImages` as Extract Images (JPEG 2000 converted to PNG), names the pictures `image-01.jpg`, `image-02.png` …, and calls the **standard-tier model with vision**: page pictures first, then up to 20 extracted pictures (768 px copies) labelled by file name, then the page text. Max 5 pages, 16,000 output tokens, 4-minute timeout. Logged as `pdf_html` / `pdf_html_revise`.
+- **Change requests** (`/to-html/revise`): current HTML + the request + picture names/sizes + the page pictures; the whole page comes back rewritten (simpler and more reliable than patching). Undo keeps the last 20 versions in the browser.
+- **Safety:** the PDF's text could carry instructions, so the answer is untrusted. `cleanHtml` keeps one `<!DOCTYPE html>…</html>` document and removes `<script>`, frames, `<link>`, `<base>`, meta refresh, `on*=` handlers (inside tags only) and `javascript:` links. The preview is an `<iframe sandbox="">` with each `images/<name>` swapped for its data URL (srcdoc inherits Vault's CSP, which allows `data:` images). A provider error is never passed through with its own status (a 401 would sign the person out); it becomes a 502.
+- **Download:** built in the browser with `jszip`: `index.html` + `images/`. Nothing is stored on the server, so the result is lost if the page is left.
+- **Limits:** vector drawings (charts, logos made of lines) are not pictures, so the model is told to leave a labelled placeholder. A model that cannot take pictures (DeepSeek, Ollama) gets a clear 400. Very long pages can hit the output limit; that is reported as "try fewer pages", never shown half-built.
+- The main panel is `max-w-[1700px]` for this tool only (other tools stay `max-w-5xl`) so the Desktop preview has room.
 
 ---
 

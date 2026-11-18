@@ -9,6 +9,7 @@ import PdfTutorChat from './pdf/PdfTutorChat';
 import { PdfVoiceContext, VoiceCommandBar } from './pdf/PdfVoice';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool, HeaderFooterTool, NupTool } from './pdf/PdfExtraTools';
+import PdfToHtmlTool from './pdf/PdfToHtml';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -255,6 +256,19 @@ const TOOL_HELP = {
       'Result downloads immediately',
     ],
   },
+  pdftohtml: {
+    title: 'PDF → HTML',
+    what: 'Turn one to five PDF pages into a responsive web page, with the pictures inside the PDF saved as image files.',
+    features: [
+      'The AI model chosen in Settings looks at each page and writes one HTML file with its styles built in',
+      'Pictures stored in the PDF are saved as images/image-01.jpg, image-02.png … and used on the page',
+      'Responsive: columns stack on phones; preview it at phone, tablet and desktop width',
+      'Ask for changes in your own words (typed or spoken); Undo goes back a version',
+      'Edit the HTML by hand in the Code view',
+      'Download a zip with index.html and the images folder',
+      'Charts or logos drawn with lines are not pictures, so they become a labelled placeholder',
+    ],
+  },
   googletopdf: {
     title: 'Google Drive → PDF',
     what: 'Export any Google Doc, Sheet, or Slide from your Drive as a PDF — no manual download needed.',
@@ -428,6 +442,7 @@ const MODES = [
   { id: 'extracttext',  label: 'Extract Text',     icon: 'type'        },
   { id: 'officetopdf',  label: 'Office → PDF',     icon: 'file-up'     },
   { id: 'pdftooffice',  label: 'PDF → Word',       icon: 'file-down'   },
+  { id: 'pdftohtml',    label: 'PDF → HTML',       icon: 'file-code'   },
   { id: 'googletopdf',  label: 'Google Drive → PDF', icon: 'cloud'     },
   { id: 'watermark',    label: 'Watermark',        icon: 'droplets'    },
   { id: 'pagenumbers',  label: 'Page Numbers',     icon: 'hash'        },
@@ -466,6 +481,7 @@ const TOOL_TIPS = {
   extracttext: 'Copy all the text out of a PDF, or save it as a text file. Runs in your browser.',
   officetopdf: 'Turn a Word, Excel, PowerPoint or similar file into a PDF.',
   pdftooffice: 'Turn a PDF into an editable Word document.',
+  pdftohtml: 'Turn PDF pages into a responsive web page plus its pictures. Preview it, ask for changes, download a zip.',
   googletopdf: 'Export a Google Doc, Sheet or Slides file from your Drive as a PDF.',
   pdf2img: 'Save PDF pages as PNG or JPG pictures. Runs in your browser.',
   extractimages: 'Pull the pictures out of a PDF as image files: photos as JPEG, the rest as PNG.',
@@ -498,7 +514,7 @@ const GROUP_TIPS = {
 
 const MODE_GROUPS = [
   { label: 'Organise', ids: ['merge', 'split', 'rotate', 'organize', 'removeblank', 'nup'] },
-  { label: 'Convert',  ids: ['img2pdf', 'text2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf', 'pdf2img', 'extractimages', 'ocr'] },
+  { label: 'Convert',  ids: ['img2pdf', 'text2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'pdftohtml', 'googletopdf', 'pdf2img', 'extractimages', 'ocr'] },
   { label: 'Edit',     ids: ['watermark', 'pagenumbers', 'headerfooter', 'crop', 'compress', 'protect', 'unprotect'] },
   { label: 'Forms',    ids: ['inspect', 'fill', 'sign', 'annotate', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo', 'compare']     },
@@ -3197,7 +3213,8 @@ export default function PdfPage() {
         </aside>
 
         {/* ── Main panel ────────────────────────────────────────────────── */}
-        <main className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl">
+        {/* PDF → HTML previews a web page at desktop width, so it gets the wide-monitor cap instead of max-w-5xl. */}
+        <main className={`flex-1 min-w-0 overflow-y-auto p-6 space-y-4 ${mode === 'pdftohtml' ? 'max-w-[1700px]' : 'max-w-5xl'}`}>
           {seedBanner && (
             <div className="px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#ecfdf5', color: '#065f46' }}>
               <span>{seedBanner}</span>
@@ -3222,6 +3239,7 @@ export default function PdfPage() {
 
           {mode === 'pdf2img' && <PageToImageTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'extractimages' && <ExtractImagesTool getIcon={getIcon} onHelp={setHelpTool} />}
+          {mode === 'pdftohtml' && <PdfToHtmlTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'ocr' && <OcrTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
           {mode === 'removeblank' && <RemoveBlankTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
           {mode === 'crop' && <CropTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
