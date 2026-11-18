@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "9733556f",
+   "fullHash": "9733556f64c89fc0401e69855d1b293a8b37c439",
+   "committedAt": "2026-11-18T10:44:16+10:00",
+   "author": "mrb",
+   "subject": "PDF -> HTML: choose a model that can see pictures (Settings -> PDF Tools, automatic fallback)",
+   "filesChanged": 13,
+   "insertions": 331,
+   "deletions": 9,
+   "area": "PDF Tools",
+   "goal": "PDF → HTML failed for the owner because the workspace default model is DeepSeek, which cannot look at pictures. Let the tool use a picture-capable model without changing the chat default.",
+   "whatChanged": "New server/services/pdfToHtmlModel.js: setting pdf_html_model (own, else first admin). Only connected text models that can see pictures are offered (same rule as callModel: not deepseek-, not ollama:). Empty = Automatic: the standard model if it can see pictures, else the first connected Claude model, else the first Gemini one. A stale choice falls back to Automatic. GET/POST /api/pdf/to-html/model-config. New Settings tab PDF Tools (AI and tools group, admin) with a model picker and a line explaining why Automatic picked what it did. The tool shows \"Model: … (automatic: the default, …, cannot see pictures)\" or \"(chosen in Settings)\" under the page range, and \"Written by …\" after converting. If nothing connected can see pictures it says to add a Claude or Gemini model. The four PDF → HTML routes were added to server/testing/routeManifest.json (missed in c6183f97). Settings nav test updated for the new tab; docs updated.",
+   "filesImpacted": [
+    "server/services/pdfToHtmlModel.js",
+    "server/services/pdfToHtmlModel.test.js",
+    "server/services/pdfToHtml.js",
+    "server/services/pdfToHtml.test.js",
+    "server/routes/pdf.js",
+    "server/testing/routeManifest.json",
+    "client/src/pages/pdf/PdfHtmlModelCard.jsx",
+    "client/src/pages/pdf/PdfToHtml.jsx",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/utils/settingsGroups.mjs",
+    "client/src/utils/settingsGroups.test.mjs",
+    "docs/pdf-agent.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "PDF → HTML works with a DeepSeek default: it picks a connected Claude model automatically, and an admin can choose a specific one.",
+   "concerns": "Checked locally in a browser with DeepSeek as default (Automatic chose Claude; choosing Gemini in Settings switched the tool; reset worked), but the conversion ran against a stand-in model because the local AI keys are invalid. Production needs at least one Claude or Gemini model in Settings → AI & Chat; which ones are connected there was not checked. Cost depends on the picked model (Claude is dearer than DeepSeek). The crossUser route test was not run."
+  },
+  {
    "commit": "3ecc38aa",
    "fullHash": "3ecc38aaa32c448af0707f70166b91759403055f",
    "committedAt": "2026-11-18T10:30:10+10:00",
