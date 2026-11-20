@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Code Map weekly run (codeMapCron.js) with a fake pool and fake job service: runs as the first admin and waits for the run to end,
- * skips when a run is already going or there is no admin, passes other errors on. The schedule is Sunday 03:17 Brisbane.
+ * Code Map weekly run (codeMapCron.js) with a fake pool, job service and live check: runs the analysis as the first admin and waits for it,
+ * then the live site check against APP_URL (skipped when unset or local); skips when a run is already going or there is no admin; one part
+ * failing never stops the other; other analysis errors are passed on. The schedule is Sunday 03:17 Brisbane.
  * Run: node server/cron/codeMapCron.test.js
  */
 'use strict';
@@ -14,14 +15,16 @@ let passed = 0;
 const t = async (name, fn) => { try { await fn(); passed++; } catch (e) { console.error(`FAIL ${name}`); throw e; } };
 
 const pool = (adminId) => ({ async query(sql) { assert.match(sql, /"isAdmin" = TRUE ORDER BY id ASC LIMIT 1/); return { rows: adminId ? [{ id: adminId }] : [] }; } });
+const quiet = { error() {} };
+const APP = 'https://vault.example.com';
 
-function fakeJobs({ busy = false, crash = false } = {}) {
+function fakeJobs({ busy = false, crash = false, order = [] } = {}) {
   const log = [];
   let done = false;
   return {
     log,
     async start(userId) {
-      log.push(['start', userId]);
+      log.push(['start', userId]); order.push('analysis');
       if (busy) throw Object.assign(new Error('busy'), { status: 409 });
       if (crash) throw new Error('db down');
       return 31;
@@ -31,28 +34,67 @@ function fakeJobs({ busy = false, crash = false } = {}) {
   };
 }
 
+function fakeLive({ crash = false, order = [] } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async check(userId, base) {
+      calls.push([userId, base]); order.push('live');
+      if (crash) throw new Error('site down');
+      return { id: 5, counts: { pass: 12, fail: 1 }, checks: [] };
+    },
+  };
+}
+
 (async () => {
-  await t('runs as the first admin and waits for the run to finish', async () => {
-    const jobs = fakeJobs();
-    const r = await runWeeklyCodeMap({ pool: pool(7), jobs });
-    assert.deepStrictEqual(r, { runId: 31, status: 'done' });
+  await t('runs the analysis as the first admin, waits for it, then the live check against APP_URL', async () => {
+    const order = [];
+    const jobs = fakeJobs({ order });
+    const live = fakeLive({ order });
+    const r = await runWeeklyCodeMap({ pool: pool(7), jobs, liveChecks: live, appUrl: `${APP}/`, log: quiet });
+    assert.deepStrictEqual(r, { runId: 31, status: 'done', live: { id: 5, counts: { pass: 12, fail: 1 } } });
     assert.deepStrictEqual(jobs.log, [['start', 7], ['whenDone', 31], ['get', 31, true]]);
+    assert.deepStrictEqual(live.calls, [[7, APP]], 'as the same admin, trailing slash dropped');
+    assert.deepStrictEqual(order, ['analysis', 'live']);
   });
 
-  await t('skips when an analysis is already running', async () => {
-    const r = await runWeeklyCodeMap({ pool: pool(7), jobs: fakeJobs({ busy: true }) });
-    assert.deepStrictEqual(r, { skipped: 'a run is already going' });
+  await t('a running analysis skips the weekly analysis, but the live check still runs', async () => {
+    const live = fakeLive();
+    const r = await runWeeklyCodeMap({ pool: pool(7), jobs: fakeJobs({ busy: true }), liveChecks: live, appUrl: APP, log: quiet });
+    assert.deepStrictEqual(r, { skipped: 'a run is already going', live: { id: 5, counts: { pass: 12, fail: 1 } } });
+    assert.strictEqual(live.calls.length, 1);
   });
 
-  await t('skips when there is no admin', async () => {
+  await t('the live check is skipped without APP_URL or with a local address', async () => {
+    for (const [appUrl, why] of [[undefined, 'APP_URL is not set'], ['', 'APP_URL is not set'], ['http://localhost:5173', 'APP_URL is a local address'], ['http://127.0.0.1:3001/', 'APP_URL is a local address']]) {
+      const live = fakeLive();
+      const r = await runWeeklyCodeMap({ pool: pool(7), jobs: fakeJobs(), liveChecks: live, appUrl, log: quiet });
+      assert.deepStrictEqual(r.live, { skipped: why }, String(appUrl));
+      assert.strictEqual(live.calls.length, 0);
+    }
+  });
+
+  await t('a failing live check is recorded and logged, and does not fail the run', async () => {
+    const errors = [];
+    const r = await runWeeklyCodeMap({ pool: pool(7), jobs: fakeJobs(), liveChecks: fakeLive({ crash: true }), appUrl: APP, log: { error: (o, m) => errors.push(m) } });
+    assert.deepStrictEqual(r, { runId: 31, status: 'done', live: { error: 'site down' } });
+    assert.deepStrictEqual(errors, ['[codeMap] weekly live check failed']);
+  });
+
+  await t('skips everything when there is no admin', async () => {
     const jobs = fakeJobs();
-    const r = await runWeeklyCodeMap({ pool: pool(null), jobs });
+    const live = fakeLive();
+    const r = await runWeeklyCodeMap({ pool: pool(null), jobs, liveChecks: live, appUrl: APP, log: quiet });
     assert.deepStrictEqual(r, { skipped: 'no admin' });
     assert.deepStrictEqual(jobs.log, []);
+    assert.strictEqual(live.calls.length, 0);
   });
 
-  await t('other errors are passed on (the scheduler logs them)', async () => {
-    await assert.rejects(runWeeklyCodeMap({ pool: pool(7), jobs: fakeJobs({ crash: true }) }), /db down/);
+  await t('other analysis errors are passed on (the scheduler logs them) after the live check has run', async () => {
+    const live = fakeLive();
+    await assert.rejects(runWeeklyCodeMap({ pool: pool(7), jobs: fakeJobs({ crash: true }), liveChecks: live, appUrl: APP, log: quiet }),
+      (err) => /db down/.test(err.message) && err.live.id === 5);
+    assert.strictEqual(live.calls.length, 1);
   });
 
   await t('the schedule is Sunday 03:17 Australia/Brisbane', async () => {

@@ -106,6 +106,7 @@ function LiveSite({ byId, onOpenTool }) {
           </p>
           <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
             {live ? <>Last checked {fmtWhen(live.createdAt)} · {live.base} · took {fmtSecs(live.durationMs)}</> : live === null ? 'Not checked yet.' : 'Loading…'}
+            {live !== undefined && ' · also runs every Sunday after the weekly analysis'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
