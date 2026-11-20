@@ -62,7 +62,7 @@ if (!url) {
   try {
     await client.query('CREATE TABLE users (id INTEGER PRIMARY KEY)');
     const dbjs = fs.readFileSync(path.join(__dirname, '..', 'db.js'), 'utf8');
-    for (const name of ['drawings', 'recycle_bin']) {
+    for (const name of ['drawings', 'recycle_bin', 'drawing_libraries']) {
       const start = dbjs.indexOf(`CREATE TABLE IF NOT EXISTS ${name} (`);
       assert.ok(start > 0, `${name} is defined in db.js`);
       await client.query(dbjs.slice(start, dbjs.indexOf('`', start)));
@@ -243,6 +243,16 @@ if (!url) {
       const dup = await call('POST', `/${id}/duplicate`);
       assert.strictEqual(dup.status, 201);
       assert.strictEqual(dup.body.drawing.title, 'Renamed (copy)');
+      // the shape library: none at first, kept per person, refused when it is not one
+      assert.deepStrictEqual((await call('GET', '/library')).body, { library: null });
+      const items = [{ id: 'l1', status: 'unpublished', elements: [{ id: 'e1', type: 'rectangle' }], created: 1 }];
+      assert.strictEqual((await call('PUT', '/library', { libraryItems: items })).status, 200);
+      assert.deepStrictEqual((await call('GET', '/library')).body.library, { libraryItems: items });
+      assert.strictEqual((await call('GET', '/library', null, 2)).body.library, null, "another person does not see it");
+      assert.strictEqual((await call('PUT', '/library', { libraryItems: [] })).status, 200, 'an emptied library is kept as empty');
+      assert.deepStrictEqual((await call('GET', '/library')).body.library, { libraryItems: [] });
+      assert.strictEqual((await call('PUT', '/library', { nope: 1 })).status, 400);
+      assert.strictEqual((await call('PUT', '/library', { libraryItems: Array(D.MAX_LIBRARY_ITEMS + 1).fill({}) })).status, 413);
       const tplRoute = await call('POST', `/${id}/duplicate`, { title: 'Route template', asTemplate: true });
       assert.strictEqual(tplRoute.status, 201);
       assert.deepStrictEqual([tplRoute.body.drawing.title, tplRoute.body.drawing.isTemplate], ['Route template', true], 'Save as template over HTTP');

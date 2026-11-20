@@ -43,7 +43,7 @@ const CATALOG = [
     notes: 'A diagram with pictures can pass the 6 MB save limit; the page then says so and the diagram is not saved until a picture is removed or shrunk.' },
   { id: 'library', label: 'Shape library', group: 'Board',
     does: 'The Library button at the top right opens a panel of ready-made shapes and symbols. Click one to add it to the page, or add your own selected pieces to the panel to reuse them.',
-    notes: 'Libraries from other people can be added from the Excalidraw libraries website. The library belongs to the browser, not to the diagram.' },
+    notes: 'To add libraries made by other people, press Browse libraries in the panel: the Excalidraw libraries website opens; choose a library and press Add to Excalidraw, and you come back to your diagram with a question asking to add its shapes. A .excalidrawlib file you downloaded earlier can be dragged onto the board to add it. Your library is kept with your Vault account, so it is the same in every diagram and on every computer you sign in on.' },
   { id: 'saving', label: 'Saving', group: 'Board',
     does: 'Everything is saved to your account by itself a moment after you stop diagram. The words beside the name say Saving, or "Saved at" with the time. Going back to Your diagrams saves anything still waiting. If a save fails, the diagram stays on screen and the page keeps trying.',
     notes: 'If the same diagram is changed in two tabs, the older tab is refused and asks you to reload, so one tab never overwrites the other without you knowing.' },

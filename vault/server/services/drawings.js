@@ -10,6 +10,8 @@ const MAX_THUMB_BYTES = 150 * 1024;
 const MAX_ELEMENTS = 20000;
 const MAX_DRAWINGS_PER_USER = 300;
 const MAX_TITLE = 120;
+const MAX_LIBRARY_BYTES = 4 * 1024 * 1024; // the shape library: a few downloaded libraries; bigger is refused in plain words
+const MAX_LIBRARY_ITEMS = 2000;
 const DEFAULT_TITLE = 'Untitled diagram';
 const LOOKS = ['sketch', 'clean'];
 const EMPTY_SCENE = JSON.stringify({ type: 'excalidraw', version: 2, source: 'vault', elements: [], appState: {}, files: {} });
@@ -158,7 +160,26 @@ async function linkedNotes(db, userId, id) {
   return rows;
 }
 
+/** The person's shape library as { libraryItems }, or null before they have one. */
+async function getLibrary(db, userId) {
+  const { rows } = await db.query('SELECT items FROM drawing_libraries WHERE "userId" = $1', [userId]);
+  if (!rows[0]) return null;
+  try { return JSON.parse(rows[0].items); } catch { return null; }
+}
+
+/** Keep the person's shape library ({ libraryItems: [...] }, exactly as the board gives it). */
+async function saveLibrary(db, userId, data) {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.libraryItems)) throw new DrawingError('That is not a shape library.');
+  if (data.libraryItems.length > MAX_LIBRARY_ITEMS) throw new DrawingError(`Your shape library has too many shapes (more than ${MAX_LIBRARY_ITEMS}). Remove some first.`, 413, 'TOO_MANY');
+  const text = JSON.stringify({ libraryItems: data.libraryItems });
+  if (Buffer.byteLength(text) > MAX_LIBRARY_BYTES) throw new DrawingError(`Your shape library is too big to keep (the limit is ${MAX_LIBRARY_BYTES / 1048576} MB). Remove some shapes first.`, 413, 'TOO_BIG');
+  await db.query(
+    `INSERT INTO drawing_libraries ("userId", items, "updatedAt") VALUES ($1, $2, NOW())
+     ON CONFLICT ("userId") DO UPDATE SET items = EXCLUDED.items, "updatedAt" = NOW()`, [userId, text]);
+}
+
 module.exports = {
+  getLibrary, saveLibrary, MAX_LIBRARY_BYTES, MAX_LIBRARY_ITEMS,
   list, get, create, update, duplicate, linkedNotes, checkScene, checkThumbnail, checkLook, cleanTitle, DrawingError, LOOKS,
   MAX_SCENE_BYTES, MAX_THUMB_BYTES, MAX_ELEMENTS, MAX_DRAWINGS_PER_USER, MAX_TITLE, DEFAULT_TITLE, EMPTY_SCENE,
 };

@@ -10,6 +10,8 @@
 //   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
 //   POST   /api/drawings/diagram       Draw it for me  { text } or { previous, instruction } -> { diagram } (AI; structure only)
 //   POST   /api/drawings/suggestions   What have I missed?  { diagram } -> { suggestions: [{ about, text, change }] } (AI; reads only the words in the shapes)
+//   GET    /api/drawings/library       the person's shape library  -> { library: { libraryItems } | null }
+//   PUT    /api/drawings/library       keep it  { libraryItems }
 //   POST   /api/drawings/:id/duplicate a copy  { title?, asTemplate? }  (asTemplate: Save as template; copying a template makes a diagram from it)
 //   DELETE /api/drawings/:id           into the recycle bin
 
@@ -71,6 +73,20 @@ router.post('/suggestions', aiLimiter, async (req, res) => {
     getLogger().error({ err }, '[drawings] suggestions model');
     return res.status(502).json({ error: 'The AI could not be reached just now. Try again in a minute.' });
   }
+});
+
+// The board's shape library (Library panel), one per person; Excalidraw's useHandleLibrary loads and saves it through these.
+router.get('/library', async (req, res) => {
+  try {
+    res.json({ library: await drawings.getLibrary(pool, req.user.id) });
+  } catch (err) { fail(res, err, 'library'); }
+});
+
+router.put('/library', async (req, res) => {
+  try {
+    await drawings.saveLibrary(pool, req.user.id, req.body || {});
+    res.json({ ok: true });
+  } catch (err) { fail(res, err, 'library save'); }
 });
 
 router.post('/:id/duplicate', async (req, res) => {

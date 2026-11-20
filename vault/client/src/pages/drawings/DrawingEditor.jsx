@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
@@ -62,6 +62,26 @@ async function elementsForLook(lib, elements, fromLook, toLook) {
   return lib.restoreElements(c.elements, null, { refreshDimensions: true });
 }
 
+// The board's shape library (Library panel) is kept per person on the server. Excalidraw's own useHandleLibrary loads it, saves every
+// change, and adds a library chosen on libraries.excalidraw.com when the person comes back (#addLibrary=... on the return URL). It is a
+// hook from the lazily loaded editor, so it lives in this small component rendered once the editor is in.
+const libraryAdapter = {
+  async load() {
+    const res = await api.get('/api/drawings/library');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Your shape library could not be loaded.');
+    return data.library || null;
+  },
+  async save({ libraryItems }) {
+    const res = await api.put('/api/drawings/library', { libraryItems });
+    if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || 'Your shape library could not be saved.'); }
+  },
+};
+function LibrarySync({ lib, excalidrawAPI }) {
+  lib.useHandleLibrary({ excalidrawAPI, adapter: libraryAdapter });
+  return null;
+}
+
 /**
  * One drawing on the Excalidraw editor. Loads the drawing and the editor, saves by itself shortly after the last change (and again on
  * leaving), guards against two tabs overwriting each other, and exports a PNG, an SVG or a .excalidraw file.
@@ -107,6 +127,8 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [tplBusy, setTplBusy] = useState(false);
 
   const apiRef = useRef(null);
+  const [exApi, setExApi] = useState(null); // the same editor API as apiRef, as state, for the shape library hook
+  const libraryReturnUrl = useMemo(() => `${window.location.origin}/drawings/${id}`, [id]); // Browse libraries -> Add brings the person back here
   const lookRef = useRef('sketch');
   const showNumsRef = useRef(showNums);
   showNumsRef.current = showNums;
@@ -882,9 +904,11 @@ export default function DrawingEditor({ id, onSavedChange }) {
         {!Excalidraw && (
           <div className="p-6 max-w-sm"><Skeleton lines={3} label="Loading the board" /></div>
         )}
+        {lib && lib.useHandleLibrary && <LibrarySync lib={lib} excalidrawAPI={exApi} />}
         {Excalidraw && initial && (
           <Excalidraw
-            excalidrawAPI={(a) => { apiRef.current = a; }}
+            excalidrawAPI={(a) => { apiRef.current = a; setExApi(a); }}
+            libraryReturnUrl={libraryReturnUrl}
             initialData={initial}
             onChange={onChange}
             langCode="en"

@@ -71,7 +71,8 @@ app.use(helmet({
       // which loads its WASM module via a data: URI fetch, not a blob: URL. Without it the
       // browser blocks the fetch and the PDF preflight silently fails (nothing gets uploaded).
       // Route Tracer (MapLibre) loads style JSON, vector/raster tiles, sprites and glyphs straight from MapTiler with a referrer-restricted browser key
-      'connect-src':["'self'", 'blob:', 'data:', 'https://api.maptiler.com'],
+      // Diagrams: Excalidraw's shape library (Browse libraries -> Add) is fetched from libraries.excalidraw.com or the excalidraw-libraries repo on raw.githubusercontent.com (the only two hosts Excalidraw accepts) when the person comes back
+      'connect-src':["'self'", 'blob:', 'data:', 'https://api.maptiler.com', 'https://libraries.excalidraw.com', 'https://raw.githubusercontent.com'],
       // 'blob:' is required for Finance's receipt/invoice preview, which loads a downloaded
       // file into an <iframe src="blob:..."> (see FinancePage.jsx openViewReceipt) — without
       // it the browser blocks the frame with a CSP violation even though the blob was created
