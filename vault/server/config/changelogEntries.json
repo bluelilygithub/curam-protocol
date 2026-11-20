@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "81018379",
+   "fullHash": "8101837910dc596dfff272b33a31a06c83287913",
+   "committedAt": "2026-11-20T11:42:35+10:00",
+   "author": "mrb",
+   "subject": "Code Map: run the live site check in the weekly run",
+   "filesChanged": 6,
+   "insertions": 116,
+   "deletions": 30,
+   "area": "Code Map",
+   "goal": "Catch a removed security header, an expiring certificate or a route left open within a week, without anyone pressing Check the live site.",
+   "whatChanged": "server/cron/codeMapCron.js: after the Sunday 03:17 Brisbane analysis, runWeeklyCodeMap runs the live site check (services/codeMap/liveCheck.js check()) as the same first admin against process.env.APP_URL, inside the same withCronLock. Skipped with a reason when APP_URL is unset (a cron has no request for getAppUrl) or a local address (localhost, 127.x.x.x, [::1]). It runs even when the weekly analysis is skipped because one is already going. A failed live check is logged and returned as live: { error }; a failed analysis is still thrown for the scheduler after the live check has run (err.live). Result now carries live: { id, counts } or { skipped }. Tests rewritten for both parts (7). Guide notes, the (i) box, the Security tab's live line and docs/code-map.md (Weekly run, Live site checks) updated.",
+   "filesImpacted": [
+    "server/cron/codeMapCron.js",
+    "server/cron/codeMapCron.test.js",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "client/src/pages/codeMap/SecurityView.jsx",
+    "docs/code-map.md"
+   ],
+   "benefit": "The running site is checked every week alongside the code, and failing high checks land in the inbox on their own.",
+   "concerns": "Relies on APP_URL being set in Railway (it is documented for OAuth and reset emails, but not verified here); without it the weekly check is skipped and only the log says so. Not run on a real Sunday or against a database; tested with fakes. The local-address test caught that 127.0.0.1 was first treated as remote; fixed. The weekly check counts towards the 10 live checks kept, so manual checks push weekly history out sooner. A long analysis delays the live check within the same lock."
+  },
+  {
    "commit": "90fa40d2",
    "fullHash": "90fa40d2ef0c5d219e4e8dbcd329815c86860f0a",
    "committedAt": "2026-11-20T11:31:42+10:00",
