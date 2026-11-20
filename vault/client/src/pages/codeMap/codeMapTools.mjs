@@ -28,7 +28,7 @@ export const TOOL_TIPS = {
   conventions: 'Every tool against every rule, with the evidence for each cell.',
   map: "Which tools call each other's APIs or share code files.",
   structure: 'Largest files, import cycles, shared foundations, separate packages and possibly unused files.',
-  security: 'Pattern checks for common security mistakes: routes missing from the access list, SQL built from request values, secrets in code, shell commands, unsafe paths, raw HTML, sign-in limits, headers and SSRF. No AI.',
+  security: 'Pattern checks for common security mistakes: routes missing from the access list, SQL built from request values, secrets in code, shell commands, unsafe paths, raw HTML, sign-in limits, headers and SSRF; plus a live check of the running site (headers, HTTPS, CORS, sign-in). No AI.',
   changes: "What moved between two runs: new and resolved findings, and each tool's score.",
   context: 'A briefing about how Vault is built, to paste into a new Claude conversation before designing the next tool. No AI call.',
   'ai-review': 'Every place the server calls an AI model, and whether plain code would do the job instead. Runs only when you press the button; costs model calls.',
@@ -54,7 +54,7 @@ export const HOW_IT_WORKS = [
   ['How sure it is', 'The checks match patterns in the code, so they can be wrong both ways. Read the evidence (file and line) before changing anything. Known false positives are listed in docs/code-map.md.'],
   ['Who owns what', 'A file reached by three or more tools counts as shared and belongs to none of them; the rest belongs to the tools that reach it.'],
   ['Explain and plan a fix', 'On a finding, Explain and plan a fix asks the AI model set in Settings to explain that finding and plan a fix, using only its evidence and the lines around it. It costs a model call, shows the files it read, and says "I could not tell" rather than guess.'],
-  ['Security', 'Eleven pattern checks for common security mistakes run with every analysis, free: every route in the access list (routeManifest.json), public routes to review, request values pasted into SQL, routes by id with no per-user check, secrets in the code (values are never shown or stored), eval or shell commands from strings, file paths from request values, raw HTML, sign-in rate limits, security headers and CORS, and SSRF. High gaps go to your Suggestions inbox. A pattern check is a pointer to read, not proof.'],
+  ['Security', 'Eleven pattern checks for common security mistakes run with every analysis, free: every route in the access list (routeManifest.json), public routes to review, request values pasted into SQL, routes by id with no per-user check, secrets in the code (values are never shown or stored), eval or shell commands from strings, file paths from request values, raw HTML, sign-in rate limits, security headers and CORS, and SSRF. High gaps go to your Suggestions inbox. A pattern check is a pointer to read, not proof. Check the live site (same tab) tests the running site instead of the code: security headers, HTTPS and its certificate, CORS, that protected routes refuse anyone not signed in, and that errors show no code details. It only runs when you press it, makes about 15 harmless requests to this app\'s own address and costs nothing.'],
   ['AI review', 'Run review asks the standard model in Settings to look at every place the server calls an AI model and say whether plain code (regex, parsing, lookups, rules) would do it as well: replace, hybrid, keep or unclear. It runs only when you press the button, never on a schedule. Files unchanged since the last review keep their verdicts at no cost. High-confidence "replace" verdicts go to the Suggestions inbox.'],
   ['Context', 'Build briefing makes a description of how Vault is built (tools, rules, building blocks, recent changes, outside services as YES or NO, your notes) to paste into a new Claude conversation or a Claude Project before designing the next tool. It uses no AI and never includes what is in your tools: no client names, amounts, notes or secret values. The last 10 are kept to copy again.'],
 ];
@@ -82,6 +82,7 @@ export const GUIDE_TOOLS = [
   { id: 'docs-picker', label: 'Docs to include', tool: 'context' },
   { id: 'security', label: 'Security', tool: 'security' },
   { id: 'security-checks', label: 'Security checks', tool: 'security' },
+  { id: 'live-check', label: 'Live site checks', tool: 'security' },
   { id: 'ai-review', label: 'AI review', tool: 'ai-review' },
   { id: 'run-ai-review', label: 'Run review', tool: 'ai-review' },
 ];

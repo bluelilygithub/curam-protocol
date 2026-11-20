@@ -35,6 +35,7 @@ node server/services/codeMap/briefing/buildBriefing.test.js
 node client/src/pages/codeMap/exportRun.test.mjs
 node server/services/codeMap/aiReview.test.js
 node server/services/codeMap/security.test.js
+node server/services/codeMap/liveCheck.test.js
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
@@ -91,7 +92,7 @@ Test: `node server/services/codeMap/explain.test.js` (path restriction, groundin
 
 ## Security
 
-The **Security** tab: eleven pattern checks for common security mistakes, in `server/services/codeMap/security.js` (a stage of `analyze`, after the rules because it reuses each tool's SSRF check). Free like the rest of the analysis, so it runs with every run, including the weekly one, and is stored in the run result as `security: { checks, counts }`. This is layer 1 of the security review agreed on 2026-11-20; an on-demand AI security review and live checks against the deployed site are later layers, not built.
+The **Security** tab: eleven pattern checks for common security mistakes, in `server/services/codeMap/security.js` (a stage of `analyze`, after the rules because it reuses each tool's SSRF check). Free like the rest of the analysis, so it runs with every run, including the weekly one, and is stored in the run result as `security: { checks, counts }`. This is layer 1 of the security review agreed on 2026-11-20; layer 3, the live site checks, is below; layer 2 (an on-demand AI security review) is not built.
 
 Each check returns a status: **gap** (fail), **check** (warn), **for review** (info, a list to keep an eye on) or **passes**, a note, its why and fix, and up to 50 items (file, line, text, owning tool) with the full count.
 
@@ -114,6 +115,34 @@ Each check returns a status: **gap** (fail), **check** (warn), **for review** (i
 First run on 2026-11-20: no gaps; 2 to check (three route files that serve shared or token-based data, two `dangerouslySetInnerHTML` uses for generated SVG); 30 public routes listed.
 
 Page: `client/src/pages/codeMap/SecurityView.jsx` (tiles, one card per check, gaps first, Copy security via `securityMd` in `exportRun.mjs`; the full-run download includes it). **Adding a check**: one entry in `CHECKS` in `security.js` with `run({ files, tools, mounts, manifest })` returning `{ status, note, items }`, plus a case in `security.test.js`.
+
+### Live site checks (layer 3)
+
+Under the code checks on the Security tab: **Check the live site** tests the running site instead of the code. `server/services/codeMap/liveCheck.js`, `POST /api/code-map/live-checks` (runs in the request, about 5 seconds; one at a time, 409 otherwise) and `GET /api/code-map/live-checks/latest`. Button only, no schedule, no AI, no cost. Table `code_map_live_checks` keeps the last 10 (deleted outright). A failing high check goes to the inbox once per check (fingerprint `codeMap:live:<check id>`).
+
+**The address** is `getAppUrl(req)` (`APP_URL`, else the request's own host), never anything from the request body, so it cannot be pointed at another site. **The requests**, with `redirect: 'manual'` and a 10-second timeout each: GET `/` (headers), GET `http://<host>/` (the redirect), a TLS connection for the certificate date, GET `/api/health` with `Origin: https://code-map-check.invalid` (CORS), up to 10 GET routes from `routeManifest.json` with class `admin` or `authed` and no `:param` (half each, spread through the list), each once with no token and once with `Bearer 000…` (64 zeros), every public GET route with no `:param`, and one POST with a broken JSON body to `/api/code-map-live-check-probe` (a path that does not exist; the JSON parser rejects it before any route). Nothing is changed.
+
+| Check | Severity | Passes when |
+| --- | --- | --- |
+| The site answers | high | `/` answers below 500 (otherwise the rest is skipped) |
+| HTTPS only | high | `http://` answers 3xx to an `https://` address |
+| Certificate not about to expire | high | 21 days or more left (warn under 21, fail under 7) |
+| HSTS | medium | `Strict-Transport-Security` with max-age of at least 180 days |
+| Content Security Policy | medium | a policy is sent and `script-src` (or `default-src`) has no `'unsafe-inline'` / `'unsafe-eval'` |
+| nosniff | low | `X-Content-Type-Options: nosniff` |
+| Cannot be framed | medium | `frame-ancestors 'self'`/`'none'` or `X-Frame-Options` DENY / SAMEORIGIN |
+| Referrer-Policy | low | the header is sent |
+| No X-Powered-By | low | the header is absent |
+| CORS | high | `/api/health` does not answer the foreign origin with `Access-Control-Allow-Origin` `*` or that origin |
+| Protected routes refuse anonymous requests | high | every sampled route answers 401 or 403 to both requests |
+| Public routes answer without errors | low | none answers 5xx or fails to answer |
+| Errors do not show code details | medium | the broken body's answer has no stack line, `node_modules`, `SyntaxError:` or `file.js:1:2` |
+
+On a local `http://localhost` address, HTTPS, the certificate and HSTS are **not applicable**, and so is the policy when it is missing (helmet sends it only when `NODE_ENV=production`). Run locally in development, the broken-body check can fail because Express shows stack traces outside production.
+
+First run against production (https://curam-vault.up.railway.app, 2026-11-20, from a developer machine): all 13 pass; certificate 36 days left; HSTS max-age 15552000.
+
+**Cannot check**: that an admin route refuses a signed-in non-admin (it has no such login; `crossUser.test.js` covers it), routes with an id, POST/PUT/DELETE routes, cookies (Vault signs in with a bearer token), or anything behind a sign-in. Export: Copy live checks (`liveMd` in `exportRun.mjs`). Test: `node server/services/codeMap/liveCheck.test.js` (a fake site; safe-request guarantees: only GETs plus the probe, redirects not followed, no `:id` routes).
 
 ## AI review (where plain code would beat a model call)
 

@@ -1,6 +1,6 @@
 // node client/src/pages/codeMap/exportRun.test.mjs
 import assert from 'node:assert';
-import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv, securityMd } from './exportRun.mjs';
+import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv, securityMd, liveMd } from './exportRun.mjs';
 
 // CSV quoting: commas, quotes and newlines are quoted; plain values are not
 assert.strictEqual(toCsv(['a', 'b'], [['x,y', 'say "hi"'], ['line\nbreak', 3]]), 'a,b\r\n"x,y","say ""hi"""\r\n"line\nbreak",3');
@@ -50,6 +50,13 @@ assert.ok(sec.indexOf('[gap] Secrets') < sec.indexOf('[passes] All good'), 'gaps
 assert.ok(sec.includes('Fix: Move it.') && !sec.includes('Fix: F'), 'no fix line for a pass');
 assert.ok(sec.includes('- `a.js:2` k… (hidden) (chat)') && sec.includes('… and 2 more'));
 assert.ok(securityMd({}).includes('No security checks'));
+const lm = liveMd({ base: 'https://v.example', createdAt: '2026-11-20', checks: [
+  { id: 'cors', label: 'CORS', severity: 'high', status: 'fail', note: 'Open.', why: 'W', fix: 'Close it.', items: [{ text: 'Access-Control-Allow-Origin: *' }], total: 1 },
+  { id: 'hsts', label: 'HSTS', severity: 'medium', status: 'na', note: 'Local.', why: 'W', fix: 'F', items: [], total: 0 },
+] });
+assert.ok(lm.startsWith('## Security: live site\n\nChecked 2026-11-20 · https://v.example'));
+assert.ok(lm.includes('- Access-Control-Allow-Origin: *'), 'items without a file print their text');
+assert.ok(lm.includes('[not applicable] HSTS') && lm.includes('Fix: Close it.') && !lm.includes('Fix: F'));
 assert.ok(runMd({ security: { checks: [] } }).includes('## Security'));
 
 const review = {

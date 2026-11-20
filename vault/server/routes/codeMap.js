@@ -9,11 +9,13 @@
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const { compareRuns } = require('../services/codeMap/compare');
+const { getAppUrl } = require('../utils/appUrl');
 
-function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview } = {}) {
+function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks } = {}) {
   const router = express.Router();
   const J = () => jobs || require('../services/codeMap/jobs');
   const R = () => aiReview || require('../services/codeMap/aiReview');
+  const L = () => liveChecks || require('../services/codeMap/liveCheck');
   let briefingService = briefing || null;
   const B = () => briefingService || (briefingService = require('../services/codeMap/briefing').createBriefingService({ jobs }));
   const ask = explain || ((userId, input) => require('../services/codeMap/explain').explainFinding(userId, input));
@@ -70,6 +72,16 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview } = {}
     try {
       res.json(await ask(req.user.id, { runId: Number(runId), ruleId, toolId, findingId }));
     } catch (err) { fail(res, err, 'explain'); }
+  });
+
+  // ── Security tab, live site: checks the running site at its own public address (APP_URL via getAppUrl, never a typed address).
+  // No model calls; about 15 GET requests and one broken POST to a path that does not exist (server/services/codeMap/liveCheck.js).
+  router.post('/live-checks', async (req, res) => {
+    try { res.status(201).json({ check: await L().check(req.user.id, getAppUrl(req)) }); } catch (err) { fail(res, err, 'live check'); }
+  });
+
+  router.get('/live-checks/latest', async (req, res) => {
+    try { res.json({ check: await L().latest() }); } catch (err) { fail(res, err, 'live check latest'); }
   });
 
   // ── AI review tab: where the server calls a model and whether plain code would do (server/services/codeMap/aiReview.js).

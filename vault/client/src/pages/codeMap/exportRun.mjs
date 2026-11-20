@@ -61,19 +61,27 @@ export function structureMd(data) {
   ].join('\n\n');
 }
 
-const SEC_WORD = { fail: 'gap', warn: 'check', info: 'for review', pass: 'passes' };
-const SEC_ORDER = ['fail', 'warn', 'info', 'pass'];
+const SEC_WORD = { fail: 'gap', warn: 'check', info: 'for review', pass: 'passes', na: 'not applicable' };
+const SEC_ORDER = ['fail', 'warn', 'info', 'pass', 'na'];
 
-/** The Security tab (server/services/codeMap/security.js): every check, gaps first, with its items. */
-export function securityMd(data) {
-  const checks = [...((data.security && data.security.checks) || [])].sort((a, b) => SEC_ORDER.indexOf(a.status) - SEC_ORDER.indexOf(b.status));
-  if (!checks.length) return '## Security\n\n_No security checks in this run (run the analysis again)._';
-  return ['## Security', ...checks.map((c) => [
+function checksMd(title, intro, checks) {
+  const list = [...checks].sort((a, b) => SEC_ORDER.indexOf(a.status) - SEC_ORDER.indexOf(b.status));
+  return [title, intro, ...list.map((c) => [
     `### [${SEC_WORD[c.status] || c.status}] ${c.label} (${c.severity})`,
-    c.note, `Why: ${c.why}`, c.status === 'pass' ? '' : `Fix: ${c.fix}`,
-    (c.items || []).length ? `${c.items.map((e) => `- ${ev(e)}${e.tool ? ` (${e.tool})` : ''}`).join('\n')}${c.total > c.items.length ? `\n- … and ${c.total - c.items.length} more` : ''}` : '',
-  ].filter(Boolean).join('\n\n'))].join('\n\n');
+    c.note, `Why: ${c.why}`, c.status === 'fail' || c.status === 'warn' ? `Fix: ${c.fix}` : '',
+    (c.items || []).length ? `${c.items.map((e) => `- ${e.file ? ev(e) : e.text}${e.tool ? ` (${e.tool})` : ''}`).join('\n')}${c.total > c.items.length ? `\n- … and ${c.total - c.items.length} more` : ''}` : '',
+  ].filter(Boolean).join('\n\n'))].filter(Boolean).join('\n\n');
 }
+
+/** The Security tab's code checks (server/services/codeMap/security.js): every check, gaps first, with its items. */
+export function securityMd(data) {
+  const checks = (data.security && data.security.checks) || [];
+  if (!checks.length) return '## Security\n\n_No security checks in this run (run the analysis again)._';
+  return checksMd('## Security', '', checks);
+}
+
+/** The Security tab's live site checks (server/services/codeMap/liveCheck.js). */
+export const liveMd = (live) => checksMd('## Security: live site', live ? `Checked ${live.createdAt || ''} · ${live.base || ''}` : '', (live && live.checks) || []);
 
 const TOOL_HEAD = ['Tool', 'Id', 'Group', 'Feature flag', 'Lifecycle', 'Admin only', 'Score %', 'Gaps', 'Checks', 'Client lines', 'Server lines', 'Test files'];
 const toolRow = (t) => [t.label, t.id, t.group, t.featureKey || '', t.lifecycle || 'ga', t.adminOnly ? 'yes' : '', t.score, t.fails, t.warns, t.locClient, t.locServer, (t.tests || []).length];

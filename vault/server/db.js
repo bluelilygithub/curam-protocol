@@ -4933,6 +4933,18 @@ async function initSchema() {
   `);
   await pool.query(`UPDATE code_map_ai_reviews SET status = 'failed', error = 'Stopped by a restart', "finishedAt" = NOW()
                       WHERE status = 'running' AND "createdAt" < $1`, [schemaStartedAt]);
+  // Code Map Security "live site" checks (services/codeMap/liveCheck.js): headers, HTTPS, CORS and auth probed on the running site when an
+  // admin presses the button. Workspace-wide; the last 10 are kept and older ones deleted outright (analysis output, not user content).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS code_map_live_checks (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      base          TEXT NOT NULL,
+      result        JSONB NOT NULL,
+      "durationMs"  INTEGER,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_code_map_ai_reviews_one_active ON code_map_ai_reviews ((status = 'running')) WHERE status = 'running'`);
 
   await pool.query(`

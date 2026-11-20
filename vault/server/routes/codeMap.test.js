@@ -83,7 +83,11 @@ async function serve(jobs) {
     async latest() { return { id: 7, status: 'done', result: { files: [] } }; },
     async get(id) { return id === 7 ? { id: 7, status: 'running', progress: { done: 1, total: 2 } } : null; },
   };
-  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview }));
+  const liveChecks = {
+    async check(userId, base) { serve.liveBase = base; return { id: 2, userId, base, checks: [], counts: {} }; },
+    async latest() { return { id: 2, checks: [] }; },
+  };
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -98,6 +102,19 @@ async function serve(jobs) {
   const jobs = fakeJobs();
   const s = await serve(jobs);
   try {
+    await t('live checks: run against the app\'s own address (APP_URL), never one from the request body; latest', async () => {
+      const prev = process.env.APP_URL;
+      process.env.APP_URL = 'https://vault.example.com/';
+      try {
+        const r = await s.call('POST', '/api/code-map/live-checks', { base: 'http://169.254.169.254' });
+        assert.strictEqual(r.status, 201);
+        assert.strictEqual(serve.liveBase, 'https://vault.example.com', 'the body is ignored');
+      } finally {
+        if (prev === undefined) delete process.env.APP_URL; else process.env.APP_URL = prev;
+      }
+      assert.strictEqual((await s.call('GET', '/api/code-map/live-checks/latest')).body.check.id, 2);
+    });
+
     await t('AI review: start is behind aiLimiter, the reads are not; named routes before /:id', async () => {
       const before = limited.length;
       assert.deepStrictEqual((await s.call('GET', '/api/code-map/ai-reviews/estimate')).body.calls, 1);

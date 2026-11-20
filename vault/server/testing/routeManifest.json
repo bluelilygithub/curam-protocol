@@ -4366,6 +4366,12 @@
   "POST /api/code-map/findings/explain": {
    "class": "admin"
   },
+  "POST /api/code-map/live-checks": {
+   "class": "admin"
+  },
+  "GET /api/code-map/live-checks/latest": {
+   "class": "admin"
+  },
   "GET /api/code-map/ai-reviews/estimate": {
    "class": "admin"
   },
