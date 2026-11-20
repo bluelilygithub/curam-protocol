@@ -141,4 +141,26 @@ export function aiReviewMd(review) {
 export const aiReviewCsv = (review) => toCsv(['File', 'Line', 'Tool', 'Verdict', 'Confidence', 'Saving', 'What it does', 'Why', 'Instead', 'Code'],
   aiSites(review).map((x) => [x.file, x.line, x.tool || '', x.verdict, x.confidence, x.saving, x.does, x.why, x.alternative, x.text]));
 
-export const datedName =(prefix, ext, iso) => `${prefix}-${String(iso || new Date().toISOString()).slice(0, 10)}.${ext}`;
+// AI security review (aiReview.js kind "security"): findings in every route file, high first.
+const SEV_RANK = { high: 0, medium: 1, low: 2 };
+const secFindings = (review) => aiSites(review).sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || SEV_RANK[a.confidence] - SEV_RANK[b.confidence] || a.file.localeCompare(b.file) || a.line - b.line);
+
+export function aiSecurityMd(review) {
+  const list = secFindings(review);
+  const s = (review && review.summary) || {};
+  return [
+    '# Vault AI security review',
+    `Run ${review?.finishedAt || ''} · ${review?.model || ''} · ${s.files || 0} route files · high ${s.high || 0}, medium ${s.medium || 0}, low ${s.low || 0}`,
+    'A model\'s reading of the code: check each finding before changing anything.',
+    ...(list.length ? list.map((x) => [
+      `## [${x.severity}] ${x.title}`,
+      `\`${x.file}:${x.line}\` · ${x.category} · ${x.confidence} confidence${x.tool ? ` · ${x.tool}` : ''}`,
+      x.text ? `\`${x.text}\`` : '', x.why, x.fix ? `**Fix:** ${x.fix}` : '',
+    ].filter(Boolean).join('\n\n')) : ['_No findings._']),
+  ].join('\n\n');
+}
+
+export const aiSecurityCsv = (review) => toCsv(['Severity', 'Confidence', 'Category', 'File', 'Line', 'Tool', 'Title', 'Why', 'Fix', 'Code'],
+  secFindings(review).map((x) => [x.severity, x.confidence, x.category, x.file, x.line, x.tool || '', x.title, x.why, x.fix, x.text]));
+
+export const datedName = (prefix, ext, iso) => `${prefix}-${String(iso || new Date().toISOString()).slice(0, 10)}.${ext}`;

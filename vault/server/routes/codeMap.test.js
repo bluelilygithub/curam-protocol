@@ -77,10 +77,10 @@ async function serve(jobs) {
   };
   serve.briefing = briefing;
   const aiReview = {
-    async estimate() { return { files: 2, sites: 3, toReview: 1, calls: 1 }; },
-    async start(userId) { if (userId !== 3) throw new Error('wrong user'); return 7; },
-    async list() { return [{ id: 7, status: 'done' }]; },
-    async latest() { return { id: 7, status: 'done', result: { files: [] } }; },
+    async estimate(kind) { return { kind, files: 2, sites: 3, toReview: 1, calls: 1 }; },
+    async start(userId, kind) { if (userId !== 3) throw new Error('wrong user'); serve.startedKind = kind; return 7; },
+    async list(kind) { return [{ id: 7, status: 'done', kind }]; },
+    async latest(kind) { return { id: 7, status: 'done', kind, result: { files: [] } }; },
     async get(id) { return id === 7 ? { id: 7, status: 'running', progress: { done: 1, total: 2 } } : null; },
   };
   const liveChecks = {
@@ -128,6 +128,16 @@ async function serve(jobs) {
       assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/7')).body.review.progress.done, 1);
       assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/8')).status, 404);
       assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/x')).status, 400);
+    });
+
+    await t('AI reviews: ?kind= is passed through (security review on the Security tab); none means the plain-code review', async () => {
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/estimate?kind=security')).body.kind, 'security');
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/latest?kind=security')).body.review.kind, 'security');
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews?kind=security')).body.reviews[0].kind, 'security');
+      assert.strictEqual((await s.call('POST', '/api/code-map/ai-reviews?kind=security')).status, 202);
+      assert.strictEqual(serve.startedKind, 'security');
+      await s.call('POST', '/api/code-map/ai-reviews');
+      assert.strictEqual(serve.startedKind, undefined);
     });
 
     await t('POST /runs starts a run for the signed-in admin', async () => {

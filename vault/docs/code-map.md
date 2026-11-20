@@ -92,7 +92,7 @@ Test: `node server/services/codeMap/explain.test.js` (path restriction, groundin
 
 ## Security
 
-The **Security** tab: eleven pattern checks for common security mistakes, in `server/services/codeMap/security.js` (a stage of `analyze`, after the rules because it reuses each tool's SSRF check). Free like the rest of the analysis, so it runs with every run, including the weekly one, and is stored in the run result as `security: { checks, counts }`. This is layer 1 of the security review agreed on 2026-11-20; layer 3, the live site checks, is below; layer 2 (an on-demand AI security review) is not built.
+The **Security** tab: eleven pattern checks for common security mistakes, in `server/services/codeMap/security.js` (a stage of `analyze`, after the rules because it reuses each tool's SSRF check). Free like the rest of the analysis, so it runs with every run, including the weekly one, and is stored in the run result as `security: { checks, counts }`. This is layer 1 of the security review agreed on 2026-11-20; layer 3 (the live site checks) and layer 2 (the AI security review) are below.
 
 Each check returns a status: **gap** (fail), **check** (warn), **for review** (info, a list to keep an eye on) or **passes**, a note, its why and fix, and up to 50 items (file, line, text, owning tool) with the full count.
 
@@ -143,6 +143,20 @@ On a local `http://localhost` address, HTTPS, the certificate and HSTS are **not
 First run against production (https://curam-vault.up.railway.app, 2026-11-20, from a developer machine): all 13 pass; certificate 36 days left; HSTS max-age 15552000.
 
 **Cannot check**: that an admin route refuses a signed-in non-admin (it has no such login; `crossUser.test.js` covers it), routes with an id, POST/PUT/DELETE routes, cookies (Vault signs in with a bearer token), or anything behind a sign-in. Export: Copy live checks (`liveMd` in `exportRun.mjs`). Test: `node server/services/codeMap/liveCheck.test.js` (a fake site; safe-request guarantees: only GETs plus the probe, redirects not followed, no `:id` routes).
+
+### AI security review (layer 2)
+
+The last part of the Security tab: **Run AI security review**. The standard model reads every route file and reports concrete problems the pattern checks cannot judge. It is a second **kind** of the AI review engine in `server/services/codeMap/aiReview.js` (`KINDS.security`; the AI review tab is `plainCode`), so it shares the job runner, the table (`code_map_ai_reviews`, column `kind`), reuse of unchanged files, progress polling and the routes (`?kind=security` on `/api/code-map/ai-reviews`, `/estimate`, `/latest`; `POST` behind aiLimiter). **Only one AI review runs at a time across both kinds** (one running row, partial unique index); a 409 carries `runningKind` so each tab only follows its own. Button only, no cron. The last 10 of each kind are kept.
+
+- **What it reads**: every file under `server/routes/` except tests (173 files, about 52,000 lines on 2026-11-20), in parts of 500 lines (`SEC_CHUNK`), so about 230 model calls and roughly 630,000 tokens of code for a first full run. Later parts carry the file's first 40 lines (requires, helpers). It does **not** read the services a route calls, so a check done in a helper is invisible: the prompt asks for confidence "low" in that case.
+- **Context given**: how the file is mounted in `server/index.js` (`mountNote`: public before the sign-in check or behind it, admin only, feature flag, AI rate limit; for a module with several routers, which export is mounted), and Vault's rules (requireAuth, requireAdmin, `"userId"` ownership, `$1` parameters, safeFetch, multer).
+- **What it reports**: `{ line, severity, category, title, why, fix, confidence }` per finding, categories access / injection / ssrf / upload / xss / secrets / validation / other. Checked as untrusted: the line must be inside the part reviewed, unknown values fall back to low / other, the code line shown comes from the file (not the model), at most 20 per part; an unreadable answer fails that file (tried again next run).
+- **Inbox**: severity high **and** confidence high, once per finding (fingerprint `codeMapAiSec:<file>:<hash of title and code line>`, category alert).
+- **Cost**: shown before running (model calls and characters / 4 of the changed files). Usage logs it as `code_map_ai_security`; the row stores tokens and an approximate cost.
+- **Page**: `client/src/pages/codeMap/AiSecurityReview.jsx`, using `useReviewJob('security')` (shared with the AI review tab). Severity filter, cards (severity, category, confidence, tool, file:line, title, why, fix), Copy findings and Download CSV (`aiSecurityMd` / `aiSecurityCsv`).
+- **Limits**: a model's reading of part of a file, so expect some false positives and misses; read the code before changing it. Not run against a real model yet (2026-11-20).
+
+Test: `node server/services/codeMap/aiReview.test.js` (route-file chunking, the prompt and mount note, finding checks, the job with kind security and the shared one-at-a-time slot).
 
 ## AI review (where plain code would beat a model call)
 

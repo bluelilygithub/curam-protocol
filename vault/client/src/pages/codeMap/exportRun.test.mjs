@@ -1,6 +1,6 @@
 // node client/src/pages/codeMap/exportRun.test.mjs
 import assert from 'node:assert';
-import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv, securityMd, liveMd } from './exportRun.mjs';
+import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv, securityMd, liveMd, aiSecurityMd, aiSecurityCsv } from './exportRun.mjs';
 
 // CSV quoting: commas, quotes and newlines are quoted; plain values are not
 assert.strictEqual(toCsv(['a', 'b'], [['x,y', 'say "hi"'], ['line\nbreak', 3]]), 'a,b\r\n"x,y","say ""hi"""\r\n"line\nbreak",3');
@@ -73,5 +73,15 @@ assert.ok(am.includes('**Instead:** A lookup table'));
 assert.ok(am.includes('### `server/a.js:9` (high confidence, chat)'), 'no saving shown for keep');
 assert.strictEqual(aiReviewCsv(review).split('\r\n')[1], 'server/a.js,3,chat,replace,high,medium,Picks a label,Fixed set,A lookup table,"callModel(m, p)"');
 assert.ok(aiReviewMd(null).startsWith('# Vault AI review'), 'no review does not throw');
+
+const secReview = { finishedAt: '2026-11-20', model: 'model-a', summary: { files: 2, high: 1, low: 1 }, result: { files: [{ file: 'server/routes/a.js', tool: 'notes', sites: [
+  { file: 'server/routes/a.js', line: 9, severity: 'low', confidence: 'high', category: 'validation', title: 'Long input', why: 'W', fix: '', text: 'x' },
+  { file: 'server/routes/a.js', line: 3, severity: 'high', confidence: 'high', category: 'access', title: 'No ownership check', why: 'Any user.', fix: 'Add userId.', text: "router.get('/:id'" },
+] }] } };
+const sm = aiSecurityMd(secReview);
+assert.ok(sm.indexOf('[high] No ownership check') < sm.indexOf('[low] Long input'), 'high first');
+assert.ok(sm.includes('`server/routes/a.js:3` · access · high confidence · notes') && sm.includes('**Fix:** Add userId.'));
+assert.ok(aiSecurityMd(null).includes('_No findings._'));
+assert.strictEqual(aiSecurityCsv(secReview).split('\r\n')[1], "high,high,access,server/routes/a.js,3,notes,No ownership check,Any user.,Add userId.,router.get('/:id'");
 
 console.log('exportRun tests passed');

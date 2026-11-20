@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import api from '../../utils/apiClient';
-import useToastStore from '../../store/toastStore';
+import React, { useMemo, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import useReviewJob from './useReviewJob';
 import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
@@ -11,8 +10,6 @@ import { aiReviewCsv, aiReviewMd, datedName } from './exportRun.mjs';
 // Code Map "AI review" tab: where the server calls a model and whether plain code would do the job (server/services/codeMap/aiReview.js).
 // Runs only when the admin presses Run review (inline confirm with the number of model calls); polls the running review every 3 seconds.
 
-const POLL_MS = 3000;
-const toast = (message, type = 'error') => useToastStore.getState().addToast(message, type);
 export const VERDICT = {
   replace: { color: '#ef4444', label: 'Replace', tip: 'Plain code would do this as well or better: cheaper, faster and predictable.' },
   hybrid: { color: '#f59e0b', label: 'Hybrid', tip: 'Plain code for the common cases, the model only for the rest.' },
@@ -23,85 +20,21 @@ const ORDER = ['replace', 'hybrid', 'unclear', 'keep'];
 const RANK = { high: 0, medium: 1, low: 2 };
 const BTN = 'text-sm font-medium px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 hover:opacity-70 transition-opacity duration-200 disabled:opacity-50';
 
-async function json(res, fallback) {
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(d.error || fallback), { status: res.status, body: d });
-  return d;
-}
+const doneMessage = (r) => `AI review finished: ${r.summary?.replace || 0} to replace, ${r.summary?.hybrid || 0} hybrid.`;
 
 export default function AiReviewView({ byId, onOpenTool }) {
   const getIcon = useIcon();
-  const [review, setReview] = useState(undefined); // latest finished review (null before the first)
-  const [estimate, setEstimate] = useState(null);
-  const [active, setActive] = useState(null); // { id, progress }
+  const job = useReviewJob('plainCode', { doneMessage });
+  const { review, estimate, active, lastFailed, busy } = job;
   const [confirm, setConfirm] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [lastFailed, setLastFailed] = useState(null);
   const [show, setShow] = useState('replace');
-
-  const load = useCallback(async () => {
-    try {
-      const [l, list, e] = await Promise.all([
-        api.get('/api/code-map/ai-reviews/latest').then((r) => json(r, 'Could not load the AI review.')),
-        api.get('/api/code-map/ai-reviews').then((r) => json(r, 'Could not load the AI reviews.')),
-        api.get('/api/code-map/ai-reviews/estimate').then((r) => json(r, 'Could not count the call sites.')),
-      ]);
-      setReview(l.review || null);
-      setEstimate(e);
-      const newest = (list.reviews || [])[0];
-      if (newest && newest.status === 'running') setActive({ id: newest.id, progress: newest.progress });
-      setLastFailed(newest && newest.status === 'failed' ? newest : null);
-    } catch (err) {
-      setReview((r) => (r === undefined ? null : r));
-      toast(err.message);
-    }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  const activeId = active?.id;
-  useEffect(() => {
-    if (!activeId) return undefined;
-    let stop = false;
-    let timer;
-    const tick = async () => {
-      try {
-        const { review: r } = await json(await api.get(`/api/code-map/ai-reviews/${activeId}`), 'Lost track of the review.');
-        if (stop) return;
-        if (r.status === 'running') { setActive({ id: r.id, progress: r.progress }); timer = setTimeout(tick, POLL_MS); return; }
-        setActive(null);
-        if (r.status === 'done') toast(`AI review finished: ${r.summary?.replace || 0} to replace, ${r.summary?.hybrid || 0} hybrid.`, 'success');
-        else toast(r.error ? `The AI review failed: ${r.error}` : 'The AI review failed.');
-        load();
-      } catch (err) {
-        if (!stop) { setActive(null); toast(err.message); }
-      }
-    };
-    timer = setTimeout(tick, POLL_MS);
-    return () => { stop = true; clearTimeout(timer); };
-  }, [activeId, load]);
-
-  const start = async () => {
-    setConfirm(false);
-    setStarting(true);
-    try {
-      const r = await api.post('/api/code-map/ai-reviews', {});
-      const d = await r.json().catch(() => ({}));
-      if (r.status === 202) setActive({ id: d.id, progress: null });
-      else if (r.status === 409 && d.runningId) { setActive({ id: d.runningId, progress: null }); toast('A review is already running; showing its progress.', 'warn'); }
-      else toast(d.error || 'Could not start the review.');
-    } catch (_) {
-      toast('Could not start the review.');
-    } finally {
-      setStarting(false);
-    }
-  };
+  const start = () => { setConfirm(false); job.start(); };
 
   const sites = useMemo(() => (review?.result?.files || []).flatMap((f) => f.sites.map((s) => ({ ...s, tool: f.tool }))), [review]);
   const shown = useMemo(() => sites.filter((s) => s.verdict === show)
     .sort((a, b) => RANK[a.confidence] - RANK[b.confidence] || RANK[a.saving] - RANK[b.saving] || a.file.localeCompare(b.file) || a.line - b.line), [sites, show]);
   const failedFiles = (review?.result?.files || []).filter((f) => f.error);
   const s = review?.summary || {};
-  const busy = starting || !!active;
   const p = active?.progress;
 
   if (review === undefined) return <Skeleton lines={6} className="h-10" label="Loading the AI review" />;

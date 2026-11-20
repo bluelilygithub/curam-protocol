@@ -7,10 +7,12 @@ import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { Collapsible, Evidence, ExportButton, Pill, SEV_COLOR, ToolChip, card, fmt, fmtSecs, fmtWhen } from './shared';
 import { liveMd, securityMd } from './exportRun.mjs';
+import AiSecurityReview from './AiSecurityReview';
 
-// Security tab. Two parts:
+// Security tab. Three parts:
 //   Code checks: plain pattern checks from server/services/codeMap/security.js, part of every analysis run (no AI, no cost).
 //   Live site: server/services/codeMap/liveCheck.js probes the running site (headers, HTTPS, CORS, auth) when the admin presses the button.
+//   AI security review (AiSecurityReview.jsx): the model reads every route file, button only, costs model calls.
 // Gaps first, then checks, then lists for review, then what passes.
 
 const toast = (message, type = 'error') => useToastStore.getState().addToast(message, type);
@@ -154,6 +156,7 @@ export default function SecurityView({ data, byId, onOpenTool }) {
         )}
       </section>
       <LiveSite byId={byId} onOpenTool={onOpenTool} />
+      <AiSecurityReview byId={byId} onOpenTool={onOpenTool} />
     </div>
   );
 }

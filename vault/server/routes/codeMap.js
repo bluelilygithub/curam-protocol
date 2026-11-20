@@ -25,7 +25,7 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
     const status = err.status || 500;
     if (status >= 500) getLogger().error({ err }, `[codeMap] ${what}`);
     // our own errors carry a status and a message meant for the admin (e.g. 503 "No AI model is set up"); anything else is hidden
-    res.status(status).json({ error: err.status ? err.message : 'Something went wrong. Try again.', ...(err.runningId ? { runningId: err.runningId } : {}) });
+    res.status(status).json({ error: err.status ? err.message : 'Something went wrong. Try again.', ...(err.runningId ? { runningId: err.runningId, runningKind: err.runningKind || null } : {}) });
   };
 
   // start a run; answers at once with its id (409 while another run is going)
@@ -84,22 +84,24 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
     try { res.json({ check: await L().latest() }); } catch (err) { fail(res, err, 'live check latest'); }
   });
 
-  // ── AI review tab: where the server calls a model and whether plain code would do (server/services/codeMap/aiReview.js).
-  // Started only by the admin's button (no cron). POST makes model calls, so it is behind aiLimiter; the GETs make none.
+  // ── AI reviews (server/services/codeMap/aiReview.js): ?kind=plainCode (default, the AI review tab: model calls plain code could do)
+  // or ?kind=security (the Security tab's AI security review of every route file). Started only by the admin's button (no cron).
+  // POST makes model calls, so it is behind aiLimiter; the GETs make none. An unknown kind is a 400.
+  const kindParam = (req) => (req.query.kind === undefined ? undefined : String(req.query.kind));
   router.get('/ai-reviews/estimate', async (req, res) => {
-    try { res.json(await R().estimate()); } catch (err) { fail(res, err, 'ai review estimate'); }
+    try { res.json(await R().estimate(kindParam(req))); } catch (err) { fail(res, err, 'ai review estimate'); }
   });
 
   router.post('/ai-reviews', ai, async (req, res) => {
-    try { res.status(202).json({ id: await R().start(req.user.id) }); } catch (err) { fail(res, err, 'ai review start'); }
+    try { res.status(202).json({ id: await R().start(req.user.id, kindParam(req)) }); } catch (err) { fail(res, err, 'ai review start'); }
   });
 
   router.get('/ai-reviews', async (req, res) => {
-    try { res.json({ reviews: await R().list() }); } catch (err) { fail(res, err, 'ai review list'); }
+    try { res.json({ reviews: await R().list(kindParam(req)) }); } catch (err) { fail(res, err, 'ai review list'); }
   });
 
   router.get('/ai-reviews/latest', async (req, res) => {
-    try { res.json({ review: await R().latest() }); } catch (err) { fail(res, err, 'ai review latest'); }
+    try { res.json({ review: await R().latest(kindParam(req)) }); } catch (err) { fail(res, err, 'ai review latest'); }
   });
 
   router.get('/ai-reviews/:id', async (req, res) => {

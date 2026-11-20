@@ -4931,6 +4931,8 @@ async function initSchema() {
       "finishedAt"   TIMESTAMPTZ
     )
   `);
+  // which review: 'plainCode' (the AI review tab) or 'security' (the Security tab's AI security review); one running at a time across both
+  await pool.query(`ALTER TABLE code_map_ai_reviews ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'plainCode'`);
   await pool.query(`UPDATE code_map_ai_reviews SET status = 'failed', error = 'Stopped by a restart', "finishedAt" = NOW()
                       WHERE status = 'running' AND "createdAt" < $1`, [schemaStartedAt]);
   // Code Map Security "live site" checks (services/codeMap/liveCheck.js): headers, HTTPS, CORS and auth probed on the running site when an
