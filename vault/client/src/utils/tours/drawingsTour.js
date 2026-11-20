@@ -59,8 +59,8 @@ export function startDrawingsTour() {
 
   tour.addStep({
     id: 'drawings-new',
-    title: 'Start a diagram',
-    text: 'New diagram opens an empty page straight away. It is called "Untitled diagram" until you rename it, and it saves as soon as you start diagram.',
+    title: 'Start a diagram or a template',
+    text: 'New diagram lets you start from a blank page or a ready-made template: org charts, project breakdowns, timelines (events, milestones, months, quarters), processes, mind maps and stakeholders. Pick a template, set its few choices (how many managers, steps or months, top to bottom or left to right, sketch or clean) and press Create. Every box is then yours to rename, move or delete, and it saves by itself.',
     attachTo: { element: '[data-tour="drawings-new"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('drawings-new', '[data-tour="drawings-new"]')()),
     when: { show() { injectStepCounter(2); } },

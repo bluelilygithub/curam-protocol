@@ -8,6 +8,7 @@ import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { loadExcalidraw } from './loadExcalidraw';
+import TemplateGallery from './TemplateGallery';
 import { filterDrawings, pieceCount, readSceneFile, titleFromFileName } from './sceneLogic.mjs';
 
 const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-60 disabled:opacity-40';
@@ -36,6 +37,7 @@ export default function DrawingsList() {
   const [renaming, setRenaming] = useState(null); // { id, title }
   const [confirmId, setConfirmId] = useState(null); // the drawing whose "Delete? Yes / No" is showing
   const [notesMenu, setNotesMenu] = useState(null); // { id, notes } while a card's list of notes is open
+  const [galleryOpen, setGalleryOpen] = useState(false); // New diagram: blank or a template
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -69,13 +71,14 @@ export default function DrawingsList() {
   };
   const warm = () => { loadExcalidraw().catch(() => {}); }; // start fetching the editor while the person is still choosing
 
-  const create = async (body = {}) => {
+  // `diagram` (from a template) is drawn by the editor once the board is ready: it needs Excalidraw to make the pieces
+  const create = async (body = {}, diagram = null) => {
     setBusy(true);
     try {
       const res = await api.post('/api/drawings', body);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not make a new diagram.');
-      open(data.drawing.id);
+      navigate(`/drawings/${data.drawing.id}`, diagram ? { state: { template: diagram } } : undefined);
     } catch (err) {
       addToast(err.message, 'error');
       setBusy(false);
@@ -142,9 +145,9 @@ export default function DrawingsList() {
   return (
     <div className="p-6 space-y-4 max-w-[1700px]">
       <div className="flex flex-wrap items-center gap-2">
-        <Tooltip text="Start an empty diagram and open it straight away. It saves by itself as you draw.">
+        <Tooltip text="Start a diagram: a blank page, or a ready-made template (org chart, timeline, process, mind map and more) you then change. It saves by itself as you draw.">
           <button
-            type="button" data-tour="drawings-new" onClick={() => create()} onPointerEnter={warm} disabled={busy || (items || []).length >= max}
+            type="button" data-tour="drawings-new" onClick={() => setGalleryOpen(true)} onPointerEnter={warm} disabled={busy || (items || []).length >= max}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
             style={{ background: 'var(--color-primary)' }}
           >
@@ -166,6 +169,10 @@ export default function DrawingsList() {
         </div>
       </div>
 
+      {galleryOpen && (
+        <TemplateGallery busy={busy} onClose={() => setGalleryOpen(false)} onCreate={({ title, look, diagram }) => create({ title, look }, diagram)} />
+      )}
+
       {error && <p className="text-sm" role="alert" style={{ color: '#ef4444' }}>{error}</p>}
 
       <div data-tour="drawings-list">
@@ -179,7 +186,7 @@ export default function DrawingsList() {
             icon="pen-tool"
             title="No diagrams yet"
             body="Sketch an idea, a diagram or a plan on an endless page. Diagrams save by themselves and are private to you."
-            action={<button type="button" onClick={() => create()} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>New diagram</button>}
+            action={<button type="button" onClick={() => setGalleryOpen(true)} onPointerEnter={warm} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>New diagram</button>}
           />
         )}
         {items !== null && items.length > 0 && shown.length === 0 && (

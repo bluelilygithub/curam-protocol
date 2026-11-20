@@ -16,7 +16,8 @@ checkGuide({
   exampleToolId: 'editor',
   exampleStepId: 'export',
   facts: [
-    ['new', 'does', /opens it straight away/, 'a new drawing opens at once'],
+    ['new', 'does', /opens a gallery.*Blank.*template/, 'New diagram offers a blank page or a template'],
+    ['templates', 'notes', /Built in only/, 'templates are built in, not saved from your own diagrams'],
     ['open-file', 'does', /\.excalidraw/, 'the file type is named'],
     ['open-file', 'notes', /6 MB/, 'the size limit is stated'],
     ['search', 'notes', /names only/, 'search covers names only'],

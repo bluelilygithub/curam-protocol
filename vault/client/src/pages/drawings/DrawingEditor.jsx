@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
@@ -69,6 +69,7 @@ async function elementsForLook(lib, elements, fromLook, toLook) {
 export default function DrawingEditor({ id, onSavedChange }) {
   const getIcon = useIcon();
   const navigate = useNavigate();
+  const location = useLocation();
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
 
@@ -125,6 +126,9 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const stoppedRef = useRef(false); // set when the server says it changed elsewhere: no more automatic saves
   const idRef = useRef(id);
   idRef.current = id;
+  // a template chosen on New diagram (TemplateGallery): drawn once, on the board's first report, then dropped from the page's history so a reload does not draw it again
+  const templateRef = useRef(null);
+  const placeRef = useRef(null);
   // what the server has: the drawing's pieces AND its look (a look change on an empty drawing is still a change to save)
   const fingerprint = (elements, files, appState) => `${sceneSignature(elements, files)}|${lookRef.current}|${appState && appState.gridModeEnabled ? 'grid' : ''}`;
 
@@ -132,6 +136,8 @@ export default function DrawingEditor({ id, onSavedChange }) {
   useEffect(() => {
     let alive = true; // set inside the effect: a development double-mount must not leave it false
     setLib(null); setInitial(null); setLoadError(''); setStatus('idle'); sigRef.current = null; stoppedRef.current = false; latestRef.current = null; leftRef.current = false;
+    templateRef.current = (location.state && location.state.template) || null;
+    if (templateRef.current) navigate(location.pathname, { replace: true, state: null });
     (async () => {
       try {
         const [res, mod] = await Promise.all([api.get(`/api/drawings/${id}`), loadExcalidraw()]);
@@ -166,7 +172,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
       }
     })();
     return () => { alive = false; };
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- the notes this drawing was sent to ----
   const loadLinkedNotes = useCallback(async () => {
@@ -264,6 +270,11 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const onChange = useCallback((elements, appState, files) => {
     if (sigRef.current === null || stoppedRef.current || leftRef.current) return;
     latestRef.current = { elements, appState, files };
+    if (templateRef.current && apiRef.current) {
+      const t = templateRef.current;
+      templateRef.current = null;
+      setTimeout(() => placeRef.current(t, null).catch(() => addToast('The template could not be drawn. Try again from New diagram.', 'error')), 0);
+    }
     // "Draw it for me" sits in the board's More tools menu (as the board's own text-to-diagram entry). The board would open its own dialog for it;
     // instead that dialog is closed at once and our panel opens.
     if (appState.openDialog && appState.openDialog.name === 'ttd' && appState.openDialog.tab === 'text-to-diagram') {
@@ -410,6 +421,8 @@ export default function DrawingEditor({ id, onSavedChange }) {
     latestRef.current = { elements: ex.getSceneElements(), appState: ex.getAppState(), files: ex.getFiles() };
     markDirty();
   };
+
+  placeRef.current = placeDiagram;
 
   const drawFromWords = async (change, wordsOverride) => {
     const ex = apiRef.current;

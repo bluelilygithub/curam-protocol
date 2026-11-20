@@ -21,13 +21,14 @@ export const TOOL_TIPS = {
 
 // One short line under the page title for the open view.
 export const TOOL_BLURBS = {
-  list: 'Your saved diagrams. Click one to open it, or start a new one.',
+  list: 'Your saved diagrams. Click one to open it, or start a new one from a blank page or a template.',
   editor: 'Draw here. Everything you do is saved by itself.',
 };
 
 // The longer text for the (i) "How Drawings works" box.
 export const HOW_IT_WORKS = [
   ['Your diagrams', 'Every diagram you make is saved to your Vault account and shown with a small preview. Click one to open it. You can rename it, make a copy, or delete it. A deleted diagram waits 30 days in the recycle bin in Settings, and a message with an Undo button appears straight away.'],
+  ['Templates', 'New diagram opens a gallery: Blank, or a ready-made template grouped as Org charts, Projects, Timelines, Processes, Mind maps and Relationships. Choose one, set its few choices (for example how many managers, steps or months, top to bottom or left to right, and the Sketch or Clean look) and press Create. The template is drawn as ordinary boxes and arrows: rename, move or delete anything, use Numbers and Change it on it, or Undo to remove it. No AI is used.'],
   ['The board', 'An endless page with shapes, arrows, lines, text, freehand and an eraser, drawn in a hand-sketched style. Pick a tool along the top, drag on the page, and change colours and line style in the panel on the left. Everything saves by itself a moment after you stop; the words next to the title say when it last did.'],
   ['Pictures and shapes', 'Paste or drop a picture onto the page, or use the picture tool. The Library button holds ready-made shapes you can add to the page. Very large pictures make a diagram too big to save (the limit is 6 MB), so shrink them first.'],
   ['Draw it for me', 'Open the More tools menu (the last icon in the row of tools along the top of the board) and choose Draw it for me under Generate, then say (with the microphone) or type a scenario: the steps of a process, who reports to whom, an idea with branches, or things in time order. The AI works out the boxes, arrows and labels and they are drawn on your diagram, tidily laid out, in the look the diagram is in. You can move and change everything, and one Undo removes the whole diagram. A Change it box shows whenever the diagram has a diagram in it, even one made by hand or on an earlier visit: say what to change (insert a step between two others, add one at the start or the end, add a loop back, rename a box) and it is redrawn in the same place. Select a box first if there are several diagrams. For a step that must wait, say what happens if it has not happened (if the deposit is not paid, go back to sending the invoice) and it is drawn as a question with a No arrow looping back. It uses one AI request each time and only sends the words you say or type, never your diagrams. It is made for flows, org charts, mind maps, timelines and relationship diagrams, not for floor plans or pictures. A step that sends things back to an earlier one is drawn as a loop round the outside, and things that act on each other both ways get a two-way arrow.'],
@@ -46,6 +47,7 @@ export const HOW_IT_WORKS = [
 export const GUIDE_TOOLS = [
   { id: 'list', label: 'Your diagrams', tool: 'list' },
   { id: 'new', label: 'New diagram', tool: 'list' },
+  { id: 'templates', label: 'Templates', tool: 'list' },
   { id: 'open-file', label: 'Open a file', tool: 'list' },
   { id: 'search', label: 'Search', tool: 'list' },
   { id: 'rename', label: 'Rename', tool: 'list' },
