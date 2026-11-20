@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "90d2d2cc",
+   "fullHash": "90d2d2cca45eacf3e0c658a8d98a9e70fa1ad71e",
+   "committedAt": "2026-11-20T11:50:59+10:00",
+   "author": "mrb",
+   "subject": "Code Map: security drift on the Changes tab",
+   "filesChanged": 6,
+   "insertions": 163,
+   "deletions": 6,
+   "area": "Code Map",
+   "goal": "See what changed in security between two runs (a check that went from passes to gap, a new unlisted route or raw-HTML use) instead of re-reading the whole Security tab.",
+   "whatChanged": "New compareSecurity in server/services/codeMap/compare.js, returned as security by GET /api/code-map/compare: per check, status changes (worse first, high first; a check new in the newer run counts as changed from not present) and items that are new or gone, matched by check, file and normalised text rather than line, so moved code is not a change. A check whose stored items hit the 50 cap in either run is listed as partial. Runs from before the Security tab return available: false with which run lacks checks. ChangesView.jsx: a Security section under the existing grid (checks worse / better with status words, new lines found, lines no longer found, tool chips, partial note, or the not-compared message) and a security count in the summary line. Guide entry, tab tip and docs/code-map.md updated. Tests: four new cases in compare.test.js (not compared, worse/better/new/resolved with a moved line, partial, self-compare), 15 in all.",
+   "filesImpacted": [
+    "server/services/codeMap/compare.js",
+    "server/services/codeMap/compare.test.js",
+    "client/src/pages/codeMap/ChangesView.jsx",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "server/services/codeMapTutor.js",
+    "docs/code-map.md"
+   ],
+   "benefit": "The Changes tab now shows security regressions and fixes between runs, including the weekly one, with moved lines ignored.",
+   "concerns": "Covers the code checks only: the live site check and AI security review are not stored in runs, so their changes are not shown. Runs saved before the Security tab cannot be compared, so the section stays \"Not compared\" until two newer runs exist. Lines are matched by text, so editing a flagged line shows as one gone and one new; checks with more than 50 lines (public routes could grow past that) are compared partly. A change to a check's pattern shows up as drift. Not clicked through in a browser; tested by unit tests, a Vite build and a real-run comparison with one moved and one added line."
+  },
+  {
    "commit": "81018379",
    "fullHash": "8101837910dc596dfff272b33a31a06c83287913",
    "committedAt": "2026-11-20T11:42:35+10:00",
