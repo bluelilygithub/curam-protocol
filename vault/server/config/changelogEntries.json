@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d1650305",
+   "fullHash": "d165030583e3599f1404561d35139baa2bbd4b0c",
+   "committedAt": "2026-11-20T10:31:51+10:00",
+   "author": "mrb",
+   "subject": "Code Map: AI review - where plain code would beat a model call",
+   "filesChanged": 14,
+   "insertions": 802,
+   "deletions": 6,
+   "area": "Code Map",
+   "goal": "Find places where Vault calls an AI model for work plain code (regex, parsing, lookups, rules) would do as well or better, so they can be made cheaper, faster and predictable. Run on demand only, as the owner asked (no cron).",
+   "whatChanged": "New server/services/codeMap/aiReview.js: finds model call sites in server/ by text search (callModel, messages.create/stream, generateContent; tests, comments and callModel.js left out; 113 sites in 65 files locally), tags each with its owning tool from the latest analysis run, and asks getModelsForUser().standard through callModel for a verdict per site (replace / hybrid / keep / unclear, confidence, what it does, why, alternative, saving), 4 sites per call with excerpts from explain.js gatherExcerpts. Answers are checked against the real lines; unknown lines and out-of-excerpt refs are dropped. Unchanged files (content hash + PROMPT_VERSION) reuse the last verdicts. Background job, one at a time, 3 files in parallel, progress polled; usage logged as code_map_ai_review with stored tokens and approximate cost; last 10 kept; high-confidence replace verdicts raised in the Suggestions inbox once per call site. New table code_map_ai_reviews with a one-running partial unique index and restart cleanup (server/db.js). Routes in server/routes/codeMap.js: GET /ai-reviews/estimate, POST /ai-reviews (aiLimiter), GET /ai-reviews, /latest, /:id; added to routeManifest.json as admin. New AI review tab (AiReviewView.jsx): last-run line, Run review with an inline confirm showing the number of model calls, verdict filter, one card per site, Copy review and Download CSV (aiReviewMd / aiReviewCsv in exportRun.mjs). Guide catalogue (codeMapTutor.js + codeMapTools.mjs), (i) box, docs/code-map.md and docs/key-files.md updated. Tests: aiReview.test.js (7), route test (+1), export test extended.",
+   "filesImpacted": [
+    "server/services/codeMap/aiReview.js",
+    "server/services/codeMap/aiReview.test.js",
+    "server/db.js",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/testing/routeManifest.json",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/CodeMapPage.jsx",
+    "client/src/pages/codeMap/AiReviewView.jsx",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "client/src/pages/codeMap/exportRun.mjs",
+    "client/src/pages/codeMap/exportRun.test.mjs",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "A ranked, exportable list of model calls that could become plain code, with the reason and the alternative for each, refreshed cheaply because unchanged files cost nothing.",
+   "concerns": "Never run against a real model or database: tested with fakes (aiReview tests, route tests, guide tests, a Vite build), and the call-site search was run on the real code. The local Postgres was down, so the new table and SQL were not executed. The first real run is about 40 model calls (113 sites, 4 per call) on the standard model; check its cost in Usage. Verdicts are a model reading code excerpts, so they are advice; prompts built in another file will often come back unclear. Call sites made other ways (wrappers without callModel in the name) are missed. estimate reads every source file on the main thread (about half a second) each time the tab opens. routeManifest.json entries were added by hand, not with crossUser.test.js --update (needs the database). No compass tour step was added for the new tab."
+  },
+  {
    "commit": "9216aea1",
    "fullHash": "9216aea110696f160039036d126a5e4b499eee10",
    "committedAt": "2026-11-20T10:22:51+10:00",
