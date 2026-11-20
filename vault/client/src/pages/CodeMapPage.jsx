@@ -18,7 +18,8 @@ import ContextView from './codeMap/ContextView';
 import ToolDetail from './codeMap/ToolDetail';
 import CodeMapTutorChat from './codeMap/CodeMapTutorChat';
 import { CODE_MAP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './codeMap/codeMapTools.mjs';
-import { fmtSecs, fmtWhen } from './codeMap/shared';
+import { ExportButton, fmtSecs, fmtWhen } from './codeMap/shared';
+import { runMd, datedName } from './codeMap/exportRun.mjs';
 
 // Admin Code Map: a static read of Vault's own source. Every tool, the code it owns, how it follows the rules in CLAUDE.md, and a ranked
 // list of what to improve. Runs are background jobs (server/services/codeMap/jobs.js); this page starts one and polls it every 1.5 seconds.
@@ -188,6 +189,14 @@ export default function CodeMapPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3" data-tour="cm-run" data-guide="run-analysis">
+          {data && (
+            <>
+              <ExportButton kind="download" label="Download .md" name={datedName('vault-code-map', 'md', run.finishedAt)} getText={() => runMd(data, run)}
+                tip="The whole run as one readable Markdown file: summary, findings, tools, rules, structure and every tool in detail." />
+              <ExportButton kind="download" label="Download .json" name={datedName('vault-code-map', 'json', run.finishedAt)} type="application/json" getText={() => JSON.stringify(data, null, 1)}
+                tip="The whole run exactly as stored, for scripts or to give Claude everything." />
+            </>
+          )}
           {active && (
             <div className="min-w-[220px]" role="status" aria-live="polite">
               <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
+import useToastStore from '../../store/toastStore';
 
 // Pieces shared by the Code Map views (CodeMapPage.jsx). The data is one stored analysis run (server/services/codeMap/index.js).
 
@@ -123,3 +124,32 @@ export function Legend() {
 }
 
 export const card = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
+
+// Copy and download, for the Context briefing and the export buttons (exportRun.mjs builds the text).
+const toast = (message, type = 'error') => useToastStore.getState().addToast(message, type);
+export async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(`${what} copied`, 'success'); } catch { toast('Could not copy'); }
+}
+export function download(text, name, type = 'text/markdown') {
+  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/** A small Copy or Download button. `getText` runs on click, so big exports are only built when asked for. */
+export function ExportButton({ kind = 'copy', label, tip, getText, name, type, what }) {
+  const getIcon = useIcon();
+  const go = () => (kind === 'copy' ? copyText(getText(), what || label) : download(getText(), name, type));
+  return (
+    <Tooltip text={tip}>
+      <button
+        type="button" onClick={go}
+        className="text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 hover:opacity-70 transition-opacity duration-200"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+      >
+        {getIcon(kind, { size: 13 })}{label}
+      </button>
+    </Tooltip>
+  );
+}

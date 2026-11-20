@@ -2,7 +2,8 @@ import React from 'react';
 import Dialog from '../../components/Dialog';
 import Tooltip from '../../components/Tooltip';
 import { useIcon } from '../../providers/IconProvider';
-import { Collapsible, Dot, Evidence, LifecyclePill, ToolChip, fmt } from './shared';
+import { Collapsible, Dot, Evidence, ExportButton, LifecyclePill, ToolChip, fmt } from './shared';
+import { toolMd } from './exportRun.mjs';
 
 // The side panel for one tool: every rule with its note and evidence, the APIs it owns, linked tools, its biggest files and the files it owns.
 // Built on the shared Dialog (raw mode, pinned to the right) so focus, Escape and the dim background behave like every other modal.
@@ -53,6 +54,7 @@ export default function ToolDetail({ tool: t, data, rules, byId, onOpenTool, onC
       </div>
       <div className="flex flex-wrap gap-3 mt-3 text-xs tabular-nums" style={{ color: 'var(--color-muted)' }}>
         <span>{t.score}% of rules</span><span>{fmt(t.locClient)} client lines</span><span>{fmt(t.locServer)} server lines</span><span>{(t.tests || []).length} test files</span>
+        <span className="ml-auto"><ExportButton label="Copy tool" what={t.label} getText={() => toolMd(t, rules)} tip={`Copy ${t.label}'s rules, evidence, APIs, owned files and tests as Markdown.`} /></span>
       </div>
 
       <H>Rules</H>

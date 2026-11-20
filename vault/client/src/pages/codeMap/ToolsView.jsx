@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
 import EmptyState from '../../components/EmptyState';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
-import { Dot, LifecyclePill, ScoreBar, STATUS_WORD, card, fmt, toolLines } from './shared';
+import { Dot, ExportButton, LifecyclePill, ScoreBar, STATUS_WORD, card, fmt, toolLines } from './shared';
+import { datedName, toolsCsv } from './exportRun.mjs';
 
 // Tools: one card per tool in the navigation, filtered by group and search, sorted by score, size or name.
 
@@ -47,6 +48,8 @@ export default function ToolsView({ data, rules, onOpenTool }) {
           </select>
         </Tooltip>
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{list.length} of {tools.length}</span>
+        <ExportButton kind="download" label="Download CSV" name={datedName('vault-tools', 'csv', data.generatedAt)} type="text/csv" getText={() => toolsCsv({ tools: list })}
+          tip="The tools shown (after the filter and group), with score, gaps, lines and tests, as a spreadsheet file." />
       </div>
       <div role="group" aria-label="Menu group" className="flex flex-wrap gap-1.5">
         {groups.map((g) => (

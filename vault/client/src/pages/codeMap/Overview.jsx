@@ -1,6 +1,7 @@
 import React from 'react';
 import EmptyState from '../../components/EmptyState';
-import { Evidence, Pill, SEV_COLOR, SEV_TIP, ToolChip, Collapsible, card, fmt } from './shared';
+import { Evidence, ExportButton, Pill, SEV_COLOR, SEV_TIP, ToolChip, Collapsible, card, fmt } from './shared';
+import { findingsMd } from './exportRun.mjs';
 import ExplainFix from './ExplainFix';
 
 // Overview: the summary tiles and the ranked findings (severity first, then how many tools each touches; built in server/services/codeMap/findings.js).
@@ -31,7 +32,10 @@ export default function Overview({ data, byId, onOpenTool, runId }) {
         {tiles.map(([n, l]) => <Tile key={l} n={n} label={l} />)}
       </div>
       <section>
-        <h2 className="text-base font-semibold mb-3" style={{ color: 'var(--color-text)' }}>What to improve, in order</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>What to improve, in order</h2>
+          {findings.length > 0 && <ExportButton label="Copy findings" what="Findings" getText={() => findingsMd(data)} tip="Copy every finding with its tools and evidence as Markdown, to paste into Claude, an email or notes." />}
+        </div>
         {!findings.length ? (
           <EmptyState icon="check" title="Nothing to improve" body="Every rule passes for every tool, and the structure checks found nothing." />
         ) : (

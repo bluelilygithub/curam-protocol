@@ -1,6 +1,7 @@
 import React from 'react';
 import EmptyState from '../../components/EmptyState';
-import { card, fmt } from './shared';
+import { ExportButton, card, fmt } from './shared';
+import { structureMd } from './exportRun.mjs';
 
 // Structure: the code as a whole rather than per tool. Largest files, import cycles, shared foundations, separate packages, possibly unused
 // files. Hotspots (big files that change often) need commit history, which the server does not have; they come later (brief milestone 5).
@@ -48,6 +49,10 @@ export default function StructureView({ data }) {
   const tools = (data.summary || {}).tools;
 
   return (
+    <div className="space-y-3">
+    <div className="flex justify-end">
+      <ExportButton label="Copy structure" what="Structure" getText={() => structureMd(data)} tip="Copy the largest files, import cycles, shared foundations, packages and possibly unused files as Markdown." />
+    </div>
     <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-4">
       <Panel title="Hotspots" sub="Large files that change often. They need commit history, which the running server does not have (git is not copied into the deploy).">
         {(data.hotspots || []).length
@@ -79,6 +84,7 @@ export default function StructureView({ data }) {
       <Panel title="Possibly unused" sub="Backup copies, and files nothing imports or names. Check before deleting: a file can be loaded by a path built at runtime.">
         <Table head={['File', 'Lines']} rows={unused.map((o) => [o.file, typeof o.loc === 'number' ? fmt(o.loc) : o.loc])} empty="Nothing found." />
       </Panel>
+    </div>
     </div>
   );
 }

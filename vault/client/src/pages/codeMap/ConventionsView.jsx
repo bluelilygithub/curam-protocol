@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
-import { Dot, Evidence, Legend, STATUS_COLOR, STATUS_WORD, ToolChip, card } from './shared';
+import { Dot, Evidence, ExportButton, Legend, STATUS_COLOR, STATUS_WORD, ToolChip, card } from './shared';
+import { conventionsCsv, datedName } from './exportRun.mjs';
 
 // Conventions: tools down the side, the rules across the top (sticky header and first column). Clicking a cell shows its note and evidence below.
 
@@ -24,7 +25,11 @@ export default function ConventionsView({ data, rules, byId, onOpenTool }) {
       <p className="text-sm leading-relaxed max-w-3xl" style={{ color: 'var(--color-muted)' }}>
         Each column is a rule from CLAUDE.md, checked against the code each tool owns. Click a cell for what was found, or a tool name for its full detail. Amber cells are worth a look, not necessarily wrong.
       </p>
-      <Legend />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Legend />
+        <ExportButton kind="download" label="Download CSV" name={datedName('vault-conventions', 'csv', data.generatedAt)} type="text/csv" getText={() => conventionsCsv({ tools: rows }, rules)}
+          tip="This grid as a spreadsheet file: one row per tool, one column per rule (follows, check, gap or n/a)." />
+      </div>
       <div className="overflow-auto rounded-xl border max-h-[70vh]" style={card} data-tour="cm-matrix" data-guide="matrix-cell">
         <table className="text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>

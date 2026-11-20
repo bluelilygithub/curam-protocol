@@ -9,7 +9,7 @@ import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { VoiceInput, VoiceInputProvider } from '../../components/voiceInput/VoiceInput';
 import { mdComponents } from '../../utils/mdComponents';
-import { Pill, SEV_COLOR, SEV_TIP, fmt, fmtWhen, scoreColor } from './shared';
+import { Pill, SEV_COLOR, SEV_TIP, copyText, download, fmt, fmtWhen, scoreColor } from './shared';
 
 // Code Map "Context" tab: a briefing about how Vault is built, for a Claude conversation that knows nothing about it (docs/code-map.md
 // "Context"). One button builds it on the server (server/services/codeMap/briefing/, no AI call); the page shows it as a report and as
@@ -29,15 +29,6 @@ const STATUS = {
   admin: { color: 'var(--color-primary)', tip: 'Admin only.' },
 };
 
-async function copyText(text, what) {
-  try { await navigator.clipboard.writeText(text); toast(`${what} copied`, 'success'); } catch { toast('Could not copy'); }
-}
-function download(text, name) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
 const fileName = (b) => `vault-briefing-${String(b?.generatedAt || new Date().toISOString()).slice(0, 10)}.md`;
 async function json(res, fallback) {
   const d = await res.json().catch(() => ({}));

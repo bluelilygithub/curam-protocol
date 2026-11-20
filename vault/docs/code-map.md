@@ -13,6 +13,12 @@ The build brief, the Python prototype it was ported from and the prompts for eac
 - `server/cron/codeMapCron.js`: the weekly run, Sunday 03:17 Australia/Brisbane.
 - Table `code_map_runs` (`server/db.js`): one row per run, the whole result as JSONB (about 115 KB). The last 30 are kept.
 - `client/src/pages/CodeMapPage.jsx` and `client/src/pages/codeMap/`: the page. Tour: `client/src/utils/tours/codeMapTour.js`.
+- `client/src/pages/codeMap/exportRun.mjs`: export. Pure functions that turn the stored run into Markdown or CSV; the buttons are `ExportButton` in `shared.jsx` (with `copyText` and `download`, also used by the Context tab). Everything is built in the browser from the run the page already has, so there is no API call. Where the buttons are:
+  - Header: **Download .md** (the whole run: summary, findings, tools table, rules, structure, every tool in detail; about 200K characters) and **Download .json** (the run exactly as stored).
+  - Overview: **Copy findings** (every finding with its tools and evidence; the evidence is capped as on the page).
+  - Tools: **Download CSV** of the tools shown after the filter and group. Conventions: **Download CSV** of the grid (one column per rule).
+  - Structure: **Copy structure**. Tool panel: **Copy tool** (rules, evidence, mounts, owned files, tests).
+  - Not covered: Changes and the dependency map have no export yet; the Context tab has its own.
 
 Tests, run with node:
 
@@ -26,6 +32,7 @@ node server/cron/codeMapCron.test.js
 node server/services/codeMap/explain.test.js
 node server/services/codeMapTutor.test.js
 node server/services/codeMap/briefing/buildBriefing.test.js
+node client/src/pages/codeMap/exportRun.test.mjs
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
