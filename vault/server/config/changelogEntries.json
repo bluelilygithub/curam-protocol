@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4fde9820",
+   "fullHash": "4fde982017bebadd87b73f6036e5f92310a8552b",
+   "committedAt": "2026-11-20T11:20:03+10:00",
+   "author": "mrb",
+   "subject": "Code Map: live site security checks (layer 3)",
+   "filesChanged": 13,
+   "insertions": 589,
+   "deletions": 70,
+   "area": "Code Map",
+   "goal": "Layer 3 of the security review: check what the running site actually does, not just the code, so a header removed by a config change or a route left open by a mount mistake shows up.",
+   "whatChanged": "New server/services/codeMap/liveCheck.js: runLiveChecks probes the site at getAppUrl(req) (APP_URL, never a typed address) with redirects off and 10-second timeouts: home page reachable, HTTP to HTTPS redirect, certificate days left (TLS connect), HSTS max-age, Content Security Policy (flags unsafe-inline/unsafe-eval in script-src), nosniff, framing (frame-ancestors or X-Frame-Options), Referrer-Policy, no X-Powered-By, CORS answer to a foreign Origin on /api/health, up to 10 admin/authed GET routes without a :param from routeManifest.json refusing both a no-token and a made-up-token request, public GET routes answering without 5xx, and a broken JSON body POSTed to a non-existent path answered without a stack trace. Local http addresses mark HTTPS, certificate, HSTS and a missing CSP as not applicable. Route probes run in parallel (about 5 s against production). Service createLiveChecks stores results in new table code_map_live_checks (last 10), one run at a time (409), failing high checks raised in the inbox (codeMap:live:<id>). Routes POST /api/code-map/live-checks and GET /live-checks/latest (admin; manifest updated by hand). Security tab rewritten around a shared CheckCard: code checks as before, then a Live site section with Check the live site, last-run line and Copy live checks (liveMd; securityMd now shares checksMd). Guide catalogue (live-check entry), tab tip, (i) box, docs/code-map.md (request list, check table, what it cannot check) and docs/key-files.md. Tests: liveCheck.test.js (fake site, safe-request guarantees), route test (APP_URL used, body ignored), export test.",
+   "filesImpacted": [
+    "server/services/codeMap/liveCheck.js",
+    "server/services/codeMap/liveCheck.test.js",
+    "server/db.js",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/testing/routeManifest.json",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/codeMap/SecurityView.jsx",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "client/src/pages/codeMap/exportRun.mjs",
+    "client/src/pages/codeMap/exportRun.test.mjs",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "A five-second, free check that the deployed site still sends its security headers, forces HTTPS, refuses anonymous API calls and does not leak errors, with failing high checks in the inbox.",
+   "concerns": "Run from a developer machine against production before commit: all 13 passed (certificate 36 days left). Not yet run from inside Railway (the server calls its own public address; should work, unverified), and the new table and routes were not run against a database (local Postgres down). Button only, so a regression is caught only when someone presses it; a weekly run was not added. It cannot test a signed-in non-admin against admin routes, routes with an id, write routes, or anything behind a sign-in. The 10 sampled protected routes are spread through the list, not all of them. In local development the error-leak check can fail because Express shows stacks outside production. The probes count against any general rate limit (about 30 requests per press)."
+  },
+  {
    "commit": "7037058f",
    "fullHash": "7037058f5ba2f7c19137fe375321af2da975f345",
    "committedAt": "2026-11-20T11:12:45+10:00",
