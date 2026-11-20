@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "9216aea1",
+   "fullHash": "9216aea110696f160039036d126a5e4b499eee10",
+   "committedAt": "2026-11-20T10:22:51+10:00",
+   "author": "mrb",
+   "subject": "Code Map: copy and download the run (Markdown, CSV, JSON)",
+   "filesChanged": 11,
+   "insertions": 218,
+   "deletions": 18,
+   "area": "Code Map",
+   "goal": "Get the Code Map's information out of the page: the whole run or a part of it, to paste into Claude, email or a spreadsheet. Until now only the Context briefing could be copied.",
+   "whatChanged": "New client/src/pages/codeMap/exportRun.mjs: pure builders that turn the stored run into Markdown (whole run, findings, one tool, structure) or CSV (tools, conventions grid), with a node test (exportRun.test.mjs). New ExportButton in shared.jsx; copyText and download moved there from ContextView.jsx, which now imports them (download takes a content type). Buttons: header Download .md and Download .json (whole run); Overview Copy findings; Tools Download CSV (the tools shown after filter and group); Conventions Download CSV; Structure Copy structure; tool panel Copy tool. All built in the browser from the loaded run, no API call or server change. docs/code-map.md describes the export and lists the new test.",
+   "filesImpacted": [
+    "client/src/pages/codeMap/exportRun.mjs",
+    "client/src/pages/codeMap/exportRun.test.mjs",
+    "client/src/pages/codeMap/shared.jsx",
+    "client/src/pages/codeMap/ContextView.jsx",
+    "client/src/pages/CodeMapPage.jsx",
+    "client/src/pages/codeMap/Overview.jsx",
+    "client/src/pages/codeMap/ToolsView.jsx",
+    "client/src/pages/codeMap/ConventionsView.jsx",
+    "client/src/pages/codeMap/StructureView.jsx",
+    "client/src/pages/codeMap/ToolDetail.jsx",
+    "docs/code-map.md"
+   ],
+   "benefit": "Any part of the Code Map can be copied as Markdown or saved as CSV/JSON in one click, so findings and tool detail can go straight into a Claude conversation or a spreadsheet.",
+   "concerns": "Not clicked through in a browser: tested by the export unit test, a Vite build, the Code Map, route, guide and guides tests, and by rendering a real local run to Markdown (about 212K characters). Copying very large text can fail in some browsers; the full run is a download for that reason. Findings evidence is capped as on the page. Changes and the dependency map have no export yet. codeMap.accuracy.test.js fails, but with the same 25 prototype differences before and after this change (expected drift, see docs/code-map.md)."
+  },
+  {
    "commit": "631a11a7",
    "fullHash": "631a11a70503adf0a02b8e0c04e9697fda9234e4",
    "committedAt": "2026-11-19T07:35:19+10:00",
