@@ -2,6 +2,57 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d83b65c1",
+   "fullHash": "d83b65c1e3d49a02b40c2e36118648dd8c0423eb",
+   "committedAt": "2026-11-21T09:25:45+10:00",
+   "author": "mrb",
+   "subject": "DocCompare: Graphics-style page (tool list, job screen) and menu placement",
+   "filesChanged": 16,
+   "insertions": 862,
+   "deletions": 349,
+   "area": "DocCompare, Navigation",
+   "goal": "Make DocCompare look and work like Graphics and Video Tools, and make it appear in the admin's saved menu instead of hiding in Unsorted.",
+   "whatChanged": "DocComparePage.jsx now uses the shared tool-page pieces: ToolSidebar with six tools in three groups (Compare documents; Changes, File details, PDF pages; PDF report, Settings), with a 'Compare two files first' / 'PDF files only' hint on tools that are not usable yet; the JobStart 'What do you want to do?' screen with seven jobs (check nothing was left out, numbers and dates, serious changes only, wording, formatting, PDFs page by page, report to share) from DOC_COMPARE_GOALS; BackToJobs and JobBar above each tool; ToolInfoModal for the (i) box; open-on-last-tool option. The app in the frame (doc-compare/src/ui/App.tsx) became one view per tool, switched by a new doc-compare:view message; the frame stays loaded so files and results survive switching and going back to the jobs. Job steps can preset the Changes filters, and a job moves on to its next step when Compare finishes. The app reports its view back (cause 'self' when it moved by itself, so the tool list follows). Filters moved into a useChangeFilters hook so the PDF report uses them; Settings is now a view, not a drawer; File details and PDF pages (page list with thumbnails) are full views; standalone builds show tabs. Menu: server/services/navSeed.js, run on boot from db.js, places each item in NEW_NAV_ITEMS (DocCompare, after Contract Review) into the saved nav_layout once and records it in workspace_settings nav_layout_seeded, so an admin who later moves it to the pool is not overruled; with no saved layout it only records. Guide catalogue (docCompareTutor.js) rewritten for the new tool and part ids; its test now also checks every job step names a real tool and a known filter.",
+   "filesImpacted": [
+    "client/src/pages/DocComparePage.jsx",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "doc-compare/src/ui/App.tsx",
+    "doc-compare/src/ui/Results.tsx",
+    "doc-compare/src/ui/SettingsDrawer.tsx",
+    "doc-compare/src/ui/guide.ts",
+    "doc-compare/src/ui/styles.css",
+    "doc-compare/tests/guide.test.ts",
+    "server/services/navSeed.js",
+    "server/services/navSeed.test.js",
+    "server/db.js",
+    "server/services/docCompareTutor.js",
+    "server/services/docCompareTutor.test.js",
+    "docs/doc-compare.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "DocCompare is now in the menu next to Contract Review (and movable in the menu layout editor like any placed item), and it has the same job-led layout as the other tool pages: pick a job such as 'Check numbers and dates' and it opens the right tool with the right filter after comparing.",
+   "concerns": "navSeed writes the workspace's saved menu layout on the first boot after deploy (one-time, idempotent, recorded in nav_layout_seeded); verified with unit tests against a fake database, and on the local database only in the no-layout case, not against the production layout. The page was smoke-tested in the real local Vault (production build and CSP, 23 checks: menu entry, (i) box, tool list, hints, job flow with auto-advance and preset filter, views, report, results surviving, guide button), but the guide chat's answers were not tested with a real model and nothing was run on Railway yet. No tour, as before."
+  },
+  {
+   "commit": "bb40199a",
+   "fullHash": "bb40199a7373088fd107a37cd58cb22d74101201",
+   "committedAt": "2026-11-21T09:14:20+10:00",
+   "author": "mrb",
+   "subject": "Build: skip onnxruntime CUDA download so the base image installs again",
+   "filesChanged": 2,
+   "insertions": 5,
+   "deletions": 0,
+   "area": "Build and deploy",
+   "goal": "Fix the failed GitHub 'Base image' build so dependency changes reach the deployed image again.",
+   "whatChanged": "The base-image build of 83837499 failed at `npm install --include=dev`, the first fresh install since 2026-11-15 (earlier builds reused the cached layer). Reproduced on Linux Node 20 with only package.json and package-lock.json: onnxruntime-node (a dependency of @imgly/background-removal-node) downloads CUDA GPU binaries on install from the onnxruntime 1.17.3 GitHub release, and that asset now returns 404. Dockerfile.base now sets ENV npm_config_onnxruntime_node_install_cuda=skip before the install; the app image inherits it. With it the install succeeds and the CPU binaries (which background removal uses; there is no GPU) are present. Recorded in docs/deploy-speed.md under what has been done.",
+   "filesImpacted": [
+    "Dockerfile.base",
+    "docs/deploy-speed.md"
+   ],
+   "benefit": "Fresh base-image builds work again, so the DocCompare install layer and any later dependency change reach the deployed image instead of failing on GitHub.",
+   "concerns": "Verified by reproducing the root npm install in WSL on Linux Node 20 (fails without the setting with the same 404, passes with it), not yet by a GitHub base build; that runs on this push (10-15 minutes) and should be checked in the Actions tab. Background removal on the server was not re-run after the change; it never used the CUDA binaries. The base image still uses node:20-slim; Node 20 reached end of life in April 2026 and the workflow warns about Node 20 actions, which is a separate upgrade."
+  },
+  {
    "commit": "1666a089",
    "fullHash": "1666a0897a76ab86741a1ba5b7424895f44e2dc9",
    "committedAt": "2026-11-21T08:57:49+10:00",
