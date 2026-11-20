@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "90fa40d2",
+   "fullHash": "90fa40d2ef0c5d219e4e8dbcd329815c86860f0a",
+   "committedAt": "2026-11-20T11:31:42+10:00",
+   "author": "mrb",
+   "subject": "Code Map: AI security review (layer 2)",
+   "filesChanged": 15,
+   "insertions": 627,
+   "deletions": 159,
+   "area": "Code Map",
+   "goal": "Layer 2 of the security review: have the standard model read every route file for problems pattern checks cannot judge (one user reaching another's data, missing admin checks, injection, unsafe uploads, SSRF, leaked secrets), on request only.",
+   "whatChanged": "server/services/codeMap/aiReview.js is now kind-driven: KINDS.plainCode (the existing AI review, unchanged behaviour) and KINDS.security. The generic reviewFiles loop handles reuse by file hash, per-file failures and progress; reviewSites stays as a wrapper. The security kind finds every server/routes file except tests (173 files, ~52,000 lines), chunks them by 500 lines (about 230 calls on a first run), prompts with how the file is mounted (mountNote: public or behind sign-in, admin, feature flag, which export of a multi-router module) plus the file's first 40 lines for later chunks and Vault's auth/ownership/SQL/SSRF rules, and checks the JSON answer (line inside the chunk, known severity/category/confidence, code line taken from the file, max 20 per chunk). Usage logged as code_map_ai_security; high severity with high confidence raised in the inbox (codeMapAiSec:<file>:<hash>). Table code_map_ai_reviews gains kind (default plainCode); queries, trimming (last 10 per kind) and estimates are per kind; one AI review runs at a time across both kinds and a 409 carries runningKind. Estimate adds approxInputTokens. Routes take ?kind= (unknown kind is 400). Client: new useReviewJob hook (load, poll, resume, start; follows a 409 only for its own kind) now used by AiReviewView and the new AiSecurityReview section on the Security tab (inline confirm with calls and tokens, progress, severity filter, cards, Copy findings / Download CSV via aiSecurityMd / aiSecurityCsv). Guide catalogue, (i) box, docs/code-map.md and docs/key-files.md. Tests: aiReview.test.js grows to 11 (chunking, prompt and mount note, finding checks, security job and the shared slot), route test (kind pass-through), export test.",
+   "filesImpacted": [
+    "server/services/codeMap/aiReview.js",
+    "server/services/codeMap/aiReview.test.js",
+    "server/db.js",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/codeMap/AiSecurityReview.jsx",
+    "client/src/pages/codeMap/useReviewJob.js",
+    "client/src/pages/codeMap/AiReviewView.jsx",
+    "client/src/pages/codeMap/SecurityView.jsx",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "client/src/pages/codeMap/exportRun.mjs",
+    "client/src/pages/codeMap/exportRun.test.mjs",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "A model-assisted security read of every route file, ranked by severity with line, fix and confidence, kept cheap on repeat runs, sharing one engine and table with the AI review instead of a copy.",
+   "concerns": "Never run against a real model or database: tested with fakes and a Vite build only; the first real run is roughly 230 model calls and ~630,000 tokens of code plus prompts, so check its cost in Usage. Findings are a model's reading of a 500-line part plus the file top: expect false positives and misses; it does not read the services a route calls, so checks done in helpers look missing (asked to mark those low confidence). The refactor touched the existing AI review (now the plainCode kind): its tests still pass, but the existing rows get kind plainCode by the column default, and the AI review tab now shows another kind's running review only as a message. Taking the shared slot means a long security review blocks the AI review tab until it ends. ALTER TABLE ... ADD COLUMN IF NOT EXISTS kind runs on boot; not executed locally (Postgres down)."
+  },
+  {
    "commit": "4fde9820",
    "fullHash": "4fde982017bebadd87b73f6036e5f92310a8552b",
    "committedAt": "2026-11-20T11:20:03+10:00",
