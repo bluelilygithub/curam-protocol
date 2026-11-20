@@ -3,14 +3,14 @@
 // Drawings: the person's saved Excalidraw scenes. Mounted at /api/drawings behind the `drawings` flag. Every query is by the signed-in
 // person; a drawing that is not theirs is simply "not found". Delete goes into the shared recycle bin (30 days). See docs/drawings.md.
 //
-//   GET    /api/drawings               list (no scenes: id, title, preview, counts, dates)
+//   GET    /api/drawings               list (no scenes: id, title, preview, counts, dates, isTemplate)
 //   POST   /api/drawings               new drawing  { title?, scene?, thumbnail? }
 //   GET    /api/drawings/:id           one drawing with its scene
 //   GET    /api/drawings/:id/notes     the person's notes that link back to the drawing (made by To Notes)
 //   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
 //   POST   /api/drawings/diagram       Draw it for me  { text } or { previous, instruction } -> { diagram } (AI; structure only)
 //   POST   /api/drawings/suggestions   What have I missed?  { diagram } -> { suggestions: [{ about, text, change }] } (AI; reads only the words in the shapes)
-//   POST   /api/drawings/:id/duplicate a copy
+//   POST   /api/drawings/:id/duplicate a copy  { title?, asTemplate? }  (asTemplate: Save as template; copying a template makes a diagram from it)
 //   DELETE /api/drawings/:id           into the recycle bin
 
 const express = require('express');
@@ -75,7 +75,7 @@ router.post('/suggestions', aiLimiter, async (req, res) => {
 
 router.post('/:id/duplicate', async (req, res) => {
   try {
-    res.status(201).json({ drawing: await drawings.duplicate(pool, req.user.id, idOf(req)) });
+    res.status(201).json({ drawing: await drawings.duplicate(pool, req.user.id, idOf(req), { title: (req.body || {}).title, asTemplate: (req.body || {}).asTemplate === true }) });
   } catch (err) { fail(res, err, 'duplicate'); }
 });
 

@@ -59,7 +59,7 @@ function checkThumbnail(v) {
   return s;
 }
 
-const LIST_COLS = 'id, title, thumbnail, look, "elementCount", "sceneBytes", "createdAt", "updatedAt"';
+const LIST_COLS = 'id, title, thumbnail, look, "isTemplate", "elementCount", "sceneBytes", "createdAt", "updatedAt"';
 
 /**
  * How many of the person's notes link back to each drawing, as { [drawingId]: count }. One pass over the notes that mention "/drawings/"
@@ -131,13 +131,17 @@ async function update(db, userId, id, patch = {}) {
   throw new DrawingError('This diagram was changed somewhere else (another tab?) since you opened it. Reload to see the newer version.', 409, 'CHANGED');
 }
 
-async function duplicate(db, userId, id) {
+/**
+ * A copy of a drawing. `title` names it (otherwise "<title> (copy)"). `asTemplate` makes the copy one of the person's own templates (Save as
+ * template); copying a template without it makes an ordinary diagram from it. Templates count towards the limit like any diagram.
+ */
+async function duplicate(db, userId, id, { title, asTemplate = false } = {}) {
   const src = await get(db, userId, id);
   await assertRoom(db, userId);
   const { rows } = await db.query(
-    `INSERT INTO drawings ("userId", title, scene, thumbnail, look, "elementCount", "sceneBytes")
-     SELECT "userId", $3, scene, thumbnail, look, "elementCount", "sceneBytes" FROM drawings WHERE id = $2 AND "userId" = $1 RETURNING ${LIST_COLS}`,
-    [userId, id, cleanTitle(`${src.title} (copy)`)]);
+    `INSERT INTO drawings ("userId", title, scene, thumbnail, look, "elementCount", "sceneBytes", "isTemplate")
+     SELECT "userId", $3, scene, thumbnail, look, "elementCount", "sceneBytes", $4 FROM drawings WHERE id = $2 AND "userId" = $1 RETURNING ${LIST_COLS}`,
+    [userId, id, cleanTitle(title, cleanTitle(`${src.title} (copy)`)), asTemplate === true]);
   return rows[0];
 }
 

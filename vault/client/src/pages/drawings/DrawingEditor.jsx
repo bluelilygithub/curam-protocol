@@ -102,6 +102,9 @@ export default function DrawingEditor({ id, onSavedChange }) {
   const [gridOn, setGridOn] = useState(false); // the board's grid: shown, and what is drawn or moved snaps to it
   const [linkedNotes, setLinkedNotes] = useState([]); // the person's notes that link back to this drawing (made by To Notes)
   const [notesMenu, setNotesMenu] = useState(false);
+  const [tplOpen, setTplOpen] = useState(false); // Save as template: the name box
+  const [tplName, setTplName] = useState('');
+  const [tplBusy, setTplBusy] = useState(false);
 
   const apiRef = useRef(null);
   const lookRef = useRef('sketch');
@@ -279,7 +282,7 @@ export default function DrawingEditor({ id, onSavedChange }) {
     // instead that dialog is closed at once and our panel opens.
     if (appState.openDialog && appState.openDialog.name === 'ttd' && appState.openDialog.tab === 'text-to-diagram') {
       if (apiRef.current) apiRef.current.updateScene({ appState: { openDialog: null }, captureUpdate: lib && lib.CaptureUpdateAction ? lib.CaptureUpdateAction.NEVER : undefined });
-      setNotesOpen(false); setAiOpen(true);
+      setNotesOpen(false); setTplOpen(false); setAiOpen(true);
     }
     if (needsPreviewRef.current) { needsPreviewRef.current = false; sigRef.current = 'preview'; } // makes the next check see a change, so a first save (with its preview) happens
     // shape numbers: where the little numbers go, and any box that has none yet gets one
@@ -553,8 +556,37 @@ export default function DrawingEditor({ id, onSavedChange }) {
     }
   };
 
+  // ---- Save as template ----
+  // The diagram is saved first, then the server copies it as one of the person's own templates (a snapshot: later changes here do not
+  // change the template). It then shows under New diagram, Yours.
+  const openTemplatePanel = () => {
+    setAiOpen(false); setNotesOpen(false);
+    setTplName(title);
+    setTplOpen((v) => !v);
+  };
+  const saveAsTemplate = async () => {
+    const ex = apiRef.current;
+    if (!ex || tplBusy) return;
+    if (!ex.getSceneElements().some((e) => !e.isDeleted)) { addToast('The diagram is empty, so there is nothing to keep as a template.', 'error'); return; }
+    setTplBusy(true);
+    try {
+      clearTimeout(timerRef.current);
+      await save();
+      if (stoppedRef.current) throw new Error('This diagram was changed in another tab. Reload it first, then save it as a template.');
+      const res = await api.post(`/api/drawings/${idRef.current}/duplicate`, { title: tplName.trim() || title, asTemplate: true });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'That could not be saved as a template. Try again.');
+      addToast(`Saved as the template "${data.drawing.title}". Find it under New diagram, Yours.`, 'success');
+      setTplOpen(false);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+
   const openNotesPanel = () => {
-    setAiOpen(false);
+    setAiOpen(false); setTplOpen(false);
     setNotesOpen((v) => !v);
     if (listsLoaded.current) return;
     listsLoaded.current = true;
@@ -723,6 +755,9 @@ export default function DrawingEditor({ id, onSavedChange }) {
               </ul>
             )}
           </div>
+          <Tooltip text="Keep a copy of this diagram as one of your own templates. It then shows under New diagram, Yours, so you can start new diagrams from it. Later changes here do not change the template.">
+            <button type="button" className={BTN} style={BTN_STYLE} disabled={!lib} aria-expanded={tplOpen} onClick={openTemplatePanel}>{getIcon('copy', { size: 13 })} Save as template</button>
+          </Tooltip>
           <PlanButton
             drawingId={id} sourceTitle={title} disabled={!lib}
             getDiagram={() => { const ex = apiRef.current; return ex ? readDiagram(ex.getSceneElements(), ex.getAppState().selectedElementIds) : null; }}
@@ -791,6 +826,21 @@ export default function DrawingEditor({ id, onSavedChange }) {
               )}
             </div>
           )}
+        </div>
+      )}
+      {tplOpen && (
+        <div className="flex flex-wrap items-center gap-3 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Name the template:</p>
+          <div className="w-64" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveAsTemplate(); } }}>
+            <Tooltip text="What the template is called under New diagram. It starts as this diagram's name. The microphone lets you say it.">
+              <div className="w-full"><VoiceInput value={tplName} onChange={setTplName} label="Template name" placeholder="Template name" /></div>
+            </Tooltip>
+          </div>
+          <Tooltip text="Save the template now. The diagram is saved first, then copied as the template.">
+            <button type="button" disabled={tplBusy} onClick={saveAsTemplate} className="px-4 py-1.5 rounded-xl text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              {tplBusy ? 'Saving…' : 'Save template'}
+            </button>
+          </Tooltip>
         </div>
       )}
       {notesOpen && (

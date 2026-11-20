@@ -85,6 +85,20 @@ export default function DrawingsList() {
     }
   };
 
+  // a diagram from one of the person's own templates (Save as template): a copy of it, named after it
+  const fromOwnTemplate = async (t) => {
+    setBusy(true);
+    try {
+      const res = await api.post(`/api/drawings/${t.id}/duplicate`, { title: t.title });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not make a diagram from that template.');
+      open(data.drawing.id);
+    } catch (err) {
+      addToast(err.message, 'error');
+      setBusy(false);
+    }
+  };
+
   const onFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
@@ -140,7 +154,10 @@ export default function DrawingsList() {
     } catch (err) { addToast(err.message, 'error'); }
   };
 
-  const shown = useMemo(() => filterDrawings(items || [], query), [items, query]);
+  // the person's own templates live in the same list (isTemplate); they show under New diagram, not here
+  const diagrams = useMemo(() => (items || []).filter((d) => !d.isTemplate), [items]);
+  const templates = useMemo(() => (items || []).filter((d) => d.isTemplate), [items]);
+  const shown = useMemo(() => filterDrawings(diagrams, query), [diagrams, query]);
 
   return (
     <div className="p-6 space-y-4 max-w-[1700px]">
@@ -170,7 +187,11 @@ export default function DrawingsList() {
       </div>
 
       {galleryOpen && (
-        <TemplateGallery busy={busy} onClose={() => setGalleryOpen(false)} onCreate={({ title, look, diagram }) => create({ title, look }, diagram)} />
+        <TemplateGallery
+          busy={busy} own={templates} onClose={() => setGalleryOpen(false)}
+          onCreate={({ title, look, diagram }) => create({ title, look }, diagram)}
+          onUseOwn={fromOwnTemplate} onDeleteOwn={remove}
+        />
       )}
 
       {error && <p className="text-sm" role="alert" style={{ color: '#ef4444' }}>{error}</p>}
@@ -181,7 +202,7 @@ export default function DrawingsList() {
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-48" label="Loading your diagrams" />)}
           </div>
         )}
-        {items !== null && items.length === 0 && !error && (
+        {items !== null && diagrams.length === 0 && !error && (
           <EmptyState
             icon="pen-tool"
             title="No diagrams yet"
@@ -189,7 +210,7 @@ export default function DrawingsList() {
             action={<button type="button" onClick={() => setGalleryOpen(true)} onPointerEnter={warm} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>New diagram</button>}
           />
         )}
-        {items !== null && items.length > 0 && shown.length === 0 && (
+        {items !== null && diagrams.length > 0 && shown.length === 0 && (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No diagram has all of those words in its name.</p>
         )}
         {shown.length > 0 && (

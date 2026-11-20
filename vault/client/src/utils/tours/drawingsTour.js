@@ -60,7 +60,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-new',
     title: 'Start a diagram or a template',
-    text: 'New diagram lets you start from a blank page or a ready-made template: org charts, project breakdowns, timelines (events, milestones, months, quarters), processes, mind maps and stakeholders. Pick a template, set its few choices (how many managers, steps or months, top to bottom or left to right, sketch or clean) and press Create. Every box is then yours to rename, move or delete, and it saves by itself.',
+    text: 'New diagram lets you start from a blank page or a ready-made template: org charts, project breakdowns, timelines (events, milestones, months, quarters), processes, mind maps and stakeholders. Pick a template, set its few choices (how many managers, steps or months, top to bottom or left to right, sketch or clean) and press Create. Every box is then yours to rename, move or delete, and it saves by itself. Templates you saved yourself (Save as template, above any open diagram) show first, under Yours.',
     attachTo: { element: '[data-tour="drawings-new"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('drawings-new', '[data-tour="drawings-new"]')()),
     when: { show() { injectStepCounter(2); } },
@@ -98,7 +98,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-export',
     title: 'Look, export and Notes',
-    text: 'Use the buttons above the diagram: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, and To Notes puts the diagram inside a new note (once it is in a note, the same button takes you back to it). Draw it for me, which turns something you say or type into boxes and arrows, is in the More tools menu, the last icon in the row of tools along the top of the board; its box also has What have I missed?, which lists what you may not have considered.',
+    text: 'Use the buttons above the diagram: Sketch or Clean switches its look (and back again, exactly as drawn), PNG and SVG save a picture, File saves a .excalidraw file you can open again, To Notes puts the diagram inside a new note (once it is in a note, the same button takes you back to it), and Save as template keeps a copy as one of your own templates for New diagram. Draw it for me, which turns something you say or type into boxes and arrows, is in the More tools menu, the last icon in the row of tools along the top of the board; its box also has What have I missed?, which lists what you may not have considered.',
     when: { show() { injectStepCounter(6); } },
     buttons: [
       btnBack(),

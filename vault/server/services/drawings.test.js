@@ -67,9 +67,11 @@ if (!url) {
       assert.ok(start > 0, `${name} is defined in db.js`);
       await client.query(dbjs.slice(start, dbjs.indexOf('`', start)));
     }
-    const alter = dbjs.indexOf('ALTER TABLE drawings ADD COLUMN IF NOT EXISTS look');
-    assert.ok(alter > 0, 'the look column is added in db.js');
-    await client.query(dbjs.slice(alter, dbjs.indexOf('`', alter)));
+    for (const col of ['look', '"isTemplate"']) {
+      const alter = dbjs.indexOf(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS ${col}`);
+      assert.ok(alter > 0, `the ${col} column is added in db.js`);
+      await client.query(dbjs.slice(alter, dbjs.indexOf('`', alter)));
+    }
     await client.query('CREATE TABLE notes (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL DEFAULT \'Untitled\', body TEXT NOT NULL DEFAULT \'\', updated_at TIMESTAMPTZ DEFAULT NOW())');
     await client.query('INSERT INTO users (id) VALUES (1), (2)');
     const pool = { query: (...a) => client.query(...a), connect: async () => ({ query: (...a) => client.query(...a), release() {} }) };
@@ -136,6 +138,18 @@ if (!url) {
     assert.strictEqual(copy.elementCount, 7);
     assert.strictEqual(copy.look, 'sketch', 'the copy keeps the look');
     assert.notStrictEqual(copy.id, a.id);
+    assert.strictEqual(copy.isTemplate, false, 'a plain copy is a diagram');
+    // Save as template, then a diagram from that template
+    const tpl = await D.duplicate(pool, 1, a.id, { title: '  My template ', asTemplate: true });
+    assert.strictEqual(tpl.title, 'My template');
+    assert.strictEqual(tpl.isTemplate, true);
+    assert.strictEqual(tpl.elementCount, 7, 'the template holds the same pieces');
+    assert.strictEqual((await D.list(pool, 1)).find((r) => r.id === tpl.id).isTemplate, true, 'the list says which rows are templates');
+    const fromTpl = await D.duplicate(pool, 1, tpl.id, { title: 'My template' });
+    assert.strictEqual(fromTpl.isTemplate, false, 'using a template makes an ordinary diagram');
+    assert.strictEqual(fromTpl.title, 'My template', 'named after the template, no "(copy)"');
+    await assert.rejects(() => D.duplicate(pool, 2, tpl.id, {}), (e) => e.status === 404, "another person cannot use someone's template");
+    await client.query('DELETE FROM drawings WHERE id = ANY($1)', [[tpl.id, fromTpl.id]]);
     await assert.rejects(() => D.duplicate(pool, 2, a.id), (e) => e.status === 404, "another person cannot copy it");
     assert.strictEqual((await rowsOf(2)).length, 0);
 
@@ -229,6 +243,11 @@ if (!url) {
       const dup = await call('POST', `/${id}/duplicate`);
       assert.strictEqual(dup.status, 201);
       assert.strictEqual(dup.body.drawing.title, 'Renamed (copy)');
+      const tplRoute = await call('POST', `/${id}/duplicate`, { title: 'Route template', asTemplate: true });
+      assert.strictEqual(tplRoute.status, 201);
+      assert.deepStrictEqual([tplRoute.body.drawing.title, tplRoute.body.drawing.isTemplate], ['Route template', true], 'Save as template over HTTP');
+      assert.strictEqual((await call('POST', `/${id}/duplicate`, { asTemplate: 'yes' })).body.drawing.isTemplate, false, 'only a real true makes a template');
+      await client.query('DELETE FROM drawings WHERE id <> ALL($1)', [[id, dup.body.drawing.id]]);
 
       // delete goes to the recycle bin, in the same transaction, and can be put back
       assert.strictEqual((await call('DELETE', `/${id}`, null, 2)).status, 404, "another person cannot delete it");

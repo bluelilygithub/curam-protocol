@@ -1251,6 +1251,8 @@ async function initSchema() {
     // Added later (2026-11-08): the look the drawing is in now. The pieces remember how they were drawn (customData in the scene), so the
     // person can flip between the two looks and get back exactly what they drew. Only the page changes the pieces; this says which look it is.
     await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS look TEXT NOT NULL DEFAULT 'sketch'`);
+    // Added 2026-11-20: a person's own template (Save as template): a snapshot copy of a diagram, shown under New diagram instead of in the list.
+    await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS "isTemplate" BOOLEAN NOT NULL DEFAULT false`);
     // ── Sketchbook (docs/sketchbook.md): cartoon pictures described in words and drawn by the image model, one picture per row, owned by
     // one person. `image` is the CURRENT picture as a data URL; `versions` is JSON text holding the last few earlier pictures (each with
     // the words that changed it) so a change can be taken back. Both stay out of the list query. Deleting goes through the shared
