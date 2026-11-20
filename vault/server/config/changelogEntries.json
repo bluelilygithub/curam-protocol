@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7037058f",
+   "fullHash": "7037058f5ba2f7c19137fe375321af2da975f345",
+   "committedAt": "2026-11-20T11:12:45+10:00",
+   "author": "mrb",
+   "subject": "Code Map: Security tab (layer 1, pattern checks on every run)",
+   "filesChanged": 13,
+   "insertions": 528,
+   "deletions": 3,
+   "area": "Code Map",
+   "goal": "Give the owner a security review of the application inside Code Map. Layer 1 of the agreed plan: free pattern checks for common mistakes that run with every analysis, including the weekly one.",
+   "whatChanged": "New server/services/codeMap/security.js, a stage of analyze() after the rules: eleven checks, each returning a status (gap / check / for review / passes), a note, why, fix and up to 50 items tagged with the owning tool. Checks: routes in the code missing from server/testing/routeManifest.json (routers taken off a module or built by a factory are skipped); public routes listed for review; request values pasted into SQL template strings (a fixed-text ternary allowed); route files with :param routes that never mention the user; secret-shaped values (Anthropic, OpenAI, Google, GitHub, AWS, Slack, private keys; obviously fake test values skipped; matched values cut to six characters and never stored); eval / new Function and shell strings in files that load child_process; file paths from request values unless the same file tests the value against a pattern; dangerouslySetInnerHTML without a sanitizer in the file; sign-in routes in auth.js without a limiter (a route that only answers 403 is skipped); helmet / CSP / open CORS in server/index.js; and the tools' SSRF guard results gathered in one place. Result stored as security: { checks, counts }; new stage label in jobs.js; failing checks added to inboxItems (high only raised, once per check). New Security tab (SecurityView.jsx) with tiles and one card per check, gaps first, and Copy security (securityMd, also in the full-run Markdown download). Guide catalogue, (i) box, docs/code-map.md (check table with what each cannot see) and docs/key-files.md updated. Tests: security.test.js; jobs.test.js gains the security stage and an inbox test; export test extended.",
+   "filesImpacted": [
+    "server/services/codeMap/security.js",
+    "server/services/codeMap/security.test.js",
+    "server/services/codeMap/index.js",
+    "server/services/codeMap/jobs.js",
+    "server/services/codeMap/jobs.test.js",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/CodeMapPage.jsx",
+    "client/src/pages/codeMap/SecurityView.jsx",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "client/src/pages/codeMap/exportRun.mjs",
+    "client/src/pages/codeMap/exportRun.test.mjs",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "Every run now reports on common security mistakes at no cost, with file and line for each, high gaps reach the inbox, and the weekly run catches a new unlisted route, pasted SQL value or committed key without anyone asking.",
+   "concerns": "Pattern checks only: they miss a request value copied into a variable before reaching SQL, validation in another file, routers built by a factory (about 300 manifest routes cannot be matched, so only code-not-in-list is reported), and anything outside server/ and client/src/ (.env files are not scanned). The per-user check is file-level: a file that mentions the user once passes even if one query forgets it. First local run: no gaps, 2 to check (shared/token route files and two SVG dangerouslySetInnerHTML uses), 30 public routes; earlier false positives (a fake test key, a database exec, a validated projectId path, the closed /register route) were fixed in the checks, which could hide a real case of the same shape. Changes tab does not compare security between runs yet. Runs saved before this deploy show an empty Security tab until the analysis runs again. Not clicked through in a browser; tested by unit tests, a Vite build and a real local analysis."
+  },
+  {
    "commit": "d1650305",
    "fullHash": "d165030583e3599f1404561d35139baa2bbd4b0c",
    "committedAt": "2026-11-20T10:31:51+10:00",
