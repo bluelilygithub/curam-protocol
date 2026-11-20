@@ -12,7 +12,7 @@ import { DropZone } from './DropZone';
 import { currentGuideTool, isView, openGuideTool, type GuideHooks } from './guide';
 import { InfoModal, infoSeen } from './InfoModal';
 import { PageViewer } from './PageViewer';
-import { ChangesView, EmptyView, MetadataView, PagesView, ReportView, SummaryBar, useChangeFilters, type FilterPreset, type Layout, type ViewId } from './Results';
+import { AuthorReviewButton, ChangesView, EmptyView, MetadataView, PagesView, ReportView, SummaryBar, useChangeFilters, type FilterPreset, type Layout, type ViewId } from './Results';
 import { SettingsPanel } from './SettingsDrawer';
 
 type Phase = 'idle' | 'reading' | 'similarity' | 'gate2' | 'comparing' | 'done';
@@ -245,7 +245,8 @@ export function App() {
                   <button className="btn primary" onClick={() => goChanges()} title="See every change in a table you can filter, search and sort.">See all changes</button>
                   <button className="btn" onClick={() => setView('metadata')} title="Compare the two files' size, dates, author and counts.">File details</button>
                   {isPdf && <button className="btn" onClick={() => setView('pages')} title="See which PDF pages look different, side by side.">PDF pages</button>}
-                  <button className="btn" onClick={() => setView('report')} title="Download a PDF of this comparison.">PDF report</button>
+                  <AuthorReviewButton all={all} trivialCount={result!.trivialCount} fileNames={[original!.name, edited!.name]} sim={sim} override={override} primary={false} />
+                  <button className="btn" onClick={() => setView('report')} title="Download a PDF of this comparison for your own records.">PDF report</button>
                 </div>
               </section>
             )}

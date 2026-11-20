@@ -9,7 +9,7 @@ const RED: [number, number, number] = [185, 28, 28];
 const GREEN: [number, number, number] = [21, 128, 61];
 
 // shortcut: jsPDF's built-in fonts are Latin-1 only, so other characters print as "?"; embed a TTF font if reports need other scripts
-const latin1 = (s: string) => mapQuotes(s).replace(/[…]/g, '...').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
+export const latin1 = (s: string) => mapQuotes(s).replace(/[…]/g, '...').replace(/→/g, '->').replace(/↕/g, '<->').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
 const cut = (s: string | undefined, n = 300) => (s ? latin1(s.length > n ? `${s.slice(0, n - 1)}...` : s) : '');
 
 export interface ExportInput {

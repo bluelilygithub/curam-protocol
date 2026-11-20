@@ -39,6 +39,9 @@ export function openGuideTool(id: string, h: GuideHooks): boolean {
     switch (id) {
       case 'files':
       case 'compare-button': h.show(id); break;
+      case 'author-report':
+        if (!h.hasResults()) h.toast(RESULTS_FIRST); else h.show(id);
+        break;
       case 'file-check':
         if (!h.show(id)) { h.show('compare-button'); h.toast('The file type check runs when you press Compare. A red box appears here only when the two files cannot be compared.'); }
         break;

@@ -27,7 +27,7 @@ export const TOOL_TIPS = {
   changes: 'Every change in one table: removed, added, moved, wording, typos, numbers and dates, formatting and layout, with severity. Filter, search, sort, and open a row to see the exact words that changed.',
   metadata: 'The two files\' details side by side (size, dates, author, and counts of pages, words, headings, tables and images), with anything suspicious flagged, such as a word count that dropped.',
   pages: 'For two PDFs: every page drawn and compared pixel by pixel. See which pages look different and open them side by side with the changes in red.',
-  report: 'Download a PDF of the comparison to keep or send: the checks, the summary, the file details, the changes (with your filters) and changed PDF pages.',
+  report: 'Two PDFs: a review to send back to the author (every change, with what to fix and a tick box), and a comparison report for your records (the checks, summary, file details, the changes with your filters, and changed PDF pages).',
   settings: 'Choose when files count as unrelated, when size and word-count changes are flagged, and which tiny differences (spaces, quotes, dashes) are ignored.',
 };
 
@@ -36,7 +36,7 @@ export const TOOL_BLURBS = {
   changes: 'Every difference between the two files, most serious first when sorted by severity.',
   metadata: 'Size, dates, author and counts for both files, with suspicious changes flagged.',
   pages: 'PDF pages compared as pictures, side by side with the changes in red.',
-  report: 'A PDF of this comparison to keep or share.',
+  report: 'A to-do list to send back to the author, and a comparison report for your records.',
   settings: 'What counts as a change, and when to warn.',
 };
 
@@ -93,6 +93,14 @@ export const DOC_COMPARE_GOALS = [
     ],
   },
   {
+    id: 'author', title: 'Send the fixes back to the author', icon: 'list-checks',
+    blurb: 'A PDF to-do list of every change, most serious first, with what to fix.',
+    steps: [
+      { tool: 'compare', note: 'Choose the original and the edited file, then press Compare.' },
+      { tool: 'report', note: 'Press Download review for the author and send the PDF to whoever made the edit.' },
+    ],
+  },
+  {
     id: 'share', title: 'Make a report to share', icon: 'share-2',
     blurb: 'Compare, narrow the list if you want, and download a PDF.',
     steps: [
@@ -114,7 +122,8 @@ export const HOW_IT_WORKS = [
   ['Kinds of change', 'Removed and Added: whole paragraphs, sections or table rows. Moved: the same text in a new place. Wording: words changed inside a paragraph (marked High when a large part was dropped). Typo: one small word fix. Number/date: anything with a digit changed. Formatting: headings, lists, bold, italic, fonts and sizes. Layout: PDF pages that look different. Metadata: file size, dates, author and counts, for example a word count that dropped.'],
   ['Trivial changes', 'Differences in spaces, line breaks, curly or straight quotes, dashes and invisible characters are hidden by default but still counted ("7 trivial changes hidden"). Tick that box to show them, or choose in Settings which of them count as trivial.'],
   ['PDF pages', 'For two PDFs, each page is also drawn and compared pixel by pixel after the text results appear. Pages where more than a tiny share changed are listed in PDF pages and as Layout changes. Open one to see the two pages side by side with the changed pixels in red. Very long PDFs (over 500 pages) wait for you to start this step.'],
-  ['The report', 'PDF report downloads the checks, the summary, the file details, the changes table (with the filters you set in Changes, which it names) and thumbnails of changed PDF pages.'],
+  ['Review for the author', 'Download review for the author (in PDF report, and on the Comparison done card) makes a PDF to send back to whoever made the edit: every change, whatever filters are set, sorted into Must fix, Please review and Minor. Each item has a tick box, where it is, what to do ("Restore this paragraph", "Check the changed figure: 30 to 60") and the original and edited text, with removed words in red and added words in green.'],
+  ['The report', 'PDF report also downloads a comparison report for your own records: the checks, the summary, the file details, the changes table (with the filters you set in Changes, which it names) and thumbnails of changed PDF pages.'],
   ['What it cannot do', 'It cannot compare two different file types (for example Word against PDF), read scanned PDFs, compare spreadsheets or images yet, or tell you which version is right. It reports differences; you decide what to keep.'],
 ];
 
@@ -133,6 +142,7 @@ export const GUIDE_TOOLS = [
   { id: 'pages', label: 'PDF pages', tool: 'pages' },
   { id: 'page-viewer', label: 'Page viewer', tool: 'pages' },
   { id: 'report', label: 'PDF report', tool: 'report' },
+  { id: 'author-report', label: 'Review for the author', tool: 'report' },
   { id: 'settings', label: 'Settings', tool: 'settings' },
   { id: 'info', label: 'How DocCompare works', tool: 'compare' },
 ];
