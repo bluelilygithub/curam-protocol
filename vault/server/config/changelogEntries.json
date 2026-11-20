@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "df5ccfb8",
+   "fullHash": "df5ccfb820fbdec514b65d593549afd3765094b8",
+   "committedAt": "2026-11-21T09:55:09+10:00",
+   "author": "mrb",
+   "subject": "DocCompare: guided tour, Vault theme and font in the app, four more jobs",
+   "filesChanged": 10,
+   "insertions": 306,
+   "deletions": 10,
+   "area": "DocCompare, Settings",
+   "goal": "Give DocCompare a guided tour like Graphics, make the app inside the frame look exactly like the rest of Vault, and offer more jobs on its start screen.",
+   "whatChanged": "New client/src/utils/tours/docCompareTour.js: an 11-step Shepherd tour (welcome, jobs, tool list, Compare documents, the two checks, Changes, File details and PDF pages, the review for the author, Settings, the (i) and compass buttons, the guide). A tour cannot reach inside the frame, so a step about a tool switches the frame to that tool and points at the frame. Started from a compass button beside the title (ToolSidebar onTour), Settings -> DocCompare Tour (/doc-compare?tour=1, flag removed from the address), and the guide (new catalogue entry 'tour'). Its step counter writes into the step's own card; the shared pattern in the other Vault tours writes into the first card in the page, which is a hidden earlier card after step 1 (noted in docs/doc-compare.md, not changed there). New doc-compare/src/ui/theme.ts: when embedded, the app applies Vault's chosen theme colours and font from the same-origin vault-settings key and client/src/themes.js (as Route Tracer does) and follows changes from other tabs; buttons, inputs, chips and headings now use Vault's sizes and medium weight. Four more jobs on the start screen (check what the AI added, headings and structure, moved paragraphs, did the document shrink): 12 cards.",
+   "filesImpacted": [
+    "client/src/utils/tours/docCompareTour.js",
+    "client/src/pages/DocComparePage.jsx",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "server/services/docCompareTutor.js",
+    "doc-compare/src/ui/theme.ts",
+    "doc-compare/src/ui/styles.css",
+    "doc-compare/src/main.tsx",
+    "doc-compare/src/vault-client.d.ts",
+    "docs/doc-compare.md"
+   ],
+   "benefit": "New users get a two-minute walk through every part of DocCompare, the tool now looks like the rest of Vault in any theme, and there are more ready-made jobs to start from.",
+   "concerns": "Inside Vault the app now loads the chosen font from Google Fonts: a network request for the typeface only (never file data; Vault's own page already loads it), so the 'no network calls' rule now applies to the standalone build and to file handling, not to the embedded font. Checked in the real local Vault (production build and CSP): all 11 steps attached and switched the right tool, ?tour=1, completion remembered, 12 job cards, frame font, primary colour and button weight matched Vault, no page errors. Not yet run on Railway, and only the default Warm Sand theme was checked."
+  },
+  {
    "commit": "7c2f88bb",
    "fullHash": "7c2f88bbefc4212b9a9cb325427b4da53b808151",
    "committedAt": "2026-11-21T09:38:31+10:00",
