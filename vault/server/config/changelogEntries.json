@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "903253e1",
+   "fullHash": "903253e197b1cb073b39f7e5654da17f128417f2",
+   "committedAt": "2026-11-20T17:36:14+10:00",
+   "author": "mrb",
+   "subject": "Diagrams: Save as template",
+   "filesChanged": 13,
+   "insertions": 176,
+   "deletions": 29,
+   "area": "Diagrams",
+   "goal": "Let people keep their own diagrams as templates and start new diagrams from them, alongside the built-in library.",
+   "whatChanged": "New column drawings.\"isTemplate\" (BOOLEAN NOT NULL DEFAULT false, ALTER TABLE ... IF NOT EXISTS in server/db.js) and in the list columns. duplicate() takes { title, asTemplate }: Save as template copies the diagram as a template row (a snapshot); copying a template without asTemplate makes an ordinary diagram named after it. Route POST /api/drawings/:id/duplicate passes title and asTemplate (only a real true). Editor: a Save as template button above the board opens a name box (starts as the diagram name); it saves the diagram first, then copies it, and refuses an empty diagram or one changed in another tab. DrawingsList hides template rows from the list, search and empty state; TemplateGallery shows them first under Yours (thumbnail, name, Delete with Yes / No, through the recycle bin with Undo) and uses one via duplicate. Tour steps 2 and 6, the (i) box (Your own templates), the guide (new Save as template entry, Templates notes), docs/drawings.md and docs/schema-notes.md updated.",
+   "filesImpacted": [
+    "server/db.js",
+    "server/services/drawings.js",
+    "server/routes/drawings.js",
+    "server/services/drawings.test.js",
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/DrawingsList.jsx",
+    "client/src/pages/drawings/TemplateGallery.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/services/drawingsTutor.js",
+    "server/services/drawingsTutor.test.js",
+    "docs/drawings.md",
+    "docs/schema-notes.md"
+   ],
+   "benefit": "A diagram someone has refined (their own org chart, a standard process) can be reused in one click from New diagram, with no AI and nothing shared with anyone else.",
+   "concerns": "Adds a column on boot (ALTER TABLE ... ADD COLUMN IF NOT EXISTS with a constant default, so no table rewrite). Templates count towards the 300 diagram limit. No rename or edit of a template in place: make a diagram from it, change it and save it again, then delete the old one. A template restored from the recycle bin comes back as a template (the whole row is restored). Tested: drawings.test.js parts 1-3 against a local Postgres (service, routes over HTTP, recycle bin), crossUserOwnership.test.js, drawingsTutor.test.js, client build. The editor button and gallery section have not been clicked through in a browser."
+  },
+  {
    "commit": "19efe1c5",
    "fullHash": "19efe1c5ec54d752146a4a9715c89c8b4819c0fa",
    "committedAt": "2026-11-20T17:25:16+10:00",
