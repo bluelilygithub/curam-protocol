@@ -52,7 +52,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-welcome',
     title: 'Diagrams — Quick Tour',
-    text: 'Sketch ideas, diagrams and plans on an endless page. Your diagrams are saved to your account by themselves, and nobody else can see them.',
+    text: 'Sketch ideas, diagrams and plans on an endless page. Diagrams opens on What do you want to do?: suggestion cards that start an org chart, a process, a timeline, a mind map, or a diagram the AI draws from your words, in one click. The list on the left also has Your diagrams and Your templates. Everything saves to your account by itself, and nobody else can see it.',
     when: { show() { injectStepCounter(1); } },
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
@@ -80,7 +80,7 @@ export function startDrawingsTour() {
   tour.addStep({
     id: 'drawings-list',
     title: 'Your diagrams',
-    text: 'Each diagram shows a small preview. Click it to open it. Under each one you can rename it, make a copy, or delete it. A deleted diagram shows an Undo button and waits 30 days in the recycle bin in Settings.',
+    text: 'Your diagrams is your repository. Each diagram shows a small preview; click it to open it. Under each one you can rename it, file it under one of your clients and its projects (File), make a copy, or delete it. Search by name, filter by client or project, and sort by date or name. A deleted diagram shows an Undo button and waits 30 days in the recycle bin in Settings.',
     attachTo: { element: '[data-tour="drawings-list"]', on: 'top' },
     beforeShowPromise: () => Promise.resolve(before('drawings-list', '[data-tour="drawings-list"]')()),
     when: { show() { injectStepCounter(4); } },

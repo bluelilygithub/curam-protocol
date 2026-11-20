@@ -8,6 +8,15 @@
 const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
+  { id: 'start', label: 'What do you want to do?', group: 'Your diagrams',
+    does: 'The first item in the list on the left, and where Diagrams opens. Suggestion cards start something in one click: Describe it and AI draws it (a new diagram with Draw it for me open), Draw an org chart, Map a process, Lay out a timeline, Break down a project, Brainstorm a mind map, Weigh it up (SWOT) and Map your stakeholders (each opens New diagram with that template picked), Start on a blank page, Browse every template, and Bring in a file. Below the cards: your own templates and the four diagrams you changed last.',
+    notes: 'A box at the bottom makes Diagrams open on Your diagrams instead next time.' },
+  { id: 'file-under', label: 'File under a client or project', group: 'Your diagrams',
+    does: 'The File button on a diagram in Your diagrams shows a Client and a Client project choice. Choose a client, and optionally one of its projects (choosing a project also chooses its client). The client and project then show on the card, and the Client and Project filters above the list find it.',
+    notes: 'Only shown when the CRM (Clients) is switched on for you. Choose No client to take it out again. A copy of a diagram stays filed in the same place. Templates are not filed.' },
+  { id: 'your-templates', label: 'Your templates', group: 'Your diagrams',
+    does: 'The third item in the list on the left: the templates you saved with Save as template, with Use (start a new diagram from it), Rename and Delete. Built-in templates opens the gallery of ready-made ones.',
+    notes: 'Starting from a template makes a new diagram; the template stays as it is.' },
   { id: 'list', label: 'Your diagrams', group: 'Your diagrams',
     does: 'Shows every diagram you have saved, newest change first, each with a small preview, its name, how many pieces it holds and when it was last changed. Click a diagram to open it on the board.',
     notes: 'Only your own diagrams appear. You can keep up to 300.' },
@@ -20,7 +29,7 @@ const CATALOG = [
   { id: 'open-file', label: 'Open a file', group: 'Your diagrams',
     does: 'The Open a file button takes a diagram file ending in .excalidraw (from Excalidraw itself, another program, or an earlier export from here) and saves it as a new diagram in your list, named after the file.',
     notes: 'Only Excalidraw diagram files work. A shape library file is refused with a message. A file over 6 MB is refused.' },
-  { id: 'search', label: 'Search', group: 'Your diagrams',
+  { id: 'search', label: 'Search, filter and sort', group: 'Your diagrams',
     does: 'The search box above the diagrams narrows the list to diagrams whose name has all the words you type. The microphone beside it lets you say the words.',
     notes: 'It searches names only, not what is drawn or written inside a diagram.' },
   { id: 'rename', label: 'Rename', group: 'Your diagrams',

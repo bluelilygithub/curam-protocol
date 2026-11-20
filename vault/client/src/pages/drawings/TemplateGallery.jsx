@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Dialog from '../../components/Dialog';
 import Tooltip from '../../components/Tooltip';
@@ -13,17 +13,21 @@ const LABEL_STYLE = { color: 'var(--color-muted)' };
 /**
  * "New diagram": a blank page or one of the built-in templates (diagramTemplates.mjs), with that template's settings, direction and look.
  * Above the built-in ones, the person's own templates (Save as template in the editor): saved diagrams with isTemplate, used as they are.
+ *   initialId                            a built-in template to have picked when the gallery opens (a start-screen card)
  *   onCreate({ title, look, diagram })   diagram is null for a blank page
  *   own                                  the person's own templates (rows from GET /api/drawings)
  *   onUseOwn(t) / onDeleteOwn(t)         make a diagram from one of them / delete one (recycle bin, with Undo)
  */
-export default function TemplateGallery({ busy, own = [], onCreate, onUseOwn, onDeleteOwn, onClose }) {
+export default function TemplateGallery({ busy, own = [], initialId = null, onCreate, onUseOwn, onDeleteOwn, onClose }) {
   const getIcon = useIcon();
-  const [chosen, setChosen] = useState(null); // a built-in template, or null
+  const first = TEMPLATES.find((t) => t.id === initialId) || null; // a suggestion card on the start screen opens with its template picked
+  const [chosen, setChosen] = useState(first); // a built-in template, or null
   const [ownChosen, setOwnChosen] = useState(null); // one of the person's own templates, or null
   const [confirmId, setConfirmId] = useState(null); // the own template whose "Delete? Yes / No" is showing
-  const [values, setValues] = useState({});
-  const [direction, setDirection] = useState('down');
+  const settingsRef = useRef(null);
+  useEffect(() => { if (first && settingsRef.current) settingsRef.current.scrollIntoView({ block: 'center' }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [values, setValues] = useState(() => (first ? defaultValues(first) : {}));
+  const [direction, setDirection] = useState(first ? first.direction : 'down');
   const [look, setLook] = useState('sketch');
 
   const choose = (t) => {
@@ -36,7 +40,7 @@ export default function TemplateGallery({ busy, own = [], onCreate, onUseOwn, on
     : { title: undefined, look, diagram: null }));
 
   const settings = () => (
-    <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)' }} aria-label={`Settings for ${chosen.name}`}>
+    <div ref={settingsRef} className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)' }} aria-label={`Settings for ${chosen.name}`}>
       <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{chosen.name}</p>
       <div className="flex flex-wrap items-end gap-3">
         {chosen.options.map((op) => (

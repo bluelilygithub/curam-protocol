@@ -162,7 +162,9 @@ export default function DrawingEditor({ id, onSavedChange }) {
     let alive = true; // set inside the effect: a development double-mount must not leave it false
     setLib(null); setInitial(null); setLoadError(''); setStatus('idle'); sigRef.current = null; stoppedRef.current = false; latestRef.current = null; leftRef.current = false;
     templateRef.current = (location.state && location.state.template) || null;
-    if (templateRef.current) navigate(location.pathname, { replace: true, state: null });
+    // the start screen's "Describe it and AI draws it": a new diagram with the Draw it for me panel already open
+    if (location.state && location.state.openDraw) { setNotesOpen(false); setTplOpen(false); setAiOpen(true); }
+    if (location.state && (location.state.template || location.state.openDraw)) navigate(location.pathname, { replace: true, state: null });
     (async () => {
       try {
         const [res, mod] = await Promise.all([api.get(`/api/drawings/${id}`), loadExcalidraw()]);

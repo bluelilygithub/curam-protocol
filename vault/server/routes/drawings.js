@@ -7,7 +7,7 @@
 //   POST   /api/drawings               new drawing  { title?, scene?, thumbnail? }
 //   GET    /api/drawings/:id           one drawing with its scene
 //   GET    /api/drawings/:id/notes     the person's notes that link back to the drawing (made by To Notes)
-//   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
+//   PUT    /api/drawings/:id           save  { title?, scene?, thumbnail?, look? ('sketch' | 'clean'), clientId?, clientProjectId? (null clears), baseUpdatedAt? }  (409 if changed elsewhere since baseUpdatedAt)
 //   POST   /api/drawings/diagram       Draw it for me  { text } or { previous, instruction } -> { diagram } (AI; structure only)
 //   POST   /api/drawings/suggestions   What have I missed?  { diagram } -> { suggestions: [{ about, text, change }] } (AI; reads only the words in the shapes)
 //   GET    /api/drawings/library       the person's shape library  -> { library: { libraryItems } | null }
@@ -110,7 +110,7 @@ router.get('/:id/notes', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const b = req.body || {};
-    res.json({ drawing: await drawings.update(pool, req.user.id, idOf(req), { title: b.title, scene: b.scene, thumbnail: b.thumbnail, look: b.look, baseUpdatedAt: b.baseUpdatedAt }) });
+    res.json({ drawing: await drawings.update(pool, req.user.id, idOf(req), { title: b.title, scene: b.scene, thumbnail: b.thumbnail, look: b.look, clientId: b.clientId, clientProjectId: b.clientProjectId, baseUpdatedAt: b.baseUpdatedAt }) });
   } catch (err) { fail(res, err, 'update'); }
 });
 

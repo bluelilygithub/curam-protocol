@@ -2516,6 +2516,10 @@ async function initSchema() {
     await client.query(`ALTER TABLE plans ADD COLUMN IF NOT EXISTS "clientProjectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_client ON plans ("userId", "clientId")`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_plans_client_project ON plans ("userId", "clientProjectId")`);
+    // Diagrams (2026-11-20) can be filed under a CRM client and one of its projects too, the same way and checked by the same rules
+    // (plans.resolveClientLink). Added here for the same reason: drawings is created before clients.
+    await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+    await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS "clientProjectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
     // Email Follow-Up cases can name a CRM client. ef_cases is created earlier in this file, before clients, so the column is added here
     // (a no-op on databases that already have it). Test: node server/db.freshSchema.test.js
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);

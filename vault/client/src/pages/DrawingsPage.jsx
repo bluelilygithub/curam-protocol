@@ -11,7 +11,7 @@ import { startDrawingsTour, TOUR_KEY as DRAWINGS_TOUR_KEY } from '../utils/tours
 import DrawingsList from './drawings/DrawingsList';
 import DrawingEditor from './drawings/DrawingEditor';
 import DrawingsTutorChat from './drawings/DrawingsTutorChat';
-import { TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './drawings/drawingsTools.mjs';
+import { HOW_IT_WORKS, GUIDE_TOOLS } from './drawings/drawingsTools.mjs';
 
 /**
  * Drawings: the person's saved Excalidraw drawings. /drawings is the list, /drawings/:id is one drawing on the editor. The editor is a
@@ -58,32 +58,40 @@ export default function DrawingsPage() {
   const openToolById = (toolId) => {
     const target = GUIDE_TOOLS.find((t) => t.id === toolId);
     if (!target) return;
-    if (target.tool === 'list' && view !== 'list') navigate('/drawings');
+    if (target.tool === 'list') navigate(target.view ? `/drawings?view=${target.view}` : '/drawings');
   };
 
   if (accessKnown && !canUse) return <Navigate to="/" replace />;
 
   const iconBtn = { color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer' };
+  const titleRow = (
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: view === 'list' ? 'var(--color-bg)' : 'var(--color-surface)', color: 'var(--color-primary)' }}>
+        {getIcon('pen-tool', { size: 16 })}
+      </div>
+      <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Diagrams</h1>
+      <Tooltip text="How Diagrams works, and what it does not do yet.">
+        <button type="button" onClick={info.open} aria-label="How Diagrams works" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('info', { size: 13 })}</button>
+      </Tooltip>
+      <Tooltip text="Take the guided tour of Diagrams.">
+        <button type="button" onClick={startTour} aria-label="Take the Diagrams tour" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('compass', { size: 13 })}</button>
+      </Tooltip>
+    </div>
+  );
 
   return (
     <VoiceInputProvider lang="en-AU">
       {/* The drawing board takes exactly the height that is left under the page's own top bar, so the page itself never scrolls */}
-      <div style={{ background: 'var(--color-bg)', ...(view === 'editor' ? { height: 'calc(100dvh - 3rem)' } : {}) }} className={view === 'editor' ? 'flex flex-col' : 'min-h-[calc(100dvh-3rem)]'}>
-        <div className="flex items-center gap-2 px-6 pt-4 pb-2 shrink-0">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
-            {getIcon('pen-tool', { size: 16 })}
-          </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Diagrams</h1>
-          <Tooltip text="How Diagrams works, and what it does not do yet.">
-            <button type="button" onClick={info.open} aria-label="How Diagrams works" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('info', { size: 13 })}</button>
-          </Tooltip>
-          <Tooltip text="Take the guided tour of Diagrams.">
-            <button type="button" onClick={startTour} aria-label="Take the Diagrams tour" className="transition-opacity duration-200 hover:opacity-60" style={iconBtn}>{getIcon('compass', { size: 13 })}</button>
-          </Tooltip>
-          {view === 'list' && <p className="text-sm ml-2" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS.list}</p>}
+      {/* The list is a dashboard with a sidebar (DrawingsList: start screen, Your diagrams, Your templates) and takes the title row into it.
+          The drawing board takes exactly the height that is left under the page's own top bar, so the page itself never scrolls. */}
+      {view === 'list' ? (
+        <div style={{ background: 'var(--color-bg)' }}><DrawingsList header={titleRow} /></div>
+      ) : (
+        <div style={{ background: 'var(--color-bg)', height: 'calc(100dvh - 3rem)' }} className="flex flex-col">
+          <div className="px-6 pt-4 pb-2 shrink-0">{titleRow}</div>
+          <DrawingEditor key={id} id={Number(id)} />
         </div>
-        {view === 'list' ? <DrawingsList /> : <DrawingEditor key={id} id={Number(id)} />}
-      </div>
+      )}
 
       {info.show && (
         <ToolInfoModal title="How Diagrams Works" onClose={info.close}>

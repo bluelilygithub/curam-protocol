@@ -28,6 +28,8 @@ export const TOOL_BLURBS = {
 // The longer text for the (i) "How Drawings works" box.
 export const HOW_IT_WORKS = [
   ['Your diagrams', 'Every diagram you make is saved to your Vault account and shown with a small preview. Click one to open it. You can rename it, make a copy, or delete it. A deleted diagram waits 30 days in the recycle bin in Settings, and a message with an Undo button appears straight away.'],
+  ['Start screen', 'Diagrams opens on What do you want to do?: suggestion cards that start something in one click. Describe it and AI draws it opens a new diagram with Draw it for me ready; Draw an org chart, Map a process, Lay out a timeline, Break down a project, Brainstorm a mind map, SWOT and Stakeholders open New diagram with that template picked; there are also a blank page, every template, and Open a file. Your own templates and the diagrams you changed last are underneath. Tick the box at the bottom to open on Your diagrams instead.'],
+  ['Your diagrams and filing', 'Your diagrams is your repository: every diagram with a preview. File puts a diagram under one of your CRM clients and, optionally, one of its projects (choosing a project also chooses its client). Filter the list by client (or Not filed) and project, search by name, and sort by newest change, oldest or name. A copy stays filed in the same place.'],
   ['Templates', 'New diagram opens a gallery: Blank, or a ready-made template grouped as Org charts, Projects, Timelines, Processes, Mind maps and Relationships. Choose one, set its few choices (for example how many managers, steps or months, top to bottom or left to right, and the Sketch or Clean look) and press Create. The template is drawn as ordinary boxes and arrows: rename, move or delete anything, use Numbers and Change it on it, or Undo to remove it. No AI is used.'],
   ['Your own templates', 'Press Save as template above any open diagram, give it a name, and a copy is kept as your own template. It shows first in the New diagram gallery, under Yours: pick it and press Create to start a new diagram that is a copy of it. Later changes to the diagram do not change the template. Delete a template from its card in the gallery (it waits 30 days in the recycle bin, with Undo). Templates count towards your 300 diagrams.'],
   ['The board', 'An endless page with shapes, arrows, lines, text, freehand and an eraser, drawn in a hand-sketched style. Pick a tool along the top, drag on the page, and change colours and line style in the panel on the left. Everything saves by itself a moment after you stop; the words next to the title say when it last did.'],
@@ -46,11 +48,14 @@ export const HOW_IT_WORKS = [
 
 // Everything the guide can point at: the two views plus the controls inside them.
 export const GUIDE_TOOLS = [
-  { id: 'list', label: 'Your diagrams', tool: 'list' },
+  { id: 'start', label: 'What do you want to do?', tool: 'list', view: 'start' },
+  { id: 'list', label: 'Your diagrams', tool: 'list', view: 'diagrams' },
+  { id: 'file-under', label: 'File under a client or project', tool: 'list', view: 'diagrams' },
+  { id: 'your-templates', label: 'Your templates', tool: 'list', view: 'templates' },
   { id: 'new', label: 'New diagram', tool: 'list' },
   { id: 'templates', label: 'Templates', tool: 'list' },
   { id: 'open-file', label: 'Open a file', tool: 'list' },
-  { id: 'search', label: 'Search', tool: 'list' },
+  { id: 'search', label: 'Search, filter and sort', tool: 'list', view: 'diagrams' },
   { id: 'rename', label: 'Rename', tool: 'list' },
   { id: 'copy', label: 'Make a copy', tool: 'list' },
   { id: 'delete', label: 'Delete and undo', tool: 'list' },

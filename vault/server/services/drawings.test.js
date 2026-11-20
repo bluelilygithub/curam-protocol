@@ -67,7 +67,9 @@ if (!url) {
       assert.ok(start > 0, `${name} is defined in db.js`);
       await client.query(dbjs.slice(start, dbjs.indexOf('`', start)));
     }
-    for (const col of ['look', '"isTemplate"']) {
+    await client.query('CREATE TABLE clients (id SERIAL PRIMARY KEY, "userId" INTEGER, name TEXT)');
+    await client.query('CREATE TABLE projects (id SERIAL PRIMARY KEY, "userId" INTEGER, "clientId" INTEGER, "projectType" TEXT, name TEXT)');
+    for (const col of ['look', '"isTemplate"', '"clientId"', '"clientProjectId"']) {
       const alter = dbjs.indexOf(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS ${col}`);
       assert.ok(alter > 0, `the ${col} column is added in db.js`);
       await client.query(dbjs.slice(alter, dbjs.indexOf('`', alter)));
@@ -150,6 +152,22 @@ if (!url) {
     assert.strictEqual(fromTpl.title, 'My template', 'named after the template, no "(copy)"');
     await assert.rejects(() => D.duplicate(pool, 2, tpl.id, {}), (e) => e.status === 404, "another person cannot use someone's template");
     await client.query('DELETE FROM drawings WHERE id = ANY($1)', [[tpl.id, fromTpl.id]]);
+
+    // filing under a CRM client and client project (the Plans rules)
+    const cl = (await client.query(`INSERT INTO clients ("userId", name) VALUES (1, 'Acme'), (1, 'Beta'), (2, 'Theirs') RETURNING id`)).rows.map((r) => r.id);
+    const pj = (await client.query(`INSERT INTO projects ("userId", "clientId", "projectType", name) VALUES (1, $1, 'client', 'Fit-out') RETURNING id`, [cl[0]])).rows[0].id;
+    const filed = await D.update(pool, 1, a.id, { clientProjectId: pj });
+    assert.deepStrictEqual([filed.clientId, filed.clientProjectId], [cl[0], pj], 'choosing a project also chooses its client');
+    const row = (await D.list(pool, 1)).find((r) => r.id === a.id);
+    assert.deepStrictEqual([row.clientName, row.clientProjectName], ['Acme', 'Fit-out'], 'the list carries the names');
+    assert.strictEqual((await D.duplicate(pool, 1, a.id)).clientProjectId, pj, 'a copy stays filed in the same place');
+    await assert.rejects(() => D.update(pool, 1, a.id, { clientId: cl[1], clientProjectId: pj }), (e) => e instanceof D.DrawingError && e.status === 400, 'a project of another client is refused');
+    await assert.rejects(() => D.update(pool, 1, a.id, { clientId: cl[2] }), (e) => e instanceof D.DrawingError && e.status === 404, "another person's client is refused");
+    const moved = await D.update(pool, 1, a.id, { clientId: cl[1] });
+    assert.deepStrictEqual([moved.clientId, moved.clientProjectId], [cl[1], null], 'changing the client drops the old project');
+    const cleared = await D.update(pool, 1, a.id, { clientId: null });
+    assert.deepStrictEqual([cleared.clientId, cleared.clientProjectId], [null, null]);
+    await client.query(`DELETE FROM drawings WHERE "userId" = 1 AND id <> $1 AND title LIKE '%(copy)%' AND id > $2`, [a.id, copy.id]);
     await assert.rejects(() => D.duplicate(pool, 2, a.id), (e) => e.status === 404, "another person cannot copy it");
     assert.strictEqual((await rowsOf(2)).length, 0);
 

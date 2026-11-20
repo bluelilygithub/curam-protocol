@@ -71,3 +71,21 @@ export function filterDrawings(list, query) {
   if (!words.length) return list;
   return list.filter((d) => words.every((w) => String(d.title || '').toLowerCase().includes(w)));
 }
+
+/**
+ * The repository view: keep to one CRM client ('none' = filed nowhere) and/or one client project, then sort ('recent' newest change first,
+ * 'oldest', or 'name' A to Z). Ids are compared as numbers; an empty filter keeps everything.
+ */
+export function arrangeDrawings(list, { clientId = '', clientProjectId = '', sort = 'recent' } = {}) {
+  let out = list;
+  if (clientId === 'none') out = out.filter((d) => !d.clientId);
+  else if (clientId) out = out.filter((d) => Number(d.clientId) === Number(clientId));
+  if (clientProjectId) out = out.filter((d) => Number(d.clientProjectId) === Number(clientProjectId));
+  const time = (d) => new Date(d.updatedAt).getTime() || 0;
+  const by = {
+    recent: (a, b) => time(b) - time(a),
+    oldest: (a, b) => time(a) - time(b),
+    name: (a, b) => String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base', numeric: true }),
+  }[sort] || null;
+  return by ? [...out].sort(by) : out;
+}

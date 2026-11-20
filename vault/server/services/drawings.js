@@ -61,7 +61,7 @@ function checkThumbnail(v) {
   return s;
 }
 
-const LIST_COLS = 'id, title, thumbnail, look, "isTemplate", "elementCount", "sceneBytes", "createdAt", "updatedAt"';
+const LIST_COLS = 'id, title, thumbnail, look, "isTemplate", "clientId", "clientProjectId", "elementCount", "sceneBytes", "createdAt", "updatedAt"';
 
 /**
  * How many of the person's notes link back to each drawing, as { [drawingId]: count }. One pass over the notes that mention "/drawings/"
@@ -77,7 +77,12 @@ async function noteCounts(db, userId) {
 }
 
 async function list(db, userId) {
-  const { rows } = await db.query(`SELECT ${LIST_COLS} FROM drawings WHERE "userId" = $1 ORDER BY "updatedAt" DESC, id DESC LIMIT 500`, [userId]);
+  const cols = LIST_COLS.split(', ').map((c) => `d.${c}`).join(', ');
+  const { rows } = await db.query(
+    `SELECT ${cols}, c.name AS "clientName", cp.name AS "clientProjectName" FROM drawings d
+       LEFT JOIN clients c ON c.id = d."clientId" AND c."userId" = d."userId"
+       LEFT JOIN projects cp ON cp.id = d."clientProjectId" AND cp."userId" = d."userId"
+      WHERE d."userId" = $1 ORDER BY d."updatedAt" DESC, d.id DESC LIMIT 500`, [userId]);
   const counts = await noteCounts(db, userId);
   return rows.map((r) => ({ ...r, noteCount: counts[r.id] || 0 }));
 }
@@ -119,6 +124,19 @@ async function update(db, userId, id, patch = {}) {
   }
   if (patch.thumbnail !== undefined) add('thumbnail', checkThumbnail(patch.thumbnail));
   if (patch.look !== undefined) add('look', checkLook(patch.look));
+  if (patch.clientId !== undefined || patch.clientProjectId !== undefined) {
+    // filing under a CRM client / client project: the same checks as Plans (both the person's own, the project belongs to the client)
+    const cur = await get(db, userId, id);
+    const body = {};
+    if (patch.clientId !== undefined) body.clientId = patch.clientId;
+    if (patch.clientProjectId !== undefined) body.clientProjectId = patch.clientProjectId;
+    let link;
+    try { link = await require('./plans').resolveClientLink(db, userId, body, { clientId: cur.clientId, clientProjectId: cur.clientProjectId }); } catch (err) {
+      if (err instanceof require('./planErrors').PlanError) throw new DrawingError(err.message, err.status);
+      throw err;
+    }
+    add('"clientId"', link.clientId); add('"clientProjectId"', link.clientProjectId);
+  }
   if (!sets.length) throw new DrawingError('Nothing to save.');
   const base = patch.baseUpdatedAt ? new Date(patch.baseUpdatedAt) : null;
   if (base && Number.isNaN(base.getTime())) throw new DrawingError('That save time was not valid.');
@@ -141,8 +159,8 @@ async function duplicate(db, userId, id, { title, asTemplate = false } = {}) {
   const src = await get(db, userId, id);
   await assertRoom(db, userId);
   const { rows } = await db.query(
-    `INSERT INTO drawings ("userId", title, scene, thumbnail, look, "elementCount", "sceneBytes", "isTemplate")
-     SELECT "userId", $3, scene, thumbnail, look, "elementCount", "sceneBytes", $4 FROM drawings WHERE id = $2 AND "userId" = $1 RETURNING ${LIST_COLS}`,
+    `INSERT INTO drawings ("userId", title, scene, thumbnail, look, "elementCount", "sceneBytes", "isTemplate", "clientId", "clientProjectId")
+     SELECT "userId", $3, scene, thumbnail, look, "elementCount", "sceneBytes", $4, "clientId", "clientProjectId" FROM drawings WHERE id = $2 AND "userId" = $1 RETURNING ${LIST_COLS}`,
     [userId, id, cleanTitle(title, cleanTitle(`${src.title} (copy)`)), asTemplate === true]);
   return rows[0];
 }

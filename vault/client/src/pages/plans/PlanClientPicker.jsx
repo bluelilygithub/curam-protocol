@@ -35,7 +35,8 @@ export function useClientOptions() {
  * client changes (the project is cleared), { clientProjectId, clientId } when a project is chosen, or { clientProjectId: null } when it is cleared.
  * Shows nothing when the CRM is not available and the plan has no client.
  */
-export default function PlanClientPicker({ clientId, clientProjectId, clientName, clientProjectName, onChange, disabled }) {
+export default function PlanClientPicker({ clientId, clientProjectId, clientName, clientProjectName, onChange, disabled, what = 'plan' }) {
+  const isPlan = what === 'plan'; // other tools (Diagrams) reuse the pickers with their own word and without the plan-only notes
   const { clients, projects, available } = useClientOptions();
   // a client or project the lists do not hold (an archived client, say) is still shown by name, so the choice never looks empty
   const clientOptions = useMemo(() => (clientId && !clients.some((c) => c.id === clientId) ? [...clients, { id: clientId, name: clientName || `Client ${clientId}` }] : clients), [clients, clientId, clientName]);
@@ -52,14 +53,14 @@ export default function PlanClientPicker({ clientId, clientProjectId, clientName
       <label className="space-y-1 block">
         <span className="text-xs block" style={LABEL_STYLE}>Client</span>
         <div className="flex items-center gap-1.5">
-          <Tooltip text="The CRM client this plan is for. Plans made from a note start with the note's client. Tasks sent from the plan are filed under it.">
-            <select value={clientId || ''} onChange={(e) => onChange({ clientId: e.target.value ? Number(e.target.value) : null, clientProjectId: null })} disabled={disabled} aria-label="Client for this plan" className={FIELD} style={FIELD_STYLE}>
+          <Tooltip text={isPlan ? `The CRM client this plan is for. Plans made from a note start with the note's client. Tasks sent from the plan are filed under it.` : `The CRM client this ${what} is filed under.`}>
+            <select value={clientId || ''} onChange={(e) => onChange({ clientId: e.target.value ? Number(e.target.value) : null, clientProjectId: null })} disabled={disabled} aria-label={`Client for this ${what}`} className={FIELD} style={FIELD_STYLE}>
               <option value="">No client</option>
               {clientOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Tooltip>
           {clientId && (
-            <Tooltip text="Open this client's page, where their plans are listed.">
+            <Tooltip text={isPlan ? `Open this client's page, where their plans are listed.` : `Open this client's page.`}>
               <Link to={`/clients/${clientId}`} className="text-xs transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }} aria-label="Open the client">Open</Link>
             </Tooltip>
           )}
@@ -68,14 +69,14 @@ export default function PlanClientPicker({ clientId, clientProjectId, clientName
       <label className="space-y-1 block">
         <span className="text-xs block" style={LABEL_STYLE}>Client project</span>
         <div className="flex items-center gap-1.5">
-          <Tooltip text="One of this client's projects. Choosing a project also chooses its client. Tasks sent from the plan are filed under the project.">
-            <select value={clientProjectId || ''} onChange={(e) => { const pid = e.target.value ? Number(e.target.value) : null; const proj = shownProjects.find((p) => p.id === pid); onChange(pid ? { clientProjectId: pid, clientId: (proj && proj.clientId) || clientId || null } : { clientProjectId: null }); }} disabled={disabled || (shownProjects.length === 0 && !clientProjectId)} aria-label="Client project for this plan" className={FIELD} style={FIELD_STYLE}>
+          <Tooltip text={isPlan ? `One of this client's projects. Choosing a project also chooses its client. Tasks sent from the plan are filed under the project.` : `One of this client's projects to file the ${what} under. Choosing a project also chooses its client.`}>
+            <select value={clientProjectId || ''} onChange={(e) => { const pid = e.target.value ? Number(e.target.value) : null; const proj = shownProjects.find((p) => p.id === pid); onChange(pid ? { clientProjectId: pid, clientId: (proj && proj.clientId) || clientId || null } : { clientProjectId: null }); }} disabled={disabled || (shownProjects.length === 0 && !clientProjectId)} aria-label={`Client project for this ${what}`} className={FIELD} style={FIELD_STYLE}>
               <option value="">{shownProjects.length === 0 ? 'No projects' : 'No project'}</option>
               {shownProjects.map((p) => <option key={p.id} value={p.id}>{clientId ? p.name : `${p.clientName ? `${p.clientName} · ` : ''}${p.name}`}</option>)}
             </select>
           </Tooltip>
           {clientProjectId && (
-            <Tooltip text="Open this client project's page, where its plans are listed.">
+            <Tooltip text={isPlan ? `Open this client project's page, where its plans are listed.` : `Open this client project's page.`}>
               <Link to={`/client-projects/${clientProjectId}`} className="text-xs transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }} aria-label="Open the client project">Open</Link>
             </Tooltip>
           )}

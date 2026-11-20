@@ -1,6 +1,6 @@
 // node client/src/pages/drawings/sceneLogic.test.mjs
 import assert from 'node:assert';
-import { sceneSignature, fileNameFor, titleFromFileName, isDarkColour, readSceneFile, saveLabel, pieceCount, filterDrawings } from './sceneLogic.mjs';
+import { sceneSignature, fileNameFor, titleFromFileName, isDarkColour, readSceneFile, saveLabel, pieceCount, filterDrawings, arrangeDrawings } from './sceneLogic.mjs';
 
 const el = (id, version = 1, nonce = 10) => ({ id, version, versionNonce: nonce });
 
@@ -50,5 +50,24 @@ assert.strictEqual(filterDrawings(list, '').length, 3);
 assert.deepStrictEqual(filterDrawings(list, 'plan').map((d) => d.title), ['Garden plan', 'Kitchen floor plan']);
 assert.deepStrictEqual(filterDrawings(list, 'floor PLAN').map((d) => d.title), ['Kitchen floor plan'], 'every word must match, in any case');
 assert.strictEqual(filterDrawings(list, 'zzz').length, 0);
+
+// the repository: filter by client / project, then sort
+{
+  const L = [
+    { id: 1, title: 'beta', clientId: 5, clientProjectId: 9, updatedAt: '2026-11-02T00:00:00Z' },
+    { id: 2, title: 'Alpha', clientId: 5, clientProjectId: null, updatedAt: '2026-11-03T00:00:00Z' },
+    { id: 3, title: 'gamma 10', clientId: null, updatedAt: '2026-11-01T00:00:00Z' },
+    { id: 4, title: 'gamma 9', clientId: 6, updatedAt: 'not a date' },
+  ];
+  const ids = (o) => arrangeDrawings(L, o).map((d) => d.id);
+  assert.deepStrictEqual(ids({}), [2, 1, 3, 4], 'newest change first; a bad date sorts last');
+  assert.deepStrictEqual(ids({ sort: 'oldest' }), [4, 3, 1, 2]);
+  assert.deepStrictEqual(ids({ sort: 'name' }), [2, 1, 4, 3], 'A to Z, ignoring case, numbers in number order');
+  assert.deepStrictEqual(ids({ clientId: '5' }), [2, 1], 'a client id from a select (text) matches');
+  assert.deepStrictEqual(ids({ clientId: 'none' }), [3], 'filed nowhere');
+  assert.deepStrictEqual(ids({ clientProjectId: 9 }), [1]);
+  assert.strictEqual(arrangeDrawings(L, {}).length, 4);
+  assert.strictEqual(L[0].id, 1, 'the list given is not reordered');
+}
 
 console.log('sceneLogic tests: all ok');
