@@ -41,6 +41,7 @@ So:
 - **7874897c (2026-11-01):** the Playwright Chromium download was moved above `COPY package*.json`. `.dockerignore` was added.
 - **0ac982d0, 273148cd (2026-11-13):** the slow steps moved into `Dockerfile.base`, built on GitHub; `Dockerfile` starts from it. The package was made public, so Railway needs no registry credentials.
 - **2026-10-17:** CI "Wait for CI" was switched off on both Railway services because it added 10-30 minutes per deploy. Do not add it back. It must stay off now too, or every deploy would wait for the base workflow.
+- **2026-11-21:** the base build failed at `npm install --include=dev` (the first fresh install since 2026-11-15; earlier builds reused the cached layer). Cause: `onnxruntime-node` (from `@imgly/background-removal-node`) downloads CUDA binaries on install and the 1.17.3 GitHub release asset now returns 404. Fixed with `ENV npm_config_onnxruntime_node_install_cuda=skip` in `Dockerfile.base` (CPU binaries ship in the package; reproduced and verified on Linux Node 20). If a fresh install fails again, reproduce it in WSL or `node:20-slim` with only `package*.json` before changing anything else.
 
 ## What is still open (nobody has done it; ask the owner first)
 

@@ -41,6 +41,10 @@ ARG PLAYWRIGHT_VERSION=1.61.1
 RUN npx --yes playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium
 
 # Install dependencies
+# onnxruntime-node (via @imgly/background-removal-node) also downloads CUDA GPU binaries on install; their GitHub release for 1.17.3 now
+# returns 404, which failed every fresh install (base build of 2026-11-21). There is no GPU here: background removal uses the CPU binaries,
+# which ship inside the package. ENV, so the app image (FROM this one) skips it too.
+ENV npm_config_onnxruntime_node_install_cuda=skip
 COPY package*.json ./
 RUN npm install --include=dev
 RUN npx playwright install chromium
