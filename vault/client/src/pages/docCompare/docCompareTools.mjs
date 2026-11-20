@@ -85,6 +85,38 @@ export const DOC_COMPARE_GOALS = [
     ],
   },
   {
+    id: 'added', title: 'Check what the AI added', icon: 'search',
+    blurb: 'New sentences, paragraphs and sections: AI edits can add claims that are not in your original.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Everything that is new in the edited version. Check any figure, quote or source you did not write.', filter: { categories: ['added'] } },
+    ],
+  },
+  {
+    id: 'structure', title: 'Check headings and structure', icon: 'list-checks',
+    blurb: 'Missing or renamed headings, changed heading levels, lists turned into paragraphs.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Removed content and formatting changes, including heading levels and lists. Removed sections show as one row.', filter: { categories: ['removed', 'formatting'] } },
+    ],
+  },
+  {
+    id: 'moved', title: 'Find paragraphs that were moved', icon: 'compare',
+    blurb: 'Text the AI kept but put somewhere else, which can change the order of an argument.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Paragraphs that moved. The location shows where each one was and where it is now.', filter: { categories: ['moved'] } },
+    ],
+  },
+  {
+    id: 'shrink', title: 'Check the document did not shrink', icon: 'file-text',
+    blurb: 'Compare word count, size, headings, tables and images between the two files.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'metadata', note: 'Compare the counts. A word count that dropped by more than 5% is flagged, because it often means skipped content.' },
+    ],
+  },
+  {
     id: 'pdf-pages', title: 'Compare two PDFs page by page', icon: 'columns',
     blurb: 'See which pages look different and view them side by side.',
     steps: [
@@ -115,7 +147,7 @@ export const DOC_COMPARE_GOALS = [
 export const HOW_IT_WORKS = [
   ['What it is for', 'When an AI edits a document it sometimes drops a paragraph, changes a number or quietly rewords a sentence. DocCompare puts the original and the edited version side by side and lists every difference, with missing content shown first and most prominently.'],
   ['Your files stay on your computer', 'Both files are read and compared inside this browser tab. Nothing is uploaded, nothing is sent to an AI model, and nothing is saved. Leave the page and the comparison is gone, so download the PDF report if you want to keep it.'],
-  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation.'],
+  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation. The compass beside the title runs an 11-step guided tour (also in Settings, DocCompare Tour).'],
   ['Choosing files', 'In Compare documents, drop a file on Original and another on Edited (LLM output), or press Choose file. Both must be the same type: PDF, Word (.docx), Markdown (.md) or plain text (.txt). Old Word .doc files must be saved as .docx first. A scanned PDF with no text in it cannot be read, and a password-protected PDF must be unlocked first.'],
   ['The two checks before comparing', 'First, the file types must match, or DocCompare stops and says why. Second, it scores how alike the two files are (0 to 100, from matching headings, shared wording and structure). Below the threshold in Settings (60 unless changed) it warns that they may not be versions of the same document, lists the reasons, and lets you Cancel or Compare anyway. Compare anyway is noted in the report.'],
   ['Reading the results', 'The summary bar counts each kind of change; press one to see only those in Changes. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to see the words that changed (struck through in red for removed, underlined in green for added).'],
@@ -145,6 +177,7 @@ export const GUIDE_TOOLS = [
   { id: 'author-report', label: 'Review for the author', tool: 'report' },
   { id: 'settings', label: 'Settings', tool: 'settings' },
   { id: 'info', label: 'How DocCompare works', tool: 'compare' },
+  { id: 'tour', label: 'Guided tour', tool: 'compare' },
 ];
 
 // postMessage types between Vault's page and the app in its frame (same origin only)

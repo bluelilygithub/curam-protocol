@@ -60,6 +60,9 @@ const CATALOG = [
   { id: 'info', label: 'How DocCompare works', group: 'Compare',
     does: 'The (i) button beside the DocCompare title in the tool list opens a plain-language guide to the whole page. It also opens by itself the first time.',
     notes: '' },
+  { id: 'tour', label: 'Guided tour', group: 'Compare',
+    does: 'The compass button beside the DocCompare title (also Settings, DocCompare Tour) runs an 11-step tour: the jobs, the tool list, Compare documents and its two checks, Changes, File details and PDF pages, the review for the author, Settings, and this guide. It switches to each tool as it goes.',
+    notes: 'It only shows the page; it never chooses files or compares. Esc or Skip Tour ends it.' },
 ];
 
 const RULES = [

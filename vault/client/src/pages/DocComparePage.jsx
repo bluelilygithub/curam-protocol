@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ToolSidebar from '../components/ToolSidebar';
+import { startDocCompareTour, TOUR_KEY as DOC_COMPARE_TOUR_KEY } from '../utils/tours/docCompareTour';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import Tooltip from '../components/Tooltip';
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
@@ -90,9 +92,26 @@ export default function DocComparePage() {
     return () => window.removeEventListener('message', onMessage);
   }, [post]);
 
-  // the guide's Open buttons: the (i) box is ours; everything else is shown by the app (it switches view itself and tells us)
+  // the guided tour: it switches tools the same way the list does ('start' = the job screen)
+  const goTool = useCallback((id) => { if (id === 'start') { setGoal(null); setTool('start'); } else openTool(id); }, [openTool]);
+  const startTour = useCallback(() => {
+    info.close();
+    try { localStorage.removeItem(DOC_COMPARE_TOUR_KEY); } catch { /* ignore */ }
+    startDocCompareTour(goTool);
+  }, [goTool, info]);
+  // Settings -> DocCompare Tour opens /doc-compare?tour=1
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!params.get('tour') || state !== 'ok') return;
+    const next = new URLSearchParams(params); next.delete('tour');
+    setParams(next, { replace: true });
+    setTimeout(startTour, 400);
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the guide's Open buttons: the (i) box and the tour are ours; everything else is shown by the app (it switches view itself and tells us)
   const openGuideTool = (id) => {
     if (id === 'info') { info.open(); return; }
+    if (id === 'tour') { startTour(); return; }
     const target = GUIDE_TOOLS.find((t) => t.id === id);
     if (!target) return;
     const wasStart = toolRef.current === 'start';
@@ -148,6 +167,8 @@ export default function DocComparePage() {
           onSelect={(id) => openTool(id)}
           onInfo={info.open}
           infoTip="How DocCompare works: what it checks, how to read the results, and what it cannot do."
+          onTour={startTour}
+          tourTip="Take the guided tour of DocCompare: the jobs, each tool, the review for the author and the guide."
         >
           <Tooltip text="Go back to the list of jobs (check nothing was left out, check numbers and dates, and so on).">
             <button
@@ -173,6 +194,7 @@ export default function DocComparePage() {
                 openOnLast={openOnLast}
                 onToggleOpenOnLast={toggleOpenOnLast}
                 appName="DocCompare"
+                tourId="doc-compare-jobs"
               />
             </div>
           )}
@@ -189,6 +211,7 @@ export default function DocComparePage() {
               ref={frameRef}
               src={`${APP_URL}?embedded=1`}
               title="DocCompare"
+              data-tour="doc-compare-app"
               className="w-full border-0 flex-1 rounded-xl"
               style={{ display: tool === 'start' ? 'none' : 'block', minHeight: '70vh', background: 'var(--color-bg)' }}
             />

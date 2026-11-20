@@ -1,3 +1,8 @@
+declare module '@vault-client/themes' {
+  export const themes: Record<string, { label: string; bg: string; surface: string; border: string; primary: string; onPrimary?: string; text: string; muted: string }>;
+  export const fontOptions: { value: string; label: string; style: string }[];
+}
+
 declare module '@vault-client/pages/docCompare/docCompareTools.mjs' {
   export const DOC_COMPARE_TOOLS: { id: string; label: string; group: string; icon: string }[];
   export const TOOL_BLURBS: Record<string, string>;

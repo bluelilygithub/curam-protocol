@@ -24,6 +24,7 @@ import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours
 import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
 import { TOUR_KEY as MEASUREMENTS_TOUR_KEY } from '../utils/tours/measurementsTour';
+import { TOUR_KEY as DOC_COMPARE_TOUR_KEY } from '../utils/tours/docCompareTour';
 import { TOUR_KEY as DRAWINGS_TOUR_KEY } from '../utils/tours/drawingsTour';
 import { TOUR_KEY as SKETCHBOOK_TOUR_KEY } from '../utils/tours/sketchbookTour';
 import { TOUR_KEY as PLANS_TOUR_KEY } from '../utils/tours/plansTour';
@@ -2615,6 +2616,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(MEASUREMENTS_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>DocCompare Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                11-step tour — jobs, the tool list, comparing, changes, file details and PDF pages, the review for the author, settings, the guide
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(DOC_COMPARE_TOUR_KEY);
+                navigate('/doc-compare?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(DOC_COMPARE_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
