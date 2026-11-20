@@ -1,61 +1,143 @@
-// What DocCompare is made of, the plain-words help for it, and the parts its guide (the round button) can point at. Shared by three places:
-//   - the app itself (vault/doc-compare/, imported through its @vault-client alias): the (i) box text and the Open-button ids;
-//   - the guide's catalogue (server/services/docCompareTutor.js): node server/services/docCompareTutor.test.js fails if the two lists drift apart;
-//   - Vault's host page (client/src/pages/DocComparePage.jsx).
-// DocCompare is one page with one job, so there is one "tool"; `tool` on a guide entry says which tool its Open button shows, and the app marks
-// each part with data-guide="<id>" so an Open button can scroll to it.
+// What DocCompare is made of, the plain-words help for it, the jobs on its start screen, and the parts its guide (the round button) can point at.
+// Shared by three places:
+//   - Vault's page (client/src/pages/DocComparePage.jsx): the left-hand tool list (ToolSidebar), the job screen (JobStart), the (i) box;
+//   - the app in the page's frame (vault/doc-compare/, imported through its @vault-client alias): its views are these tool ids;
+//   - the guide's catalogue (server/services/docCompareTutor.js): node server/services/docCompareTutor.test.js fails if the lists drift apart.
+// `tool` on a guide entry says which tool (view) its Open button shows; the app marks each part with data-guide="<id>" so it can scroll to it.
 
 export const DOC_COMPARE_TOOLS = [
-  { id: 'doc-compare', label: 'DocCompare', group: 'DocCompare', icon: 'compare' },
+  { id: 'compare', label: 'Compare documents', group: 'Compare', icon: 'compare' },
+  { id: 'changes', label: 'Changes', group: 'Results', icon: 'list-checks' },
+  { id: 'metadata', label: 'File details', group: 'Results', icon: 'file-text' },
+  { id: 'pages', label: 'PDF pages', group: 'Results', icon: 'columns' },
+  { id: 'report', label: 'PDF report', group: 'Share and set up', icon: 'download' },
+  { id: 'settings', label: 'Settings', group: 'Share and set up', icon: 'sliders' },
 ];
 
-export const GROUPS = ['DocCompare'];
+export const GROUPS = ['Compare', 'Results', 'Share and set up'];
 
 export const GROUP_TIPS = {
-  DocCompare: 'Compare an original document with an AI-edited version and see everything that changed.',
+  Compare: 'Choose the original and the AI-edited file and compare them. Your files never leave your computer.',
+  Results: 'What changed: every change in a table, the file details, and (for PDFs) the pages side by side.',
+  'Share and set up': 'Download a report of the comparison, and choose what counts as a change.',
 };
 
 export const TOOL_TIPS = {
-  'doc-compare': 'Drop in the original and the AI-edited version of a document (PDF, Word, Markdown or text) and see every change: missing text, added text, wording, numbers, formatting and page layout. Your files never leave your computer.',
+  compare: 'Drop in the original and the AI-edited version (PDF, Word, Markdown or text) and press Compare. Two checks run first: the files must be the same type, and they should look like versions of the same document.',
+  changes: 'Every change in one table: removed, added, moved, wording, typos, numbers and dates, formatting and layout, with severity. Filter, search, sort, and open a row to see the exact words that changed.',
+  metadata: 'The two files\' details side by side (size, dates, author, and counts of pages, words, headings, tables and images), with anything suspicious flagged, such as a word count that dropped.',
+  pages: 'For two PDFs: every page drawn and compared pixel by pixel. See which pages look different and open them side by side with the changes in red.',
+  report: 'Download a PDF of the comparison to keep or send: the checks, the summary, the file details, the changes (with your filters) and changed PDF pages.',
+  settings: 'Choose when files count as unrelated, when size and word-count changes are flagged, and which tiny differences (spaces, quotes, dashes) are ignored.',
 };
 
 export const TOOL_BLURBS = {
-  'doc-compare': 'Catch what an AI edit skipped or changed.',
+  compare: 'Choose the original and the edited file, then press Compare.',
+  changes: 'Every difference between the two files, most serious first when sorted by severity.',
+  metadata: 'Size, dates, author and counts for both files, with suspicious changes flagged.',
+  pages: 'PDF pages compared as pictures, side by side with the changes in red.',
+  report: 'A PDF of this comparison to keep or share.',
+  settings: 'What counts as a change, and when to warn.',
 };
+
+// The "What do you want to do?" jobs (components/JobStart.jsx). Each step names a tool above; `filter` preselects the Changes table
+// (categories and severities as in doc-compare/src/report/model.ts). After Compare finishes, the page moves on to the job's next step.
+export const DOC_COMPARE_GOALS = [
+  {
+    id: 'missing', title: 'Check the AI did not leave anything out', icon: 'alert-triangle',
+    blurb: 'Find removed paragraphs, missing sections and dropped table rows.',
+    steps: [
+      { tool: 'compare', note: 'Choose the original and the AI-edited file, then press Compare.' },
+      { tool: 'changes', note: 'These are the removed items. Open a row to read what is missing.', filter: { categories: ['removed'] } },
+      { tool: 'metadata', note: 'Check the word count: a big drop means content was skipped.' },
+    ],
+  },
+  {
+    id: 'numbers', title: 'Check numbers and dates were not changed', icon: 'hash',
+    blurb: 'Amounts, dates, days and clause numbers: any change with a digit in it.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Every change involving a number or date. Open a row to see the old and new values.', filter: { categories: ['number'] } },
+    ],
+  },
+  {
+    id: 'serious', title: 'See only the serious changes', icon: 'shield',
+    blurb: 'Just the High severity items: removed content and changed numbers.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Only High severity changes are shown. Clear filters to see everything.', filter: { severities: ['high'] } },
+    ],
+  },
+  {
+    id: 'wording', title: 'Review every wording change', icon: 'type',
+    blurb: 'Rewording, typos and moved paragraphs, word by word.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Wording, typo and moved changes. Open a row for the word-by-word difference.', filter: { categories: ['wording', 'typo', 'moved'] } },
+    ],
+  },
+  {
+    id: 'formatting', title: 'Check the formatting survived', icon: 'list',
+    blurb: 'Headings, lists, bold, italic, fonts and table shape.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files (Word or PDF keep the most formatting), then press Compare.' },
+      { tool: 'changes', note: 'Formatting changes: heading levels, lists, bold, fonts and sizes.', filter: { categories: ['formatting'] } },
+    ],
+  },
+  {
+    id: 'pdf-pages', title: 'Compare two PDFs page by page', icon: 'columns',
+    blurb: 'See which pages look different and view them side by side.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two PDF files, then press Compare.' },
+      { tool: 'pages', note: 'Pages with visible changes are listed. Open one to see the two side by side.' },
+    ],
+  },
+  {
+    id: 'share', title: 'Make a report to share', icon: 'share-2',
+    blurb: 'Compare, narrow the list if you want, and download a PDF.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Optional: filter the list. The report includes only what is shown here.' },
+      { tool: 'report', note: 'Download the PDF report.' },
+    ],
+  },
+];
 
 // The longer text for the (i) "How DocCompare works" box, shown once per browser and from the (i) button.
 export const HOW_IT_WORKS = [
   ['What it is for', 'When an AI edits a document it sometimes drops a paragraph, changes a number or quietly rewords a sentence. DocCompare puts the original and the edited version side by side and lists every difference, with missing content shown first and most prominently.'],
-  ['Your files stay on your computer', 'Both files are read and compared inside this browser tab. Nothing is uploaded, nothing is sent to an AI model, and nothing is saved. Close the tab and the comparison is gone, so download the PDF report if you want to keep it.'],
-  ['Choosing files', 'Drop a file on Original and another on Edited (LLM output), or press Choose file. Both must be the same type: PDF, Word (.docx), Markdown (.md) or plain text (.txt). Old Word .doc files must be saved as .docx first. A scanned PDF with no text in it cannot be read, and a password-protected PDF must be unlocked first.'],
+  ['Your files stay on your computer', 'Both files are read and compared inside this browser tab. Nothing is uploaded, nothing is sent to an AI model, and nothing is saved. Leave the page and the comparison is gone, so download the PDF report if you want to keep it.'],
+  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation.'],
+  ['Choosing files', 'In Compare documents, drop a file on Original and another on Edited (LLM output), or press Choose file. Both must be the same type: PDF, Word (.docx), Markdown (.md) or plain text (.txt). Old Word .doc files must be saved as .docx first. A scanned PDF with no text in it cannot be read, and a password-protected PDF must be unlocked first.'],
   ['The two checks before comparing', 'First, the file types must match, or DocCompare stops and says why. Second, it scores how alike the two files are (0 to 100, from matching headings, shared wording and structure). Below the threshold in Settings (60 unless changed) it warns that they may not be versions of the same document, lists the reasons, and lets you Cancel or Compare anyway. Compare anyway is noted in the report.'],
-  ['Reading the results', 'The summary bar counts each kind of change; press one to show only those. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to open it and see the words that changed (struck through in red for removed, underlined in green for added). Filters, search and sorting are above the table.'],
+  ['Reading the results', 'The summary bar counts each kind of change; press one to see only those in Changes. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to see the words that changed (struck through in red for removed, underlined in green for added).'],
   ['Kinds of change', 'Removed and Added: whole paragraphs, sections or table rows. Moved: the same text in a new place. Wording: words changed inside a paragraph (marked High when a large part was dropped). Typo: one small word fix. Number/date: anything with a digit changed. Formatting: headings, lists, bold, italic, fonts and sizes. Layout: PDF pages that look different. Metadata: file size, dates, author and counts, for example a word count that dropped.'],
   ['Trivial changes', 'Differences in spaces, line breaks, curly or straight quotes, dashes and invisible characters are hidden by default but still counted ("7 trivial changes hidden"). Tick that box to show them, or choose in Settings which of them count as trivial.'],
-  ['PDF pages', 'For two PDFs, each page is also drawn and compared pixel by pixel after the text results appear. Pages where more than a tiny share changed are listed as Layout changes. The page viewer shows the two pages side by side with the changed pixels in red. Very long PDFs (over 500 pages) wait for you to start this step.'],
-  ['The report', 'Download PDF report saves the checks, the summary, the metadata, the changes table (with the filters you have set, which it names) and thumbnails of changed PDF pages.'],
+  ['PDF pages', 'For two PDFs, each page is also drawn and compared pixel by pixel after the text results appear. Pages where more than a tiny share changed are listed in PDF pages and as Layout changes. Open one to see the two pages side by side with the changed pixels in red. Very long PDFs (over 500 pages) wait for you to start this step.'],
+  ['The report', 'PDF report downloads the checks, the summary, the file details, the changes table (with the filters you set in Changes, which it names) and thumbnails of changed PDF pages.'],
   ['What it cannot do', 'It cannot compare two different file types (for example Word against PDF), read scanned PDFs, compare spreadsheets or images yet, or tell you which version is right. It reports differences; you decide what to keep.'],
 ];
 
-// Everything the guide can point at: the page plus its parts. `tool` is the tool the Open button shows.
+// Everything the guide can point at: the six tools plus the parts inside them. `tool` is the tool (view) the Open button shows.
 export const GUIDE_TOOLS = [
-  { id: 'doc-compare', label: 'DocCompare', tool: 'doc-compare' },
-  { id: 'files', label: 'Original and Edited files', tool: 'doc-compare' },
-  { id: 'compare', label: 'Compare button', tool: 'doc-compare' },
-  { id: 'file-check', label: 'File type check', tool: 'doc-compare' },
-  { id: 'same-document', label: 'Same-document check', tool: 'doc-compare' },
-  { id: 'summary', label: 'Summary bar', tool: 'doc-compare' },
-  { id: 'trivial', label: 'Trivial changes', tool: 'doc-compare' },
-  { id: 'changes', label: 'Changes table', tool: 'doc-compare' },
-  { id: 'filters', label: 'Filters and search', tool: 'doc-compare' },
-  { id: 'metadata', label: 'Metadata table', tool: 'doc-compare' },
-  { id: 'layout', label: 'PDF page layout check', tool: 'doc-compare' },
-  { id: 'page-viewer', label: 'Page viewer', tool: 'doc-compare' },
-  { id: 'report', label: 'Download PDF report', tool: 'doc-compare' },
-  { id: 'settings', label: 'Settings', tool: 'doc-compare' },
-  { id: 'info', label: 'How DocCompare works', tool: 'doc-compare' },
+  { id: 'compare', label: 'Compare documents', tool: 'compare' },
+  { id: 'files', label: 'Original and Edited files', tool: 'compare' },
+  { id: 'compare-button', label: 'Compare button', tool: 'compare' },
+  { id: 'file-check', label: 'File type check', tool: 'compare' },
+  { id: 'same-document', label: 'Same-document check', tool: 'compare' },
+  { id: 'changes', label: 'Changes', tool: 'changes' },
+  { id: 'summary', label: 'Summary bar', tool: 'changes' },
+  { id: 'trivial', label: 'Trivial changes', tool: 'changes' },
+  { id: 'filters', label: 'Filters and search', tool: 'changes' },
+  { id: 'metadata', label: 'File details', tool: 'metadata' },
+  { id: 'pages', label: 'PDF pages', tool: 'pages' },
+  { id: 'page-viewer', label: 'Page viewer', tool: 'pages' },
+  { id: 'report', label: 'PDF report', tool: 'report' },
+  { id: 'settings', label: 'Settings', tool: 'settings' },
+  { id: 'info', label: 'How DocCompare works', tool: 'compare' },
 ];
 
 // postMessage types between Vault's page and the app in its frame (same origin only)
-export const OPEN_TYPE = 'doc-compare:open'; // Vault -> app  { type, id }
-export const CONTEXT_TYPE = 'doc-compare:context'; // app -> Vault  { type, tool }
+export const OPEN_TYPE = 'doc-compare:open'; // Vault -> app  { type, id }               the guide's Open button: show that part
+export const VIEW_TYPE = 'doc-compare:view'; // Vault -> app  { type, view, filter? }   the tool list or a job step: switch view
+export const CONTEXT_TYPE = 'doc-compare:context'; // app -> Vault  { type, tool, view, results, pdf }  where the person is

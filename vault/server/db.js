@@ -3707,6 +3707,8 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_changelog_committed ON changelog_entries ("committedAt" DESC)`);
   try { await require('./services/changelog').seedChangelog(); } catch (err) { console.warn('[changelog] seed skipped:', err.message); }
+  // a newly shipped tool goes into the admin's saved menu layout once, next to its neighbour (services/navSeed.js)
+  try { await require('./services/navSeed').seedNavItems(pool); } catch (err) { console.warn('[navSeed] skipped:', err.message); }
 
   // ── Ponytail report (admin; docs/ponytail-report.md) ──────────────────────
   // The Ponytail plugin in Claude Code posts one task row per turn with a Bearer key. Only the key's SHA-256 is stored (shown once).

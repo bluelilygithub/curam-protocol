@@ -146,6 +146,27 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .viewer-pages figcaption { font-size: 12px; color: var(--color-muted); margin-bottom: 4px; }
 .page { position: relative; }
 .page canvas { width: 100%; height: auto; display: block; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); }
+/* views: inside Vault the page around the app draws the tool list, so the app is just the tool's content */
+.app.embedded { padding: 4px 4px 60px; max-width: none; }
+.app main { display: flex; flex-direction: column; gap: 14px; }
+.privacy-embedded { display: inline-block; margin-bottom: 12px; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; width: 100%; border-bottom: 1px solid var(--color-border); }
+.tab { font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--color-muted); cursor: pointer; transition: opacity 200ms; }
+.tab:hover { opacity: 0.7; }
+.tab.active { color: var(--color-text); border-bottom-color: var(--color-primary); font-weight: 600; }
+.empty-view { background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: 12px; padding: 28px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.empty-view p { margin: 0; max-width: 520px; }
+.done-card, .report-card, .settings-panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.done-card .summary { border: 0; padding: 0; }
+.report-card p, .report-card ul { margin: 0; }
+.settings-panel { max-width: 640px; }
+.small { font-size: 12px; }
+.page-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.page-list li { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 8px; }
+.page-list li.changed { border-color: var(--warn); }
+.page-list img, .thumb-blank { width: 64px; height: 84px; object-fit: cover; object-position: top; border-radius: 4px; border: 1px solid var(--color-border); background: #fff; display: flex; align-items: center; justify-content: center; color: var(--color-muted); }
+.page-label { display: flex; flex-direction: column; font-size: 13px; }
+
 /* the shared themed tooltip (planner-core TooltipHost look="vault"): the same card as Vault's own Tooltip */
 .rp-tooltip { position: fixed; z-index: 70; pointer-events: none; width: max-content; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .btn.icon { padding: 4px 10px; font-size: 16px; line-height: 1.2; }

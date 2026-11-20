@@ -1,31 +1,30 @@
 import { TooltipHost } from '@planner-core/help/TooltipHost';
-import { CONTEXT_TYPE, OPEN_TYPE } from '@vault-client/pages/docCompare/docCompareTools.mjs';
+import { CONTEXT_TYPE, DOC_COMPARE_TOOLS, OPEN_TYPE, TOOL_BLURBS, VIEW_TYPE } from '@vault-client/pages/docCompare/docCompareTools.mjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { alignPages, compareLayout, PdfPair, type LayoutPage } from '../compare/layout';
+import { alignPages, compareLayout, PdfPair } from '../compare/layout';
 import { readPair } from '../compare/read';
 import { compareInWorker, similarityInWorker } from '../compare/workerClient';
 import { GateError, type NormalizedDoc } from '../readers/types';
-import type { Change, ComparisonResult, SimilarityResult } from '../report/model';
+import type { Category, Change, ComparisonResult, SimilarityResult } from '../report/model';
 import { SEVERITY } from '../report/severity';
 import { loadSettings, saveSettings, type Settings } from '../settings';
 import { DropZone } from './DropZone';
-import { currentGuideTool, openGuideTool } from './guide';
+import { currentGuideTool, isView, openGuideTool, type GuideHooks } from './guide';
 import { InfoModal, infoSeen } from './InfoModal';
 import { PageViewer } from './PageViewer';
-import { Results } from './Results';
-import { SettingsDrawer } from './SettingsDrawer';
+import { ChangesView, EmptyView, MetadataView, PagesView, ReportView, SummaryBar, useChangeFilters, type FilterPreset, type Layout, type ViewId } from './Results';
+import { SettingsPanel } from './SettingsDrawer';
 
 type Phase = 'idle' | 'reading' | 'similarity' | 'gate2' | 'comparing' | 'done';
-type Layout = { status: 'off' | 'waiting' | 'running' | 'done' | 'error'; done: number; total: number; pages: LayoutPage[]; error?: string };
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
+// Inside Vault, the page around this app draws the tool list, the job screen and the (i) box, and picks the view; standalone, the app does.
 const embedded = window.parent !== window;
 
-/** Scrolls to a part marked data-guide="<id>" and flashes it; opens it if it is a fold-out. */
+/** Scrolls to a part marked data-guide="<id>" and flashes it. */
 function showPart(id: string): boolean {
   const el = document.querySelector<HTMLElement>(`[data-guide="${id}"]`);
   if (!el) return false;
-  if (el instanceof HTMLDetailsElement) el.open = true;
   el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
   el.classList.remove('guide-flash'); void el.offsetWidth; el.classList.add('guide-flash');
   window.setTimeout(() => el.classList.remove('guide-flash'), 1800);
@@ -33,6 +32,8 @@ function showPart(id: string): boolean {
 }
 
 export function App() {
+  const [view, setViewState] = useState<ViewId>('compare');
+  const selfMove = useRef(false); // true when the app changed view by itself (Vault's tool list then follows)
   const [original, setOriginal] = useState<File>();
   const [edited, setEdited] = useState<File>();
   const [phase, setPhase] = useState<Phase>('idle');
@@ -42,8 +43,7 @@ export function App() {
   const [override, setOverride] = useState(false);
   const [result, setResult] = useState<ComparisonResult>();
   const [settings, setSettingsState] = useState<Settings>(loadSettings);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(() => !infoSeen());
+  const [infoOpen, setInfoOpen] = useState(() => !embedded && !infoSeen());
   const [toast, setToast] = useState<string>();
   const [layout, setLayout] = useState<Layout>({ status: 'off', done: 0, total: 0, pages: [] });
   const [viewerPage, setViewerPage] = useState<number>();
@@ -52,6 +52,7 @@ export function App() {
   const runId = useRef(0);
   const toastTimer = useRef<number>(undefined);
 
+  const setView = (v: ViewId, self = true) => { selfMove.current = self; setViewState(v); window.scrollTo(0, 0); };
   const setSettings = (s: Settings) => { setSettingsState(s); saveSettings(s); };
   const say = (text: string) => { setToast(text); window.clearTimeout(toastTimer.current); toastTimer.current = window.setTimeout(() => setToast(undefined), 6000); };
 
@@ -138,102 +139,142 @@ export function App() {
     }));
   }, [layout.pages, result, settings.layoutPixelRatio]);
 
+  const all = useMemo(() => [...(result?.changes ?? []), ...layoutChanges], [result, layoutChanges]);
+  const filters = useChangeFilters(all, settings.showTrivial);
+
   const busy = phase === 'reading' || phase === 'similarity' || phase === 'comparing';
   const stage = { reading: 'Reading both files…', similarity: 'Checking they are the same document…', comparing: 'Comparing content and formatting…' }[phase as 'reading'];
   const isPdf = docs?.[0].sourceType === 'pdf';
   const hasResults = phase === 'done' && !!result;
+  const openPage = (p: number) => { if (pdfPair.current && layout.status === 'done') setViewerPage(p); else say('The page viewer opens once the page check has finished.'); };
+  const goChanges = (preset?: FilterPreset) => { if (preset) filters.apply(preset); setView('changes'); };
 
-  // ---- Vault's guide chat (in the page around this app): it asks us to show parts, and is told which part the person is on. Same origin only.
-  const hooks = useRef<Parameters<typeof openGuideTool>[1]>(undefined);
+  // ---- Vault's page around this app: it switches views (tool list, job steps) and shows parts (guide's Open buttons). Same origin only.
+  const hooks = useRef<GuideHooks>(undefined);
   hooks.current = {
     openInfo: () => setInfoOpen(true),
-    openSettings: () => setSettingsOpen(true),
+    setView: (v) => setView(v, false),
+    later: (fn) => window.setTimeout(fn, 60),
     openViewer: () => { if (layout.status !== 'done' || !pdfPair.current) return false; setViewerPage(layoutChanges[0]?.page ?? 1); return true; },
     show: showPart,
     toast: say,
     hasResults: () => hasResults,
     isPdf: () => !!isPdf,
   };
+  const applyPreset = useRef(filters.apply);
+  applyPreset.current = filters.apply;
   useEffect(() => {
     if (!embedded) return undefined;
     const onMessage = (ev: MessageEvent) => {
       if (ev.origin !== window.location.origin || ev.source !== window.parent) return;
-      const d = ev.data as { type?: unknown; id?: unknown } | null;
-      if (!d || d.type !== OPEN_TYPE || typeof d.id !== 'string' || !hooks.current) return;
-      setSettingsOpen(false); setInfoOpen(false); setViewerPage(undefined);
-      const id = d.id;
-      // let the closed panels leave the page before scrolling
-      window.setTimeout(() => { if (hooks.current) openGuideTool(id, hooks.current); }, 0);
+      const d = ev.data as { type?: unknown; id?: unknown; view?: unknown; filter?: FilterPreset } | null;
+      if (!d || !hooks.current) return;
+      if (d.type === VIEW_TYPE && isView(d.view)) {
+        setViewerPage(undefined);
+        if (d.filter && typeof d.filter === 'object') applyPreset.current(d.filter);
+        hooks.current.setView(d.view);
+      } else if (d.type === OPEN_TYPE && typeof d.id === 'string') {
+        setViewerPage(undefined);
+        openGuideTool(d.id, hooks.current);
+      }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
-  const guideTool = currentGuideTool({ info: infoOpen, settings: settingsOpen, viewer: viewerPage !== undefined, gate2: phase === 'gate2', error: !!error, results: hasResults });
+  const guideTool = currentGuideTool({ info: infoOpen, viewer: viewerPage !== undefined, gate2: phase === 'gate2', error: !!error, view });
   useEffect(() => {
     if (!embedded) return;
-    try { window.parent.postMessage({ type: CONTEXT_TYPE, tool: guideTool }, window.location.origin); } catch { /* the guide must never break the app */ }
-  }, [guideTool]);
+    const cause = selfMove.current ? 'self' : 'vault';
+    selfMove.current = false;
+    try { window.parent.postMessage({ type: CONTEXT_TYPE, tool: guideTool, view, results: hasResults, pdf: !!isPdf, cause }, window.location.origin); } catch { /* the guide must never break the app */ }
+  }, [guideTool, view, hasResults, isPdf]);
+
+  const needResults = (title: string) => <EmptyView title={title} text="Choose the original and the edited file in Compare documents and press Compare. The results appear here." onAction={() => setView('compare')} />;
 
   return (
-    <div className="app">
+    <div className={`app${embedded ? ' embedded' : ''}`}>
       <TooltipHost look="vault" />
-      <header className="top">
-        <div>
-          <h1>DocCompare</h1>
-          <p className="muted">Compare an original document with an LLM-edited version and catch anything it skipped or changed.</p>
-        </div>
-        <div className="top-actions">
-          <span className="privacy" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded, sent to an AI model or saved.">🔒 Files never leave your computer</span>
-          <button className="btn icon" onClick={() => setInfoOpen(true)} aria-label="How DocCompare works" title="How DocCompare works: what it checks, how to read the results, and what it cannot do." data-guide="info">ⓘ</button>
-          <button className="btn" onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" data-guide="settings" title="Settings: the same-document threshold, when file size and word count are flagged, and which differences count as trivial.">Settings</button>
-        </div>
-      </header>
-
-      <section className="drops" aria-label="Files to compare" data-guide="files">
-        <DropZone label="Original" hint="The document before the AI edited it." file={original} onFile={(f) => pick('original', f)} />
-        <DropZone label="Edited (LLM output)" hint="The version the AI produced." file={edited} onFile={(f) => pick('edited', f)} />
-      </section>
-
-      <div className="compare-row" data-guide="compare">
-        <button className="btn primary" disabled={!original || !edited || busy} onClick={start} title={!original || !edited ? 'Choose both files first.' : 'Compare the two files. Nothing leaves this browser tab.'}>{busy ? 'Comparing…' : 'Compare'}</button>
-        {busy && <span className="progress" role="status" aria-live="polite"><span className="spinner" aria-hidden="true" />{stage}</span>}
-      </div>
-
-      {error && <div className="gate gate-stop" role="alert" data-guide="file-check"><strong>Can't compare these files.</strong> {error}</div>}
-
-      {phase === 'gate2' && sim && docs && (
-        <div className="gate gate-warn" role="alertdialog" aria-labelledby="g2-title" data-guide="same-document">
-          <h2 id="g2-title">These files may not be versions of the same document</h2>
-          <p>Similarity score <strong>{sim.score}</strong> / 100 (threshold {settings.similarityThreshold}).</p>
-          {sim.reasons.length > 0 && <ul>{sim.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-          <div className="row">
-            <button className="btn" onClick={reset} title="Stop here and choose different files.">Cancel</button>
-            <button className="btn primary" onClick={() => { setOverride(true); void compare(docs, runId.current); }} title="Compare them anyway. The report will say this check was overridden.">Compare anyway</button>
+      {!embedded && (
+        <header className="top">
+          <div>
+            <h1>DocCompare</h1>
+            <p className="muted">Compare an original document with an LLM-edited version and catch anything it skipped or changed.</p>
           </div>
-        </div>
+          <div className="top-actions">
+            <span className="privacy" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded, sent to an AI model or saved.">🔒 Files never leave your computer</span>
+            <button className="btn icon" onClick={() => setInfoOpen(true)} aria-label="How DocCompare works" title="How DocCompare works: what it checks, how to read the results, and what it cannot do.">ⓘ</button>
+          </div>
+          <nav className="tabs" aria-label="Tools">
+            {DOC_COMPARE_TOOLS.map((t) => (
+              <button key={t.id} className={`tab${view === t.id ? ' active' : ''}`} aria-current={view === t.id ? 'page' : undefined} onClick={() => setView(t.id as ViewId)} title={TOOL_BLURBS[t.id]}>{t.label}</button>
+            ))}
+          </nav>
+        </header>
       )}
+      {embedded && <span className="privacy privacy-embedded" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded, sent to an AI model or saved.">🔒 Files never leave your computer</span>}
 
-      {hasResults && docs && sim && (
-        <Results
-          result={result!}
-          layoutChanges={layoutChanges}
-          layout={layout}
-          isPdf={isPdf}
-          sim={sim}
-          override={override}
-          settings={settings}
-          onShowTrivial={(v) => setSettings({ ...settings, showTrivial: v })}
-          fileNames={[original!.name, edited!.name]}
-          onRunLayout={() => void runLayout()}
-          onOpenPage={(p) => setViewerPage(p)}
-        />
-      )}
+      <main data-guide={view}>
+        {view === 'compare' && (
+          <>
+            <section className="drops" aria-label="Files to compare" data-guide="files">
+              <DropZone label="Original" hint="The document before the AI edited it." file={original} onFile={(f) => pick('original', f)} />
+              <DropZone label="Edited (LLM output)" hint="The version the AI produced." file={edited} onFile={(f) => pick('edited', f)} />
+            </section>
+            <div className="compare-row" data-guide="compare-button">
+              <button className="btn primary" disabled={!original || !edited || busy} onClick={start} title={!original || !edited ? 'Choose both files first.' : 'Compare the two files. Nothing leaves this browser tab.'}>{busy ? 'Comparing…' : hasResults ? 'Compare again' : 'Compare'}</button>
+              {busy && <span className="progress" role="status" aria-live="polite"><span className="spinner" aria-hidden="true" />{stage}</span>}
+            </div>
+            {error && <div className="gate gate-stop" role="alert" data-guide="file-check"><strong>Can't compare these files.</strong> {error}</div>}
+            {phase === 'gate2' && sim && docs && (
+              <div className="gate gate-warn" role="alertdialog" aria-labelledby="g2-title" data-guide="same-document">
+                <h2 id="g2-title">These files may not be versions of the same document</h2>
+                <p>Similarity score <strong>{sim.score}</strong> / 100 (threshold {settings.similarityThreshold}).</p>
+                {sim.reasons.length > 0 && <ul>{sim.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+                <div className="row">
+                  <button className="btn" onClick={reset} title="Stop here and choose different files.">Cancel</button>
+                  <button className="btn primary" onClick={() => { setOverride(true); void compare(docs, runId.current); }} title="Compare them anyway. The report will say this check was overridden.">Compare anyway</button>
+                </div>
+              </div>
+            )}
+            {hasResults && sim && (
+              <section className="done-card" aria-label="Result">
+                <h2>Comparison done</h2>
+                <SummaryBar all={all} layoutChanges={layoutChanges} result={result!} settings={settings} onShowTrivial={(v) => setSettings({ ...settings, showTrivial: v })} onPick={(cat?: Category) => goChanges({ categories: cat ? [cat] : [] })} />
+                <p className="gate-summary muted">File types match ✓ · Similarity {sim.score}/100{sim.score < settings.similarityThreshold && override ? ' · compared anyway (below threshold)' : ''}{isPdf && layout.status === 'running' ? ` · comparing pages ${layout.done}/${layout.total}…` : ''}</p>
+                <div className="row">
+                  <button className="btn primary" onClick={() => goChanges()} title="See every change in a table you can filter, search and sort.">See all changes</button>
+                  <button className="btn" onClick={() => setView('metadata')} title="Compare the two files' size, dates, author and counts.">File details</button>
+                  {isPdf && <button className="btn" onClick={() => setView('pages')} title="See which PDF pages look different, side by side.">PDF pages</button>}
+                  <button className="btn" onClick={() => setView('report')} title="Download a PDF of this comparison.">PDF report</button>
+                </div>
+              </section>
+            )}
+          </>
+        )}
+
+        {view === 'changes' && (hasResults ? (
+          <>
+            <SummaryBar all={all} layoutChanges={layoutChanges} result={result!} settings={settings} onShowTrivial={(v) => setSettings({ ...settings, showTrivial: v })} onPick={(cat?: Category) => filters.apply({ categories: cat ? [cat] : [] })} activeCats={filters.cats} />
+            <ChangesView all={all} f={filters} isPdf={!!isPdf} onOpenPage={openPage} />
+          </>
+        ) : needResults('No changes to show yet'))}
+
+        {view === 'metadata' && (hasResults ? <MetadataView result={result!} /> : needResults('No file details yet'))}
+
+        {view === 'pages' && (!hasResults ? needResults('No pages to show yet')
+          : !isPdf ? <EmptyView title="PDF pages is for PDF files" text="These files are not PDFs, so there are no pages to draw. Their changes are all in Changes." onAction={() => setView('changes')} action="Go to Changes" />
+            : <PagesView layout={layout} threshold={settings.layoutPixelRatio} maxPages={settings.maxPagesForLayout} onRunLayout={() => void runLayout()} onOpenPage={openPage} />)}
+
+        {view === 'report' && (hasResults && sim ? (
+          <ReportView result={result!} all={all} layoutChanges={layoutChanges} layout={layout} sim={sim} override={override} settings={settings} fileNames={[original!.name, edited!.name]} f={filters} onEditFilters={() => setView('changes')} />
+        ) : needResults('Nothing to report yet'))}
+
+        {view === 'settings' && <SettingsPanel settings={settings} onChange={setSettings} />}
+      </main>
 
       {viewerPage !== undefined && pdfPair.current && (
         <PageViewer pair={pdfPair.current} pages={layout.pages} start={viewerPage} threshold={settings.layoutPixelRatio} onClose={() => setViewerPage(undefined)} />
       )}
-
-      {settingsOpen && <SettingsDrawer settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}
       {infoOpen && <InfoModal onClose={() => setInfoOpen(false)} />}
       <div className="toast" role="status" aria-live="polite">{toast && <span>{toast}</span>}</div>
     </div>
