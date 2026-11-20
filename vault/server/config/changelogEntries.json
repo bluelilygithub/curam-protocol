@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "801928e9",
+   "fullHash": "801928e97de583a11e38fa5d675b17f8ba39501f",
+   "committedAt": "2026-11-20T17:49:17+10:00",
+   "author": "mrb",
+   "subject": "Diagrams: shape library kept per person, Browse libraries returns to Vault",
+   "filesChanged": 10,
+   "insertions": 88,
+   "deletions": 7,
+   "area": "Diagrams",
+   "goal": "Make the board's Library panel usable: choosing a library on the Excalidraw libraries website only downloaded a .excalidrawlib file with no clear next step, and the library was not kept.",
+   "whatChanged": "New table drawing_libraries (\"userId\" primary key, items TEXT as { libraryItems } JSON, \"updatedAt\") and getLibrary / saveLibrary in server/services/drawings.js (at most 4 MB and 2,000 items, plain-words refusals). Routes GET and PUT /api/drawings/library, placed before the /:id routes. DrawingEditor renders a small LibrarySync component once the editor is loaded that calls Excalidraw's useHandleLibrary with an adapter on those routes, and passes libraryReturnUrl (the diagram's own URL), so Add to Excalidraw on libraries.excalidraw.com returns with #addLibrary=... and the hook asks to add the shapes. CSP connect-src gains https://libraries.excalidraw.com and https://raw.githubusercontent.com, the two hosts Excalidraw accepts for libraries. Guide (Shape library notes), the (i) box, docs/drawings.md and docs/schema-notes.md updated. drawings.test.js covers the library routes (none at first, per person, emptied kept, refusals).",
+   "filesImpacted": [
+    "server/index.js",
+    "server/db.js",
+    "server/services/drawings.js",
+    "server/routes/drawings.js",
+    "server/services/drawings.test.js",
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "server/services/drawingsTutor.js",
+    "docs/drawings.md",
+    "docs/schema-notes.md"
+   ],
+   "benefit": "Libraries chosen on the website land straight in the Library panel, and the library follows the person into every diagram and onto every computer they sign in on.",
+   "concerns": "The return trip from libraries.excalidraw.com has not been tried in a browser: it depends on Excalidraw's own #addLibrary handling and on the CSP change, so check Browse libraries -> Add to Excalidraw on Railway. connect-src now allows all of raw.githubusercontent.com (CSP cannot narrow to a path), which widens where the page may fetch from. Shapes people added to the library before this change were held only by the editor in that visit, so there is nothing to migrate. Tested: drawings.test.js parts 1-3 and crossUserOwnership.test.js against local Postgres, drawingsTutor.test.js, client build."
+  },
+  {
    "commit": "903253e1",
    "fullHash": "903253e197b1cb073b39f7e5654da17f128417f2",
    "committedAt": "2026-11-20T17:36:14+10:00",
