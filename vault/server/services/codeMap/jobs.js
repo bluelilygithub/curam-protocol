@@ -26,6 +26,7 @@ const STAGE_LABELS = {
   mounts: 'Reading the API mounts',
   ownership: 'Working out which tool owns what',
   rules: 'Running the checks',
+  security: 'Running the security checks',
   structure: 'Looking at the structure',
   findings: 'Ranking the findings',
   saving: 'Saving the results',
@@ -78,6 +79,19 @@ function inboxItems(result, runId) {
         context: `Code Map run #${runId}. Open Code Map (admin) for the full evidence.`,
       });
     }
+  }
+  // Security tab (security.js): a high-severity check that fails, once per check (secret values are already hidden in its items)
+  for (const c of (result.security && result.security.checks) || []) {
+    if (c.status !== 'fail') continue;
+    const ev = (c.items || []).slice(0, EVIDENCE_IN_INBOX);
+    items.push({
+      high: c.severity === 'high',
+      ruleId: `security:${c.id}`,
+      toolId: 'all',
+      title: `Code Map security: ${c.label}`,
+      body: [c.note, `${c.why} ${c.fix}`, ev.length ? `Evidence:\n${ev.map((e) => `- ${e.file}${e.line ? `:${e.line}` : ''}  ${e.text}`).join('\n')}` : ''].filter(Boolean).join('\n\n'),
+      context: `Code Map run #${runId}. Open Code Map → Security for the full list.`,
+    });
   }
   return items;
 }

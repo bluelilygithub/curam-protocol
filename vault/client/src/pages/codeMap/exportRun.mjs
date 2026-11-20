@@ -61,6 +61,20 @@ export function structureMd(data) {
   ].join('\n\n');
 }
 
+const SEC_WORD = { fail: 'gap', warn: 'check', info: 'for review', pass: 'passes' };
+const SEC_ORDER = ['fail', 'warn', 'info', 'pass'];
+
+/** The Security tab (server/services/codeMap/security.js): every check, gaps first, with its items. */
+export function securityMd(data) {
+  const checks = [...((data.security && data.security.checks) || [])].sort((a, b) => SEC_ORDER.indexOf(a.status) - SEC_ORDER.indexOf(b.status));
+  if (!checks.length) return '## Security\n\n_No security checks in this run (run the analysis again)._';
+  return ['## Security', ...checks.map((c) => [
+    `### [${SEC_WORD[c.status] || c.status}] ${c.label} (${c.severity})`,
+    c.note, `Why: ${c.why}`, c.status === 'pass' ? '' : `Fix: ${c.fix}`,
+    (c.items || []).length ? `${c.items.map((e) => `- ${ev(e)}${e.tool ? ` (${e.tool})` : ''}`).join('\n')}${c.total > c.items.length ? `\n- … and ${c.total - c.items.length} more` : ''}` : '',
+  ].filter(Boolean).join('\n\n'))].join('\n\n');
+}
+
 const TOOL_HEAD = ['Tool', 'Id', 'Group', 'Feature flag', 'Lifecycle', 'Admin only', 'Score %', 'Gaps', 'Checks', 'Client lines', 'Server lines', 'Test files'];
 const toolRow = (t) => [t.label, t.id, t.group, t.featureKey || '', t.lifecycle || 'ga', t.adminOnly ? 'yes' : '', t.score, t.fails, t.warns, t.locClient, t.locServer, (t.tests || []).length];
 
@@ -90,6 +104,7 @@ export function runMd(data, run = {}) {
     '## Rules',
     rules.map((r) => `- **${r.label}** (${r.severity}, ${r.area}): ${r.why} Fix: ${r.fix}`).join('\n'),
     structureMd(data),
+    securityMd(data),
     '## Every tool in detail',
     ...(data.tools || []).map((t) => toolMd(t, rules)),
   ].join('\n\n');

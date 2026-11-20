@@ -1,6 +1,6 @@
 // node client/src/pages/codeMap/exportRun.test.mjs
 import assert from 'node:assert';
-import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv } from './exportRun.mjs';
+import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv, securityMd } from './exportRun.mjs';
 
 // CSV quoting: commas, quotes and newlines are quoted; plain values are not
 assert.strictEqual(toCsv(['a', 'b'], [['x,y', 'say "hi"'], ['line\nbreak', 3]]), 'a,b\r\n"x,y","say ""hi"""\r\n"line\nbreak",3');
@@ -41,6 +41,16 @@ for (const h of ['# Vault Code Map', '## Summary', '## What to improve', '## Too
 assert.ok(runMd({}).startsWith('# Vault Code Map'), 'an empty result does not throw');
 
 assert.strictEqual(datedName('vault-code-map', 'md', '2026-11-20T01:00:00Z'), 'vault-code-map-2026-11-20.md');
+
+const sec = securityMd({ security: { checks: [
+  { id: 'a', label: 'All good', severity: 'high', status: 'pass', note: 'Fine.', why: 'W', fix: 'F', items: [], total: 0 },
+  { id: 'b', label: 'Secrets', severity: 'high', status: 'fail', note: '1 line.', why: 'W', fix: 'Move it.', items: [{ file: 'a.js', line: 2, text: 'k… (hidden)', tool: 'chat' }], total: 3 },
+] } });
+assert.ok(sec.indexOf('[gap] Secrets') < sec.indexOf('[passes] All good'), 'gaps first');
+assert.ok(sec.includes('Fix: Move it.') && !sec.includes('Fix: F'), 'no fix line for a pass');
+assert.ok(sec.includes('- `a.js:2` k… (hidden) (chat)') && sec.includes('… and 2 more'));
+assert.ok(securityMd({}).includes('No security checks'));
+assert.ok(runMd({ security: { checks: [] } }).includes('## Security'));
 
 const review = {
   finishedAt: '2026-11-20T01:00:00Z', model: 'model-a', summary: { replace: 1, keep: 1 },

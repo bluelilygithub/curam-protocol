@@ -112,6 +112,17 @@ function build(over = {}) {
     assert.match(mood.context, /run #7/);
   });
 
+  await t('inbox items: a failing security check, once per check; high only when its severity is high', () => {
+    const items = inboxItems({ findings: [], security: { checks: [
+      { id: 'secrets', label: 'Secrets written in the code', severity: 'high', status: 'fail', note: '1 line', why: 'W', fix: 'F', items: [{ file: 'a.js', line: 2, text: 'sk-ant… (hidden)' }] },
+      { id: 'userScope', label: 'U', severity: 'medium', status: 'warn', items: [] },
+      { id: 'rawHtml', label: 'R', severity: 'medium', status: 'fail', items: [] },
+    ] } }, 7);
+    assert.deepStrictEqual(items.map((i) => [i.ruleId, i.toolId, i.high]), [['security:secrets', 'all', true], ['security:rawHtml', 'all', false]]);
+    assert.strictEqual(items[0].title, 'Code Map security: Secrets written in the code');
+    assert.match(items[0].body, /a\.js:2  sk-ant… \(hidden\)/);
+  });
+
   await t('success: queued -> done with summary, result, duration, commit hint; stage while running', async () => {
     let release;
     const gate = new Promise((r) => { release = r; });
@@ -215,7 +226,7 @@ function build(over = {}) {
   await t('worker thread: runs the real analyzer on the fixture repo and reports stages', async () => {
     const stages = [];
     const r = await runInWorker({ root: path.join(__dirname, '__fixtures__', 'repo'), onStage: (s) => stages.push(s) });
-    assert.deepStrictEqual(stages, ['files', 'imports', 'tools', 'mounts', 'ownership', 'rules', 'structure', 'findings']);
+    assert.deepStrictEqual(stages, ['files', 'imports', 'tools', 'mounts', 'ownership', 'rules', 'security', 'structure', 'findings']);
     assert.strictEqual(r.summary.tools, 8);
     assert.strictEqual(r.findings[0].id, 'rule:flag');
     await assert.rejects(runInWorker({ root: path.join(__dirname, 'no-such-folder') }), /APP_NAV_GROUPS/);

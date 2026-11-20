@@ -13,6 +13,7 @@ const { parseMounts } = require('./mounts');
 const { computeOwnership, buildEdges, buildSharedModules, buildCore } = require('./ownership');
 const { RULES, buildRuleContext, applyRules } = require('./rules');
 const { buildStructure } = require('./structure');
+const { buildSecurity } = require('./security');
 const { buildFindings } = require('./findings');
 
 const TOOL_KEEP = ['id', 'label', 'group', 'path', 'featureKey', 'lifecycle', 'defaultOn', 'adminOnly', 'locClient', 'locServer', 'score', 'fails', 'warns',
@@ -21,6 +22,14 @@ const TOOL_KEEP = ['id', 'label', 'group', 'path', 'featureKey', 'lifecycle', 'd
 function logger() {
   try {
     return require('../../middleware/requestContext').getLogger();
+  } catch {
+    return null;
+  }
+}
+
+function readManifest(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, 'server/testing/routeManifest.json'), 'utf8')).routes || null;
   } catch {
     return null;
   }
@@ -73,6 +82,9 @@ function analyze({ root, files: givenFiles, rules = RULES, log = logger(), onSta
     keyfiles: root ? readText(path.join(root, 'docs/key-files.md')) : '',
   });
   for (const tool of tools) applyRules(tool, ctx, rules);
+
+  stage('security'); // after the rules: it reuses each tool's SSRF check
+  const security = buildSecurity({ files, tools, mounts, manifest: root ? readManifest(root) : null });
 
   stage('structure');
   const edges = buildEdges(tools);
@@ -130,6 +142,7 @@ function analyze({ root, files: givenFiles, rules = RULES, log = logger(), onSta
     sharedModules,
     mounts: mounts.map((m) => ({ path: m.path, owner: m.owner, line: m.line, features: m.features, aiLimiter: m.aiLimiter, admin: m.admin, public: m.public })),
     findings,
+    security,
     rules: rules.map((r) => ({ id: r.id, label: r.label, severity: r.severity, area: r.area, why: r.why, fix: r.fix })),
     commitHint: process.env.RAILWAY_GIT_COMMIT_SHA || null,
     generatedAt: new Date().toISOString(),

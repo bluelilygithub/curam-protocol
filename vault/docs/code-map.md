@@ -34,6 +34,7 @@ node server/services/codeMapTutor.test.js
 node server/services/codeMap/briefing/buildBriefing.test.js
 node client/src/pages/codeMap/exportRun.test.mjs
 node server/services/codeMap/aiReview.test.js
+node server/services/codeMap/security.test.js
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
@@ -87,6 +88,32 @@ A button under each finding on the Overview (with a tool picker when the finding
 - Code excerpts go to the model provider set in Settings. Nothing is stored and no code is changed.
 
 Test: `node server/services/codeMap/explain.test.js` (path restriction, grounding, model resolution).
+
+## Security
+
+The **Security** tab: eleven pattern checks for common security mistakes, in `server/services/codeMap/security.js` (a stage of `analyze`, after the rules because it reuses each tool's SSRF check). Free like the rest of the analysis, so it runs with every run, including the weekly one, and is stored in the run result as `security: { checks, counts }`. This is layer 1 of the security review agreed on 2026-11-20; an on-demand AI security review and live checks against the deployed site are later layers, not built.
+
+Each check returns a status: **gap** (fail), **check** (warn), **for review** (info, a list to keep an eye on) or **passes**, a note, its why and fix, and up to 50 items (file, line, text, owning tool) with the full count.
+
+| Check | Severity | Looks for | Does not see |
+| --- | --- | --- | --- |
+| Every route is in the access list | high | `router.<method>('<path>')` in a mount's route file, joined to its mount, missing from `server/testing/routeManifest.json` | routers built by a factory or taken off a module (`require(...).helperRouter`): about 300 manifest routes are not found this way, so the check only reports routes in the code that are missing from the list, never the reverse |
+| Public routes (no sign-in) | medium (info) | manifest entries with class `public` | |
+| Request values pasted into SQL | high | `${...req.body/query/params...}` inside a template string holding SQL; a `cond ? 'A' : 'B'` choice of fixed text is allowed | a request value copied into a variable first |
+| Routes by id with no per-user check | medium (warn) | route files with a `:param` route that never mention `userId`, `req.user`, `ownerId` or `accountantOf` | whether each query really filters by user |
+| Secrets written in the code | high | Anthropic, OpenAI, Google, GitHub, AWS and Slack key shapes and private-key headers; values with SECRET/FAKE/TEST/EXAMPLE/DUMMY/do-not in them count as made-up | `.env` files and anything outside `server/` and `client/src/` |
+| Running code or shell commands from strings | high | `eval(` / `new Function(` anywhere; `exec(`/`execSync(` with a template string, or `shell: true`, in server files that load `child_process` | |
+| File paths built from request values | medium | `path.join/resolve`, `fs.*`, `sendFile`, `res.download` with a request value, unless the same file tests that value against a pattern (`/^\d+$/.test(req.params.x)`) | validation in another file |
+| Raw HTML put into the page | medium | `dangerouslySetInnerHTML` in client files that do not mention DOMPurify or sanitize | |
+| Sign-in routes are rate-limited | high | `router.post` routes in `server/routes/auth.js` named login / register / reset / forgot / password / verify / mfa without a limiter on the line; a route whose next line answers 403 (closed) is skipped | |
+| Security headers and CORS | medium | `helmet(` missing, `contentSecurityPolicy: false`, or `cors()` / `origin: '*'` / `origin: true` in `server/index.js` | headers actually sent by the live site |
+| Web addresses fetched safely (SSRF) | high | the tools' SSRF guard rule results, gathered in one place | |
+
+**Secret values are never stored**: a matched key is cut to its first six characters plus "(hidden)" before it goes into the run, the export or the inbox. **Inbox**: a failing high check is raised once per check (fingerprint `codeMap:security:<check id>:all`; `jobs.js` `inboxItems`). The Changes tab does not yet compare security checks between runs. The test file builds its fake keys at run time so the real scan never flags it.
+
+First run on 2026-11-20: no gaps; 2 to check (three route files that serve shared or token-based data, two `dangerouslySetInnerHTML` uses for generated SVG); 30 public routes listed.
+
+Page: `client/src/pages/codeMap/SecurityView.jsx` (tiles, one card per check, gaps first, Copy security via `securityMd` in `exportRun.mjs`; the full-run download includes it). **Adding a check**: one entry in `CHECKS` in `security.js` with `run({ files, tools, mounts, manifest })` returning `{ status, note, items }`, plus a case in `security.test.js`.
 
 ## AI review (where plain code would beat a model call)
 

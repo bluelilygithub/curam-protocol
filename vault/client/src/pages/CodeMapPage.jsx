@@ -16,6 +16,7 @@ import StructureView from './codeMap/StructureView';
 import ChangesView from './codeMap/ChangesView';
 import ContextView from './codeMap/ContextView';
 import AiReviewView from './codeMap/AiReviewView';
+import SecurityView from './codeMap/SecurityView';
 import ToolDetail from './codeMap/ToolDetail';
 import CodeMapTutorChat from './codeMap/CodeMapTutorChat';
 import { CODE_MAP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './codeMap/codeMapTools.mjs';
@@ -285,6 +286,7 @@ export default function CodeMapPage() {
               </Suspense>
             )}
             {view === 'structure' && <StructureView data={data} />}
+            {view === 'security' && <SecurityView data={data} byId={byId} onOpenTool={setDetailId} />}
             {view === 'changes' && <ChangesView runs={runs} byId={byId} onOpenTool={setDetailId} />}
           </>
         )}
