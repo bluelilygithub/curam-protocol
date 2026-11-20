@@ -75,6 +75,7 @@ import ExpenseReviewPage from './pages/ExpenseReviewPage';
 import RoomPlannerPage from './pages/RoomPlannerPage';
 import GardenPlannerPage from './pages/GardenPlannerPage';
 import RouteTracerPage from './pages/RouteTracerPage';
+import DocComparePage from './pages/DocComparePage';
 import CellarPlannerPage from './pages/CellarPlannerPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
 import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
@@ -257,6 +258,7 @@ function App() {
               <Route path="/room-planner" element={<RoomPlannerPage />} />
               <Route path="/garden-planner" element={<GardenPlannerPage />} />
               <Route path="/route-tracer" element={<RouteTracerPage />} />
+              <Route path="/doc-compare" element={<DocComparePage />} />
               <Route path="/cellar-planner" element={<CellarPlannerPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

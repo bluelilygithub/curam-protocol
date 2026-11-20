@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "nodemon --config nodemon.json server/index.js",
     "dev:client": "vite --config client/vite.config.js",
-    "build": "vite build --config client/vite.config.js && node scripts/buildRoomPlanner.js && node scripts/buildGardenPlanner.js && node scripts/buildRouteTracer.js && node scripts/buildCellarPlanner.js",
+    "build": "vite build --config client/vite.config.js && node scripts/buildRoomPlanner.js && node scripts/buildGardenPlanner.js && node scripts/buildRouteTracer.js && node scripts/buildCellarPlanner.js && node scripts/buildDocCompare.js",
     "start": "node server/index.js",
     "migrate:embeddings": "node server/scripts/migrateEmbeddings.js",
     "test:fitness": "node server/services/fitness/fitness.test.js && node server/services/fitness/week.test.js && node server/services/fitness/log.test.js && node server/services/fitness/adapt.test.js && node server/services/fitness/dashboard.test.js && node server/services/fitness/reminders.test.js",

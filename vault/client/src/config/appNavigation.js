@@ -53,6 +53,7 @@ export const APP_NAV_GROUPS = [
     items: [
       { id: 'documentRedaction', label: 'Redaction', path: '/document-redaction', icon: 'file-pen', featureKey: 'documentRedaction', matchPrefix: true },
       { id: 'contractReview', label: 'Contract Review', path: '/contract-review', icon: 'clipboard-list', featureKey: 'contractReview', matchPrefix: true },
+      { id: 'docCompare', label: 'DocCompare', path: '/doc-compare', icon: 'compare', featureKey: 'docCompare', aliases: 'compare diff difference document llm edit changes missing redline word pdf' },
     ],
   },
   {

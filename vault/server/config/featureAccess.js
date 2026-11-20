@@ -47,6 +47,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   roomPlanner: true,
   gardenPlanner: true,
   routeTracer: true,
+  // compares an original document with an AI-edited version, entirely in the browser (docs/doc-compare.md)
+  docCompare: true,
   // a work in progress with unverified values: off until an admin switches it on (Settings -> Feature Access)
   cellarPlanner: false,
   // being built milestone by milestone (docs/topic-research.md): off until an admin switches it on
@@ -88,6 +90,7 @@ const FEATURE_LIFECYCLE = {
   sketchbook: 'preview',      // new: cartoon pictures from a description; paid image calls, not yet tried with the live image service
   plans: 'preview',           // new: plans with dates, dependencies and a Gantt; not yet used on Railway
   liveTv: 'preview',          // new: streams come and go, and most will not play in a browser; not yet run on Railway
+  docCompare: 'preview',      // new: tested on generated documents only; not yet run on Railway or on real AI edits
 };
 const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
 

@@ -19,6 +19,7 @@ on:
       - vault/garden-planner/package*.json
       - vault/route-tracer/package*.json
       - vault/cellar-planner/package*.json
+      - vault/doc-compare/package*.json
   workflow_dispatch:
 
 permissions:

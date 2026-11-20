@@ -3406,6 +3406,9 @@
   "POST /api/memory-tutor": {
    "class": "authed"
   },
+  "POST /api/doc-compare-tutor": {
+   "class": "authed"
+  },
   "GET /api/serp-tracker/sites": {
    "class": "authed"
   },

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": { "@planner-core/*": ["../planner-core/src/*"], "react": ["./node_modules/@types/react"], "react/*": ["./node_modules/@types/react/*"] }
+  },
+  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts"]
+}

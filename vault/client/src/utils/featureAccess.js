@@ -40,6 +40,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   roomPlanner: true,
   gardenPlanner: true,
   routeTracer: true,
+  docCompare: true,
   cellarPlanner: false,
   measurements: true,
   fitness: true,
@@ -67,6 +68,7 @@ export const FEATURE_LIFECYCLE = {
   sketchbook: 'preview',
   plans: 'preview',
   liveTv: 'preview',
+  docCompare: 'preview',
 };
 export const LIFECYCLE_LABELS = {
   preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
@@ -118,6 +120,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'roomPlanner', label: 'Room Planner' },
       { key: 'gardenPlanner', label: 'Garden Planner' },
       { key: 'routeTracer', label: 'Route Tracer' },
+      { key: 'docCompare', label: 'DocCompare' },
       { key: 'cellarPlanner', label: 'Cellar Planner' },
       { key: 'measurements', label: 'Measurements' },
       { key: 'fitness', label: 'Fitness' },
