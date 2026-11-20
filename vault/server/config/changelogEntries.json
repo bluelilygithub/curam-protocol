@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7c2f88bb",
+   "fullHash": "7c2f88bbefc4212b9a9cb325427b4da53b808151",
+   "committedAt": "2026-11-21T09:38:31+10:00",
+   "author": "mrb",
+   "subject": "DocCompare: \"Download review for the author\" PDF",
+   "filesChanged": 10,
+   "insertions": 353,
+   "deletions": 7,
+   "area": "DocCompare",
+   "goal": "Give one button that produces a complete, actionable, formatted PDF to send back to whoever made the AI edit, so they can work through the fixes.",
+   "whatChanged": "New doc-compare/src/report/authorReport.ts builds review_<edited name>_<date>.pdf in the browser with jsPDF: a cover with the file names and a count box (Must fix / Please review / Minor), how to use the list, then every non-trivial change (whatever filters are set; trivial differences only counted, file details only when flagged Medium or High) grouped by severity. Each item has a tick box, number, change type and location, one plain instruction from actionFor() (for example restore the missing section, restore this text, check the changed figure \"30\" -> \"60\", confirm added text, review rewording, restore formatting), and the text: the word diff drawn word by word with removed words red and struck through and added words green and underlined, a missing section's contents listed once, a table row once, or the text once when only its place or formatting changed; footer with page n of N. Buttons: 'Download review for the author' at the top of the PDF report tool (a card with the counts) and on the Comparison done card. Arrows now print as -> in both PDFs (the built-in font is Latin-1). The guide catalogue gained 'author-report', the (i) box and tool tips describe it, and a new job 'Send the fixes back to the author' (Compare documents, then PDF report). Tests: tests/authorReport.test.ts (instructions per change kind, item order and filtering, and generated PDFs read back with pdf.js).",
+   "filesImpacted": [
+    "doc-compare/src/report/authorReport.ts",
+    "doc-compare/tests/authorReport.test.ts",
+    "doc-compare/src/report/pdfExport.ts",
+    "doc-compare/src/ui/Results.tsx",
+    "doc-compare/src/ui/App.tsx",
+    "doc-compare/src/ui/guide.ts",
+    "doc-compare/src/ui/styles.css",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "server/services/docCompareTutor.js",
+    "docs/doc-compare.md"
+   ],
+   "benefit": "One click gives the author a self-explanatory fix list (what is missing, which figures changed, what to restore), most serious first, instead of a raw comparison table.",
+   "concerns": "The PDF uses jsPDF's built-in Latin-1 font, so characters outside Western European languages print as ?. Very long paragraphs in the word diff stop after about 2,500 words, and a removed section lists at most 40 of its items. Checked with unit tests, a generated sample read back and looked at, and the buttons clicked in the standalone build; not yet clicked inside the deployed Vault."
+  },
+  {
    "commit": "d83b65c1",
    "fullHash": "d83b65c1e3d49a02b40c2e36118648dd8c0423eb",
    "committedAt": "2026-11-21T09:25:45+10:00",
