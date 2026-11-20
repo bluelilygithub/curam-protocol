@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "19efe1c5",
+   "fullHash": "19efe1c5ec54d752146a4a9715c89c8b4819c0fa",
+   "committedAt": "2026-11-20T17:25:16+10:00",
+   "author": "mrb",
+   "subject": "Diagrams: templates on New diagram",
+   "filesChanged": 10,
+   "insertions": 470,
+   "deletions": 12,
+   "area": "Diagrams",
+   "goal": "Give people a head start: pick a standard org chart, project breakdown, timeline, process or mind map instead of drawing from a blank page.",
+   "whatChanged": "New diagram (and the empty-list button) now opens TemplateGallery.jsx: Blank, then 17 built-in templates in six groups (Org charts, Projects, Timelines, Processes, Mind maps, Relationships). Choosing one shows its settings under its group (counts such as managers per level, phases, steps, months, years; starting month or year) plus Direction and Look. diagramTemplates.mjs builds the same {kind, direction, nodes, edges} structure Draw it for me gets from the AI, with values clamped and at most 40 boxes. DrawingsList creates the drawing with the chosen look and passes the structure as router state; DrawingEditor draws it with placeDiagram on the board's first report, then clears the state so a reload does not draw it again. No AI, no server or database change. Tour step 2, the (i) box, the guide (new Templates entry, New diagram wording) and docs/drawings.md updated; drawingsTutor.test.js updated for the new wording.",
+   "filesImpacted": [
+    "client/src/pages/drawings/TemplateGallery.jsx",
+    "client/src/pages/drawings/diagramTemplates.mjs",
+    "client/src/pages/drawings/diagramTemplates.test.mjs",
+    "client/src/pages/drawings/DrawingsList.jsx",
+    "client/src/pages/drawings/DrawingEditor.jsx",
+    "client/src/pages/drawings/drawingsTools.mjs",
+    "client/src/utils/tours/drawingsTour.js",
+    "server/services/drawingsTutor.js",
+    "server/services/drawingsTutor.test.js",
+    "docs/drawings.md"
+   ],
+   "benefit": "Common diagrams start in one click with sensible structure and placeholder labels, in either look and direction, and remain fully editable (Numbers, Change it, What have I missed? all work on them).",
+   "concerns": "Not yet tried in a browser: the template is drawn on the board's first onChange after loading (the existing first-preview logic relies on the same report), so confirm a template appears on Railway. Timelines are boxes in a row, not a dated scale. In Phases with tasks laid out left to right, a phase's tasks share a column with the next phase and can look crowded. Built-in templates only; no Save as template. Tests: diagramTemplates.test.mjs and drawingsTutor.test.js pass; client build passes."
+  },
+  {
    "commit": "90d2d2cc",
    "fullHash": "90d2d2cca45eacf3e0c658a8d98a9e70fa1ad71e",
    "committedAt": "2026-11-20T11:50:59+10:00",
