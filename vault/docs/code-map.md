@@ -77,6 +77,15 @@ It shows new items (in the newer run only, high first), resolved items, items th
 
 Renaming a tool's id or a rule's id makes its items look resolved and new at once. A change to a rule (a new rule, a tighter regex) shows up as drift too, so note rule changes in the changelog.
 
+**Security** (added 2026-11-20, `compareSecurity` in `compare.js`, returned as `security` by `/compare`): a section at the bottom of the tab, and a count in the summary line. It compares the Security tab's code checks only (the live site check and the AI security review are not part of a run):
+
+- each check's **status** (gap, check, for review, passes): checks that got worse first (high first), then better; a check new in the newer run counts as changed from "not in the older run";
+- each check's **lines**, matched by check, file and text, not line number, so moving code is not a change: lines found only in the newer run ("new lines found") and only in the older one ("lines no longer found"), high-severity checks first;
+- a check whose stored lines hit the cap (`MAX_ITEMS`, 50) in either run is compared **partly**, and the section lists it;
+- a run made before the Security tab has no checks, so the section says "Not compared" and which run is the older one.
+
+Changing a check's pattern or note shows up as drift too (a tighter pattern makes lines "no longer found").
+
 ## Explain and plan a fix
 
 A button under each finding on the Overview (with a tool picker when the finding names several tools). It calls `POST /api/code-map/findings/explain` with `{ runId, ruleId, toolId, findingId }`, the only Code Map route behind `aiLimiter` (set on the route in `server/routes/codeMap.js`, since the mount has none). `server/services/codeMap/explain.js`:
@@ -110,7 +119,7 @@ Each check returns a status: **gap** (fail), **check** (warn), **for review** (i
 | Security headers and CORS | medium | `helmet(` missing, `contentSecurityPolicy: false`, or `cors()` / `origin: '*'` / `origin: true` in `server/index.js` | headers actually sent by the live site |
 | Web addresses fetched safely (SSRF) | high | the tools' SSRF guard rule results, gathered in one place | |
 
-**Secret values are never stored**: a matched key is cut to its first six characters plus "(hidden)" before it goes into the run, the export or the inbox. **Inbox**: a failing high check is raised once per check (fingerprint `codeMap:security:<check id>:all`; `jobs.js` `inboxItems`). The Changes tab does not yet compare security checks between runs. The test file builds its fake keys at run time so the real scan never flags it.
+**Secret values are never stored**: a matched key is cut to its first six characters plus "(hidden)" before it goes into the run, the export or the inbox. **Inbox**: a failing high check is raised once per check (fingerprint `codeMap:security:<check id>:all`; `jobs.js` `inboxItems`). The Changes tab compares the checks between runs (see "Changes between runs"). The test file builds its fake keys at run time so the real scan never flags it.
 
 First run on 2026-11-20: no gaps; 2 to check (three route files that serve shared or token-based data, two `dangerouslySetInnerHTML` uses for generated SVG); 30 public routes listed.
 

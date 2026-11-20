@@ -69,6 +69,42 @@ const bySeverity = (a, b) => (SEV_ORDER[a.sev] ?? 3) - (SEV_ORDER[b.sev] ?? 3)
   || String(a.toolLabel).localeCompare(String(b.toolLabel))
   || a.key.localeCompare(b.key);
 
+// Security tab drift (security.js checks). A check is compared by status (gap / check / for review / passes); its items by check, file and
+// text, not line, so moved code is not a change. A check's stored items are capped (security.js MAX_ITEMS): when either run hit the cap the
+// item comparison for that check is partial, and says so. Runs from before the Security tab have no checks: not compared.
+const SEC_RANK = { pass: 0, na: 0, info: 0, warn: 1, fail: 2 };
+const secItemKey = (checkId, it) => `${checkId}:${it.file || ''}:${String(it.text || '').replace(/\s+/g, ' ').trim()}`;
+
+function compareSecurity(a, b) {
+  const A = a.security && a.security.checks;
+  const B = b.security && b.security.checks;
+  if (!A || !B) return { available: false, reason: !A && !B ? 'Neither run has security checks.' : `The ${!A ? 'older' : 'newer'} run was made before the Security tab existed.` };
+  const before = new Map(A.map((c) => [c.id, c]));
+  const changed = [];
+  const newItems = [];
+  const resolvedItems = [];
+  const partial = [];
+  const itemOf = (c, it) => ({ key: secItemKey(c.id, it), checkId: c.id, check: c.label, sev: c.severity, file: it.file || '', line: it.line || 0, text: it.text || '', tool: it.tool || null });
+  for (const c of B) {
+    const p = before.get(c.id);
+    if (!p) { changed.push({ id: c.id, label: c.label, sev: c.severity, fromStatus: null, status: c.status, worse: SEC_RANK[c.status] > 0 }); continue; }
+    if (p.status !== c.status) changed.push({ id: c.id, label: c.label, sev: c.severity, fromStatus: p.status, status: c.status, worse: (SEC_RANK[c.status] || 0) > (SEC_RANK[p.status] || 0) });
+    if ((p.total || 0) > (p.items || []).length || (c.total || 0) > (c.items || []).length) partial.push(c.label);
+    const pk = new Set((p.items || []).map((it) => secItemKey(c.id, it)));
+    const ck = new Set((c.items || []).map((it) => secItemKey(c.id, it)));
+    for (const it of c.items || []) if (!pk.has(secItemKey(c.id, it))) newItems.push(itemOf(c, it));
+    for (const it of p.items || []) if (!ck.has(secItemKey(c.id, it))) resolvedItems.push(itemOf(p, it));
+  }
+  const order = (x, y) => (SEV_ORDER[x.sev] ?? 3) - (SEV_ORDER[y.sev] ?? 3) || String(x.check).localeCompare(String(y.check)) || x.key.localeCompare(y.key);
+  newItems.sort(order);
+  resolvedItems.sort(order);
+  changed.sort((x, y) => (y.worse - x.worse) || (SEV_ORDER[x.sev] ?? 3) - (SEV_ORDER[y.sev] ?? 3) || x.label.localeCompare(y.label));
+  return {
+    available: true, changed, newItems, resolvedItems, partial,
+    counts: { worse: changed.filter((x) => x.worse).length, better: changed.filter((x) => !x.worse).length, newItems: newItems.length, resolvedItems: resolvedItems.length },
+  };
+}
+
 /** Drift from run `from` to run `to` (both analyze() results). */
 function compareRuns(from, to) {
   const a = from || {};
@@ -112,6 +148,7 @@ function compareRuns(from, to) {
     toolsRemoved,
     cyclesGained,
     cyclesLost,
+    security: compareSecurity(a, b),
     counts: {
       new: newFindings.length,
       newHigh: newFindings.filter((x) => x.sev === 'high').length,
@@ -124,4 +161,4 @@ function compareRuns(from, to) {
   };
 }
 
-module.exports = { compareRuns, findingItems, cycleKey };
+module.exports = { compareRuns, compareSecurity, findingItems, cycleKey };

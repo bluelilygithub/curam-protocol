@@ -6,7 +6,8 @@ import EmptyState from '../../components/EmptyState';
 import { Pill, SEV_COLOR, SEV_TIP, STATUS_COLOR, STATUS_WORD, ToolChip, card, fmt, fmtWhen } from './shared';
 
 // Changes: what moved between two finished runs (GET /api/code-map/compare, server/services/codeMap/compare.js). The pickers default to
-// the latest run and the one before. Worst first: score drops, new findings (high first), findings that got worse; then what improved.
+// the latest run and the one before. Worst first: score drops, new findings (high first), findings that got worse; then what improved;
+// then Security: the Security tab's code checks that changed status and lines that appeared or went away (compare.js compareSecurity).
 
 const runLabel = (r) => `#${r.id} · ${fmtWhen(r.finishedAt || r.createdAt)}${r.commitHint ? ` · ${String(r.commitHint).slice(0, 7)}` : ''}`;
 
@@ -53,6 +54,70 @@ function ItemList({ items, byId, onOpenTool, empty, showChange }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// Security tab statuses (server/services/codeMap/security.js), not the rule statuses above
+const SEC = {
+  fail: { color: '#ef4444', word: 'gap' }, warn: { color: '#f59e0b', word: 'check' }, info: { color: 'var(--color-primary)', word: 'for review' },
+  pass: { color: '#16a34a', word: 'passes' }, na: { color: 'var(--color-muted)', word: 'not applicable' },
+};
+const secWord = (s) => (s ? <span style={{ color: (SEC[s] || {}).color }}>{(SEC[s] || {}).word || s}</span> : <span style={{ color: 'var(--color-muted)' }}>not in the older run</span>);
+
+function SecurityItems({ items, byId, onOpenTool, empty }) {
+  if (!items.length) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{empty}</p>;
+  return (
+    <ul className="space-y-2">
+      {items.map((it) => (
+        <li key={it.key} className="rounded-xl border px-3 py-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', borderLeft: `4px solid ${SEV_COLOR[it.sev] || 'var(--color-border)'}` }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill color={SEV_COLOR[it.sev]} tip={SEV_TIP[it.sev]}>{it.sev}</Pill>
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{it.check}</span>
+            {it.tool && byId[it.tool] ? <ToolChip tool={byId[it.tool]} onOpen={onOpenTool} /> : null}
+          </div>
+          <p className="text-xs mt-1 font-mono break-all" style={{ color: 'var(--color-muted)' }}>
+            {it.file ? <span style={{ color: 'var(--color-primary)' }}>{it.file}{it.line ? `:${it.line}` : ''} </span> : null}{it.text}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SecurityDrift({ sec, byId, onOpenTool }) {
+  if (!sec || !sec.available) {
+    return (
+      <Section title="Security" count="" sub="Changes in the Security tab's code checks between the two runs.">
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Not compared: {sec ? sec.reason : 'no security data.'} Pick two runs made since then.</p>
+      </Section>
+    );
+  }
+  const worse = sec.changed.filter((x) => x.worse);
+  const better = sec.changed.filter((x) => !x.worse);
+  return (
+    <Section title="Security" count={`${sec.counts.worse} worse · ${sec.counts.newItems} new · ${sec.counts.resolvedItems} gone`} sub="The Security tab's code checks: checks whose status moved, then lines that appeared or went away (matched by file and text, so moved lines are not counted). The live site check and the AI security review are not part of a run.">
+      <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-4">
+        <div className="space-y-3">
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Checks that got worse ({worse.length})</p>
+          {worse.length ? (
+            <ul className="space-y-1 text-sm">{worse.map((x) => <li key={x.id} style={{ color: 'var(--color-text)' }}><Pill color={SEV_COLOR[x.sev]} tip={SEV_TIP[x.sev]}>{x.sev}</Pill> {x.label}: {secWord(x.fromStatus)} → {secWord(x.status)}</li>)}</ul>
+          ) : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>None.</p>}
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>New lines found ({sec.newItems.length})</p>
+          <SecurityItems items={sec.newItems} byId={byId} onOpenTool={onOpenTool} empty="None." />
+        </div>
+        <div className="space-y-3">
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Checks that got better ({better.length})</p>
+          {better.length ? (
+            <ul className="space-y-1 text-sm">{better.map((x) => <li key={x.id} style={{ color: 'var(--color-text)' }}>{x.label}: {secWord(x.fromStatus)} → {secWord(x.status)}</li>)}</ul>
+          ) : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>None.</p>}
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Lines no longer found ({sec.resolvedItems.length})</p>
+          <SecurityItems items={sec.resolvedItems} byId={byId} onOpenTool={onOpenTool} empty="None." />
+        </div>
+      </div>
+      {sec.partial.length > 0 && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Partly compared (more lines than a run keeps, so some changes may not show): {sec.partial.join(', ')}.</p>
+      )}
+    </Section>
   );
 }
 
@@ -165,6 +230,9 @@ export default function ChangesView({ runs, byId, onOpenTool }) {
             <span style={{ color: 'var(--color-text)' }}><b>{c.resolved}</b> resolved</span>
             <span style={{ color: 'var(--color-text)' }}><b>{c.worse}</b> got worse · <b>{c.better}</b> got better</span>
             <span style={{ color: 'var(--color-text)' }}><b>{c.scoresDown}</b> scores down · <b>{c.scoresUp}</b> up</span>
+            {diff.security?.available && (
+              <span style={{ color: 'var(--color-text)' }}>security: <b style={{ color: diff.security.counts.worse ? SEV_COLOR.high : undefined }}>{diff.security.counts.worse}</b> checks worse · <b>{diff.security.counts.newItems}</b> new lines</span>
+            )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
             {[
@@ -208,6 +276,7 @@ export default function ChangesView({ runs, byId, onOpenTool }) {
               <CycleList cycles={diff.cyclesLost} empty="None." />
             </Section>
           </div>
+          <SecurityDrift sec={diff.security} byId={byId} onOpenTool={onOpenTool} />
         </>
       )}
     </div>

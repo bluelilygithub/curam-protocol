@@ -120,6 +120,48 @@ t('cycles match whatever order the files come in', () => {
 t('missing or empty results do not throw', () => {
   const x = compareRuns(null, {});
   assert.deepStrictEqual(x.newFindings, []);
+  assert.strictEqual(x.security.available, false);
+});
+
+// ── security drift
+const sec = (checks) => ({ security: { checks } });
+const chk = (id, status, items = [], extra = {}) => ({ id, label: id, severity: extra.severity || 'high', status, items, total: extra.total ?? items.length });
+
+t('security: a run from before the Security tab is not compared, and says which one', () => {
+  assert.deepStrictEqual(compareRuns({}, sec([])).security, { available: false, reason: 'The older run was made before the Security tab existed.' });
+  assert.match(compareRuns(sec([]), {}).security.reason, /newer run/);
+});
+
+t('security: status changes worst first, new and resolved items matched by file and text (not line)', () => {
+  const A = sec([
+    chk('secrets', 'pass'),
+    chk('userScope', 'warn', [{ file: 'server/routes/a.js', line: 10, text: "router.get('/:id'", tool: 'notes' }, { file: 'server/routes/b.js', line: 3, text: "router.get('/:token'" }], { severity: 'medium' }),
+    chk('rawHtml', 'warn', [{ file: 'client/src/X.jsx', line: 5, text: 'dangerouslySetInnerHTML' }], { severity: 'medium' }),
+  ]);
+  const B = sec([
+    chk('secrets', 'fail', [{ file: 'server/config/k.js', line: 1, text: "const K = 'sk-ant… (hidden)';" }]),
+    chk('userScope', 'warn', [{ file: 'server/routes/a.js', line: 42, text: "router.get('/:id'", tool: 'notes' }, { file: 'server/routes/c.js', line: 7, text: "router.put('/:id'" }], { severity: 'medium' }),
+    chk('rawHtml', 'pass', [], { severity: 'medium' }),
+    chk('newCheck', 'warn', [{ file: 'server/x.js', line: 1, text: 'x' }], { severity: 'low' }),
+  ]);
+  const s = compareRuns(A, B).security;
+  assert.strictEqual(s.available, true);
+  assert.deepStrictEqual(s.changed.map((x) => [x.id, x.fromStatus, x.status, x.worse]), [['secrets', 'pass', 'fail', true], ['newCheck', null, 'warn', true], ['rawHtml', 'warn', 'pass', false]]);
+  assert.deepStrictEqual(s.newItems.map((x) => [x.checkId, x.file]), [['secrets', 'server/config/k.js'], ['userScope', 'server/routes/c.js']], 'a moved line is not new; high first');
+  assert.deepStrictEqual(s.resolvedItems.map((x) => [x.checkId, x.file]), [['rawHtml', 'client/src/X.jsx'], ['userScope', 'server/routes/b.js']]);
+  assert.deepStrictEqual(s.counts, { worse: 2, better: 1, newItems: 2, resolvedItems: 2 });
+  assert.deepStrictEqual(s.partial, []);
+});
+
+t('security: a check that hit the item cap in either run is marked partial', () => {
+  const s = compareRuns(sec([chk('publicRoutes', 'info', [{ text: 'GET /a' }], { total: 80 })]), sec([chk('publicRoutes', 'info', [{ text: 'GET /a' }])])).security;
+  assert.deepStrictEqual(s.partial, ['publicRoutes']);
+});
+
+t('security: the same run compared with itself has no security changes', () => {
+  const s = compareRuns(before, before).security;
+  assert.strictEqual(s.available, true);
+  assert.deepStrictEqual([s.changed, s.newItems, s.resolvedItems], [[], [], []]);
 });
 
 console.log(`compare.test.js: ${passed} passed`);

@@ -29,7 +29,7 @@ export const TOOL_TIPS = {
   map: "Which tools call each other's APIs or share code files.",
   structure: 'Largest files, import cycles, shared foundations, separate packages and possibly unused files.',
   security: 'Pattern checks for common security mistakes: routes missing from the access list, SQL built from request values, secrets in code, shell commands, unsafe paths, raw HTML, sign-in limits, headers and SSRF; plus a live check of the running site (headers, HTTPS, CORS, sign-in), and an AI security review of every route file on request (costs model calls).',
-  changes: "What moved between two runs: new and resolved findings, and each tool's score.",
+  changes: "What moved between two runs: new and resolved findings, each tool's score, and security checks that got worse or found new lines.",
   context: 'A briefing about how Vault is built, to paste into a new Claude conversation before designing the next tool. No AI call.',
   'ai-review': 'Every place the server calls an AI model, and whether plain code would do the job instead. Runs only when you press the button; costs model calls.',
 };
