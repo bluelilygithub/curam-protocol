@@ -33,6 +33,7 @@ node server/services/codeMap/explain.test.js
 node server/services/codeMapTutor.test.js
 node server/services/codeMap/briefing/buildBriefing.test.js
 node client/src/pages/codeMap/exportRun.test.mjs
+node server/services/codeMap/aiReview.test.js
 ```
 
 The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
@@ -86,6 +87,21 @@ A button under each finding on the Overview (with a tool picker when the finding
 - Code excerpts go to the model provider set in Settings. Nothing is stored and no code is changed.
 
 Test: `node server/services/codeMap/explain.test.js` (path restriction, grounding, model resolution).
+
+## AI review (where plain code would beat a model call)
+
+The **AI review** tab. For every place the server calls a model, the workspace's standard model judges whether a deterministic approach (regex, parsing, a lookup, arithmetic, fixed rules, a template) would do the job as well or better. **It runs only when an admin presses Run review; there is no cron**, by the owner's decision (2026-11-20). Unlike the analysis it costs model calls, so the button first shows an inline confirm with the number of calls.
+
+- `server/services/codeMap/aiReview.js`. **Call sites**: lines in `server/` (tests, comments and `callModel.js` itself left out) matching `callModel(`, `.messages.create(` / `.messages.stream(`, or `.generateContent(` / `.generateContentStream(`. Plain text search, so a call made some other way is missed (113 sites in 65 files on 2026-11-20). Each site is tagged with the tool that owns its file in the latest analysis run (`shared` or none otherwise).
+- **One model call per 4 sites of a file**, with excerpts read through `explain.js` `gatherExcerpts` (up to 200 lines around each site, 800 per call, `server/` and `client/src/` only). The prompt asks for `replace`, `hybrid`, `keep` or `unclear` per line, with confidence, what the call does, why, the alternative and the likely saving. The answer is untrusted JSON: verdicts are matched to the real lines, unknown lines and refs outside the excerpts are dropped, and a missing line becomes `unclear`.
+- **Reuse**: a file whose content (and the prompt version, `PROMPT_VERSION`) is unchanged since the last finished review keeps that review's verdicts with no model call. A file whose call failed is recorded with its error and tried again next time; the review only fails as a whole when every call failed.
+- **Job**: one review at a time (in memory, and a partial unique index on `code_map_ai_reviews`), three files at a time, progress "File x of y" polled by the page every 3 seconds. A restart marks a running review failed (`server/db.js`). The last 10 are kept and older ones deleted outright. Token totals and an approximate cost (`costCalculator.calculateCost`) are stored on the row; each call is logged in Usage as `code_map_ai_review`.
+- **Inbox**: each `replace` verdict with high confidence is raised once per call site (fingerprint `codeMapAi:<file>:<hash of the call line>`, so moving the line does not raise it again).
+- **Routes** (behind the mount's `requireAdmin`): `GET /ai-reviews/estimate` (sites, files, files changed, model calls a run would make; reads the source, no model), `POST /ai-reviews` (**aiLimiter**; 202 with the id, 409 with `runningId` while one runs, 503 with no model), `GET /ai-reviews`, `GET /ai-reviews/latest`, `GET /ai-reviews/:id`.
+- **Page**: `client/src/pages/codeMap/AiReviewView.jsx`. Works before any analysis run. Last-run line (date, model, sites, model calls, files reused, tokens, cost), verdict filter, one card per site (file:line, what it does, why, instead), Copy review (Markdown) and Download CSV (`aiReviewMd` / `aiReviewCsv` in `exportRun.mjs`).
+- **Limits**: verdicts are a model's reading of the code shown, so check them before changing anything. A prompt built in another file often comes back `unclear`. Code excerpts go to the model provider set in Settings.
+
+Test: `node server/services/codeMap/aiReview.test.js` (site search, answer checking, reuse, splitting, the job with a fake database and model).
 
 ## Context (a briefing for Claude)
 

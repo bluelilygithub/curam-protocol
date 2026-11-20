@@ -15,6 +15,7 @@ import ConventionsView from './codeMap/ConventionsView';
 import StructureView from './codeMap/StructureView';
 import ChangesView from './codeMap/ChangesView';
 import ContextView from './codeMap/ContextView';
+import AiReviewView from './codeMap/AiReviewView';
 import ToolDetail from './codeMap/ToolDetail';
 import CodeMapTutorChat from './codeMap/CodeMapTutorChat';
 import { CODE_MAP_TOOLS, TOOL_TIPS, HOW_IT_WORKS, GUIDE_TOOLS } from './codeMap/codeMapTools.mjs';
@@ -257,6 +258,9 @@ export default function CodeMapPage() {
         ) : view === 'context' ? (
           // works before the first run too: CLAUDE.md and notes do not need one; the briefing card says to run an analysis first
           <ContextView hasRun={!!data} onRunAnalysis={startRun} busy={busy} />
+        ) : view === 'ai-review' ? (
+          // reads the code itself, so it works before the first analysis run (tools then show as "no single tool")
+          <AiReviewView byId={byId} onOpenTool={setDetailId} />
         ) : !data ? (
           <EmptyState
             icon="code-map"

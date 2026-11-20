@@ -76,7 +76,14 @@ async function serve(jobs) {
     docsCopy: (userId, paths) => real.docsCopy(userId, paths),
   };
   serve.briefing = briefing;
-  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing }));
+  const aiReview = {
+    async estimate() { return { files: 2, sites: 3, toReview: 1, calls: 1 }; },
+    async start(userId) { if (userId !== 3) throw new Error('wrong user'); return 7; },
+    async list() { return [{ id: 7, status: 'done' }]; },
+    async latest() { return { id: 7, status: 'done', result: { files: [] } }; },
+    async get(id) { return id === 7 ? { id: 7, status: 'running', progress: { done: 1, total: 2 } } : null; },
+  };
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -91,6 +98,21 @@ async function serve(jobs) {
   const jobs = fakeJobs();
   const s = await serve(jobs);
   try {
+    await t('AI review: start is behind aiLimiter, the reads are not; named routes before /:id', async () => {
+      const before = limited.length;
+      assert.deepStrictEqual((await s.call('GET', '/api/code-map/ai-reviews/estimate')).body.calls, 1);
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/latest')).body.review.id, 7);
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews')).body.reviews.length, 1);
+      assert.strictEqual(limited.length, before, 'reads skip the limiter');
+      const r = await s.call('POST', '/api/code-map/ai-reviews');
+      assert.strictEqual(r.status, 202);
+      assert.deepStrictEqual(r.body, { id: 7 });
+      assert.strictEqual(limited.length, before + 1);
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/7')).body.review.progress.done, 1);
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/8')).status, 404);
+      assert.strictEqual((await s.call('GET', '/api/code-map/ai-reviews/x')).status, 400);
+    });
+
     await t('POST /runs starts a run for the signed-in admin', async () => {
       const r = await s.call('POST', '/api/code-map/runs');
       assert.strictEqual(r.status, 202);

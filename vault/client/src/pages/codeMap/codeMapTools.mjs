@@ -11,6 +11,7 @@ export const CODE_MAP_TOOLS = [
   { id: 'structure', label: 'Structure', group: 'Code Map', icon: 'code-map' },
   { id: 'changes', label: 'Changes', group: 'Code Map', icon: 'code-map' },
   { id: 'context', label: 'Context', group: 'Code Map', icon: 'code-map' },
+  { id: 'ai-review', label: 'AI review', group: 'Code Map', icon: 'code-map' },
 ];
 
 export const GROUPS = ['Code Map'];
@@ -28,6 +29,7 @@ export const TOOL_TIPS = {
   structure: 'Largest files, import cycles, shared foundations, separate packages and possibly unused files.',
   changes: "What moved between two runs: new and resolved findings, and each tool's score.",
   context: 'A briefing about how Vault is built, to paste into a new Claude conversation before designing the next tool. No AI call.',
+  'ai-review': 'Every place the server calls an AI model, and whether plain code would do the job instead. Runs only when you press the button; costs model calls.',
 };
 
 export const TOOL_BLURBS = {
@@ -38,6 +40,7 @@ export const TOOL_BLURBS = {
   structure: 'The code as a whole.',
   changes: 'Drift between two runs.',
   context: 'A briefing for Claude.',
+  'ai-review': 'Model calls plain code could do.',
 };
 
 // The longer text for the (i) "How Code Map works" box.
@@ -48,6 +51,7 @@ export const HOW_IT_WORKS = [
   ['How sure it is', 'The checks match patterns in the code, so they can be wrong both ways. Read the evidence (file and line) before changing anything. Known false positives are listed in docs/code-map.md.'],
   ['Who owns what', 'A file reached by three or more tools counts as shared and belongs to none of them; the rest belongs to the tools that reach it.'],
   ['Explain and plan a fix', 'On a finding, Explain and plan a fix asks the AI model set in Settings to explain that finding and plan a fix, using only its evidence and the lines around it. It costs a model call, shows the files it read, and says "I could not tell" rather than guess.'],
+  ['AI review', 'Run review asks the standard model in Settings to look at every place the server calls an AI model and say whether plain code (regex, parsing, lookups, rules) would do it as well: replace, hybrid, keep or unclear. It runs only when you press the button, never on a schedule. Files unchanged since the last review keep their verdicts at no cost. High-confidence "replace" verdicts go to the Suggestions inbox.'],
   ['Context', 'Build briefing makes a description of how Vault is built (tools, rules, building blocks, recent changes, outside services as YES or NO, your notes) to paste into a new Claude conversation or a Claude Project before designing the next tool. It uses no AI and never includes what is in your tools: no client names, amounts, notes or secret values. The last 10 are kept to copy again.'],
 ];
 
@@ -72,4 +76,6 @@ export const GUIDE_TOOLS = [
   { id: 'owner-notes', label: 'Your notes for Claude', tool: 'context' },
   { id: 'claude-md', label: 'CLAUDE.md', tool: 'context' },
   { id: 'docs-picker', label: 'Docs to include', tool: 'context' },
+  { id: 'ai-review', label: 'AI review', tool: 'ai-review' },
+  { id: 'run-ai-review', label: 'Run review', tool: 'ai-review' },
 ];

@@ -95,4 +95,27 @@ export function runMd(data, run = {}) {
   ].join('\n\n');
 }
 
-export const datedName = (prefix, ext, iso) => `${prefix}-${String(iso || new Date().toISOString()).slice(0, 10)}.${ext}`;
+// AI review (server/services/codeMap/aiReview.js): every call site and its verdict.
+const AI_ORDER = ['replace', 'hybrid', 'unclear', 'keep'];
+const aiSites = (review) => ((review && review.result && review.result.files) || []).flatMap((f) => f.sites.map((s) => ({ ...s, tool: f.tool })));
+
+export function aiReviewMd(review) {
+  const sites = aiSites(review);
+  const s = (review && review.summary) || {};
+  return [
+    '# Vault AI review: where plain code would beat a model call',
+    `Run ${review?.finishedAt || ''} · ${review?.model || ''} · ${sites.length} call sites · replace ${s.replace || 0}, hybrid ${s.hybrid || 0}, unclear ${s.unclear || 0}, keep ${s.keep || 0}`,
+    ...AI_ORDER.map((v) => {
+      const list = sites.filter((x) => x.verdict === v);
+      return [`## ${v[0].toUpperCase()}${v.slice(1)} (${list.length})`, ...(list.length ? list.map((x) => [
+        `### \`${x.file}:${x.line}\` (${x.confidence} confidence${v === 'keep' ? '' : `, ${x.saving} saving`}${x.tool ? `, ${x.tool}` : ''})`,
+        `\`${x.text}\``, x.does, x.why, x.alternative ? `**Instead:** ${x.alternative}` : '',
+      ].filter(Boolean).join('\n\n')) : ['_None._'])].join('\n\n');
+    }),
+  ].join('\n\n');
+}
+
+export const aiReviewCsv = (review) => toCsv(['File', 'Line', 'Tool', 'Verdict', 'Confidence', 'Saving', 'What it does', 'Why', 'Instead', 'Code'],
+  aiSites(review).map((x) => [x.file, x.line, x.tool || '', x.verdict, x.confidence, x.saving, x.does, x.why, x.alternative, x.text]));
+
+export const datedName =(prefix, ext, iso) => `${prefix}-${String(iso || new Date().toISOString()).slice(0, 10)}.${ext}`;

@@ -4366,6 +4366,21 @@
   "POST /api/code-map/findings/explain": {
    "class": "admin"
   },
+  "GET /api/code-map/ai-reviews/estimate": {
+   "class": "admin"
+  },
+  "POST /api/code-map/ai-reviews": {
+   "class": "admin"
+  },
+  "GET /api/code-map/ai-reviews": {
+   "class": "admin"
+  },
+  "GET /api/code-map/ai-reviews/latest": {
+   "class": "admin"
+  },
+  "GET /api/code-map/ai-reviews/:id": {
+   "class": "admin"
+  },
   "POST /api/code-map-tutor": {
    "class": "admin"
   },

@@ -10,9 +10,10 @@ const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const { compareRuns } = require('../services/codeMap/compare');
 
-function createCodeMapRouter({ jobs, explain, limiter, briefing } = {}) {
+function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview } = {}) {
   const router = express.Router();
   const J = () => jobs || require('../services/codeMap/jobs');
+  const R = () => aiReview || require('../services/codeMap/aiReview');
   let briefingService = briefing || null;
   const B = () => briefingService || (briefingService = require('../services/codeMap/briefing').createBriefingService({ jobs }));
   const ask = explain || ((userId, input) => require('../services/codeMap/explain').explainFinding(userId, input));
@@ -69,6 +70,33 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing } = {}) {
     try {
       res.json(await ask(req.user.id, { runId: Number(runId), ruleId, toolId, findingId }));
     } catch (err) { fail(res, err, 'explain'); }
+  });
+
+  // ── AI review tab: where the server calls a model and whether plain code would do (server/services/codeMap/aiReview.js).
+  // Started only by the admin's button (no cron). POST makes model calls, so it is behind aiLimiter; the GETs make none.
+  router.get('/ai-reviews/estimate', async (req, res) => {
+    try { res.json(await R().estimate()); } catch (err) { fail(res, err, 'ai review estimate'); }
+  });
+
+  router.post('/ai-reviews', ai, async (req, res) => {
+    try { res.status(202).json({ id: await R().start(req.user.id) }); } catch (err) { fail(res, err, 'ai review start'); }
+  });
+
+  router.get('/ai-reviews', async (req, res) => {
+    try { res.json({ reviews: await R().list() }); } catch (err) { fail(res, err, 'ai review list'); }
+  });
+
+  router.get('/ai-reviews/latest', async (req, res) => {
+    try { res.json({ review: await R().latest() }); } catch (err) { fail(res, err, 'ai review latest'); }
+  });
+
+  router.get('/ai-reviews/:id', async (req, res) => {
+    if (!/^\d{1,9}$/.test(req.params.id)) return res.status(400).json({ error: 'Review id must be a number.' });
+    try {
+      const r = await R().get(Number(req.params.id));
+      if (!r) return res.status(404).json({ error: 'That review is no longer here (the last 10 are kept).' });
+      res.json({ review: r });
+    } catch (err) { fail(res, err, 'ai review get'); }
   });
 
   // ── Context tab: a briefing about how Vault is built, for a Claude conversation (server/services/codeMap/briefing/). No model calls.

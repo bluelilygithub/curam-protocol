@@ -1,6 +1,6 @@
 // node client/src/pages/codeMap/exportRun.test.mjs
 import assert from 'node:assert';
-import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName } from './exportRun.mjs';
+import { mdTable, toCsv, findingsMd, toolMd, toolsCsv, conventionsCsv, runMd, datedName, aiReviewMd, aiReviewCsv } from './exportRun.mjs';
 
 // CSV quoting: commas, quotes and newlines are quoted; plain values are not
 assert.strictEqual(toCsv(['a', 'b'], [['x,y', 'say "hi"'], ['line\nbreak', 3]]), 'a,b\r\n"x,y","say ""hi"""\r\n"line\nbreak",3');
@@ -41,5 +41,20 @@ for (const h of ['# Vault Code Map', '## Summary', '## What to improve', '## Too
 assert.ok(runMd({}).startsWith('# Vault Code Map'), 'an empty result does not throw');
 
 assert.strictEqual(datedName('vault-code-map', 'md', '2026-11-20T01:00:00Z'), 'vault-code-map-2026-11-20.md');
+
+const review = {
+  finishedAt: '2026-11-20T01:00:00Z', model: 'model-a', summary: { replace: 1, keep: 1 },
+  result: { files: [{ file: 'server/a.js', tool: 'chat', sites: [
+    { file: 'server/a.js', line: 3, text: 'callModel(m, p)', verdict: 'replace', confidence: 'high', saving: 'medium', does: 'Picks a label', why: 'Fixed set', alternative: 'A lookup table' },
+    { file: 'server/a.js', line: 9, text: 'callModel(m, q)', verdict: 'keep', confidence: 'high', saving: 'low', does: 'Writes a summary', why: '', alternative: '' },
+  ] }] },
+};
+const am = aiReviewMd(review);
+assert.ok(am.includes('## Replace (1)') && am.includes('## Hybrid (0)') && am.includes('## Keep (1)'));
+assert.ok(am.includes('### `server/a.js:3` (high confidence, medium saving, chat)'));
+assert.ok(am.includes('**Instead:** A lookup table'));
+assert.ok(am.includes('### `server/a.js:9` (high confidence, chat)'), 'no saving shown for keep');
+assert.strictEqual(aiReviewCsv(review).split('\r\n')[1], 'server/a.js,3,chat,replace,high,medium,Picks a label,Fixed set,A lookup table,"callModel(m, p)"');
+assert.ok(aiReviewMd(null).startsWith('# Vault AI review'), 'no review does not throw');
 
 console.log('exportRun tests passed');

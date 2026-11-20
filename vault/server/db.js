@@ -4911,6 +4911,29 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_code_map_briefings_user ON code_map_briefings ("userId", "generatedAt" DESC)`);
+  // Code Map "AI review" (services/codeMap/aiReview.js): each review of where the server calls a model and whether plain code would do.
+  // Started by an admin's button only (no cron). Workspace-wide like code_map_runs; the last 10 are kept and older ones deleted outright
+  // (analysis output, not user content). One running review at a time (partial unique index); a restart fails one left running.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS code_map_ai_reviews (
+      id             SERIAL PRIMARY KEY,
+      "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status         TEXT NOT NULL DEFAULT 'running',
+      model          TEXT,
+      summary        JSONB,
+      result         JSONB,
+      error          TEXT,
+      "inputTokens"  INTEGER,
+      "outputTokens" INTEGER,
+      "costUsd"      NUMERIC(10,4),
+      "durationMs"   INTEGER,
+      "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finishedAt"   TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`UPDATE code_map_ai_reviews SET status = 'failed', error = 'Stopped by a restart', "finishedAt" = NOW()
+                      WHERE status = 'running' AND "createdAt" < $1`, [schemaStartedAt]);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_code_map_ai_reviews_one_active ON code_map_ai_reviews ((status = 'running')) WHERE status = 'running'`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (

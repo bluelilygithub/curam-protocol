@@ -56,6 +56,12 @@ const CATALOG = [
   { id: 'context', label: 'Context', group: G,
     does: 'A briefing about how Vault is built, for starting a conversation in the Claude app that knows nothing about Vault (for example to design the next tool). It is built from the latest run, the feature flags and navigation, the last 30 days of the changelog and its open concerns, a Ponytail summary, which outside services are set up (YES or NO only), the installed packages, and three short curated files (about Vault, the rules every tool follows, the shared building blocks). The page shows it as a report and as Markdown for Claude.',
     notes: 'It describes how Vault is built, never what is in it: no client names, amounts, notes, emails, task titles or secret values. It makes no AI call. It needs a finished analysis run first.' },
+  { id: 'ai-review', label: 'AI review', group: G,
+    does: 'Every place the server calls an AI model, each with a verdict: Replace (plain code such as a regex, a parser, a lookup or fixed rules would do it as well or better), Hybrid (plain code for the common cases, the model for the rest), Keep (the task needs the model) or Unclear (the review could not tell from the code it saw). Buttons at the top filter by verdict; each item shows the file and line, what the call does, why, and what to do instead, with its tool as a link. Copy review and Download CSV export every verdict. The line under the heading says when it last ran, which model, how many call sites and model calls, tokens and the approximate cost.',
+    notes: 'The verdicts come from an AI model reading the code around each call, so they are advice to check, not facts. Call sites are found by text search, so a call made some other way is missed. A prompt built in another file often comes back Unclear.' },
+  { id: 'run-ai-review', label: 'Run review', group: G,
+    does: 'The button on the AI review tab. It first says about how many model calls the run will make and asks Yes or No. While it runs it shows File x of y and the rest of the page stays usable.',
+    notes: 'It never runs on a schedule, only from this button. Files unchanged since the last review keep their verdicts and cost nothing, so a repeat run is cheap. It uses the standard model in Settings, counts towards the AI rate limit and shows in Usage as code_map_ai_review. One review at a time; the last 10 are kept. High-confidence Replace verdicts go to the Suggestions inbox once per call site.' },
   { id: 'build-briefing', label: 'Build briefing', group: G,
     does: 'On the Context tab: builds a new briefing from the latest run and keeps it (the last 10 are listed under Earlier briefings, each with Copy). Copy for Claude puts the Markdown on the clipboard; Download .md saves it. The size in characters and an estimate in tokens are shown next to Copy.',
     notes: 'Paste it as the first message of a new Claude conversation, or add the .md file to a Claude Project as knowledge. A briefing over about 60,000 characters is shortened and says so at the top.' },
@@ -71,7 +77,7 @@ const CATALOG = [
 ];
 
 const RULES = [
-  'Code Map reads the code as it is deployed, on the server. It makes no AI call except Explain and plan a fix, and never changes code.',
+  'Code Map reads the code as it is deployed, on the server. It makes no AI call except Explain and plan a fix and the AI review (only when its button is pressed), and never changes code.',
   'Colours: green follows the rule, amber is worth a look (not necessarily wrong), red is a gap, grey means the rule does not apply to that tool.',
   'The checks are pattern matches in the code, so they can be wrong both ways: always read the evidence before changing anything. docs/code-map.md lists the known false positives.',
   'A file reached by three or more tools is shared and belongs to none of them; a problem in a shared file is not charged to any tool.',
