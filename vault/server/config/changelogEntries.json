@@ -2,6 +2,46 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "author": "mrb",
+   "area": "DocCompare",
+   "commit": "5e2a0d99",
+   "fullHash": "5e2a0d99c7011f25a5f3f1a377220fdce95867ec",
+   "committedAt": "2026-11-22T07:01:30+10:00",
+   "subject": "DocCompare tour: a step for versions meant to differ",
+   "filesChanged": 5,
+   "insertions": 9,
+   "deletions": 5,
+   "goal": "Show people in the guided tour that two intentionally different versions can be compared without a verdict.",
+   "whatChanged": "The DocCompare tour gains a step, \"Versions meant to differ\" (step 9 of 15, after the verdict), which switches the frame to Compare documents and explains the \"These are intentionally different versions\" box: no verdict or decisions, sections grouped as in both / worded differently / only in A / only in B, figures and quotes that differ still listed, the PDF titled Version comparison, one-off checks only. The step count is now 15 in the tour, the Settings tour list, the (i) box, the guide catalogue and docs/doc-compare.md (which still said 11).",
+   "filesImpacted": [
+    "client/src/utils/tours/docCompareTour.js",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "server/services/docCompareTutor.js",
+    "docs/doc-compare.md"
+   ],
+   "benefit": "The version comparison option is discoverable from the tour instead of only from the job list.",
+   "concerns": "The tour still has no step for Projects and Timeline (phase 5). Checked in the real local Vault (production build): all 15 steps, each counter \"Step n of 15\", the new step on Compare documents with the box visible, no page errors."
+  },
+  {
+   "author": "mrb",
+   "area": "DocCompare",
+   "commit": "43617a6c",
+   "fullHash": "43617a6ce022ad82764d49a9d0ce45f193e57909",
+   "committedAt": "2026-11-22T07:01:31+10:00",
+   "subject": "DocCompare: Projects and Saved checks open before comparing",
+   "filesChanged": 1,
+   "insertions": 3,
+   "deletions": 1,
+   "goal": "Let people reach Projects and Saved checks from the tool list before they have compared anything, since that is where they open earlier work.",
+   "whatChanged": "The Vault page's tool list marked every tool except Compare documents and Settings \"Compare two files first\" until a comparison finished, which greyed out Projects and Saved checks, the two places you go to open earlier work. They now never carry that hint. Timeline, which needs an open project, now says \"Open or start a project first\" instead. The other results tools keep \"Compare two files first\".",
+   "filesImpacted": [
+    "client/src/pages/DocComparePage.jsx"
+   ],
+   "benefit": "Opening a project or a saved check from the tool list no longer looks unavailable on a fresh page.",
+   "concerns": "None known. Checked in the real local Vault (production build): before comparing, Projects and Saved checks have no hint, Timeline asks for a project, All changes still says Compare two files first."
+  },
+  {
    "commit": "a0609cc1",
    "fullHash": "a0609cc1bbb485f79033325ba4791eee2e85b96a",
    "committedAt": "2026-11-21T19:44:20+10:00",
