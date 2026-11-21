@@ -254,3 +254,12 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .toast span { display: block; padding: 10px 14px; border-radius: 10px; background: var(--color-text); color: var(--color-bg); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); font-size: 13px; }
 .guide-flash { outline: 3px solid var(--color-primary); outline-offset: 4px; border-radius: 10px; transition: outline-color 200ms; }
 .page canvas.overlay { position: absolute; inset: 0; box-shadow: none; opacity: 0.85; }
+
+/* projects (addendum §7) */
+.round-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 10px; font-size: 14px; }
+.round-note { margin: 2px 0 4px; font-size: 13px; font-weight: 600; color: var(--color-muted); }
+.round-note-bad { color: var(--removed); }
+.timeline tr.current th, .timeline tr.current td { background: var(--color-bg); }
+.project-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+.export-reminder { margin: 8px 0; }
+.timeline th { white-space: nowrap; }

@@ -1,3 +1,5 @@
+import type { Block } from '../readers/types';
+
 // The categories added for the submission checks (addendum §2) are part of the union now; the checks that produce them arrive in later phases.
 export type Category =
   | 'removed' | 'added' | 'moved' | 'wording' | 'typo' | 'number' | 'formatting' | 'layout' | 'metadata'
@@ -27,6 +29,17 @@ export interface Change {
   decision?: 'restore' | 'accept' | 'later'; // set by the person (Phase 2)
   decidedAt?: string; // ISO timestamp
   origin?: 'removed' | 'added' | 'changed';
+  // ---- projects (addendum §7) ----
+  anchor?: string; // where the change sits in the original: a block id, or "+<id before>:<fingerprint>" for added text; stable across rounds
+  edit?: Edit; // how the change is applied to the original when it is accepted (the accepted state, §7.3)
+  roundNote?: string; // "New in this round", "Not fixed: …", "Since round 2: …" (§7.4, §7.6)
+}
+
+/** One accepted change, as an edit to the original's blocks (ids are the original's; inserted blocks get ids from their anchor). */
+export interface Edit {
+  remove?: string[];
+  insert?: { after: string | null; blocks: Block[] };
+  replace?: { id: string; block: Block };
 }
 
 export interface MetaRow {

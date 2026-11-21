@@ -1,5 +1,5 @@
 import { diffWordsWithSpace } from 'diff';
-import { locate } from '../compare/content';
+import { addedAnchor, locate, precedingOriginal } from '../compare/content';
 import { ALL_RULES, mapQuotes, normalize } from '../compare/normalize';
 import type { PostCheck } from '../compare/postChecks';
 import type { NewChange } from '../compare/content';
@@ -49,23 +49,26 @@ export const newClaims: PostCheck = (a, b, ops) => {
   const editedQuotes = extractQuotes(b);
   const seen = new Set<string>();
   const out: NewChange[] = [];
-  const refsB = referenceBlockIds(b); // added references are checks/references.ts's (and count as claims there)
+  const refsB = referenceBlockIds(b);
+  const before = precedingOriginal(ops); // added references are checks/references.ts's (and count as claims there)
 
   const isNew = (c: Claim) => {
     if (c.kind === 'statistic') { const n = numberOf(c.text); return !!n && !origNumbers.has(n); }
     return !origLower.includes(normalize(c.text, ALL_RULES).toLowerCase());
   };
+  let anchor: string | undefined; // the paragraph the claim is in, for projects (an accepted paragraph must not carry an open claim with it)
   const report = (c: Claim, block: (typeof b.blocks)[number]) => {
     const k = `${c.kind}|${normalize(c.text, ALL_RULES).toLowerCase()}`;
     if (seen.has(k)) return;
     seen.add(k);
-    out.push({ category: 'newClaim', severity: SEVERITY.newClaim, location: locate(block, true), edited: block.text, detail: `${KIND_LABEL[c.kind]}: ${c.text}` });
+    out.push({ category: 'newClaim', severity: SEVERITY.newClaim, location: locate(block, true), edited: block.text, detail: `${KIND_LABEL[c.kind]}: ${c.text}`, anchor });
   };
 
   for (const op of ops) {
     if (op.kind !== 'added' && op.kind !== 'modified') continue;
     const blk = op.b;
     if (refsB.has(blk.id)) continue;
+    anchor = op.kind === 'modified' ? op.a.id : addedAnchor(before(blk), blk);
     let scan = blk.text;
     if (op.kind === 'modified') {
       // only what was put in; a figure that replaced a figure is a number change, not a new claim

@@ -6,9 +6,11 @@
 // `tool` on a guide entry says which tool (view) its Open button shows; the app marks each part with data-guide="<id>" so it can scroll to it.
 
 export const DOC_COMPARE_TOOLS = [
+  { id: 'projects', label: 'Projects', group: 'Compare', icon: 'folder' },
   { id: 'compare', label: 'Compare documents', group: 'Compare', icon: 'compare' },
   { id: 'saved', label: 'Saved checks', group: 'Compare', icon: 'history' },
   { id: 'review', label: 'Verdict and review', group: 'Results', icon: 'shield' },
+  { id: 'timeline', label: 'Timeline', group: 'Results', icon: 'history' },
   { id: 'changes', label: 'All changes', group: 'Results', icon: 'list-checks' },
   { id: 'metadata', label: 'File details', group: 'Results', icon: 'file-text' },
   { id: 'pages', label: 'PDF pages', group: 'Results', icon: 'columns' },
@@ -25,9 +27,11 @@ export const GROUP_TIPS = {
 };
 
 export const TOOL_TIPS = {
+  projects: 'Every document you are checking over several drafts: its original, how many rounds, the latest verdict and the space it uses. Open, rename, export (one .doccompare file), import or delete a project. Kept in this browser only.',
   compare: 'Drop in the original and the AI-edited version (PDF, Word, Markdown or text) and press Compare. Two checks run first: the files must be the same type, and they should look like versions of the same document.',
   saved: 'Every check you run is saved here with its label: search by label or file name, open one to come back to it (your decisions come back too), rename it, or delete it. Kept in this browser only.',
   review: 'The verdict (Not ready to submit, Review recommended, or No significant changes found) and a card for each change you need to decide: Restore, Accept or Fix later. Your decisions are kept in this browser.',
+  timeline: 'A project\'s rounds in a table: words, sections, references, issues fixed / not fixed / new, and the verdict of each, with the round that lost the most words marked. Open a round, make the latest round the new original, delete rounds, or compact old ones to free space.',
   changes: 'Every change in one table, including the minor ones: removed, added, moved, wording, typos, numbers and dates, formatting and layout, with severity. Filter, search, sort, and open a row to see the exact words that changed.',
   metadata: 'The two files\' details side by side (size, dates, author, and counts of pages, words, headings, tables and images), with anything suspicious flagged, such as a word count that dropped.',
   pages: 'For two PDFs: every page drawn and compared pixel by pixel. See which pages look different and open them side by side with the changes in red.',
@@ -36,6 +40,8 @@ export const TOOL_TIPS = {
 };
 
 export const TOOL_BLURBS = {
+  projects: 'Documents you check draft after draft, each kept with its original.',
+  timeline: 'Every round of a project: what was fixed, what is new, and the verdict.',
   compare: 'Choose the original and the edited file, then press Compare.',
   saved: 'Find, open, rename or delete the checks you have run.',
   review: 'Is it ready to submit? Decide each change that matters, most serious first.',
@@ -56,6 +62,15 @@ export const DOC_COMPARE_GOALS = [
     steps: [
       { tool: 'compare', note: 'Choose your original and the LLM-edited version, then press Compare.' },
       { tool: 'review', note: 'Read the verdict, then Restore, Accept or Fix later each card. The verdict turns from red once every red item is decided.' },
+    ],
+  },
+  {
+    id: 'rounds', title: 'Check a new draft of the same document', icon: 'history',
+    blurb: 'Keep your original as a clean copy and check every later draft against it: what was fixed, what is still missing, and what is new.',
+    steps: [
+      { tool: 'compare', note: 'First time: choose the original and the LLM draft, leave "Save this as your original?" ticked, and press Compare. Next time: open the project in Projects, add the latest version and press Check this version.' },
+      { tool: 'review', note: 'The round summary (fixed, not fixed, new) and the cards: items you chose to restore that are still missing come first.' },
+      { tool: 'timeline', note: 'Every round side by side, with the round that lost the most words marked.' },
     ],
   },
   {
@@ -204,6 +219,7 @@ export const HOW_IT_WORKS = [
   ['New claims and quotes', 'LLMs sometimes invent statistics, quotes and sources. Any statistic (a percentage, an amount, a count, a year), quote, citation such as [3] or (Smith et al., 2021), link, or source ("a 2021 survey by …") in added or changed text that is nowhere in your original is a red New claim: check the source exists and says this, or remove it. A figure that replaced another figure is a Number change instead. A direct quote (four or more words in quotation marks, or a block quote) must match your original exactly: any change, even a corrected typo, is red.'],
   ['Limits, required headings and versions', 'Set a word limit on the Compare documents screen (and a page limit in Settings): over the limit is red. The reference list is not counted and footnotes are, unless you change that in Settings; File details shows the words section by section. In Settings you can paste the headings this submission must have (and save them as a named template): a missing one is red, one out of order is amber. Without a list, every heading in your original counts, and a removed one is already reported. A version number near the start ("Version 1.3", "v1.3", "Rev B", "Draft 4") that did not change although the content did is amber; one that went backwards is red.'],
   ['References, numbering, spelling and terms', 'References and footnotes: the reference list (under a heading such as References, Bibliography or Sources), footnotes and endnotes are matched between the two versions. A reference or footnote that was removed, added (a possible invented source) or changed (authors, year, title or link) is red. A renumbered list is amber, and every citation such as [3] or (Smith 2021) that now points to nothing, to a different source, or sits on different text is red. In a PDF these are found by best effort, and the item says so. Numbering: a gap, a repeat or a number going backwards that your original did not have, in numbered paragraphs, headings, figures and tables, is amber, and so are paragraphs that got a new number. Spelling: DocCompare works out whether your original uses Australian or US spelling and lists every word the LLM switched to the other one as one amber item. Terms: a defined term ("the Act"), an acronym or a phrase your original repeats that the LLM dropped or used much less, an acronym used without its expansion, and a new acronym never spelled out are amber. Add your own protected terms in Settings.'],
+  ['Projects and rounds', 'Leave "Save this as your original?" ticked when you compare, and DocCompare keeps a clean copy of your original as a project. Each later draft you add (Compare documents, "Add the latest version") becomes the next round, with an optional note. Every round is checked against your original plus the changes you accepted, so an intended cut is not flagged again, and against the previous round. Cards say what happened since: "New in this round", "You chose to restore this in round 2, but it\'s still missing", "Changed again", or that a paragraph removed in an earlier round hasn\'t come back. Fixed and accepted items move to Resolved; "This round only" shows just what changed since the last round. Timeline lists every round. If you restructure the document on purpose, make the latest round the new original (a reason is required, and open issues it absorbs are listed and always shown in the report). Projects are kept in this browser: export one as a .doccompare file to keep a copy, and compact old rounds to free space.'],
   ['Trivial changes', 'Differences in spaces, line breaks, curly or straight quotes, dashes and invisible characters are hidden by default but still counted ("7 trivial changes hidden"). Tick that box to show them, or choose in Settings which of them count as trivial.'],
   ['PDF pages', 'For two PDFs, each page is also drawn and compared pixel by pixel after the text results appear. Pages where more than a tiny share changed are listed in PDF pages and as Layout changes. Open one to see the two pages side by side with the changed pixels in red. Very long PDFs (over 500 pages) wait for you to start this step.'],
   ['Review for the author', 'Download review for the author (in PDF report, and on the Comparison done card) makes a PDF to send back to whoever made the edit: every change, whatever filters are set, sorted into Must fix, Please review and Minor. Each item has a tick box, where it is, what to do ("Restore this paragraph", "Check the changed figure: 30 to 60") and the original and edited text, with removed words in red and added words in green.'],
@@ -224,6 +240,14 @@ export const GUIDE_TOOLS = [
   { id: 'compare-button', label: 'Compare button', tool: 'compare' },
   { id: 'file-check', label: 'File type check', tool: 'compare' },
   { id: 'same-document', label: 'Same-document check', tool: 'compare' },
+  { id: 'projects', label: 'Projects', tool: 'projects' },
+  { id: 'save-project', label: 'Save as a project', tool: 'compare' },
+  { id: 'add-round', label: 'Add the latest version', tool: 'compare' },
+  { id: 'timeline', label: 'Timeline', tool: 'timeline' },
+  { id: 'new-original', label: 'Make the new original', tool: 'timeline' },
+  { id: 'compact', label: 'Compact old rounds', tool: 'timeline' },
+  { id: 'round-summary', label: 'Round summary', tool: 'review' },
+  { id: 'resolved', label: 'Resolved items', tool: 'review' },
   { id: 'review', label: 'Verdict and review', tool: 'review' },
   { id: 'verdict', label: 'Verdict', tool: 'review' },
   { id: 'review-queue', label: 'Review cards', tool: 'review' },

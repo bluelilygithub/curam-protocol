@@ -26,6 +26,17 @@ export interface ExportInput {
   filtersNote: string;
   landscape: boolean;
   decisions?: Decisions;
+  project?: ProjectReport;
+}
+
+/** A project round in the report (addendum §8): its summary, the timeline, and every replacement of the original. */
+export interface ProjectReport {
+  name: string;
+  round: number;
+  rounds: number;
+  summary?: string;
+  timeline: { number: number; addedAt: string; note?: string; words: number; summary: string; counts: string; verdict: Verdict; largestLoss: boolean }[];
+  replacements: { round: number; at: string; reason: string; absorbed: number; items: string[] }[];
 }
 
 const VERDICT_COLOUR: Record<Verdict, [number, number, number]> = { red: RED, amber: [146, 64, 14], green: GREEN };
@@ -53,6 +64,7 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   const W = doc.internal.pageSize.getWidth();
   line('Submission check', 18, true);
   y += 4;
+  if (x.project) line(`Project: ${x.project.name} · round ${x.project.round} of ${x.project.rounds}`, 11, true);
   line(`Original: ${x.fileNames[0]}`);
   line(`Edited: ${x.fileNames[1]}`);
   line(`Checked: ${new Date().toLocaleString()} · DocCompare ${APP_VERSION}`);
@@ -62,6 +74,7 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   doc.setTextColor(30, 30, 30);
   y += 66;
   line(summarySentence(x.all), 11);
+  if (x.project?.summary) line(x.project.summary, 11, true);
   y += 4;
   line(ACCURACY_NOTE, 9, false, [90, 90, 90]);
   y += 6;
@@ -87,6 +100,25 @@ export function buildReportPdf(x: ExportInput): jsPDF {
       margin: { left: margin, right: margin },
     });
     y = after();
+  }
+
+  // ---- a project: the timeline and every replacement of the original (never left out, §7.7) ----
+  if (x.project) {
+    y += 6;
+    line('Timeline', 12, true);
+    autoTable(doc, {
+      startY: y,
+      head: [['Round', 'Added', 'Note', 'Words', 'Fixed / not fixed / new', 'Red / amber / info', 'Verdict']],
+      body: x.project.timeline.map((r) => [String(r.number), new Date(r.addedAt).toLocaleDateString('en-AU'), cut(r.note ?? '', 80), `${r.words}${r.largestLoss ? ' (most lost)' : ''}`, r.summary, r.counts, latin1(VERDICT_TEXT[r.verdict].title)]),
+      styles: { fontSize: 8, cellPadding: 3, valign: 'top' },
+      headStyles: { fillColor: [155, 91, 70] },
+      margin: { left: margin, right: margin },
+    });
+    y = after();
+    if (x.project.replacements.length) {
+      line('Original replaced', 12, true);
+      for (const r of x.project.replacements) line(`Round ${r.round} became the new original on ${new Date(r.at).toLocaleString('en-AU')}. Reason: ${r.reason}. Open issues accepted with it: ${r.absorbed}${r.items.length ? ` (${r.items.join('; ')})` : ''}.`, 10);
+    }
   }
 
   // ---- the existing report, as the full detail ----

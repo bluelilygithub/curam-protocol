@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { TrackedItem } from '../project/model';
 import type { Change, WordCounts } from '../report/model';
 import { ACCURACY_NOTE, VERDICT_TEXT, isOpen, progress, reviewItems, summarySentence, verdictOf, type Decision, type Decisions, type ReviewItem } from '../review/verdict';
 
@@ -23,7 +24,21 @@ async function copy(text: string): Promise<boolean> {
 
 const DECISION_LABEL: Record<Decision, string> = { restore: 'To restore', accept: 'Accepted', later: 'Fix later' };
 
-export function ReviewView({ changes, words, decisions, persistent, onDecide, onDismissSimilar, onShowAll, onShowIn, say }: {
+/** A project round on the review screen (addendum §7.4): its summary, notes on the cards, resolved items and "This round only". */
+export interface ProjectReview {
+  name: string;
+  round: number;
+  latestRound: number;
+  summary?: string; // "Round 4: 3 issues fixed, 1 not fixed, 2 new changes."
+  readOnly: boolean; // an earlier round, or "This round only"
+  roundOnly: boolean;
+  canRoundOnly: boolean;
+  onRoundOnly: (v: boolean) => void;
+  resolved: TrackedItem[];
+  onUndoAccept: (i: TrackedItem) => void;
+}
+
+export function ReviewView({ changes, words, decisions, persistent, onDecide, onDismissSimilar, onShowAll, onShowIn, say, project }: {
   changes: Change[];
   words?: WordCounts;
   decisions: Decisions;
@@ -33,7 +48,9 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
   onShowAll: () => void;
   onShowIn: (c: Change) => void;
   say: (text: string) => void;
+  project?: ProjectReview;
 }) {
+  const readOnly = !!project?.readOnly;
   const items = useMemo(() => reviewItems(changes, decisions), [changes, decisions]);
   const verdict = verdictOf(items);
   const p = progress(items);
@@ -60,7 +77,7 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
     const move = (to: number) => { const n = Math.min(items.length - 1, Math.max(0, to)); setFocus(n); cards.current[n]?.focus(); };
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); move(focus + 1); return; }
     if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); move(focus - 1); return; }
-    if (!i) return;
+    if (!i || readOnly) return;
     const k = e.key.toLowerCase();
     if (k === 'a') { e.preventDefault(); void decide(i, 'accept'); move(focus + 1); }
     else if (k === 'r' && i.tier === 'red') { e.preventDefault(); void decide(i, 'restore'); move(focus + 1); }
@@ -70,11 +87,20 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
   const shown = showDecided ? items : items.filter(isOpen);
   return (
     <section className="review" aria-label="Verdict and review">
+      {project && (
+        <div className="round-bar" data-guide="round-summary">
+          <strong>{project.name}</strong>
+          <span>Round {project.round}{project.round < project.latestRound ? ` of ${project.latestRound} (earlier round: read-only, but an acceptance can be undone)` : ''}</span>
+          {project.canRoundOnly && <label className="inline" title="Show only what changed since the previous round. The verdict and your decisions always use the comparison with your original."><input type="checkbox" checked={project.roundOnly} onChange={(e) => project.onRoundOnly(e.target.checked)} /> This round only</label>}
+        </div>
+      )}
+      {project?.roundOnly && <p className="gate gate-warn">This round only: what changed since round {project.round - 1}. Nothing to decide here; the verdict comes from the comparison with your original. Untick "This round only" to decide.</p>}
       <div className={`verdict verdict-${verdict}`} role="status" data-guide="verdict">
         <span className="verdict-icon" aria-hidden="true">{VERDICT_TEXT[verdict].icon}</span>
         <div>
           <h2>{VERDICT_TEXT[verdict].title}</h2>
           <p className="verdict-sentence">{summarySentence(changes)}</p>
+          {project?.summary && !project.roundOnly && <p className="verdict-sentence"><strong>{project.summary}</strong></p>}
         </div>
       </div>
       <p className="accuracy-note">{ACCURACY_NOTE}</p>
@@ -109,6 +135,7 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
                 <span className="muted small">{c.location}</span>
                 {i.decision && <span className={`badge decision-${i.decision.decision}`}>{DECISION_LABEL[i.decision.decision]}</span>}
               </div>
+              {c.roundNote && !project?.roundOnly && <p className={`round-note${/still|Not fixed|hasn't/.test(c.roundNote) ? ' round-note-bad' : ''}`}>{c.roundNote}</p>}
               <p className="card-summary">{c.summary}</p>
               <p className="card-why"><strong>Why it matters:</strong> {c.whyItMatters}</p>
               {c.diffHtml && !c.trivial && c.category !== 'formatting'
@@ -129,7 +156,7 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
               )}
               <p className="card-action"><strong>What to do:</strong> {c.action}</p>
               <div className="row">
-                {i.tier === 'red' ? (
+                {readOnly ? null : i.tier === 'red' ? (
                   <>
                     <button className="btn primary" onClick={() => void decide(i, 'restore')} title="Copy the original text to the clipboard so you can paste it back, and record that you will restore it. Key: R">Restore</button>
                     <button className="btn" onClick={() => void decide(i, 'accept')} title="Record that this change was intended. Key: A">Accept</button>
@@ -141,13 +168,26 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
                     {similar(i).length > 1 && <button className="btn" onClick={() => onDismissSimilar(similar(i).map((x) => x.key))} title={`Accept all ${similar(i).length} open changes of this kind at once.`}>Dismiss all similar ({similar(i).length})</button>}
                   </>
                 )}
-                {i.decision && <button className="btn ghost" onClick={() => onDecide(i.key, null)} title="Take back this decision.">Undo</button>}
+                {i.decision && (!readOnly || (i.decision.decision === 'accept' && !project?.roundOnly)) && <button className="btn ghost" onClick={() => onDecide(i.key, null)} title={readOnly ? 'Undo this acceptance: the change leaves the accepted state and the latest round is checked again.' : 'Take back this decision.'}>{readOnly ? 'Undo acceptance' : 'Undo'}</button>}
                 <button className="link" onClick={() => onShowIn(c)} title="Find this change in the full table of changes.">Show in all changes</button>
               </div>
             </li>
           );
         })}
       </ol>
+      {project && project.resolved.length > 0 && !project.roundOnly && (
+        <details className="meta" data-guide="resolved">
+          <summary>Resolved ({project.resolved.length})</summary>
+          <ul className="card-children">
+            {project.resolved.map((i) => (
+              <li key={i.itemId}>
+                <strong>{i.status === 'fixed' ? '✓ Fixed' : '✔ Accepted'}</strong> {i.change.summary ?? i.change.detail} <span className="muted small">{i.change.roundNote}</span>
+                {i.status === 'accepted' && !i.absorbed && i.decidedInRound && <> <button className="link" onClick={() => project.onUndoAccept(i)} title="Undo this acceptance: the change leaves the accepted state and the latest round is checked again.">Undo acceptance</button></>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }

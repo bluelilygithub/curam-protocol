@@ -2,13 +2,13 @@ import { Fragment, useMemo, useState } from 'react';
 import type { LayoutPage } from '../compare/layout';
 import { CATEGORY_ICON, CATEGORY_LABEL, type Category, type Change, type ComparisonResult, type Severity, type SimilarityResult } from '../report/model';
 import { authorItems, downloadAuthorPdf } from '../report/authorReport';
-import { exportPdf } from '../report/pdfExport';
+import { exportPdf, type ProjectReport } from '../report/pdfExport';
 import type { Decisions } from '../review/verdict';
 import { SEVERITY_RANK } from '../report/severity';
 import type { Settings } from '../settings';
 
 type SortKey = 'id' | 'location' | 'category' | 'severity';
-export type ViewId = 'compare' | 'saved' | 'review' | 'changes' | 'metadata' | 'pages' | 'report' | 'settings';
+export type ViewId = 'projects' | 'compare' | 'saved' | 'review' | 'timeline' | 'changes' | 'metadata' | 'pages' | 'report' | 'settings';
 export interface FilterPreset { categories?: string[]; severities?: string[] }
 
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
@@ -300,7 +300,7 @@ export function PagesView({ layout, threshold, maxPages, onRunLayout, onOpenPage
 
 export function ReportView(p: {
   result: ComparisonResult; all: Change[]; layoutChanges: Change[]; layout: Layout; sim: SimilarityResult; override: boolean;
-  settings: Settings; fileNames: [string, string]; f: Filters; onEditFilters: () => void; decisions: Decisions;
+  settings: Settings; fileNames: [string, string]; f: Filters; onEditFilters: () => void; decisions: Decisions; project?: ProjectReport;
 }) {
   const [landscape, setLandscape] = useState(true);
   const real = p.all.filter((c) => !c.trivial).length;
@@ -311,7 +311,7 @@ export function ReportView(p: {
     <div className="report-card">
       <h2>Comparison report</h2>
       <p>For your own records. The report is a PDF with:</p>
-      <ul><li>first, the verdict, the summary and your decisions on each item (with an <strong>UNRESOLVED ISSUES</strong> watermark on every page while a red item is open or marked Fix later); then, as the full detail:</li></ul>
+      <ul><li>first, the verdict, the summary and your decisions on each item (with an <strong>UNRESOLVED ISSUES</strong> watermark on every page while a red item is open or marked Fix later); then, as the full detail:</li>{p.project && <li>for the project <strong>{p.project.name}</strong>: the round summary, the timeline of all {p.project.rounds} rounds and every time the original was replaced (with the reason);</li>}</ul>
       <ul>
         <li>the two file names, the date, and the two checks (similarity {p.sim.score}/100{p.override ? ', compared anyway' : ''});</li>
         <li>counts of each kind of change by severity, and the file details table;</li>

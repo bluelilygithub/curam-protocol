@@ -16,9 +16,9 @@ export const changedQuotes: PostCheck = (a, b, ops) => {
     if (edited.includes(normQuote(q.text)) || removedBlocks.has(q.block.id)) continue;
     const { quote: match, score } = closestQuote(q.text, editedQuotes);
     if (match && score >= 0.6) {
-      out.push({ category: 'quote', severity: SEVERITY.quote, location: locate(q.block), original: q.text, edited: match.text, detail: 'Quote reworded', diffHtml: classify(normQuote(q.text), normQuote(match.text)).diffHtml });
+      out.push({ category: 'quote', severity: SEVERITY.quote, location: locate(q.block), original: q.text, edited: match.text, detail: 'Quote reworded', anchor: q.block.id, diffHtml: classify(normQuote(q.text), normQuote(match.text)).diffHtml });
     } else {
-      out.push({ category: 'quote', severity: SEVERITY.quote, location: locate(q.block), original: q.text, detail: 'Quote removed' });
+      out.push({ category: 'quote', severity: SEVERITY.quote, location: locate(q.block), original: q.text, detail: 'Quote removed', anchor: q.block.id });
     }
   }
   return out;

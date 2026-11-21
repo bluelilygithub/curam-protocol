@@ -62,6 +62,18 @@ export function openGuideTool(id: string, h: GuideHooks): boolean {
         if (!h.hasResults()) h.toast(RESULTS_FIRST);
         else if (!h.show(id)) { h.show('summary'); h.toast('This comparison has no trivial changes.'); }
         break;
+      case 'save-project':
+        if (!h.show(id)) { h.show('files'); h.toast('Choose the original file first: "Save this as your original?" appears under the two file boxes. (Inside an open project you add the latest version instead.)'); }
+        break;
+      case 'add-round':
+      case 'new-original':
+      case 'compact':
+      case 'round-summary':
+        if (!h.show(id)) h.toast('Open a project first (in Projects), or start one in Compare documents with "Save this as your original?" ticked.');
+        break;
+      case 'resolved':
+        if (!h.show(id)) h.toast('Resolved lists the items fixed or accepted in a project round. It appears once a project round has some.');
+        break;
       case 'page-viewer':
         if (!h.hasResults()) h.toast(RESULTS_FIRST);
         else if (!h.isPdf()) h.toast('The page viewer is for two PDF files only.');
