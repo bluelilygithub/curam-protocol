@@ -2,6 +2,55 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0f8b1d8f",
+   "fullHash": "0f8b1d8fbbb6e42beba6d37e6c0d840b7cfd44f4",
+   "committedAt": "2026-11-21T10:03:52+10:00",
+   "author": "mrb",
+   "subject": "DocCompare addendum phase 1: tiers, plain-language messages, section drop",
+   "filesChanged": 14,
+   "insertions": 390,
+   "deletions": 60,
+   "area": "DocCompare",
+   "goal": "Lay the foundations for the submission-check addendum: every change explained in plain words with red/amber/info tiers, so the verdict screen and review queue (phase 2) have what they need.",
+   "whatChanged": "The Change type gains optional tier, summary, whyItMatters, action, decision, decidedAt and origin, and the addendum's new categories (newClaim, reference, citation, quote, numbering, wordLimit, spelling, terminology, requiredHeading, versionNumber, drift) join the union with labels and icons; nothing produces them yet. New doc-compare/src/report/messages.ts holds every plain-language summary, why-it-matters and action in Australian English; the pipeline annotates every change (pipeline.annotate) and the review for the author now prints 'Why it matters' under each action (actionFor moved into the catalogue). Re-tiering per addendum §3 in severity.ts: layout pixel changes and file-detail warnings drop from medium to low (info); a new red rule flags a section that lost more than 15% of its words, through a new post-processing stage, compare/postChecks.ts (sections under 40 words skipped; not raised where a removal or move in that section already explains it). The aligner pairs a paragraph cut down to a few of its own words as modified (word containment of at least 0.9) instead of removed plus added, so 'tightening' shows as content cut from that paragraph. Use-case fixtures on a new white-paper base: uc01 caveat dropped and section tightened, uc02 statistic changed, uc03 heading removed, uc07 table row lost, uc09 heading level; e2e tests also check every change is described and the red file-detail findings are exactly the expected ones. New tests/messages.test.ts (every situation worded, never 'safe', 'correct' or 'verified', Australian spelling, tiers, section drop, tightened pairing).",
+   "filesImpacted": [
+    "doc-compare/src/report/model.ts",
+    "doc-compare/src/report/messages.ts",
+    "doc-compare/src/report/severity.ts",
+    "doc-compare/src/report/authorReport.ts",
+    "doc-compare/src/compare/pipeline.ts",
+    "doc-compare/src/compare/postChecks.ts",
+    "doc-compare/src/compare/align.ts",
+    "doc-compare/src/compare/textSim.ts",
+    "doc-compare/src/ui/Results.tsx",
+    "doc-compare/tests/messages.test.ts",
+    "doc-compare/tests/e2e.test.ts",
+    "doc-compare/tests/authorReport.test.ts",
+    "doc-compare/tests/fixtures/generate.mjs",
+    "docs/doc-compare.md"
+   ],
+   "benefit": "Every finding now says in everyday words what happened, why it matters and what to do, and a section the LLM 'tightened' is flagged red even when no whole paragraph was removed.",
+   "concerns": "Results change on purpose: page layout differences and file-detail warnings (size, counts, dates) now show as Low instead of Medium, and fall out of the review for the author's list (only flagged High file details are kept). One test expectation changed (the removed-section instruction wording). The new pairing rule could pair two unrelated short paragraphs when one's words are nearly all inside the other; it needs 3+ words and 90% containment, and ranks below real matches. No visible screens changed yet; the verdict and review queue are phase 2. 107 app tests pass; not yet looked at in the deployed Vault."
+  },
+  {
+   "commit": "e29c8e70",
+   "fullHash": "e29c8e70d8cd7535afcf6df918219330e2972da0",
+   "committedAt": "2026-11-21T10:03:42+10:00",
+   "author": "mrb",
+   "subject": "DocCompare: audit against SPEC.md and the submission-check addendum",
+   "filesChanged": 1,
+   "insertions": 77,
+   "deletions": 0,
+   "area": "DocCompare",
+   "goal": "Do the audit the submission-check addendum requires before any work: what exists, how the code differs from SPEC.md, what each addendum section needs, and the decisions to take first.",
+   "whatChanged": "New doc-compare/docs/AUDIT.md: a map of the existing modules, seven differences between the code and SPEC.md (code wins, flagged: Settings is a view, the job dashboard, the embedded Vault font, extra severity rules, no MinHash, no PDF text-position or merged-cell comparison, the extra author review PDF), a table of what each addendum section needs with sizes and the modules it touches, five decisions with the owner's answers (keep the Vault shell and add a Check-a-document flow; projects in the browser's IndexedDB; restructures approved; re-tiering and spelling list as proposed), and six shippable phases.",
+   "filesImpacted": [
+    "doc-compare/docs/AUDIT.md"
+   ],
+   "benefit": "The addendum's large scope (several weeks) is broken into phases that each ship on their own, with the direction-changing decisions settled up front.",
+   "concerns": "Size estimates are judgement, not measured. The file was committed with the phase 1 'Done' note already in it, because phase 1 was finished in the same session and pushed together."
+  },
+  {
    "commit": "df5ccfb8",
    "fullHash": "df5ccfb820fbdec514b65d593549afd3765094b8",
    "committedAt": "2026-11-21T09:55:09+10:00",
