@@ -29,7 +29,8 @@ const ch = (o: Partial<Change>): Change => ({ id: 1, category: 'wording', severi
 
 describe('actionFor', () => {
   it('says what to do for each kind of change', () => {
-    expect(actionFor(ch({ category: 'removed', severity: 'high', group: 'section', original: '4. Termination', children: [ch({}), ch({})] }))).toMatch(/^Restore the missing section "4\. Termination".*2 items/);
+    // addendum §2: the wording now comes from messages.ts and offers "accept the removal" (was "(2 items, listed below)")
+    expect(actionFor(ch({ category: 'removed', severity: 'high', group: 'section', original: '4. Termination', children: [ch({}), ch({})] }))).toMatch(/^Restore the missing section "4\. Termination" and everything under it, or accept the removal/);
     expect(actionFor(ch({ category: 'removed', severity: 'high', group: 'tableRow' }))).toMatch(/missing table row/);
     expect(actionFor(ch({ category: 'removed', severity: 'high' }))).toMatch(/^Restore this text/);
     expect(actionFor(ch({ category: 'added' }))).toMatch(/^Confirm this added text/);

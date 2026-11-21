@@ -1,5 +1,10 @@
-export type Category = 'removed' | 'added' | 'moved' | 'wording' | 'typo' | 'number' | 'formatting' | 'layout' | 'metadata';
+// The categories added for the submission checks (addendum §2) are part of the union now; the checks that produce them arrive in later phases.
+export type Category =
+  | 'removed' | 'added' | 'moved' | 'wording' | 'typo' | 'number' | 'formatting' | 'layout' | 'metadata'
+  | 'newClaim' | 'reference' | 'citation' | 'quote' | 'numbering' | 'wordLimit' | 'spelling' | 'terminology' | 'requiredHeading' | 'versionNumber' | 'drift';
 export type Severity = 'high' | 'medium' | 'low';
+/** The addendum's names for the severities: red = high, amber = medium, info = low. */
+export type Tier = 'red' | 'amber' | 'info';
 
 export interface Change {
   id: number;
@@ -14,6 +19,14 @@ export interface Change {
   trivial?: boolean; // differs only by a rule in Settings → trivial changes; hidden unless "show trivial" is on
   group?: 'section' | 'tableRow'; // removed/added as a whole section or table row
   page?: number; // layout changes: original page, opens the page viewer
+  // ---- addendum §2 (all optional) ----
+  tier?: Tier; // derived from severity
+  summary?: string; // plain language: what happened
+  whyItMatters?: string;
+  action?: string; // what to do about it
+  decision?: 'restore' | 'accept' | 'later'; // set by the person (Phase 2)
+  decidedAt?: string; // ISO timestamp
+  origin?: 'removed' | 'added' | 'changed';
 }
 
 export interface MetaRow {
@@ -48,6 +61,17 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   formatting: 'Formatting',
   layout: 'Layout',
   metadata: 'Metadata',
+  newClaim: 'New claim',
+  reference: 'Reference',
+  citation: 'Citation',
+  quote: 'Quote',
+  numbering: 'Numbering',
+  wordLimit: 'Word limit',
+  spelling: 'Spelling',
+  terminology: 'Terminology',
+  requiredHeading: 'Required heading',
+  versionNumber: 'Version number',
+  drift: 'Drift',
 };
 
 /** Text glyph per category so colour is never the only signal. */
@@ -61,4 +85,15 @@ export const CATEGORY_ICON: Record<Category, string> = {
   formatting: 'B',
   layout: '▦',
   metadata: 'i',
+  newClaim: '!',
+  reference: '[ ]',
+  citation: '[n]',
+  quote: '“”',
+  numbering: '1.',
+  wordLimit: 'W',
+  spelling: 'ab',
+  terminology: 'T',
+  requiredHeading: 'H',
+  versionNumber: 'v',
+  drift: '↘',
 };

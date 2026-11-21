@@ -33,6 +33,13 @@ describe('end-to-end per fixture', () => {
     expect(visible.map((c) => `${c.category}: ${c.location} — ${c.detail ?? ''}`), JSON.stringify(visible, null, 1).slice(0, 2000)).toHaveLength(f.expect.categories.length);
     expect(visible.map((c) => c.category).sort()).toEqual([...f.expect.categories].sort());
     if (f.expect.trivial) expect(result.trivialCount).toBeGreaterThan(0);
+    // red file-detail findings (whole-document or per-section word-count drops): exactly the expected ones
+    const redMeta = result.changes.filter((c) => c.category === 'metadata' && c.severity === 'high').map((c) => c.detail ?? '');
+    const want = f.expect.redMeta ?? [];
+    expect(redMeta.filter((d) => !want.some((p) => new RegExp(p).test(d))), 'no unexpected red file-detail findings').toEqual(redMeta.filter((d) => /^Word count dropped/.test(d)));
+    for (const p of want) expect(redMeta.some((d) => new RegExp(p).test(d)), `red finding ${p}`).toBe(true);
+    // every change carries its plain-language message and tier (addendum §2)
+    for (const c of result.changes) expect(c.summary && c.whyItMatters && c.action && c.tier, `change ${c.id} is described`).toBeTruthy();
   });
 });
 

@@ -14,6 +14,18 @@ export function wordDice(a: string, b: string): number {
   return (2 * common) / (wa.length + wb.length);
 }
 
+/** Share of the shorter text's words (multiset) found in the longer one: catches a paragraph cut down to its first sentence. */
+export function containment(a: string, b: string): { share: number; shorterWords: number } {
+  let wa = words(a), wb = words(b);
+  if (wa.length > wb.length) [wa, wb] = [wb, wa];
+  if (!wa.length) return { share: 0, shorterWords: 0 };
+  const counts = new Map<string, number>();
+  for (const w of wb) counts.set(w, (counts.get(w) ?? 0) + 1);
+  let found = 0;
+  for (const w of wa) { const n = counts.get(w); if (n) { found++; counts.set(w, n - 1); } }
+  return { share: found / wa.length, shorterWords: wa.length };
+}
+
 /** Dice coefficient over character bigrams: good for short strings like headings. */
 export function charDice(a: string, b: string): number {
   a = a.toLowerCase().replace(/\s+/g, ' ').trim();

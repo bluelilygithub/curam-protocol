@@ -34,6 +34,30 @@ const UNRELATED = [
   { p: 'Bake in a covered pot at a high temperature for twenty minutes, then uncover and bake until the crust is deep brown.' },
 ];
 
+/** A white-paper style submission (addendum §0.1 use cases): statistics, a direct quote, a table, numbered recommendations, references. */
+const WP = [
+  { h: 1, text: 'Submission to the Inquiry into Housing Affordability' },
+  { p: 'This submission from the Tenants Advice Network responds to the terms of reference and draws on our casework with 1,200 households across New South Wales during 2023.' },
+  { h: 2, text: '1. Background' },
+  { p: 'Rents in Sydney rose by 14% in the twelve months to June 2023, the fastest rise in more than a decade, while the median household income rose by 3.2%.' },
+  { p: 'These figures cover the private rental market only and do not include social housing, where waiting times are measured in a different way and published separately.' },
+  { p: 'Around 42% of the households we assisted were paying more than half of their income in rent, which is well above the usual measure of housing stress.' },
+  { h: 2, text: '2. Evidence' },
+  { p: 'One tenant told us, "We moved three times in two years because every lease ended with a rent increase we could not meet."' },
+  { p: 'Our caseworkers recorded 318 notices to vacate in 2023, compared with 201 in 2021, and most were issued without any reason given.' },
+  { table: [['Year', 'Notices to vacate', 'Households assisted'], ['2021', '201', '860'], ['2022', '264', '1,010'], ['2023', '318', '1,200']] },
+  { h: 2, text: '3. Recommendations' },
+  { p: '1. End no-grounds evictions for all residential leases in New South Wales, with a fair process for landlords who need to sell or move in.' },
+  { p: '2. Limit rent increases to once every twelve months and require a clear written reason for any increase.' },
+  { p: '3. Fund tenant advocacy services to meet demand, which has grown by 40% since 2021.' },
+  { h: 2, text: '4. Impact on families' },
+  { p: 'Families who are forced to move often lose contact with schools, doctors and support networks, and children suffer when they change schools during the year.' },
+  { p: 'Older renters face particular difficulty, because they are less likely to find new housing close to the family and community services they depend on.' },
+  { h: 2, text: 'References' },
+  { p: '[1] Australian Housing and Urban Research Institute (2022), Forced moves and housing insecurity, Final Report 378.' },
+  { p: '[2] NSW Department of Communities and Justice (2023), Rent and Sales Report, Issue 145.' },
+];
+
 const clone = (m) => structuredClone(m);
 const idx = (m, pred) => m.findIndex(pred);
 const paraWith = (m, s) => idx(m, (x) => 'p' in x && x.p.includes(s));
@@ -51,6 +75,13 @@ const CASES = [
   { name: 'font-changed', formats: ['docx', 'pdf'], edit: (m) => { m[paraWith(m, 'A deposit')].font = 'Times New Roman'; return m; }, expect: ['formatting'] },
   { name: 'paragraph-moved', formats: ['docx', 'pdf', 'md', 'txt'], edit: (m) => { const [p] = m.splice(paraWith(m, 'Hosting, domain'), 1); m.splice(paraWith(m, 'On termination') + 1, 0, p); return m; }, expect: ['moved'] },
   { name: 'table-row-removed', formats: ['docx', 'md'], edit: (m) => { m[idx(m, (x) => 'table' in x)].table.splice(2, 1); return m; }, expect: ['removed'] },
+  // ---- addendum §0.1 use cases, on the white-paper base. redMeta: red file-detail findings expected (patterns). ----
+  { name: 'uc01-caveat-dropped', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { m.splice(paraWith(m, 'These figures cover'), 1); return m; }, expect: ['removed'] },
+  { name: 'uc01-section-tightened', base: WP, formats: ['docx', 'md'], edit: (m) => { m[paraWith(m, 'Families who are forced')].p = 'Families who are forced to move often lose contact with schools.'; m[paraWith(m, 'Older renters')].p = 'Older renters face particular difficulty.'; return m; }, expect: ['wording', 'wording'], redMeta: ['Section "4\\. Impact on families" lost \\d+% of its words'] },
+  { name: 'uc02-statistic-changed', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { const i = paraWith(m, 'Around 42%'); m[i].p = m[i].p.replace('42%', '24%'); return m; }, expect: ['number'] },
+  { name: 'uc03-heading-removed', base: WP, formats: ['docx', 'md'], edit: (m) => { m.splice(idx(m, (x) => x.text === '2. Evidence'), 1); return m; }, expect: ['removed'] },
+  { name: 'uc07-table-row-lost', base: WP, formats: ['docx', 'md'], edit: (m) => { m[idx(m, (x) => 'table' in x)].table.splice(2, 1); return m; }, expect: ['removed'] },
+  { name: 'uc09-heading-level', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { m[idx(m, (x) => x.text === '3. Recommendations')].h = 3; return m; }, expect: ['formatting'] },
   { name: 'whitespace-quotes', formats: ['docx', 'md', 'txt'], trivial: true, edit: (m) => m.map((x) => ('p' in x ? { ...x, p: x.p.replace(/'/g, '’').replace(/, /g, ',  ').replace('each review', 'each review') + '  ' } : x)), expect: [] },
 ];
 
@@ -145,15 +176,15 @@ const WRITERS = { txt: async (m) => new TextEncoder().encode(toTxt(m)), md: asyn
 
 /**
  * @returns {Promise<{ name: string, type: string, original: { name: string, bytes: Uint8Array }, edited: { name: string, bytes: Uint8Array },
- *   expect: { categories: string[], trivial?: boolean, gate?: 'type-mismatch' | 'similarity' } }[]>}
+ *   expect: { categories: string[], trivial?: boolean, redMeta?: string[], gate?: 'type-mismatch' | 'similarity' } }[]>}
  */
 export async function buildFixtures() {
   const out = [];
   for (const c of CASES) {
     for (const type of c.formats) {
-      const orig = (c.original ?? ((m) => m))(clone(BASE));
+      const orig = (c.original ?? ((m) => m))(clone(c.base ?? BASE));
       const edited = c.edit(clone(orig));
-      out.push({ name: `${c.name}.${type}`, type, original: { name: `original.${type}`, bytes: await WRITERS[type](orig) }, edited: { name: `edited.${type}`, bytes: await WRITERS[type](edited) }, expect: { categories: c.expect, trivial: !!c.trivial } });
+      out.push({ name: `${c.name}.${type}`, type, original: { name: `original.${type}`, bytes: await WRITERS[type](orig) }, edited: { name: `edited.${type}`, bytes: await WRITERS[type](edited) }, expect: { categories: c.expect, trivial: !!c.trivial, redMeta: c.redMeta ?? [] } });
     }
   }
   for (const type of ['md', 'docx']) {

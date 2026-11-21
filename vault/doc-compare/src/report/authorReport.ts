@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { describe } from './messages';
 import { CATEGORY_LABEL, type Change, type Severity } from './model';
 import { latin1 } from './pdfExport';
 
@@ -8,44 +9,8 @@ import { latin1 } from './pdfExport';
  * tick box, so the author can work through it.
  */
 
-const quote = (s: string | undefined, n = 80) => {
-  const t = (s ?? '').replace(/\s+/g, ' ').trim();
-  return t.length > n ? `"${t.slice(0, n - 1)}…"` : `"${t}"`;
-};
-
-/** The one instruction for a change, in plain words. */
-export function actionFor(c: Change): string {
-  switch (c.category) {
-    case 'removed':
-      if (c.group === 'section') return `Restore the missing section ${quote(c.original, 60)} and everything under it (${c.children?.length ?? 0} items, listed below).`;
-      if (c.group === 'tableRow') return 'Restore the missing table row shown below.';
-      if (c.detail === 'Image removed') return 'Restore the missing image.';
-      if (c.detail === 'Heading removed') return `Restore the missing heading ${quote(c.original, 60)}.`;
-      return 'Restore this text: it is in the original but missing from the edited version.';
-    case 'added':
-      if (c.group === 'section') return `Confirm the new section ${quote(c.edited, 60)} is wanted; remove it if not.`;
-      if (c.detail === 'Image added') return 'Confirm the added image is wanted; remove it if not.';
-      return 'Confirm this added text is wanted; remove it if not.';
-    case 'moved':
-      return `Confirm this text should move (${c.location}); otherwise put it back where it was.`;
-    case 'number':
-      return `Check the changed figure${/;/.test(c.detail ?? '') ? 's' : ''}: ${c.detail ?? ''}. Restore the original value unless the change was intended.`;
-    case 'wording':
-      if (c.trivial) return 'No action: only spacing, quotes or invisible characters differ.';
-      if (c.severity === 'high') return 'Restore the words dropped from this paragraph (struck through below), or confirm they should go.';
-      return 'Review the rewording: keep it, or restore the original wording.';
-    case 'typo':
-      return `Check the spelling change ${c.detail ?? ''}: keep it if it fixes a mistake, otherwise restore the original.`;
-    case 'formatting':
-      return `Restore the original formatting unless the change was intended: ${c.detail ?? 'formatting changed'}.`;
-    case 'layout':
-      return `Check ${c.location.replace(/ \(edited\)$/, '')} of the edited PDF: ${c.detail ?? 'its layout changed'}.`;
-    case 'metadata':
-      return `Check: ${c.detail ?? 'a file detail changed'}.`;
-    default:
-      return 'Review this change.';
-  }
-}
+// the wording of every instruction lives in the message catalogue (messages.ts)
+export { actionFor } from './messages';
 
 /** The items the author gets: every non-trivial change, plus only the metadata flags worth acting on. Most serious first, then document order. */
 export function authorItems(changes: Change[]): Change[] {
@@ -127,7 +92,9 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
       font(10, 'bold'); doc.text(latin1(`${n}.  ${CATEGORY_LABEL[c.category]}`), M + 18, y);
       font(9, 'normal', [90, 90, 90]); doc.text(latin1(c.location).slice(0, 110), M + 18 + doc.getTextWidth(latin1(`${n}.  ${CATEGORY_LABEL[c.category]}`)) + 14, y);
       y += 15;
-      para(actionFor(c), 10, 'bold', [30, 30, 30], 18);
+      const msg = describe(c);
+      para(msg.action, 10, 'bold', [30, 30, 30], 18);
+      para(`Why it matters: ${msg.whyItMatters}`, 9, 'italic', [90, 90, 90], 18);
       const colour: [number, number, number] = c.category === 'added' ? [21, 128, 61] : [185, 28, 28];
       if (c.category === 'metadata') {
         para(`Original: ${c.original ?? '-'}     Edited: ${c.edited ?? '-'}`, 9, 'normal', [70, 70, 70], 18);

@@ -14,9 +14,9 @@ const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
 const SEVERITIES: Severity[] = ['high', 'medium', 'low'];
 const EXCERPT = 300;
 const SEV_TIP: Record<Severity, string> = {
-  high: 'Show High changes: removed content, removed sections or table rows, changed numbers or dates, a big word-count drop.',
-  medium: 'Show Medium changes: added content, wording, moved text, heading or list changes, layout.',
-  low: 'Show Low changes: typo fixes, bold/italic/font changes and informational file details.',
+  high: 'Show High (red) changes: removed content, removed sections or table rows, changed numbers or dates, a word count down more than 5% overall or 15% in a section.',
+  medium: 'Show Medium (amber) changes: added content, rewording, moved text, heading or list changes.',
+  low: 'Show Low (info) changes: typo fixes, bold/italic/font changes, PDF page layout and file details.',
 };
 
 export type Layout = { status: 'off' | 'waiting' | 'running' | 'done' | 'error'; done: number; total: number; pages: LayoutPage[]; error?: string };

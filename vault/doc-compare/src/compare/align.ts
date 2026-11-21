@@ -1,7 +1,7 @@
 import { diffArrays } from 'diff';
 import type { Block } from '../readers/types';
 import { ALL_RULES, normalize } from './normalize';
-import { wordDice } from './textSim';
+import { containment, wordDice } from './textSim';
 
 export type AlignOp =
   | { kind: 'equal'; a: Block; b: Block }
@@ -49,7 +49,7 @@ function pairGap(ra: Block[], rb: Block[], fa: string[], fb: string[], ops: Alig
     let best = -1, bestSim = 0;
     for (let j = j0; j < Math.min(rb.length, j0 + PAIR_WINDOW); j++) {
       if (isSpecial(blockA) !== isSpecial(rb[j])) continue;
-      const s = wordDice(textA, fb[rb[j].location.index]);
+      const s = pairScore(textA, fb[rb[j].location.index]);
       if (s >= MODIFIED_MIN_SIM && s > bestSim) { best = j; bestSim = s; }
     }
     if (best < 0) { ops.push({ kind: 'removed', a: blockA }); continue; }
@@ -61,6 +61,17 @@ function pairGap(ra: Block[], rb: Block[], fa: string[], fb: string[], ops: Alig
 }
 
 const isSpecial = (b: Block) => b.type === 'image' || b.type === 'pageBreak';
+
+/**
+ * How alike two blocks are, for pairing. Word overlap, or, when one is nearly all contained in the other (an LLM "tightening" a paragraph
+ * down to its first sentence), just enough to pair them as modified, ranked below any real overlap match.
+ */
+function pairScore(a: string, b: string): number {
+  const dice = wordDice(a, b);
+  if (dice >= MODIFIED_MIN_SIM) return dice;
+  const c = containment(a, b);
+  return c.share >= 0.9 && c.shorterWords >= 3 ? MODIFIED_MIN_SIM + c.share * 0.01 : dice;
+}
 
 function detectMoves(ops: AlignOp[], fa: string[], fb: string[]): AlignOp[] {
   const removedByFp = new Map<string, number[]>();
