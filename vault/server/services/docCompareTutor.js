@@ -115,7 +115,7 @@ const CATALOG = [
     does: 'The (i) button beside the DocCompare title in the tool list opens a plain-language guide to the whole page. It also opens by itself the first time.',
     notes: '' },
   { id: 'tour', label: 'Guided tour', group: 'Compare',
-    does: 'The compass button beside the DocCompare title (also Settings, DocCompare Tour) runs a 14-step tour: Check a document, the jobs, the tool list, Compare documents, labels and saved checks, its two checks, Changes, File details and PDF pages, the review for the author, Settings, and this guide. It switches to each tool as it goes.',
+    does: 'The compass button beside the DocCompare title (also Settings, DocCompare Tour) runs a 15-step tour: Check a document, the jobs, the tool list, Compare documents, labels and saved checks, its two checks, the verdict, versions meant to differ, Changes, File details and PDF pages, the review for the author, Settings, and this guide. It switches to each tool as it goes.',
     notes: 'It only shows the page; it never chooses files or compares. Esc or Skip Tour ends it.' },
 ];
 

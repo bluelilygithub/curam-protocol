@@ -8,7 +8,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_doc_compare_completed';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 15;
 
 // Shepherd keeps earlier cards in the page (hidden), so the counter goes into this step's own card, not the first one found.
 function injectStepCounter(stepIndex, card) {
@@ -106,6 +106,10 @@ export function startDocCompareTour(goTool) {
   step('dc-review', 'The verdict comes first',
     'After comparing you see the verdict: Not ready to submit, Review recommended, or No significant changes found. Below it, a card for each change that matters says what happened and why it matters. Restore copies the original text to paste back, Accept records the change was intended, Fix later keeps it open. Your decisions are kept in this browser. The verdict shows what changed, not whether the content is accurate.',
     FRAME, 'review', 'top');
+
+  step('dc-versions', 'Versions meant to differ',
+    'Comparing a long and a short version, or one for government and one for industry? Tick "These are intentionally different versions" under the file boxes before you compare. There is then no verdict and nothing to decide: Verdict and review becomes a Version comparison that groups the sections as in both versions, worded differently, only in A and only in B, and still lists any figures or quotes that differ. The PDF report is titled Version comparison. It is for one-off checks, not projects.',
+    FRAME, 'compare', 'top');
 
   step('dc-changes', 'All changes',
     'Every difference in one table, including the minor ones: removed, added, moved, wording, typos, numbers and dates, formatting and layout, each marked High, Medium or Low. Filter and search above the table, and press a row to see the exact words that changed, red for removed and green for added.',
