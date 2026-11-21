@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "a0609cc1",
+   "fullHash": "a0609cc1bbb485f79033325ba4791eee2e85b96a",
+   "committedAt": "2026-11-21T19:44:20+10:00",
+   "author": "mrb",
+   "subject": "DocCompare: version comparison subtitle instead of \"Is it ready to submit?\"",
+   "filesChanged": 3,
+   "insertions": 10,
+   "deletions": 7,
+   "area": "DocCompare",
+   "goal": "Stop the Verdict and review page asking \"Is it ready to submit?\" when two intentionally different versions are compared, where there is no verdict.",
+   "whatChanged": "The DocCompare app now says in its context message to the Vault page whether the results on screen are a version comparison (versions: true). The Vault page then shows a new subtitle for Verdict and review, \"Version comparison: which sections are in both versions, worded differently or only in one, and any figures or quotes that differ.\" (VERSIONS_REVIEW_BLURB in docCompareTools.mjs); a normal check keeps \"Is it ready to submit? Decide each change that matters, most serious first.\"",
+   "filesImpacted": [
+    "doc-compare/src/ui/App.tsx",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "client/src/pages/DocComparePage.jsx"
+   ],
+   "benefit": "The page heading matches what the screen shows: no submission question where there is no verdict.",
+   "concerns": "None known. Checked in the real local Vault (production build): versions mode shows the new subtitle, and a normal check afterwards shows the usual one; 219 app tests pass."
+  },
+  {
    "commit": "ec7784db",
    "fullHash": "ec7784dbc8d7800116f89d703a959a0ccb8c9443",
    "committedAt": "2026-11-21T19:11:27+10:00",
