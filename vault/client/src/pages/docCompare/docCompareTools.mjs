@@ -52,6 +52,9 @@ export const TOOL_BLURBS = {
   settings: 'What counts as a change, and when to warn.',
 };
 
+// Verdict and review's subtitle when the two files are intentionally different versions (no verdict there, addendum §0.2)
+export const VERSIONS_REVIEW_BLURB = 'Version comparison: which sections are in both versions, worded differently or only in one, and any figures or quotes that differ.';
+
 // The "What do you want to do?" jobs (components/JobStart.jsx). Each step names a tool above; `filter` preselects the Changes table
 // (categories and severities as in doc-compare/src/report/model.ts). After Compare finishes, the page moves on to the job's next step.
 export const DOC_COMPARE_GOALS = [
@@ -278,4 +281,4 @@ export const GUIDE_TOOLS = [
 // postMessage types between Vault's page and the app in its frame (same origin only)
 export const OPEN_TYPE = 'doc-compare:open'; // Vault -> app  { type, id }               the guide's Open button: show that part
 export const VIEW_TYPE = 'doc-compare:view'; // Vault -> app  { type, view, filter? }   the tool list or a job step: switch view
-export const CONTEXT_TYPE = 'doc-compare:context'; // app -> Vault  { type, tool, view, results, pdf }  where the person is
+export const CONTEXT_TYPE = 'doc-compare:context'; // app -> Vault  { type, tool, view, results, pdf, versions }  where the person is

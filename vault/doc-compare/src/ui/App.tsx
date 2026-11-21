@@ -523,8 +523,8 @@ export function App() {
     if (!embedded) return;
     const cause = selfMove.current ? 'self' : 'vault';
     selfMove.current = false;
-    try { window.parent.postMessage({ type: CONTEXT_TYPE, tool: guideTool, view, results: hasResults, pdf: !!isPdf, cause }, window.location.origin); } catch { /* the guide must never break the app */ }
-  }, [guideTool, view, hasResults, isPdf]);
+    try { window.parent.postMessage({ type: CONTEXT_TYPE, tool: guideTool, view, results: hasResults, pdf: !!isPdf, versions: hasResults && quickVersions, cause }, window.location.origin); } catch { /* the guide must never break the app */ }
+  }, [guideTool, view, hasResults, isPdf, quickVersions]);
 
   const needResults = (title: string) => <EmptyView title={title} text="Choose the original and the edited file in Compare documents and press Compare. The results appear here." onAction={() => setView('compare')} />;
 

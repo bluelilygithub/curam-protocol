@@ -9,7 +9,7 @@ import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { useIcon } from '../providers/IconProvider';
 import DocCompareTutorChat from './docCompare/DocCompareTutorChat';
 import {
-  DOC_COMPARE_TOOLS, DOC_COMPARE_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS,
+  DOC_COMPARE_TOOLS, DOC_COMPARE_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, VERSIONS_REVIEW_BLURB, HOW_IT_WORKS, GUIDE_TOOLS,
   OPEN_TYPE, VIEW_TYPE, CONTEXT_TYPE,
 } from './docCompare/docCompareTools.mjs';
 
@@ -47,7 +47,7 @@ export default function DocComparePage() {
   });
   const [goal, setGoal] = useState(null);
   const [guideTool, setGuideTool] = useState('compare');
-  const [app, setApp] = useState({ results: false, pdf: false });
+  const [app, setApp] = useState({ results: false, pdf: false, versions: false });
   const info = useToolInfoModal('vault_doc_compare_info_seen');
 
   const post = useCallback((msg) => frameRef.current?.contentWindow?.postMessage(msg, window.location.origin), []);
@@ -81,7 +81,7 @@ export default function DocComparePage() {
         pendingFilter.current = null;
       }
       if (typeof d.tool === 'string' && KNOWN.has(d.tool)) setGuideTool(d.tool);
-      setApp({ results: !!d.results, pdf: !!d.pdf });
+      setApp({ results: !!d.results, pdf: !!d.pdf, versions: !!d.versions });
       if (d.cause === 'self' && TOOL_IDS.includes(d.view) && toolRef.current !== 'start') setTool(d.view);
       // once Compare has finished: a job moves on to its next step; without a job, the verdict comes first (addendum §6)
       const g = goalRef.current;
@@ -236,7 +236,7 @@ export default function DocComparePage() {
             <div className="space-y-3">
               <BackToJobs onBack={backToStart} toolLabel={labelFor(tool)} goal={stepIndex(goal, tool) >= 0 ? goal : null} />
               <JobBar goal={goal} mode={tool} onStep={stepTo} labelFor={labelFor} carry="go to" />
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{tool === 'review' && app.versions ? VERSIONS_REVIEW_BLURB : TOOL_BLURBS[tool]}</p>
             </div>
           )}
           {state === 'ok' && (
