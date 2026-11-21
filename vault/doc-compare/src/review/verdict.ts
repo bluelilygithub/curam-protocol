@@ -84,24 +84,36 @@ export function summarySentence(changes: Change[]): string {
   const requiredMissing = n((c) => c.category === 'requiredHeading' && !/^Out of order/.test(c.detail ?? ''));
   const requiredOrder = n((c) => c.category === 'requiredHeading' && /^Out of order/.test(c.detail ?? ''));
   const version = real.some((c) => c.category === 'versionNumber');
+  const refs = (verb: string) => n((c) => c.category === 'reference' && new RegExp(`^(Reference|Footnote|Endnote|Link) ${verb}`).test(c.detail ?? ''));
+  const refsRemoved = refs('removed'), refsChanged = refs('changed'), refsAdded = refs('added');
+  const citations = n((c) => c.category === 'citation');
+  const numbering = real.some((c) => c.category === 'numbering' || (c.category === 'reference' && /renumbered/.test(c.detail ?? '')));
+  const spellingTo = /to (Australian|US)/.exec(real.find((c) => c.category === 'spelling')?.detail ?? '')?.[1];
+  const terms = n((c) => c.category === 'terminology');
 
-  const removed = [removedSections && plural(removedSections, 'section'), removedOther && plural(removedOther, 'paragraph'), removedRows && plural(removedRows, 'table row'), quotesRemoved && plural(quotesRemoved, 'quote')].filter(Boolean) as string[];
-  const addedParts = [added && plural(added, 'passage'), claims && plural(claims, 'claim')].filter(Boolean) as string[];
+  const removed = [removedSections && plural(removedSections, 'section'), removedOther && plural(removedOther, 'paragraph'), removedRows && plural(removedRows, 'table row'), quotesRemoved && plural(quotesRemoved, 'quote'), refsRemoved && plural(refsRemoved, 'reference')].filter(Boolean) as string[];
+  // an added reference is a claim too (addendum §5.1)
+  const addedParts = [added && plural(added, 'passage'), claims + refsAdded && plural(claims + refsAdded, 'claim')].filter(Boolean) as string[];
   const clauses = [
     removed.length ? `removed ${list(removed)}` : '',
     cut ? `cut words from ${plural(cut, 'paragraph')}` : '',
     figures ? `changed ${plural(figures, 'figure')}` : '',
     quotesChanged ? `changed ${plural(quotesChanged, 'quote')}` : '',
+    refsChanged ? `changed ${plural(refsChanged, 'reference')}` : '',
     reworded ? `reworded ${plural(reworded, 'paragraph')}` : '',
     moved ? `moved ${plural(moved, 'paragraph')}` : '',
     structure ? `changed the structure in ${plural(structure, 'place')}` : '',
-    addedParts.length ? `added ${list(addedParts)} that need${added + claims === 1 ? 's' : ''} checking` : '',
+    addedParts.length ? `added ${list(addedParts)} that need${added + claims + refsAdded === 1 ? 's' : ''} checking` : '',
   ].filter(Boolean);
   const sectionsPart = sectionsCut ? `${plural(sectionsCut, 'section')} lost more than 15% of ${sectionsCut === 1 ? 'its' : 'their'} words` : '';
   const extras = [
     overWords || overPages ? ` It is over the ${overWords && overPages ? 'word and page limits' : overWords ? 'word limit' : 'page limit'}.` : '',
     requiredMissing ? ` ${plural(requiredMissing, 'required heading')} ${requiredMissing === 1 ? 'is' : 'are'} missing.` : '',
     requiredOrder ? ` ${plural(requiredOrder, 'required heading')} ${requiredOrder === 1 ? 'is' : 'are'} out of order.` : '',
+    citations ? ` ${plural(citations, 'citation')} no longer point${citations === 1 ? 's' : ''} to the right source.` : '',
+    numbering ? ' The numbering needs checking.' : '',
+    spellingTo ? ` Some spelling switched to ${spellingTo}.` : '',
+    terms ? ` ${plural(terms, 'defined term or acronym')} need${terms === 1 ? 's' : ''} checking.` : '',
     version ? ' The version number needs checking.' : '',
   ].join('');
   const tail = (overall

@@ -120,6 +120,13 @@ export function ReviewView({ changes, words, decisions, persistent, onDecide, on
                     {c.edited && <div><h4>Edited</h4><p className="text-added">{c.edited.slice(0, 1200)}</p></div>}
                   </div>
                 )}
+              {/* grouped spelling switches and renumbered paragraphs: one line per word or paragraph */}
+              {c.children && !c.group && (
+                <ul className="card-children">
+                  {c.children.slice(0, 40).map((k) => <li key={k.id}>{k.detail} <span className="muted small">{k.location}</span></li>)}
+                  {c.children.length > 40 && <li className="muted small">and {c.children.length - 40} more (see All changes)</li>}
+                </ul>
+              )}
               <p className="card-action"><strong>What to do:</strong> {c.action}</p>
               <div className="row">
                 {i.tier === 'red' ? (

@@ -4,7 +4,7 @@ import { ALL_RULES, mapQuotes, normalize } from '../compare/normalize';
 import type { PostCheck } from '../compare/postChecks';
 import type { NewChange } from '../compare/content';
 import { SEVERITY } from '../report/severity';
-import { closestQuote, docText, extractQuotes, normQuote } from './docText';
+import { closestQuote, docText, extractQuotes, normQuote, referenceBlockIds } from './docText';
 
 /**
  * New claims (addendum §4): statistics, quotes, citations, links and attributions in added or changed text that appear nowhere in the
@@ -49,6 +49,7 @@ export const newClaims: PostCheck = (a, b, ops) => {
   const editedQuotes = extractQuotes(b);
   const seen = new Set<string>();
   const out: NewChange[] = [];
+  const refsB = referenceBlockIds(b); // added references are checks/references.ts's (and count as claims there)
 
   const isNew = (c: Claim) => {
     if (c.kind === 'statistic') { const n = numberOf(c.text); return !!n && !origNumbers.has(n); }
@@ -64,6 +65,7 @@ export const newClaims: PostCheck = (a, b, ops) => {
   for (const op of ops) {
     if (op.kind !== 'added' && op.kind !== 'modified') continue;
     const blk = op.b;
+    if (refsB.has(blk.id)) continue;
     let scan = blk.text;
     if (op.kind === 'modified') {
       // only what was put in; a figure that replaced a figure is a number change, not a new claim

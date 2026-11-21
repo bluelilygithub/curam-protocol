@@ -45,6 +45,16 @@ const WHY = {
   requiredOrder: 'Following the required order makes it easy for assessors to find each part.',
   version: 'Readers and reviewers rely on the version number to know which draft they have.',
   versionBack: 'An older version number suggests an older draft, or that the wrong file was used.',
+  refRemoved: 'Removing a source leaves the claims that relied on it unsupported, and citations to it may now point to nothing.',
+  refChanged: 'A changed author, year, title or link can make a source impossible to find, or point readers to a different one.',
+  refRenumbered: 'Citations in the text have to follow the new numbers, or they point to the wrong source.',
+  citeBroken: 'A citation without its source leaves the claim unsupported, and assessors notice.',
+  citeWrong: 'The claim is now attributed to a source that may not say it.',
+  citeDetached: 'The claim in this text no longer shows where it comes from.',
+  numbering: 'Gaps, repeats and out-of-order numbers look like missing content, and cross-references to them break.',
+  renumbered: 'Cross-references, and other documents that cite paragraph or figure numbers, may now point to the wrong place.',
+  spelling: 'A submission should use one spelling standard throughout; these words no longer match the spelling your original uses.',
+  terms: 'Defined terms and acronyms have to be used consistently, or the document can read as if it means something different.',
 };
 
 /** The plain-language message for a change. */
@@ -112,6 +122,41 @@ export function describe(c: Change): Message {
       if (/went backwards/.test(c.detail ?? '')) return { summary: `${c.detail ?? 'The version went backwards'}.`, whyItMatters: WHY.versionBack, action: 'Set the version number to the next one after the original, or check you picked the right files.' };
       if (/history table/.test(c.detail ?? '')) return { summary: 'The version history table was not updated.', whyItMatters: WHY.version, action: 'Add a row for this version to the version history table.' };
       return { summary: `${c.detail ?? 'The version number needs checking'}.`, whyItMatters: WHY.version, action: 'Update the version number so readers know which version they have.' };
+    case 'reference': {
+      const d = c.detail ?? '';
+      if (/^Reference list renumbered/.test(d)) return { summary: `The LLM renumbered the reference list (${d.replace(/^Reference list renumbered: /, '')}).`, whyItMatters: WHY.refRenumbered, action: 'Check each citation in the text still points to the right source (any that do not are listed separately), or restore the original numbering.' };
+      const m = /^(Reference|Footnote|Endnote|Link) (removed|added|changed)(?: \(([^)]+)\))?: (.+)$/.exec(d);
+      const kind = (m?.[1] ?? 'Reference').toLowerCase(), name = m?.[4] ?? '';
+      const label = kind === 'reference' ? `reference ${name}` : name.toLowerCase();
+      if (m?.[2] === 'added') return { summary: `The LLM added ${label} that isn't in your original.`, whyItMatters: WHY.newClaim, action: 'Check this source exists and says what the text claims, or remove it.' };
+      if (m?.[2] === 'changed') return { summary: `The LLM changed the ${m[3] ?? 'wording'} of ${label}.`, whyItMatters: WHY.refChanged, action: `Restore ${label} as it was, unless you meant to fix it.` };
+      return { summary: `The LLM removed ${label}${kind === 'reference' ? ' from the reference list' : ''}.`, whyItMatters: WHY.refRemoved, action: `Restore ${label}, or accept the removal if nothing in the text relies on it.` };
+    }
+    case 'citation': {
+      const d = c.detail ?? '';
+      const what = d.replace(/^[^:]+: /, '');
+      if (/^Citation points to nothing/.test(d)) return { summary: `A citation in the edited version points to nothing: ${what}.`, whyItMatters: WHY.citeBroken, action: 'Restore the missing source, or fix or remove the citation.' };
+      if (/different source/.test(d)) return { summary: `A citation now points to a different source than in your original: ${what}.`, whyItMatters: WHY.citeWrong, action: 'Change the citation back so it points to the source your original used.' };
+      if (/removed from this text/.test(d)) return { summary: `The LLM took a citation off the text in ${where(c)}: ${what}.`, whyItMatters: WHY.citeDetached, action: 'Put the citation back on this text.' };
+      return { summary: `The LLM moved a citation onto different text (${where(c)}): ${what}.`, whyItMatters: WHY.citeWrong, action: 'Check the source supports this text, or move the citation back where it was.' };
+    }
+    case 'numbering': {
+      const d = c.detail ?? '';
+      if (/^Renumbered: \d+ paragraph/.test(d)) { const n = Number(/(\d+) paragraph/.exec(d)?.[1] ?? 0); return { summary: `The LLM renumbered ${n === 1 ? 'a paragraph' : `${n} paragraphs`}: ${d.replace(/^Renumbered: \d+ paragraphs? \((.*)\)$/, '$1')}.`, whyItMatters: WHY.renumbered, action: 'Check any cross-references to these numbers, or restore the original numbering.' }; }
+      if (/^Renumbered: /.test(d)) return { summary: `The LLM changed a number: ${d.replace(/^Renumbered: /, '')}.`, whyItMatters: WHY.renumbered, action: 'Check any cross-references to this number, or restore the original number.' };
+      return { summary: `${d} (${where(c)}).`, whyItMatters: WHY.numbering, action: 'Fix the numbering, or restore the item that is missing.' };
+    }
+    case 'spelling': {
+      if (c.children) return { summary: `The LLM switched the spelling ${(c.detail ?? '').replace(/^Spelling switched /, '').replace(/: (\d+) places?, (\d+) words? \(.*$/, (_, p, w) => ` in ${p} place${p === '1' ? '' : 's'} (${w} word${w === '1' ? '' : 's'})`)}.`, whyItMatters: WHY.spelling, action: 'Change these words back to the spelling your original uses, or accept them all if you want the new spelling.' };
+      return { summary: `The LLM changed "${c.original}" to "${c.edited}"${/\(\d+×\)/.test(c.detail ?? '') ? ` ${/\((\d+)×\)/.exec(c.detail ?? '')?.[1]} times` : ''}.`, whyItMatters: WHY.spelling, action: `Change "${c.edited}" back to "${c.original}", or accept it.` };
+    }
+    case 'terminology': {
+      const d = c.detail ?? '';
+      const acr = /^Acronym (\S+)/.exec(d)?.[1] ?? '';
+      if (/never spelled out/.test(d)) return { summary: `The LLM introduced the acronym ${acr} without saying what it stands for.`, whyItMatters: WHY.terms, action: `Spell out ${acr} the first time it is used, or replace it with the words it stands for.` };
+      if (/without its expansion/.test(d)) return { summary: `${d}.`, whyItMatters: WHY.terms, action: `Add the expansion back the first time ${acr} is used.` };
+      return { summary: `${d || 'A defined term or acronym is used differently'}.`, whyItMatters: WHY.terms, action: 'Use the term again where the LLM replaced it, or accept the change if you meant it.' };
+    }
     default:
       return { summary: c.detail ?? 'Something changed.', whyItMatters: 'Check this change before you submit.', action: 'Review this change.' };
   }

@@ -1,4 +1,4 @@
-import type { Block, DocMetadata, NormalizedDoc, PageRef } from './types';
+import type { Block, DocMetadata, NormalizedDoc, Note, PageRef } from './types';
 
 export type RawBlock = Omit<Block, 'id' | 'location'> & { location?: Partial<Block['location']> };
 type ReaderMeta = Partial<Omit<DocMetadata, 'fileName' | 'fileSizeBytes' | 'lastModified' | 'wordCount' | 'charCount' | 'headingCount' | 'tableCount' | 'imageCount'>>;
@@ -6,7 +6,7 @@ type ReaderMeta = Partial<Omit<DocMetadata, 'fileName' | 'fileSizeBytes' | 'last
 export const countWords = (s: string) => (s.match(/\S+/g) ?? []).length;
 
 /** Fills ids, index, section, per-section paragraph numbers and the counts every reader shares. */
-export function finalize(file: File, sourceType: string, raw: RawBlock[], meta: ReaderMeta, pages?: PageRef[]): NormalizedDoc {
+export function finalize(file: File, sourceType: string, raw: RawBlock[], meta: ReaderMeta, pages?: PageRef[], notes?: Note[]): NormalizedDoc {
   let section: string | undefined;
   let para = 0;
   const tables = new Set<number>();
@@ -25,6 +25,7 @@ export function finalize(file: File, sourceType: string, raw: RawBlock[], meta: 
     sourceType,
     blocks,
     pages,
+    ...(notes?.length ? { notes } : {}),
     metadata: {
       fileName: file.name,
       fileSizeBytes: file.size,

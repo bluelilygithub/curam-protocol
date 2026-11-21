@@ -76,6 +76,22 @@ export const DOC_COMPARE_GOALS = [
     ],
   },
   {
+    id: 'references', title: 'Check references and citations', icon: 'list',
+    blurb: 'References and footnotes dropped, changed, renumbered or invented, and citations that now point to nothing or to a different source.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'Every reference, footnote and citation finding. A citation that points to nothing, or to a different source, needs fixing before you submit.', filter: { categories: ['reference', 'citation'] } },
+    ],
+  },
+  {
+    id: 'consistency', title: 'Check spelling and terms stay consistent', icon: 'type',
+    blurb: 'Australian spelling switched to US, defined terms swapped for other words, and acronyms that lost their expansion.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare. Optional: list names and terms the LLM must keep under Protected terms in Settings; the results update.' },
+      { tool: 'changes', note: 'Spelling switches (one grouped row with every word) and terminology findings.', filter: { categories: ['spelling', 'terminology'] } },
+    ],
+  },
+  {
     id: 'limit', title: 'Check it is within the word limit', icon: 'file-text',
     blurb: 'Set the word limit, then see the total and where the words are, section by section.',
     steps: [
@@ -128,7 +144,7 @@ export const DOC_COMPARE_GOALS = [
     blurb: 'Missing or renamed headings, changed heading levels, lists turned into paragraphs.',
     steps: [
       { tool: 'compare', note: 'Choose the two files, then press Compare.' },
-      { tool: 'changes', note: 'Removed content and formatting changes, including heading levels and lists. Removed sections show as one row.', filter: { categories: ['removed', 'formatting'] } },
+      { tool: 'changes', note: 'Removed content, formatting and numbering: heading levels, lists, and numbers with a gap, a repeat or a new number. Removed sections show as one row.', filter: { categories: ['removed', 'formatting', 'numbering'] } },
     ],
   },
   {
@@ -186,7 +202,8 @@ export const HOW_IT_WORKS = [
   ['Reading the results', 'The summary bar counts each kind of change; press one to see only those in Changes. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to see the words that changed (struck through in red for removed, underlined in green for added).'],
   ['Kinds of change', 'Removed and Added: whole paragraphs, sections or table rows. Moved: the same text in a new place. Wording: words changed inside a paragraph (marked High when a large part was dropped). Typo: one small word fix. Number/date: anything with a digit changed. Formatting: headings, lists, bold, italic, fonts and sizes. Layout: PDF pages that look different. Metadata: file size, dates, author and counts, for example a word count that dropped.'],
   ['New claims and quotes', 'LLMs sometimes invent statistics, quotes and sources. Any statistic (a percentage, an amount, a count, a year), quote, citation such as [3] or (Smith et al., 2021), link, or source ("a 2021 survey by …") in added or changed text that is nowhere in your original is a red New claim: check the source exists and says this, or remove it. A figure that replaced another figure is a Number change instead. A direct quote (four or more words in quotation marks, or a block quote) must match your original exactly: any change, even a corrected typo, is red.'],
-  ['Limits, required headings and versions', 'Set a word limit on the Compare documents screen (and a page limit in Settings): over the limit is red. The reference list is not counted unless you change that in Settings; File details shows the words section by section. In Settings you can paste the headings this submission must have (and save them as a named template): a missing one is red, one out of order is amber. Without a list, every heading in your original counts, and a removed one is already reported. A version number near the start ("Version 1.3", "v1.3", "Rev B", "Draft 4") that did not change although the content did is amber; one that went backwards is red.'],
+  ['Limits, required headings and versions', 'Set a word limit on the Compare documents screen (and a page limit in Settings): over the limit is red. The reference list is not counted and footnotes are, unless you change that in Settings; File details shows the words section by section. In Settings you can paste the headings this submission must have (and save them as a named template): a missing one is red, one out of order is amber. Without a list, every heading in your original counts, and a removed one is already reported. A version number near the start ("Version 1.3", "v1.3", "Rev B", "Draft 4") that did not change although the content did is amber; one that went backwards is red.'],
+  ['References, numbering, spelling and terms', 'References and footnotes: the reference list (under a heading such as References, Bibliography or Sources), footnotes and endnotes are matched between the two versions. A reference or footnote that was removed, added (a possible invented source) or changed (authors, year, title or link) is red. A renumbered list is amber, and every citation such as [3] or (Smith 2021) that now points to nothing, to a different source, or sits on different text is red. In a PDF these are found by best effort, and the item says so. Numbering: a gap, a repeat or a number going backwards that your original did not have, in numbered paragraphs, headings, figures and tables, is amber, and so are paragraphs that got a new number. Spelling: DocCompare works out whether your original uses Australian or US spelling and lists every word the LLM switched to the other one as one amber item. Terms: a defined term ("the Act"), an acronym or a phrase your original repeats that the LLM dropped or used much less, an acronym used without its expansion, and a new acronym never spelled out are amber. Add your own protected terms in Settings.'],
   ['Trivial changes', 'Differences in spaces, line breaks, curly or straight quotes, dashes and invisible characters are hidden by default but still counted ("7 trivial changes hidden"). Tick that box to show them, or choose in Settings which of them count as trivial.'],
   ['PDF pages', 'For two PDFs, each page is also drawn and compared pixel by pixel after the text results appear. Pages where more than a tiny share changed are listed in PDF pages and as Layout changes. Open one to see the two pages side by side with the changed pixels in red. Very long PDFs (over 500 pages) wait for you to start this step.'],
   ['Review for the author', 'Download review for the author (in PDF report, and on the Comparison done card) makes a PDF to send back to whoever made the edit: every change, whatever filters are set, sorted into Must fix, Please review and Minor. Each item has a tick box, where it is, what to do ("Restore this paragraph", "Check the changed figure: 30 to 60") and the original and edited text, with removed words in red and added words in green.'],
@@ -201,6 +218,7 @@ export const GUIDE_TOOLS = [
   { id: 'word-limit', label: 'Word limit', tool: 'compare' },
   { id: 'word-counts', label: 'Words by section', tool: 'metadata' },
   { id: 'required-headings', label: 'Required headings', tool: 'settings' },
+  { id: 'glossary', label: 'Protected terms', tool: 'settings' },
   { id: 'files', label: 'Original and Edited files', tool: 'compare' },
   { id: 'saved', label: 'Saved checks', tool: 'saved' },
   { id: 'compare-button', label: 'Compare button', tool: 'compare' },

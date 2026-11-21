@@ -20,6 +20,8 @@ export function wordCounts(a: NormalizedDoc, b: NormalizedDoc, s: Settings): Wor
       total += n;
       sections.set(section, (sections.get(section) ?? 0) + n);
     }
+    // footnotes and endnotes count by default (Settings); link definitions are not prose
+    if (s.includeFootnotes) total += (d.notes ?? []).filter((n) => n.kind !== 'link').reduce((sum, n) => sum + countWords(n.text), 0);
     return { total, sections };
   };
   const ca = count(a), cb = count(b);

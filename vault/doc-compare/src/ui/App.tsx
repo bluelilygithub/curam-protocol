@@ -188,7 +188,7 @@ export function App() {
     const id = runId.current;
     compareInWorker(docs[0], docs[1], settings).then((r) => { if (id === runId.current) setResult(r); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.trivial, settings.fileSizeChangePct, settings.wordCountDropPct, settings.wordLimit, settings.pageLimit, settings.excludeReferences, settings.requiredHeadings]);
+  }, [settings.trivial, settings.fileSizeChangePct, settings.wordCountDropPct, settings.wordLimit, settings.pageLimit, settings.excludeReferences, settings.includeFootnotes, settings.requiredHeadings, settings.glossary]);
 
   useEffect(() => () => pdfPair.current?.destroy(), []);
 

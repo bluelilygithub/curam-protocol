@@ -1,9 +1,9 @@
 // Builds test document pairs in memory (DOCX via `docx`, PDF via `pdf-lib`, plus .md/.txt), each with its expected
 // changes. Used by the tests directly and written to disk by `npm run fixtures` (scripts/fixtures.mjs) for manual UI testing.
-import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
+import { AlignmentType, Document, FootnoteReferenceRun, HeadingLevel, LevelFormat, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 
-/** @typedef {{ h: number, text: string } | { p: string, bold?: string, font?: string } | { table: string[][] }} Item */
+/** @typedef {{ h: number, text: string } | { p: string, bold?: string, font?: string, fn?: string } | { li: string } | { table: string[][] }} Item */
 
 /** @type {Item[]} */
 const BASE = [
@@ -61,6 +61,15 @@ const WP = [
 /** The white paper with a version line under the title (addendum §7.10). */
 const VWP = [WP[0], { p: 'Version 1.2, November 2023. Prepared by the policy team.' }, ...WP.slice(1)];
 
+/** The white paper with numbered citations in the text (addendum §5.1). */
+const WPC = WP.map((x) => ('p' in x && x.p.startsWith('Rents in Sydney') ? { ...x, p: x.p.replace('rose by 3.2%.', 'rose by 3.2% [2].') } : 'p' in x && x.p.startsWith('Families who') ? { ...x, p: x.p.replace('during the year.', 'during the year [1].') } : x));
+/** The white paper with a footnote on the caveat paragraph. */
+const WPF = WP.map((x) => ('p' in x && x.p.startsWith('These figures cover') ? { ...x, fn: 'Private rental data from the NSW Rental Bond Board, June 2023.' } : x));
+/** Australian spelling and a defined term, for the spelling and terminology checks (§5.5). */
+const WPS = [...WP.slice(0, 7), { p: 'Our organisation analysed the behaviour of landlords and prioritised the centre of each neighbourhood, recognising that colour and favour play no part.' }, { p: 'The Residential Tenancies Act 2010 (the "Act") sets the rules. The Act allows a landlord to end a lease without grounds, and the Act does not limit how often rent can rise.' }, ...WP.slice(7)];
+/** A Word list with automatic numbering. */
+const WPL = [...WP.slice(0, 11), { li: 'End no-grounds evictions for all residential leases.' }, { li: 'Limit rent increases to once every twelve months.' }, { li: 'Fund tenant advocacy services to meet demand.' }, ...WP.slice(14)];
+
 const clone = (m) => structuredClone(m);
 const idx = (m, pred) => m.findIndex(pred);
 const paraWith = (m, s) => idx(m, (x) => 'p' in x && x.p.includes(s));
@@ -69,7 +78,7 @@ const paraWith = (m, s) => idx(m, (x) => 'p' in x && x.p.includes(s));
 const CASES = [
   { name: 'identical', formats: ['docx', 'pdf', 'md', 'txt'], edit: (m) => m, expect: [] },
   { name: 'paragraph-removed', formats: ['docx', 'pdf', 'md', 'txt'], edit: (m) => { m.splice(paraWith(m, 'Hosting, domain'), 1); return m; }, expect: ['removed'] },
-  { name: 'section-removed', formats: ['docx', 'pdf', 'md'], edit: (m) => { const i = idx(m, (x) => x.text === '4. Termination'); m.splice(i, 3); return m; }, expect: ['removed'] },
+  { name: 'section-removed', formats: ['docx', 'pdf', 'md'], edit: (m) => { const i = idx(m, (x) => x.text === '4. Termination'); m.splice(i, 3); return m; }, expect: ['removed', 'numbering'] },
   { name: 'typo-introduced', formats: ['docx', 'pdf', 'md', 'txt'], edit: (m) => { const i = paraWith(m, 'we will receive'); m[i].p = m[i].p.replace('receive', 'recieve'); return m; }, expect: ['typo'] },
   { name: 'typo-corrected', formats: ['docx', 'md', 'txt'], original: (m) => { const i = paraWith(m, 'we will receive'); m[i].p = m[i].p.replace('receive', 'recieve'); return m; }, edit: (m) => { const i = paraWith(m, 'we will recieve'); m[i].p = m[i].p.replace('recieve', 'receive'); return m; }, expect: ['typo'] },
   { name: 'number-changed', formats: ['docx', 'pdf', 'md', 'txt'], edit: (m) => { const i = paraWith(m, '30 days'); m[i].p = m[i].p.replace('30 days', '60 days'); m[i].bold = 'payable within 60 days'; return m; }, expect: ['number'] },
@@ -82,7 +91,7 @@ const CASES = [
   { name: 'uc01-caveat-dropped', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { m.splice(paraWith(m, 'These figures cover'), 1); return m; }, expect: ['removed'] },
   { name: 'uc01-section-tightened', base: WP, formats: ['docx', 'md'], edit: (m) => { m[paraWith(m, 'Families who are forced')].p = 'Families who are forced to move often lose contact with schools.'; m[paraWith(m, 'Older renters')].p = 'Older renters face particular difficulty.'; return m; }, expect: ['wording', 'wording'], redMeta: ['Section "4\\. Impact on families" lost \\d+% of its words'] },
   { name: 'uc02-statistic-changed', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { const i = paraWith(m, 'Around 42%'); m[i].p = m[i].p.replace('42%', '24%'); return m; }, expect: ['number'] },
-  { name: 'uc03-heading-removed', base: WP, formats: ['docx', 'md'], edit: (m) => { m.splice(idx(m, (x) => x.text === '2. Evidence'), 1); return m; }, expect: ['removed'] },
+  { name: 'uc03-heading-removed', base: WP, formats: ['docx', 'md'], edit: (m) => { m.splice(idx(m, (x) => x.text === '2. Evidence'), 1); return m; }, expect: ['removed', 'numbering'] },
   { name: 'uc07-table-row-lost', base: WP, formats: ['docx', 'md'], edit: (m) => { m[idx(m, (x) => 'table' in x)].table.splice(2, 1); return m; }, expect: ['removed'] },
   { name: 'uc09-heading-level', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { m[idx(m, (x) => x.text === '3. Recommendations')].h = 3; return m; }, expect: ['formatting'] },
   // ---- phase 3: new claims, quotes, limits, required headings, version numbers ----
@@ -94,22 +103,49 @@ const CASES = [
   { name: 'uc03-required-heading-order', base: WP, formats: ['md'], settings: { requiredHeadings: ['2. Evidence', '1. Background'] }, edit: (m) => m, expect: ['requiredHeading'] },
   { name: 'uc11-version-not-updated', base: VWP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'Around 42%'); m[i].p = m[i].p.replace('42%', '24%'); return m; }, expect: ['number', 'versionNumber'] },
   { name: 'uc11-version-backwards', base: VWP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'Version 1.2'); m[i].p = m[i].p.replace('1.2', '1.1'); return m; }, expect: ['number', 'versionNumber'] },
+  // ---- phase 4: references and citations, numbering, spelling and terminology ----
+  { name: 'uc08-reference-removed', base: WPC, formats: ['docx', 'md', 'pdf'], edit: (m) => { m.splice(paraWith(m, '[2] NSW'), 1); return m; }, expect: ['reference', 'citation'] },
+  { name: 'uc08-reference-changed', base: WPC, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, '[1] Australian'); m[i].p = m[i].p.replace('(2022)', '(2021)'); return m; }, expect: ['reference'] },
+  { name: 'uc08-reference-invented', base: WPC, formats: ['docx', 'md'], edit: (m) => { m.push({ p: '[3] Smith, J. (2021), Rental stress in Australian cities, Housing Studies Journal 12.' }); return m; }, expect: ['reference'] },
+  { name: 'uc08-references-renumbered', base: WPC, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, '[1] Australian'); const [r1, r2] = [m[i], m[i + 1]]; m[i] = { p: r2.p.replace('[2]', '[1]') }; m[i + 1] = { p: r1.p.replace('[1]', '[2]') }; return m; }, expect: ['reference', 'citation', 'citation'] },
+  { name: 'uc08-footnote-removed', base: WPF, formats: ['docx', 'md', 'pdf'], edit: (m) => { delete m[paraWith(m, 'These figures cover')].fn; return m; }, expect: ['reference'] },
+  { name: 'uc08-footnote-moved', base: WPF, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'These figures cover'); m[i + 1].fn = m[i].fn; delete m[i].fn; return m; }, expect: ['citation', 'citation'] },
+  { name: 'uc10-numbering-gap', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { m.splice(paraWith(m, '2. Limit rent'), 1); return m; }, expect: ['removed', 'numbering'] },
+  { name: 'uc10-renumbered', base: WP, formats: ['docx', 'md'], edit: (m) => { m.splice(paraWith(m, '2. Limit rent'), 1); const i = paraWith(m, '3. Fund'); m[i].p = m[i].p.replace('3. Fund', '2. Fund'); return m; }, expect: ['removed', 'numbering'] },
+  { name: 'uc10-list-renumbered', base: WPL, formats: ['docx', 'md'], edit: (m) => { m.splice(idx(m, (x) => 'li' in x && x.li.startsWith('Limit')), 1); return m; }, expect: ['removed', 'numbering'] },
+  { name: 'uc07-figure-order', base: WP, formats: ['docx', 'md'], original: (m) => { m.splice(paraWith(m, 'Our caseworkers') + 1, 0, { p: 'Figure 1: Notices to vacate by year.' }, { p: 'Figure 2: Households assisted by year.' }); return m; }, edit: (m) => { const i = paraWith(m, 'Figure 1:'); [m[i], m[i + 1]] = [m[i + 1], m[i]]; return m; }, expect: ['moved', 'numbering', 'numbering'] },
+  { name: 'uc12-spelling-switched', base: WPS, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'Our organisation'); m[i].p = 'Our organization analyzed the behavior of landlords and prioritized the center of each neighborhood, recognizing that color and favor play no part.'; return m; }, expect: ['wording', 'spelling'] },
+  { name: 'uc12-defined-term-replaced', base: WPS, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'The Residential Tenancies Act'); m[i].p = 'The Residential Tenancies Act 2010 sets the rules. The law allows a landlord to end a lease without grounds, and the law does not limit how often rent can rise.'; return m; }, expect: ['wording', 'terminology'] },
+  { name: 'uc12-acronym-unexplained', base: WP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'Older renters'); m[i].p = m[i].p.replace('services they depend on.', 'services they depend on, such as the CRA.'); return m; }, expect: ['wording', 'terminology'] },
   { name: 'whitespace-quotes', formats: ['docx', 'md', 'txt'], trivial: true, edit: (m) => m.map((x) => ('p' in x ? { ...x, p: x.p.replace(/'/g, '’').replace(/, /g, ',  ').replace('each review', 'each review') + '  ' } : x)), expect: [] },
 ];
 
 // ---------- writers ----------
 
+/** List items numbered as they would be shown (1., 2., … within a run of items). */
+const listNumbers = (m) => { let n = 0; return m.map((x) => ('li' in x ? ++n : (n = 0, 0))); };
+
 function toTxt(m) {
-  return m.map((x) => ('h' in x ? x.text : 'p' in x ? x.p : x.table.map((r) => r.join(' | ')).join('\n'))).join('\n\n') + '\n';
+  const nums = listNumbers(m);
+  return m.map((x, i) => ('h' in x ? x.text : 'li' in x ? `${nums[i]}. ${x.li}` : 'p' in x ? x.p : x.table.map((r) => r.join(' | ')).join('\n'))).join('\n\n') + '\n';
 }
 
 function toMd(m) {
-  return m.map((x) => {
+  const nums = listNumbers(m);
+  const notes = [];
+  const body = m.map((x, i) => {
     if ('h' in x) return `${'#'.repeat(x.h)} ${x.text}`;
-    if ('p' in x) return x.bold ? x.p.replace(x.bold, `**${x.bold}**`) : x.p;
+    if ('li' in x) return `${nums[i]}. ${x.li}`;
+    if ('p' in x) {
+      const p = x.bold ? x.p.replace(x.bold, `**${x.bold}**`) : x.p;
+      if (!x.fn) return p;
+      notes.push(x.fn);
+      return `${p}[^${notes.length}]`;
+    }
     const [head, ...rows] = x.table;
     return [`| ${head.join(' | ')} |`, `|${head.map(() => ' --- ').join('|')}|`, ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n');
-  }).join('\n\n') + '\n';
+  });
+  return [...body, ...notes.map((n, i) => `[^${i + 1}]: ${n}`)].join('\n\n') + '\n';
 }
 
 const segments = (x) => {
@@ -120,12 +156,19 @@ const segments = (x) => {
 
 async function toDocx(m) {
   const HL = { 1: HeadingLevel.HEADING_1, 2: HeadingLevel.HEADING_2, 3: HeadingLevel.HEADING_3 };
+  const footnotes = {};
   const children = m.map((x) => {
     if ('h' in x) return new Paragraph({ heading: HL[x.h], children: [new TextRun(x.text)] });
-    if ('p' in x) return new Paragraph({ children: segments(x).map((s) => new TextRun({ text: s.text, bold: s.bold, font: x.font })) });
+    if ('li' in x) return new Paragraph({ numbering: { reference: 'recs', level: 0 }, children: [new TextRun(x.li)] });
+    if ('p' in x) {
+      const runs = segments(x).map((s) => new TextRun({ text: s.text, bold: s.bold, font: x.font }));
+      if (x.fn) { const n = Object.keys(footnotes).length + 1; footnotes[n] = { children: [new Paragraph(x.fn)] }; runs.push(new FootnoteReferenceRun(n)); }
+      return new Paragraph({ children: runs });
+    }
     return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: x.table.map((r) => new TableRow({ children: r.map((c) => new TableCell({ children: [new Paragraph(c)] })) })) });
   });
-  const doc = new Document({ creator: 'DocCompare fixtures', title: 'Fixture', sections: [{ children }] });
+  const numbering = { config: [{ reference: 'recs', levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.START }] }] };
+  const doc = new Document({ creator: 'DocCompare fixtures', title: 'Fixture', footnotes, numbering, sections: [{ children }] });
   return new Uint8Array(await Packer.toBuffer(doc));
 }
 
@@ -138,8 +181,11 @@ async function toPdf(m) {
   const left = 56, width = 483, bottom = 56;
   let page = pdf.addPage([595, 842]);
   let y = 790;
-  const ensure = (h) => { if (y - h < bottom) { page = pdf.addPage([595, 842]); y = 790; } };
-  for (const x of m) {
+  let notesOnPage = 0, noteNo = 0;
+  const ensure = (h) => { if (y - h < bottom) { page = pdf.addPage([595, 842]); y = 790; notesOnPage = 0; } };
+  const nums = listNumbers(m);
+  for (const [k, item] of m.entries()) {
+    const x = 'li' in item ? { p: `${nums[k]}. ${item.li}` } : item;
     if ('h' in x) {
       const size = { 1: 20, 2: 15, 3: 13 }[x.h];
       ensure(size * 3);
@@ -169,6 +215,12 @@ async function toPdf(m) {
           page.drawText(drawn, { x: cx, y, size, font: line[i].font });
           cx += line[i].font.widthOfTextAtSize(text, size);
           i = j;
+        }
+        if (x.fn && line === lines[lines.length - 1]) {
+          noteNo++;
+          page.drawText(String(noteNo), { x: cx + 1, y: y + 4, size: 7, font: F.regular });
+          page.drawText(`${noteNo} ${x.fn}`, { x: left, y: 40 - notesOnPage * 10, size: 8, font: F.regular });
+          notesOnPage++;
         }
       }
       y -= size * 1.2;

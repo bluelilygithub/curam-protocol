@@ -11,16 +11,22 @@ import { compareContent, type NewChange } from './content';
 import { compareTableShapes } from './formatting';
 import { runPostChecks } from './postChecks';
 import { wordCounts } from '../checks/limits';
+import { referenceBlockIds } from '../checks/docText';
+import { referenceCount } from '../checks/references';
 
 export { similarity };
 
 /** Content, formatting and metadata comparison of two read documents (no DOM; runs in the worker or in tests). */
 export function compareDocs(a: NormalizedDoc, b: NormalizedDoc, settings: Settings): ComparisonResult {
   const ops = align(a.blocks, b.blocks);
-  const { changes, trivialCount } = compareContent(ops, settings.trivial);
+  // reference-list entries are compared as references (checks/references.ts), not as paragraphs, so each finding shows once
+  const refA = referenceBlockIds(a), refB = referenceBlockIds(b);
+  const inRefs = (o: (typeof ops)[number]) => ('a' in o && refA.has(o.a.id)) || ('b' in o && refB.has(o.b.id));
+  const { changes, trivialCount } = compareContent(ops.filter((o) => !inRefs(o)), settings.trivial);
   for (const s of compareTableShapes(a, b)) changes.push({ category: 'formatting', severity: SEVERITY.structure, location: `Table ${s.table}`, detail: `Table shape ${s.from} → ${s.to} (rows × columns)` });
   changes.push(...runPostChecks(a, b, ops, settings, changes));
-  const meta = compareMetadata(a.metadata, b.metadata, settings);
+  const counted = (d: NormalizedDoc) => ({ ...d.metadata, referenceCount: referenceCount(d), noteCount: (d.notes ?? []).filter((n) => n.kind !== 'link').length });
+  const meta = compareMetadata(counted(a), counted(b), settings);
   return { changes: numbered([...changes, ...meta.changes]), trivialCount, metadata: meta.rows, words: wordCounts(a, b, settings) };
 }
 

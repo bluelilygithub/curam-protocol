@@ -1,7 +1,7 @@
 import * as pdfjs from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import { finalize, type RawBlock } from './finalize';
-import { GateError, type PageRef, type Reader, type Run } from './types';
+import { GateError, type Note, type PageRef, type Reader, type Run } from './types';
 
 /** Opens a PDF. The caller (main.tsx in the browser) sets pdfjs.GlobalWorkerOptions.workerPort to the bundled worker. */
 export async function openPdf(file: File) {
@@ -38,9 +38,11 @@ export const pdfReader: Reader = {
     try {
       const lines: Line[] = [];
       const pages: PageRef[] = [];
+      const pageBox: { y0: number; h: number }[] = [];
       for (let p = 1; p <= doc.numPages; p++) {
         const page = await doc.getPage(p);
         const content = await page.getTextContent();
+        pageBox[p] = { y0: page.view[1], h: page.view[3] - page.view[1] };
         // loads the page's fonts, so commonObjs can give the real font name ("Arial-BoldMT") for bold/italic
         await page.getOperatorList();
         const fontName = (id: string) => {
@@ -87,12 +89,26 @@ export const pdfReader: Reader = {
       const body = [...bySize.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 11;
       const headingSizes = [...new Set(lines.map((l) => l.size).filter((s) => s > body * 1.15))].sort((a, b) => b - a);
 
+      // footnotes, best effort: small text in the bottom fifth of a page, each note starting with its number (or *, †)
+      const notes: Note[] = [];
+      const noteLines = new Set<Line>();
+      let note: Note | undefined;
+      for (const l of lines) {
+        const text = l.runs.map((r) => r.text).join('').trim();
+        const box = pageBox[l.page];
+        const small = !!text && l.size < body * 0.9 && !!box && l.y < box.y0 + box.h * 0.2;
+        if (!small) { note = undefined; continue; }
+        const m = /^(\d{1,3}|[*†‡])\s+(\S.*)$/.exec(text);
+        if (m) { note = { id: `fn:${m[1]}`, kind: 'footnote', label: m[1], text: m[2] }; notes.push(note); noteLines.add(l); }
+        else if (note) { note.text += ` ${text}`; noteLines.add(l); }
+      }
+
       const blocks: (RawBlock & { lastPage: number })[] = [];
       let prev: Line | undefined;
       let block: (RawBlock & { lastPage: number }) | undefined;
       for (const l of lines) {
         const text = l.runs.map((r) => r.text).join('');
-        if (!text.trim()) { prev = l; continue; }
+        if (!text.trim() || noteLines.has(l)) { prev = l; continue; }
         const level = headingSizes.indexOf(l.size) + 1;
         const type = level > 0 ? 'heading' : 'paragraph';
         const gap = prev && prev.page === l.page ? prev.y - l.y : Infinity;
@@ -115,7 +131,17 @@ export const pdfReader: Reader = {
 
       const info = (await doc.getMetadata().catch(() => null))?.info as Record<string, unknown> | undefined;
       const str = (k: string) => (typeof info?.[k] === 'string' && (info[k] as string).trim()) || undefined;
-      return finalize(file, 'pdf', blocks.map(({ lastPage: _lastPage, ...b }) => b), {
+      // footnote marks: a small number on its own in a body line (superscript)
+      if (notes.length) for (const b of blocks) {
+        const isMark = (r: Run) => /^\d{1,3}$/.test(r.text.trim()) && (r.sizePt ?? body) < body * 0.8;
+        const refs = b.runs.filter(isMark).map((r) => `fn:${r.text.trim()}`);
+        if (!refs.length) continue;
+        // the mark is not part of the sentence: kept as a note reference, out of the text
+        b.notes = refs;
+        b.runs = b.runs.filter((r) => !isMark(r));
+        b.text = b.runs.map((r) => r.text).join('').trimEnd();
+      }
+      const doc2 = finalize(file, 'pdf', blocks.map(({ lastPage: _lastPage, ...b }) => b), {
         created: pdfDate(info?.CreationDate),
         modified: pdfDate(info?.ModDate),
         author: str('Author'),
@@ -123,7 +149,8 @@ export const pdfReader: Reader = {
         producer: str('Producer'),
         application: str('Creator'),
         pageCount: doc.numPages,
-      }, pages);
+      }, pages, notes);
+      return notes.length ? { ...doc2, notesBestEffort: true } : doc2;
     } finally {
       await doc.destroy();
     }

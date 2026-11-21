@@ -4,6 +4,7 @@ import type { Change } from '../report/model';
 import { SEVERITY } from '../report/severity';
 import type { TrivialRules } from '../settings';
 import type { AlignOp } from './align';
+import { numberLabel } from '../checks/numbering';
 import { compareFormatting } from './formatting';
 import { normalize } from './normalize';
 import { levenshtein, truncate, words, wordDice } from './textSim';
@@ -119,9 +120,12 @@ export function compareContent(ops: AlignOp[], rules: TrivialRules): { changes: 
 
     // equal or modified pair
     const { a, b } = op;
-    const na = normalize(a.text, rules), nb = normalize(b.text, rules);
+    // a paragraph whose only change is its leading number ("3." -> "2.") is renumbering (checks/numbering.ts), not a changed figure
+    const la = numberLabel(a.text), lb = numberLabel(b.text);
+    const [ta, tb] = la.num && lb.num && la.num.kind === lb.num.kind ? [la.rest, lb.rest] : [a.text, b.text];
+    const na = normalize(ta, rules), nb = normalize(tb, rules);
     if (na === nb) {
-      if (a.text !== b.text) {
+      if (ta !== tb) {
         trivialCount++;
         changes.push({ category: 'wording', severity: SEVERITY.trivial, trivial: true, location: locate(a), original: a.text, edited: b.text, detail: 'Only whitespace, quotes, dashes or invisible characters differ', diffHtml: classify(a.text, b.text).diffHtml });
       }

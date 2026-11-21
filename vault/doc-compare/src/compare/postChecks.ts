@@ -1,6 +1,11 @@
 import { newClaims } from '../checks/claims';
 import { requiredHeadings } from '../checks/headings';
+import { isReferenceHeading } from '../checks/docText';
 import { limits } from '../checks/limits';
+import { numbering } from '../checks/numbering';
+import { references } from '../checks/references';
+import { spelling } from '../checks/spelling';
+import { terms } from '../checks/terms';
 import { changedQuotes } from '../checks/quotes';
 import { versionNumber } from '../checks/version';
 import { countWords } from '../readers/finalize';
@@ -43,7 +48,7 @@ export const sectionWordDrop: PostCheck = (a, b, ops) => {
   const out: NewChange[] = [];
   for (const [k, s] of wa) {
     const e = wb.get(k);
-    if (!k || !e || explained.has(k) || s.words < SECTION_MIN_WORDS) continue;
+    if (!k || !e || explained.has(k) || s.words < SECTION_MIN_WORDS || isReferenceHeading(s.title)) continue; // the reference list: checks/references.ts
     const pct = ((s.words - e.words) / s.words) * 100;
     if (pct <= SECTION_DROP_PCT) continue;
     out.push({
@@ -58,7 +63,7 @@ export const sectionWordDrop: PostCheck = (a, b, ops) => {
   return out;
 };
 
-export const POST_CHECKS: PostCheck[] = [sectionWordDrop, newClaims, changedQuotes, limits, requiredHeadings, versionNumber];
+export const POST_CHECKS: PostCheck[] = [sectionWordDrop, newClaims, changedQuotes, references, numbering, spelling, terms, limits, requiredHeadings, versionNumber];
 
 /** Runs every post check in order, each seeing what the earlier ones found. */
 export function runPostChecks(a: NormalizedDoc, b: NormalizedDoc, ops: AlignOp[], settings: Settings, changes: NewChange[]): NewChange[] {

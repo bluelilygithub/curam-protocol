@@ -197,6 +197,8 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .card-summary { font-weight: 600; font-size: 15px; }
 .card-why { font-size: 13px; color: var(--color-muted); }
 .card-action { font-size: 13px; }
+.card-children { margin: 4px 0 8px; padding-left: 20px; font-size: 13px; max-height: 220px; overflow: auto; }
+.card-children li { margin: 2px 0; }
 .tier-red { color: var(--removed); background: var(--removed-bg); }
 .tier-amber { color: var(--warn); background: var(--warn-bg); }
 .decision-restore, .decision-accept { color: var(--added); background: var(--added-bg); }

@@ -17,9 +17,15 @@ export const SEVERITY = {
   wordLimit: 'high', // over the word or page limit (§5.4)
   requiredHeadingMissing: 'high', // §5.6
   versionBackwards: 'high', // §7.10
+  reference: 'high', // a reference or footnote removed, added or changed (§5.1)
+  citation: 'high', // a citation that no longer points to anything, or now sits on different text (§5.1)
   requiredHeadingOrder: 'medium',
   versionWarning: 'medium', // version not updated, changed without content change, removed, history table not updated
   // amber
+  referenceRenumbered: 'medium', // harmless when the citations moved with it; broken ones are reported as citations
+  numbering: 'medium', // gaps, duplicates, restarts, renumbered paragraphs (§5.3)
+  spelling: 'medium', // Australian <-> US spelling switched (§5.5)
+  terminology: 'medium', // defined term, acronym or glossary term dropped, or an acronym without its expansion (§5.5)
   added: 'medium',
   addedSection: 'medium',
   wording: 'medium',

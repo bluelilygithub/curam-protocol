@@ -18,6 +18,9 @@ export function SettingsPanel({ settings, onChange }: { settings: Settings; onCh
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const applyHeadings = (text: string) => { setHeadingsText(text); onChange({ ...settings, requiredHeadings: text.split('\n').map((l) => l.trim()).filter(Boolean) }); };
   const updateTemplates = (t: HeadingTemplates) => { setTemplates(t); saveTemplates(t); };
+  const [glossaryText, setGlossaryText] = useState((settings.glossary ?? []).join('\n'));
+  const applyGlossary = (text: string) => { setGlossaryText(text); onChange({ ...settings, glossary: text.split('\n').map((l) => l.trim()).filter(Boolean) }); };
+  const loadGlossary = async (f: File | undefined) => { if (f) applyGlossary(await f.text()); };
 
   return (
     <div className="settings-panel" data-guide="settings-form">
@@ -31,7 +34,7 @@ export function SettingsPanel({ settings, onChange }: { settings: Settings; onCh
         </label>
       </div>
       <label className="inline" title="Leave the reference list (References, Bibliography, Sources, Works cited, Endnotes, Notes) out of the word count, as most submissions do."><input type="checkbox" checked={settings.excludeReferences} onChange={(e) => onChange({ ...settings, excludeReferences: e.target.checked })} /> Don't count the reference list</label>
-      <label className="inline" title="Count footnotes and endnotes. DocCompare does not read footnotes yet (coming with the references check), so this has no effect for now."><input type="checkbox" checked={settings.includeFootnotes} onChange={(e) => onChange({ ...settings, includeFootnotes: e.target.checked })} /> Count footnotes (from the next update)</label>
+      <label className="inline" title="Count the words in footnotes and endnotes (Word and Markdown; in a PDF, footnotes are found by best effort)."><input type="checkbox" checked={settings.includeFootnotes} onChange={(e) => onChange({ ...settings, includeFootnotes: e.target.checked })} /> Count footnotes and endnotes</label>
 
       <h2>Required headings</h2>
       <p className="muted small">Leave empty and every heading in your original counts as required (a removed heading is already reported). Or paste the headings this submission must have, one per line, for example an inquiry's terms of reference: a missing one is red, and one out of order is amber. Numbering and small wording differences are allowed.</p>
@@ -55,6 +58,15 @@ export function SettingsPanel({ settings, onChange }: { settings: Settings; onCh
         </ul>
       )}
       {settings.requiredHeadings.length > 0 && <button className="btn ghost" onClick={() => applyHeadings('')} title="Go back to treating every original heading as required.">Clear the list</button>}
+
+      <h2>Protected terms</h2>
+      <p className="muted small">Terms the LLM must keep, one per line (names of programs, legislation, defined terms). If the edited version stops using one, or uses it less than half as often, that is amber. Defined terms, acronyms and phrases your original repeats are found without a list.</p>
+      <textarea className="headings" rows={4} value={glossaryText} onChange={(e) => applyGlossary(e.target.value)} placeholder={'Residential Tenancies Act 2010\nTenants Advice Network'} aria-label="Protected terms, one per line" data-guide="glossary"
+        title="One term per line. Applies to the next comparison and updates the current one." />
+      <div className="row">
+        <label className="btn" title="Load a glossary from a plain-text file, one term per line. The file stays on this computer.">Load from a file<input type="file" accept=".txt,text/plain" hidden onChange={(e) => { void loadGlossary(e.target.files?.[0]); e.target.value = ''; }} /></label>
+        {glossaryText.trim() && <button className="btn ghost" onClick={() => applyGlossary('')} title="Remove every protected term.">Clear the list</button>}
+      </div>
 
       <h2>Checks</h2>
       <label className="field">Same-document threshold (0–100)

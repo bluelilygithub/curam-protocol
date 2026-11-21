@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import JSZip from 'jszip';
 import { finalize, type RawBlock } from './finalize';
-import { GateError, type Reader, type Run } from './types';
+import { GateError, type Note, type Reader, type Run } from './types';
 
 /** preserveOrder output: each node is { tagName: children[], ':@': attrs } or { '#text': string }. */
 type XNode = Record<string, unknown>;
@@ -45,7 +45,7 @@ function readRPr(rPr: XNode | undefined): Fmt {
   return f;
 }
 
-interface StyleInfo { name: string; basedOn?: string; rPr: Fmt; headingLevel?: number; list?: boolean }
+interface StyleInfo { name: string; basedOn?: string; rPr: Fmt; headingLevel?: number; list?: boolean; numId?: string; ilvl?: number }
 
 function readStyles(xml: string | undefined): { styles: Map<string, StyleInfo>; defaults: Fmt } {
   const styles = new Map<string, StyleInfo>();
@@ -65,6 +65,8 @@ function readStyles(xml: string | undefined): { styles: Map<string, StyleInfo>; 
       rPr: readRPr(child(s, 'w:rPr')),
       headingLevel: h ? Number(h[1]) : outline !== undefined ? Number(outline) + 1 : undefined,
       list: !!child(pPr, 'w:numPr'),
+      numId: attr(child(child(pPr, 'w:numPr'), 'w:numId'), 'w:val'),
+      ilvl: Number(attr(child(child(pPr, 'w:numPr'), 'w:ilvl'), 'w:val') ?? 0),
     });
   }
   return { styles, defaults };
@@ -75,6 +77,62 @@ function styleChain(styles: Map<string, StyleInfo>, id: string | undefined): Sty
   const chain: StyleInfo[] = [];
   for (let s = id ? styles.get(id) : undefined, guard = 0; s && guard < 20; s = s.basedOn ? styles.get(s.basedOn) : undefined, guard++) chain.unshift(s);
   return chain;
+}
+
+// ---- automatic numbering (word/numbering.xml): what Word draws in front of a numbered paragraph ----
+interface Lvl { start: number; fmt: string; text: string }
+type Numbering = Map<string, { lvls: Lvl[]; starts: Map<number, number> }>;
+
+function readNumbering(xml: string | undefined): Numbering {
+  const out: Numbering = new Map();
+  if (!xml) return out;
+  const root = findDeep(parse(xml), 'w:numbering');
+  const abstract = new Map<string, Lvl[]>();
+  for (const an of kids(root).filter((n) => tagOf(n) === 'w:abstractNum')) {
+    const lvls: Lvl[] = [];
+    for (const l of kids(an).filter((n) => tagOf(n) === 'w:lvl')) {
+      lvls[Number(attr(l, 'w:ilvl') ?? 0)] = { start: Number(attr(child(l, 'w:start'), 'w:val') ?? 1), fmt: attr(child(l, 'w:numFmt'), 'w:val') ?? 'decimal', text: attr(child(l, 'w:lvlText'), 'w:val') ?? '' };
+    }
+    abstract.set(attr(an, 'w:abstractNumId') ?? '', lvls);
+  }
+  for (const n of kids(root).filter((x) => tagOf(x) === 'w:num')) {
+    const starts = new Map<number, number>();
+    for (const o of kids(n).filter((x) => tagOf(x) === 'w:lvlOverride')) {
+      const s = attr(child(o, 'w:startOverride'), 'w:val');
+      if (s !== undefined) starts.set(Number(attr(o, 'w:ilvl') ?? 0), Number(s));
+    }
+    out.set(attr(n, 'w:numId') ?? '', { lvls: abstract.get(attr(child(n, 'w:abstractNumId'), 'w:val') ?? '') ?? [], starts });
+  }
+  return out;
+}
+
+const roman = (n: number) => { let s = ''; for (const [v, r] of [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']] as const) while (n >= v) { s += r; n -= v; } return s; };
+const letter = (n: number) => String.fromCharCode(96 + (((n - 1) % 26) + 1)).repeat(Math.floor((n - 1) / 26) + 1);
+function fmtNum(n: number, fmt: string): string {
+  switch (fmt) {
+    case 'lowerLetter': return letter(n);
+    case 'upperLetter': return letter(n).toUpperCase();
+    case 'lowerRoman': return roman(n);
+    case 'upperRoman': return roman(n).toUpperCase();
+    case 'decimalZero': return String(n).padStart(2, '0');
+    default: return String(n);
+  }
+}
+
+/** Keeps the counters per list while the body is read, and renders "%1.%2." into "2.1.". Bullets get no number. */
+function numberer(numbering: Numbering) {
+  const counters = new Map<string, number[]>();
+  return (numId: string | undefined, ilvl: number): string | undefined => {
+    const def = numId && numId !== '0' ? numbering.get(numId) : undefined;
+    const lvl = def?.lvls[ilvl];
+    if (!def || !lvl || lvl.fmt === 'bullet' || lvl.fmt === 'none') return undefined;
+    const c = counters.get(numId!) ?? [];
+    const startOf = (i: number) => def.starts.get(i) ?? def.lvls[i]?.start ?? 1;
+    c[ilvl] = c[ilvl] === undefined ? startOf(ilvl) : c[ilvl] + 1;
+    c.length = ilvl + 1; // deeper levels start again
+    counters.set(numId!, c);
+    return lvl.text.replace(/%(\d)/g, (_, k) => { const i = Number(k) - 1; return fmtNum(c[i] ?? startOf(i), def.lvls[i]?.fmt ?? 'decimal'); }).trim() || undefined;
+  };
 }
 
 function readRels(xml: string | undefined): Map<string, string> {
@@ -128,7 +186,7 @@ export const docxReader: Reader = {
     const get = (p: string) => zip.file(p)?.async('string');
     const docXml = await get('word/document.xml');
     if (!docXml) throw new GateError('corrupt', `${file.name} has no word/document.xml; it is not a valid DOCX file.`);
-    const [stylesXml, relsXml, coreXml, appXml, themeXml] = await Promise.all([get('word/styles.xml'), get('word/_rels/document.xml.rels'), get('docProps/core.xml'), get('docProps/app.xml'), get('word/theme/theme1.xml')]);
+    const [stylesXml, relsXml, coreXml, appXml, themeXml, numberingXml, footnotesXml, endnotesXml] = await Promise.all([get('word/styles.xml'), get('word/_rels/document.xml.rels'), get('docProps/core.xml'), get('docProps/app.xml'), get('word/theme/theme1.xml'), get('word/numbering.xml'), get('word/footnotes.xml'), get('word/endnotes.xml')]);
     themeFonts = {};
     if (themeXml) {
       const scheme = findDeep(parse(themeXml), 'a:fontScheme');
@@ -140,8 +198,9 @@ export const docxReader: Reader = {
     const body = findDeep(parse(docXml), 'w:body');
     const out: RawBlock[] = [];
     let tableNo = 0;
+    const nextNumber = numberer(readNumbering(numberingXml));
 
-    const paragraph = (p: XNode, table?: { t: number; r: number; c: number }): { runs: Run[]; pageBreakAfter: boolean; images: number; styleName?: string; level?: number; type: RawBlock['type'] } => {
+    const paragraph = (p: XNode, table?: { t: number; r: number; c: number }): { runs: Run[]; pageBreakAfter: boolean; images: number; styleName?: string; level?: number; type: RawBlock['type']; notes: string[]; numId?: string; ilvl: number } => {
       const pPr = child(p, 'w:pPr');
       const styleId = attr(child(pPr, 'w:pStyle'), 'w:val');
       const chain = styleChain(styles, styleId);
@@ -153,6 +212,7 @@ export const docxReader: Reader = {
       const baseFmt: Fmt = Object.assign({}, defaults, ...chain.map((s) => s.rPr));
       const runs: Run[] = [];
       let pageBreakAfter = false, images = 0;
+      const notes: string[] = [];
       const walkRuns = (nodes: XNode[], link?: string) => {
         for (const n of nodes) {
           const t = tagOf(n);
@@ -171,6 +231,7 @@ export const docxReader: Reader = {
               else if (ct === 'w:br' || ct === 'w:cr') { if (attr(c, 'w:type') === 'page') pageBreakAfter = true; else text += '\n'; }
               else if (ct === 'w:noBreakHyphen') text += '‑';
               else if (ct === 'w:drawing' || ct === 'w:pict' || ct === 'w:object') images++;
+              else if (ct === 'w:footnoteReference' || ct === 'w:endnoteReference') notes.push(`${ct === 'w:footnoteReference' ? 'fn' : 'en'}:${attr(c, 'w:id')}`);
             }
             if (text) runs.push({ ...fmt, text });
           } else if (t === 'w:hyperlink') {
@@ -191,6 +252,9 @@ export const docxReader: Reader = {
         styleName: pStyle?.name,
         type: table ? 'tableCell' : headingLevel ? 'heading' : isList ? 'listItem' : 'paragraph',
         level: headingLevel ?? (isList ? Number(attr(child(numPr, 'w:ilvl'), 'w:val') ?? 0) + 1 : undefined),
+        notes,
+        numId: attr(child(numPr, 'w:numId'), 'w:val') ?? [...chain].reverse().find((s) => s.numId)?.numId,
+        ilvl: Number(attr(child(numPr, 'w:ilvl'), 'w:val') ?? [...chain].reverse().find((s) => s.numId)?.ilvl ?? 0),
       };
     };
 
@@ -200,7 +264,8 @@ export const docxReader: Reader = {
         if (t === 'w:p') {
           const p = paragraph(n);
           const text = p.runs.map((r) => r.text).join('');
-          if (text.trim() || p.type === 'heading') out.push({ type: p.type, level: p.level, style: p.styleName, text, runs: p.runs });
+          const number = nextNumber(p.numId, p.ilvl);
+          if (text.trim() || p.type === 'heading') out.push({ type: p.type, level: p.level, style: p.styleName, text, runs: p.runs, ...(number ? { number } : {}), ...(p.notes.length ? { notes: p.notes } : {}) });
           for (let i = 0; i < p.images; i++) out.push({ type: 'image', text: '', runs: [] });
           if (p.pageBreakAfter) out.push({ type: 'pageBreak', text: '', runs: [] });
         } else if (t === 'w:tbl') {
@@ -210,14 +275,15 @@ export const docxReader: Reader = {
             for (const tc of kids(tr).filter((x) => tagOf(x) === 'w:tc')) {
               const span = Number(attr(child(child(tc, 'w:tcPr'), 'w:gridSpan'), 'w:val') ?? 1);
               const runs: Run[] = [];
+              const notes: string[] = [];
               let images = 0;
               // a cell holds paragraphs (and possibly nested tables, flattened into the cell text)
               const cellParas = (xs: XNode[]) => xs.forEach((x) => {
-                if (tagOf(x) === 'w:p') { const p = paragraph(x, { t: tIdx, r, c }); if (runs.length && p.runs.length) runs.push({ text: '\n' }); runs.push(...p.runs); images += p.images; }
+                if (tagOf(x) === 'w:p') { const p = paragraph(x, { t: tIdx, r, c }); if (runs.length && p.runs.length) runs.push({ text: '\n' }); runs.push(...p.runs); notes.push(...p.notes); images += p.images; }
                 else if (tagOf(x) === 'w:tbl' || tagOf(x) === 'w:tr' || tagOf(x) === 'w:tc' || tagOf(x) === 'w:sdt' || tagOf(x) === 'w:sdtContent') cellParas(kids(x));
               });
               cellParas(kids(tc));
-              out.push({ type: 'tableCell', text: runs.map((x) => x.text).join(''), runs, location: { table: { t: tIdx, r, c } } });
+              out.push({ type: 'tableCell', text: runs.map((x) => x.text).join(''), runs, ...(notes.length ? { notes } : {}), location: { table: { t: tIdx, r, c } } });
               for (let i = 0; i < images; i++) out.push({ type: 'image', text: '', runs: [] });
               c += span;
             }
@@ -228,6 +294,18 @@ export const docxReader: Reader = {
       }
     };
     walkBody(kids(body));
-    return finalize(file, 'docx', out, readCore(coreXml, appXml));
+    // footnotes and endnotes, numbered as Word shows them: in the order their marks first appear
+    const order = [...new Set(out.flatMap((b) => b.notes ?? []))];
+    const notes: Note[] = [];
+    for (const [xml, kind, tag, prefix] of [[footnotesXml, 'footnote', 'w:footnote', 'fn'], [endnotesXml, 'endnote', 'w:endnote', 'en']] as const) {
+      if (!xml) continue;
+      for (const n of kids(findDeep(parse(xml), `${tag}s`)).filter((x) => tagOf(x) === tag && !attr(x, 'w:type'))) {
+        const id = `${prefix}:${attr(n, 'w:id')}`;
+        const text = kids(n).filter((x) => tagOf(x) === 'w:p').map((x) => paragraph(x).runs.map((r) => r.text).join('')).join(' ').trim();
+        const shown = order.filter((o) => o.startsWith(prefix)).indexOf(id);
+        if (text) notes.push({ id, kind, label: String(shown >= 0 ? shown + 1 : attr(n, 'w:id')), text });
+      }
+    }
+    return finalize(file, 'docx', out, readCore(coreXml, appXml), undefined, notes);
   },
 };

@@ -50,6 +50,9 @@ export function compareMetadata(a: DocMetadata, b: DocMetadata, s: Settings): { 
   const counts: [string, number | undefined, number | undefined][] = [
     ['Pages', a.pageCount, b.pageCount], ['Words', a.wordCount, b.wordCount], ['Characters', a.charCount, b.charCount],
     ['Headings', a.headingCount, b.headingCount], ['Tables', a.tableCount, b.tableCount], ['Images', a.imageCount, b.imageCount],
+    // shown only when either document has some (0 and 0 is noise for a document without references)
+    ...((a.referenceCount || b.referenceCount ? [['References', a.referenceCount, b.referenceCount]] : []) as [string, number | undefined, number | undefined][]),
+    ...((a.noteCount || b.noteCount ? [['Footnotes and endnotes', a.noteCount, b.noteCount]] : []) as [string, number | undefined, number | undefined][]),
   ];
   for (const [label, va, vb] of counts) {
     if (va === undefined || vb === undefined) { if (va !== undefined || vb !== undefined) rows.push({ label, original: String(va ?? '—'), edited: String(vb ?? '—'), difference: '—' }); continue; }

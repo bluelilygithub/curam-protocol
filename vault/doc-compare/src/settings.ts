@@ -17,8 +17,9 @@ export interface Settings {
   wordLimit: number | null; // the edited version's word limit (also on the main screen)
   pageLimit: number | null;
   excludeReferences: boolean; // leave the reference list out of the word count
-  includeFootnotes: boolean; // count footnotes (footnotes are read from phase 4 on)
+  includeFootnotes: boolean; // count footnotes and endnotes in the word count
   requiredHeadings: string[]; // a pasted list for this submission; empty = every original heading counts (already checked by removals)
+  glossary: string[]; // protected terms (addendum §5.5), one per line: reported when the edited version drops them
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   excludeReferences: true,
   includeFootnotes: true,
   requiredHeadings: [],
+  glossary: [],
 };
 
 const KEY = 'doc-compare:settings';

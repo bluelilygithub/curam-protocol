@@ -34,6 +34,22 @@ const SAMPLES: Change[] = [
   ch({ category: 'metadata', severity: 'high', detail: 'Word count dropped by 20.9%' }),
   ch({ category: 'metadata', severity: 'high', detail: 'Section "2. Evidence" lost 40% of its words' }),
   ch({ category: 'metadata', severity: 'low', detail: 'Author changed' }),
+  ch({ category: 'reference', severity: 'high', detail: 'Reference removed: [2]' }),
+  ch({ category: 'reference', severity: 'high', detail: 'Reference added: [3]' }),
+  ch({ category: 'reference', severity: 'high', detail: 'Reference changed (year, link): [1]' }),
+  ch({ category: 'reference', severity: 'high', detail: 'Footnote removed: Footnote 1' }),
+  ch({ category: 'reference', detail: 'Reference list renumbered: 2 references have a new number' }),
+  ch({ category: 'citation', severity: 'high', detail: 'Citation points to nothing: [2]' }),
+  ch({ category: 'citation', severity: 'high', detail: 'Citation now points to a different source: [1]' }),
+  ch({ category: 'citation', severity: 'high', detail: 'Citation removed from this text: footnote 1' }),
+  ch({ category: 'citation', severity: 'high', detail: 'Citation moved to this text: footnote 1' }),
+  ch({ category: 'numbering', detail: 'Numbering gap: number 3 follows 1' }),
+  ch({ category: 'numbering', detail: 'Renumbered: 2 paragraphs (3 → 2, 4 → 3)', children: [ch({ category: 'numbering', detail: 'Renumbered: 3 → 2' })] }),
+  ch({ category: 'spelling', detail: 'Spelling switched from Australian to US: 3 places, 2 words (color, center)', children: [ch({ category: 'spelling', original: 'colour', edited: 'color', detail: 'colour → color (2×)' })] }),
+  ch({ category: 'spelling', original: 'colour', edited: 'color', detail: 'colour → color (2×)' }),
+  ch({ category: 'terminology', detail: 'Defined term "Act" is no longer used (4× in the original)' }),
+  ch({ category: 'terminology', detail: 'Acronym CRA is new and never spelled out' }),
+  ch({ category: 'terminology', detail: 'Acronym TAN is used without its expansion "Tenants Advice Network"' }),
   ...(Object.keys(CATEGORY_LABEL) as Category[]).map((category) => ch({ category, severity: 'medium' })),
 ];
 
@@ -50,7 +66,8 @@ group('message catalogue', () => {
     for (const c of SAMPLES) expect(Object.values(describe(c)).join(' '), c.category).not.toMatch(/\b(safe|correct|verified)\b/i);
   });
   it('uses Australian spelling', () => {
-    expect(SAMPLES.map((c) => Object.values(describe(c)).join(' ')).join(' ')).not.toMatch(/\b(color|organize|analyze|center|behavior|recognize)\b/i);
+    // spelling cards quote the US word on purpose
+    expect(SAMPLES.filter((c) => c.category !== 'spelling').map((c) => Object.values(describe(c)).join(' ')).join(' ')).not.toMatch(/\b(color|organize|analyze|center|behavior|recognize)\b/i);
   });
   it('names the specific thing', () => {
     expect(describe(SAMPLES[0]).summary).toBe('The LLM removed the whole section "2. Evidence" (2 parts).');
