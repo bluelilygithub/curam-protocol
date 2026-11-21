@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Change } from '../report/model';
+import type { Change, WordCounts } from '../report/model';
 import { ACCURACY_NOTE, VERDICT_TEXT, isOpen, progress, reviewItems, summarySentence, verdictOf, type Decision, type Decisions, type ReviewItem } from '../review/verdict';
 
 /** The text Restore copies: the original wording (a removed section's parts one after another). */
@@ -23,8 +23,9 @@ async function copy(text: string): Promise<boolean> {
 
 const DECISION_LABEL: Record<Decision, string> = { restore: 'To restore', accept: 'Accepted', later: 'Fix later' };
 
-export function ReviewView({ changes, decisions, persistent, onDecide, onDismissSimilar, onShowAll, onShowIn, say }: {
+export function ReviewView({ changes, words, decisions, persistent, onDecide, onDismissSimilar, onShowAll, onShowIn, say }: {
   changes: Change[];
+  words?: WordCounts;
   decisions: Decisions;
   persistent: boolean;
   onDecide: (key: string, decision: Decision | null) => void;
@@ -77,6 +78,12 @@ export function ReviewView({ changes, decisions, persistent, onDecide, onDismiss
         </div>
       </div>
       <p className="accuracy-note">{ACCURACY_NOTE}</p>
+      {words && (
+        <p className="words-line" data-guide="word-total" title="Total words, the reference list left out unless Settings says otherwise. The table by section is under File details.">
+          <strong>Words:</strong> {words.original.toLocaleString('en-AU')} in the original, {words.edited.toLocaleString('en-AU')} in the edited version
+          {words.limit ? <> · limit {words.limit.toLocaleString('en-AU')}{words.edited > words.limit ? <span className="text-removed"> (over by {(words.edited - words.limit).toLocaleString('en-AU')})</span> : ' (within the limit)'}</> : null}
+        </p>
+      )}
 
       <div className="review-bar">
         <strong>{p.decided} of {p.total} decided</strong>

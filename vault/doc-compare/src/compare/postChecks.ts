@@ -1,15 +1,23 @@
+import { newClaims } from '../checks/claims';
+import { requiredHeadings } from '../checks/headings';
+import { limits } from '../checks/limits';
+import { changedQuotes } from '../checks/quotes';
+import { versionNumber } from '../checks/version';
 import { countWords } from '../readers/finalize';
 import type { Block, NormalizedDoc } from '../readers/types';
 import { SECTION_DROP_PCT, SECTION_MIN_WORDS, SEVERITY } from '../report/severity';
+import type { Settings } from '../settings';
 import type { AlignOp } from './align';
 import type { NewChange } from './content';
 import { ALL_RULES, normalize } from './normalize';
 
 /**
  * Checks that run after the block comparison, on whole documents (addendum §3-5 adds its submission checks here, one function each, instead
- * of growing content.ts). Each returns new changes; none changes the ones already found.
+ * of growing content.ts). Each returns new changes; none changes the ones already found. `ctx.changes` holds everything found so far
+ * (the version check needs to know whether the content changed), so order matters: it runs last.
  */
-export type PostCheck = (a: NormalizedDoc, b: NormalizedDoc, ops: AlignOp[]) => NewChange[];
+export interface PostCheckContext { settings: Settings; changes: NewChange[] }
+export type PostCheck = (a: NormalizedDoc, b: NormalizedDoc, ops: AlignOp[], ctx: PostCheckContext) => NewChange[];
 
 const sectionOf = (bl: Block) => (bl.type === 'heading' ? bl.text.trim().slice(0, 80) : bl.location.section) ?? '';
 const key = (s: string) => normalize(s, ALL_RULES).toLowerCase();
@@ -50,4 +58,11 @@ export const sectionWordDrop: PostCheck = (a, b, ops) => {
   return out;
 };
 
-export const POST_CHECKS: PostCheck[] = [sectionWordDrop];
+export const POST_CHECKS: PostCheck[] = [sectionWordDrop, newClaims, changedQuotes, limits, requiredHeadings, versionNumber];
+
+/** Runs every post check in order, each seeing what the earlier ones found. */
+export function runPostChecks(a: NormalizedDoc, b: NormalizedDoc, ops: AlignOp[], settings: Settings, changes: NewChange[]): NewChange[] {
+  const found: NewChange[] = [];
+  for (const check of POST_CHECKS) found.push(...check(a, b, ops, { settings, changes: [...changes, ...found] }));
+  return found;
+}

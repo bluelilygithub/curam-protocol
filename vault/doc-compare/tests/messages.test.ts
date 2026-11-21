@@ -5,6 +5,9 @@ import { annotate } from '../src/compare/pipeline';
 import { describe } from '../src/report/messages';
 import { CATEGORY_LABEL, type Category, type Change } from '../src/report/model';
 import { SEVERITY, TIER } from '../src/report/severity';
+import { DEFAULT_SETTINGS } from '../src/settings';
+
+const CTX = { settings: DEFAULT_SETTINGS, changes: [] };
 import type { Block, NormalizedDoc } from '../src/readers/types';
 
 const ch = (o: Partial<Change>): Change => ({ id: 1, category: 'wording', severity: 'medium', location: '1. Background, para 2', ...o });
@@ -86,10 +89,10 @@ group('tightened paragraphs', () => {
     const head = blk('Impact', { type: 'heading', level: 2 });
     const a = docOf([head, blk(LONG, { location: { index: 0, section: 'Impact' } }), blk(LONG2, { location: { index: 0, section: 'Impact' } })]);
     const b = docOf([head, blk('Families who are forced to move often lose contact with schools.', { location: { index: 0, section: 'Impact' } }), blk('Older renters face particular difficulty.', { location: { index: 0, section: 'Impact' } })]);
-    const found = sectionWordDrop(a, b, align(a.blocks, b.blocks));
+    const found = sectionWordDrop(a, b, align(a.blocks, b.blocks), CTX);
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ severity: 'high', detail: expect.stringMatching(/^Section "Impact" lost \d+% of its words$/) });
     const c = docOf([head, blk(LONG, { location: { index: 0, section: 'Impact' } })]);
-    expect(sectionWordDrop(a, c, align(a.blocks, c.blocks))).toEqual([]);
+    expect(sectionWordDrop(a, c, align(a.blocks, c.blocks), CTX)).toEqual([]);
   });
 });

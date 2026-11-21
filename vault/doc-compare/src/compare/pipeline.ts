@@ -9,7 +9,8 @@ import type { Settings } from '../settings';
 import { align } from './align';
 import { compareContent, type NewChange } from './content';
 import { compareTableShapes } from './formatting';
-import { POST_CHECKS } from './postChecks';
+import { runPostChecks } from './postChecks';
+import { wordCounts } from '../checks/limits';
 
 export { similarity };
 
@@ -18,9 +19,9 @@ export function compareDocs(a: NormalizedDoc, b: NormalizedDoc, settings: Settin
   const ops = align(a.blocks, b.blocks);
   const { changes, trivialCount } = compareContent(ops, settings.trivial);
   for (const s of compareTableShapes(a, b)) changes.push({ category: 'formatting', severity: SEVERITY.structure, location: `Table ${s.table}`, detail: `Table shape ${s.from} → ${s.to} (rows × columns)` });
-  for (const check of POST_CHECKS) changes.push(...check(a, b, ops));
+  changes.push(...runPostChecks(a, b, ops, settings, changes));
   const meta = compareMetadata(a.metadata, b.metadata, settings);
-  return { changes: numbered([...changes, ...meta.changes]), trivialCount, metadata: meta.rows };
+  return { changes: numbered([...changes, ...meta.changes]), trivialCount, metadata: meta.rows, words: wordCounts(a, b, settings) };
 }
 
 /** Tier, plain-language summary / why it matters / action, and origin, from the message catalogue (addendum §2). */

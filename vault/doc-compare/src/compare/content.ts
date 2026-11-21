@@ -44,7 +44,8 @@ export function classify(na: string, nb: string): { category: Change['category']
   const real = hunks.filter((h) => h.del.trim() || h.ins.trim());
   const pair = (h: { del: string; ins: string }) => `"${truncate(h.del.trim(), 40) || '∅'}" → "${truncate(h.ins.trim(), 40) || '∅'}"`;
 
-  const numeric = real.filter((h) => /\d/.test(h.del) || /\d/.test(h.ins));
+  // a figure that was changed or removed; a figure only inserted is a new claim (addendum §4, checks/claims.ts), not a number change
+  const numeric = real.filter((h) => /\d/.test(h.del));
   if (numeric.length) return { category: 'number', severity: SEVERITY.number, detail: numeric.slice(0, 3).map(pair).join('; ') + (numeric.length > 3 ? ` and ${numeric.length - 3} more` : ''), diffHtml: html };
 
   if (real.length === 1) {

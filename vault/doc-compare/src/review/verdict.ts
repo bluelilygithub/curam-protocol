@@ -76,21 +76,38 @@ export function summarySentence(changes: Change[]): string {
   const overall = real.find((c) => c.category === 'metadata' && /^Word count dropped by ([\d.]+)%/.test(c.detail ?? ''));
   const overallPct = overall ? Math.round(Number(/([\d.]+)%/.exec(overall.detail ?? '')?.[1] ?? 0)) : 0;
   const sectionsCut = n((c) => c.category === 'metadata' && /^Section .* lost/.test(c.detail ?? ''));
+  const claims = n((c) => c.category === 'newClaim');
+  const quotesChanged = n((c) => c.category === 'quote' && c.detail !== 'Quote removed');
+  const quotesRemoved = n((c) => c.category === 'quote' && c.detail === 'Quote removed');
+  const overWords = real.some((c) => c.category === 'wordLimit' && /words,/.test(c.detail ?? ''));
+  const overPages = real.some((c) => c.category === 'wordLimit' && /pages?,/.test(c.detail ?? ''));
+  const requiredMissing = n((c) => c.category === 'requiredHeading' && !/^Out of order/.test(c.detail ?? ''));
+  const requiredOrder = n((c) => c.category === 'requiredHeading' && /^Out of order/.test(c.detail ?? ''));
+  const version = real.some((c) => c.category === 'versionNumber');
 
-  const removed = [removedSections && plural(removedSections, 'section'), removedOther && plural(removedOther, 'paragraph'), removedRows && plural(removedRows, 'table row')].filter(Boolean) as string[];
+  const removed = [removedSections && plural(removedSections, 'section'), removedOther && plural(removedOther, 'paragraph'), removedRows && plural(removedRows, 'table row'), quotesRemoved && plural(quotesRemoved, 'quote')].filter(Boolean) as string[];
+  const addedParts = [added && plural(added, 'passage'), claims && plural(claims, 'claim')].filter(Boolean) as string[];
   const clauses = [
     removed.length ? `removed ${list(removed)}` : '',
     cut ? `cut words from ${plural(cut, 'paragraph')}` : '',
     figures ? `changed ${plural(figures, 'figure')}` : '',
+    quotesChanged ? `changed ${plural(quotesChanged, 'quote')}` : '',
     reworded ? `reworded ${plural(reworded, 'paragraph')}` : '',
     moved ? `moved ${plural(moved, 'paragraph')}` : '',
     structure ? `changed the structure in ${plural(structure, 'place')}` : '',
-    added ? `added ${plural(added, 'passage')} that need${added === 1 ? 's' : ''} checking` : '',
+    addedParts.length ? `added ${list(addedParts)} that need${added + claims === 1 ? 's' : ''} checking` : '',
   ].filter(Boolean);
   const sectionsPart = sectionsCut ? `${plural(sectionsCut, 'section')} lost more than 15% of ${sectionsCut === 1 ? 'its' : 'their'} words` : '';
-  const tail = overall
+  const extras = [
+    overWords || overPages ? ` It is over the ${overWords && overPages ? 'word and page limits' : overWords ? 'word limit' : 'page limit'}.` : '',
+    requiredMissing ? ` ${plural(requiredMissing, 'required heading')} ${requiredMissing === 1 ? 'is' : 'are'} missing.` : '',
+    requiredOrder ? ` ${plural(requiredOrder, 'required heading')} ${requiredOrder === 1 ? 'is' : 'are'} out of order.` : '',
+    version ? ' The version number needs checking.' : '',
+  ].join('');
+  const tail = (overall
     ? ` The edited version is also ${overallPct}% shorter overall${sectionsPart ? `, and ${sectionsPart}` : ''}.`
-    : sectionsPart ? ` Also, ${sectionsPart}.` : '';
+    : sectionsPart ? ` Also, ${sectionsPart}.` : '') + extras;
+  if (!clauses.length && extras && !overall && !sectionsPart) return extras.trim();
   if (!clauses.length) return `The LLM made changes that need your attention.${tail}`;
   return `The LLM ${list(clauses)}.${tail}`;
 }

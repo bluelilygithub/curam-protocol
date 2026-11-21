@@ -37,6 +37,14 @@ const WHY = {
   wordDrop: 'A big drop in words often means content was skipped.',
   fileDetail: 'File details can show a document was recreated rather than edited, or that something large was removed.',
   trivial: 'This does not change the meaning.',
+  newClaim: 'LLMs sometimes invent statistics, quotes and sources. An invented figure in a submission can damage your credibility.',
+  quote: 'Quotes must match their source exactly, even where the original has a typo.',
+  quoteRemoved: 'A quote from legislation, a report or a stakeholder is often the evidence a point rests on.',
+  limit: 'Submissions over the limit can be rejected or cut off before the reader gets to the end.',
+  required: 'Assessors look for the sections they asked for; a missing one can mean the submission is marked down or not considered.',
+  requiredOrder: 'Following the required order makes it easy for assessors to find each part.',
+  version: 'Readers and reviewers rely on the version number to know which draft they have.',
+  versionBack: 'An older version number suggests an older draft, or that the wrong file was used.',
 };
 
 /** The plain-language message for a change. */
@@ -80,6 +88,30 @@ export function describe(c: Change): Message {
       if (/^Section .* lost/.test(d)) return { summary: `${d}.`, whyItMatters: WHY.wordDrop, action: 'Read that section in both versions and restore anything the LLM cut that you need.' };
       return { summary: `A file detail changed: ${d}.`, whyItMatters: WHY.fileDetail, action: `Check: ${d}.` };
     }
+    case 'newClaim': {
+      const [kind, ...rest] = (c.detail ?? 'Claim: ').split(': ');
+      const what = rest.join(': ');
+      const noun = { Statistic: 'a statistic', Quote: 'a quote', Citation: 'a citation', Link: 'a link', Source: 'a source' }[kind] ?? 'a claim';
+      return {
+        summary: `The LLM added ${noun} that isn't in your original: ${what.length > 90 ? `${what.slice(0, 89)}…` : what}`,
+        whyItMatters: WHY.newClaim,
+        action: kind === 'Quote' ? 'Check who said this and that these are their exact words, or remove it.' : kind === 'Link' ? 'Open the link, check it exists and says what the text claims, or remove it.' : 'Check the source exists and says this, or remove it.',
+      };
+    }
+    case 'quote':
+      if (c.detail === 'Quote removed') return { summary: `The LLM removed a direct quote from ${where(c)}.`, whyItMatters: WHY.quoteRemoved, action: 'Restore the quote exactly as it was, or accept the removal if you meant to cut it.' };
+      return { summary: `The LLM changed the wording of a direct quote in ${where(c)}.`, whyItMatters: WHY.quote, action: 'Restore the quote exactly as it was in your original.' };
+    case 'wordLimit':
+      return /pages?,/.test(c.detail ?? '')
+        ? { summary: `The edited version is over the page limit: ${c.detail}.`, whyItMatters: WHY.limit, action: 'Shorten the document, or check the page limit in Settings.' }
+        : { summary: `The edited version is over the word limit: ${c.detail}.`, whyItMatters: WHY.limit, action: 'Cut words to get under the limit (the section table under File details shows where the words are), or check the limit you set.' };
+    case 'requiredHeading':
+      if (/^Out of order/.test(c.detail ?? '')) return { summary: `A required heading is out of order: ${c.detail?.replace(/^Out of order: /, '')}.`, whyItMatters: WHY.requiredOrder, action: 'Move the section back into the required order, or check the list of required headings in Settings.' };
+      return { summary: `A required heading is missing: ${quote(c.original, 80)}.`, whyItMatters: WHY.required, action: `Add the section ${quote(c.original, 80)} back, or check the list of required headings in Settings.` };
+    case 'versionNumber':
+      if (/went backwards/.test(c.detail ?? '')) return { summary: `${c.detail ?? 'The version went backwards'}.`, whyItMatters: WHY.versionBack, action: 'Set the version number to the next one after the original, or check you picked the right files.' };
+      if (/history table/.test(c.detail ?? '')) return { summary: 'The version history table was not updated.', whyItMatters: WHY.version, action: 'Add a row for this version to the version history table.' };
+      return { summary: `${c.detail ?? 'The version number needs checking'}.`, whyItMatters: WHY.version, action: 'Update the version number so readers know which version they have.' };
     default:
       return { summary: c.detail ?? 'Something changed.', whyItMatters: 'Check this change before you submit.', action: 'Review this change.' };
   }

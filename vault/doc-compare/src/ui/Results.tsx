@@ -217,7 +217,33 @@ function LongText({ text, className }: { text: string; className: string }) {
 // ---------- File details ----------
 
 export function MetadataView({ result }: { result: ComparisonResult }) {
+  const w = result.words;
+  const pct = (a: number, b: number) => (a ? `${b >= a ? '+' : ''}${(((b - a) / a) * 100).toFixed(0)}%` : b ? 'new' : '—');
   return (
+    <>
+    {w && (
+      <div className="table-wrap" data-guide="word-counts">
+        <table>
+          <caption className="table-caption">
+            Words by section: {w.original.toLocaleString('en-AU')} → {w.edited.toLocaleString('en-AU')}
+            {w.limit ? ` (limit ${w.limit.toLocaleString('en-AU')}${w.edited > w.limit ? `, over by ${(w.edited - w.limit).toLocaleString('en-AU')}` : ''})` : ''}
+            {w.referencesExcluded ? ' · reference list not counted' : ''}
+          </caption>
+          <thead><tr><th scope="col">Section</th><th scope="col">Original</th><th scope="col">Edited</th><th scope="col">Change</th></tr></thead>
+          <tbody>
+            {w.sections.map((s) => {
+              const drop = s.original >= 40 && (s.original - s.edited) / s.original > 0.15;
+              return (
+                <tr key={s.title} className={drop ? 'flagged' : ''}>
+                  <th scope="row">{drop && <span title="Lost more than 15% of its words." aria-label="flagged">⚑ </span>}{s.title}</th>
+                  <td>{s.original}</td><td>{s.edited}</td><td>{s.edited - s.original === 0 ? '—' : `${s.edited - s.original > 0 ? '+' : ''}${s.edited - s.original} (${pct(s.original, s.edited)})`}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
     <div className="table-wrap" data-guide="metadata-table">
       <table>
         <thead><tr><th scope="col">Detail</th><th scope="col">Original</th><th scope="col">Edited</th><th scope="col">Difference</th></tr></thead>
@@ -230,6 +256,7 @@ export function MetadataView({ result }: { result: ComparisonResult }) {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

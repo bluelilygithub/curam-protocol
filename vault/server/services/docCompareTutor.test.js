@@ -35,7 +35,9 @@ checkGuide({
   assert.strictEqual(tools.CONTEXT_TYPE, 'doc-compare:context');
   // the start screen's jobs: every step is a real tool, a job starts by comparing, and a filter only names known categories/severities
   const toolIds = tools.DOC_COMPARE_TOOLS.map((t) => t.id);
-  const CATS = ['removed', 'added', 'moved', 'wording', 'typo', 'number', 'formatting', 'layout', 'metadata'];
+  // keep in step with Category in doc-compare/src/report/model.ts
+  const CATS = ['removed', 'added', 'moved', 'wording', 'typo', 'number', 'formatting', 'layout', 'metadata',
+    'newClaim', 'reference', 'citation', 'quote', 'numbering', 'wordLimit', 'spelling', 'terminology', 'requiredHeading', 'versionNumber', 'drift'];
   assert.ok(tools.DOC_COMPARE_GOALS.length >= 4, 'the start screen has jobs');
   for (const g of tools.DOC_COMPARE_GOALS) {
     assert.ok(g.id && g.title && g.blurb && g.icon && g.steps.length >= 2, `${g.id} is described`);

@@ -12,6 +12,13 @@ export const SEVERITY = {
   number: 'high', // any changed number, date, percentage or amount
   wordCountDrop: 'high', // whole document down more than 5%
   sectionWordDrop: 'high', // one section down more than 15% (when no removal there already explains it)
+  newClaim: 'high', // a statistic, quote, citation, link or attribution not in the original (addendum §4)
+  quote: 'high', // a direct quote reworded or removed (§5.2)
+  wordLimit: 'high', // over the word or page limit (§5.4)
+  requiredHeadingMissing: 'high', // §5.6
+  versionBackwards: 'high', // §7.10
+  requiredHeadingOrder: 'medium',
+  versionWarning: 'medium', // version not updated, changed without content change, removed, history table not updated
   // amber
   added: 'medium',
   addedSection: 'medium',

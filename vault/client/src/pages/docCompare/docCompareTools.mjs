@@ -68,6 +68,22 @@ export const DOC_COMPARE_GOALS = [
     ],
   },
   {
+    id: 'invented', title: 'Check for invented facts and quotes', icon: 'search',
+    blurb: 'Statistics, quotes, sources and links the LLM added that are not in your original, and quotes it reworded.',
+    steps: [
+      { tool: 'compare', note: 'Choose the two files, then press Compare.' },
+      { tool: 'changes', note: 'New claims and changed quotes. Check each source exists and says this, or remove it.', filter: { categories: ['newClaim', 'quote'] } },
+    ],
+  },
+  {
+    id: 'limit', title: 'Check it is within the word limit', icon: 'file-text',
+    blurb: 'Set the word limit, then see the total and where the words are, section by section.',
+    steps: [
+      { tool: 'compare', note: 'Type the word limit next to the label, choose the two files, then press Compare.' },
+      { tool: 'metadata', note: 'Words by section, with the total and the limit at the top. Over the limit is also a red item on the verdict.' },
+    ],
+  },
+  {
     id: 'numbers', title: 'Check numbers and dates were not changed', icon: 'hash',
     blurb: 'Amounts, dates, days and clause numbers: any change with a digit in it.',
     steps: [
@@ -104,7 +120,7 @@ export const DOC_COMPARE_GOALS = [
     blurb: 'New sentences, paragraphs and sections: AI edits can add claims that are not in your original.',
     steps: [
       { tool: 'compare', note: 'Choose the two files, then press Compare.' },
-      { tool: 'changes', note: 'Everything that is new in the edited version. Check any figure, quote or source you did not write.', filter: { categories: ['added'] } },
+      { tool: 'changes', note: 'Everything that is new in the edited version, and the claims in it that are not in your original. Check any figure, quote or source you did not write.', filter: { categories: ['added', 'newClaim'] } },
     ],
   },
   {
@@ -169,6 +185,8 @@ export const HOW_IT_WORKS = [
   ['The verdict', 'After comparing you see one of three verdicts. Not ready to submit: a red item (removed content, a changed figure, a big cut) has not been decided, or is marked Fix later. Review recommended: no red items are open, but some amber ones (rewording, added text, structure) are. No significant changes found: only minor changes, or everything is decided. A card for each item says what happened, why it matters and what to do. Restore copies the original text so you can paste it back; Accept records the change was intended; Fix later keeps it open. Your decisions are kept in this browser for these two files, so they are still there if you reload or compare the same files again. The verdict shows what changed; it does not check whether the content is accurate.'],
   ['Reading the results', 'The summary bar counts each kind of change; press one to see only those in Changes. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to see the words that changed (struck through in red for removed, underlined in green for added).'],
   ['Kinds of change', 'Removed and Added: whole paragraphs, sections or table rows. Moved: the same text in a new place. Wording: words changed inside a paragraph (marked High when a large part was dropped). Typo: one small word fix. Number/date: anything with a digit changed. Formatting: headings, lists, bold, italic, fonts and sizes. Layout: PDF pages that look different. Metadata: file size, dates, author and counts, for example a word count that dropped.'],
+  ['New claims and quotes', 'LLMs sometimes invent statistics, quotes and sources. Any statistic (a percentage, an amount, a count, a year), quote, citation such as [3] or (Smith et al., 2021), link, or source ("a 2021 survey by …") in added or changed text that is nowhere in your original is a red New claim: check the source exists and says this, or remove it. A figure that replaced another figure is a Number change instead. A direct quote (four or more words in quotation marks, or a block quote) must match your original exactly: any change, even a corrected typo, is red.'],
+  ['Limits, required headings and versions', 'Set a word limit on the Compare documents screen (and a page limit in Settings): over the limit is red. The reference list is not counted unless you change that in Settings; File details shows the words section by section. In Settings you can paste the headings this submission must have (and save them as a named template): a missing one is red, one out of order is amber. Without a list, every heading in your original counts, and a removed one is already reported. A version number near the start ("Version 1.3", "v1.3", "Rev B", "Draft 4") that did not change although the content did is amber; one that went backwards is red.'],
   ['Trivial changes', 'Differences in spaces, line breaks, curly or straight quotes, dashes and invisible characters are hidden by default but still counted ("7 trivial changes hidden"). Tick that box to show them, or choose in Settings which of them count as trivial.'],
   ['PDF pages', 'For two PDFs, each page is also drawn and compared pixel by pixel after the text results appear. Pages where more than a tiny share changed are listed in PDF pages and as Layout changes. Open one to see the two pages side by side with the changed pixels in red. Very long PDFs (over 500 pages) wait for you to start this step.'],
   ['Review for the author', 'Download review for the author (in PDF report, and on the Comparison done card) makes a PDF to send back to whoever made the edit: every change, whatever filters are set, sorted into Must fix, Please review and Minor. Each item has a tick box, where it is, what to do ("Restore this paragraph", "Check the changed figure: 30 to 60") and the original and edited text, with removed words in red and added words in green.'],
@@ -180,6 +198,9 @@ export const HOW_IT_WORKS = [
 export const GUIDE_TOOLS = [
   { id: 'compare', label: 'Compare documents', tool: 'compare' },
   { id: 'check-label', label: 'Label', tool: 'compare' },
+  { id: 'word-limit', label: 'Word limit', tool: 'compare' },
+  { id: 'word-counts', label: 'Words by section', tool: 'metadata' },
+  { id: 'required-headings', label: 'Required headings', tool: 'settings' },
   { id: 'files', label: 'Original and Edited files', tool: 'compare' },
   { id: 'saved', label: 'Saved checks', tool: 'saved' },
   { id: 'compare-button', label: 'Compare button', tool: 'compare' },

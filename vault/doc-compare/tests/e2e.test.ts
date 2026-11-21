@@ -13,7 +13,8 @@ const file = (f: { name: string; bytes: Uint8Array }) => new File([f.bytes.slice
 
 async function run(f: Fixture) {
   const [a, b] = await readPair(file(f.original), file(f.edited));
-  return { a, b, sim: similarity(a, b), result: compareDocs(a, b, DEFAULT_SETTINGS) };
+  // a fixture can set what a person would set first (a word limit, a list of required headings)
+  return { a, b, sim: similarity(a, b), result: compareDocs(a, b, { ...DEFAULT_SETTINGS, ...(f.expect.settings ?? {}) }) };
 }
 
 // the case list lives in the generator; names are known up front so each gets its own test

@@ -228,6 +228,17 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .verdict-badge-green { color: var(--added); background: var(--added-bg); }
 @media (max-width: 640px) { .saved-list li { grid-template-columns: 1fr; } .saved-status { justify-content: flex-start; } }
 
+/* phase 3: limits, required headings, word counts */
+.field.narrow { flex: 0 0 auto; min-width: 160px; max-width: 200px; }
+.settings-panel h2 { margin: 8px 0 0; font-size: 15px; }
+.settings-panel .headings { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); width: 100%; box-sizing: border-box; resize: vertical; }
+.template-name { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); flex: 1; min-width: 200px; }
+.templates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.templates li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.templates li > span:first-child { flex: 1; }
+.table-caption { caption-side: top; text-align: left; padding: 10px 10px 4px; font-weight: 600; }
+.words-line { margin: 0; font-size: 13px; }
+
 /* the shared themed tooltip (planner-core TooltipHost look="vault"): the same card as Vault's own Tooltip */
 .rp-tooltip { position: fixed; z-index: 70; pointer-events: none; width: max-content; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .btn.icon { padding: 4px 10px; font-size: 16px; line-height: 1.2; }

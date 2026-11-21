@@ -29,7 +29,7 @@ const countImages = (n: unknown): number => {
   return (node.type === 'image' || node.type === 'imageReference' ? 1 : 0) + (node.children ?? []).reduce<number>((s, c) => s + countImages(c), 0);
 };
 
-function walk(nodes: RootContent[], out: RawBlock[], ctx: { table: number; list?: { depth: number; kind: string } }): void {
+function walk(nodes: RootContent[], out: RawBlock[], ctx: { table: number; list?: { depth: number; kind: string }; quote?: boolean }): void {
   for (const n of nodes) {
     // containers (lists, quotes) recurse, so only leaf blocks count their images
     const imgs = n.type === 'heading' || n.type === 'paragraph' || n.type === 'table' ? countImages(n) : 0;
@@ -43,7 +43,7 @@ function walk(nodes: RootContent[], out: RawBlock[], ctx: { table: number; list?
         const runs: Run[] = []; inlineRuns(n.children, {}, runs);
         const text = runsText(runs);
         if (ctx.list) out.push({ type: 'listItem', level: ctx.list.depth, style: ctx.list.kind, text, runs });
-        else if (text.trim()) out.push({ type: 'paragraph', text, runs });
+        else if (text.trim()) out.push({ type: 'paragraph', style: ctx.quote ? 'quote' : undefined, text, runs });
         break;
       }
       case 'list': {
@@ -52,7 +52,7 @@ function walk(nodes: RootContent[], out: RawBlock[], ctx: { table: number; list?
         for (const item of l.children) walk(item.children, out, { ...ctx, list: { depth, kind: l.ordered ? 'ordered list' : 'bullet list' } });
         break;
       }
-      case 'blockquote': walk(n.children, out, ctx); break;
+      case 'blockquote': walk(n.children, out, { ...ctx, quote: true }); break; // its paragraphs are direct quotes (checks/quotes.ts)
       case 'code': out.push({ type: 'other', style: `code${n.lang ? `:${n.lang}` : ''}`, text: n.value, runs: [{ text: n.value, font: 'monospace' }] }); break;
       case 'html': if (n.value.trim()) out.push({ type: 'other', style: 'html', text: n.value, runs: [{ text: n.value }] }); break;
       case 'thematicBreak': break;

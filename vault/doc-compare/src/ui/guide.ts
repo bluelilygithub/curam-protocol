@@ -39,7 +39,12 @@ export function openGuideTool(id: string, h: GuideHooks): boolean {
     switch (id) {
       case 'files':
       case 'check-label':
+      case 'word-limit':
+      case 'required-headings':
       case 'compare-button': h.show(id); break;
+      case 'word-counts':
+        if (!h.hasResults()) h.toast(RESULTS_FIRST); else h.show(id);
+        break;
       case 'author-report':
         if (!h.hasResults()) h.toast(RESULTS_FIRST); else h.show(id);
         break;

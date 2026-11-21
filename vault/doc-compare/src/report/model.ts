@@ -45,10 +45,20 @@ export interface SimilarityResult {
   reasons: string[];
 }
 
+/** Word counts (addendum §5.4): totals and per section, reference list left out when Settings says so. */
+export interface WordCounts {
+  original: number;
+  edited: number;
+  limit: number | null;
+  referencesExcluded: boolean;
+  sections: { title: string; original: number; edited: number }[];
+}
+
 export interface ComparisonResult {
   changes: Change[];
   trivialCount: number;
   metadata: MetaRow[];
+  words?: WordCounts;
 }
 
 export const CATEGORY_LABEL: Record<Category, string> = {

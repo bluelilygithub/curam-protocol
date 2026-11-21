@@ -58,6 +58,9 @@ const WP = [
   { p: '[2] NSW Department of Communities and Justice (2023), Rent and Sales Report, Issue 145.' },
 ];
 
+/** The white paper with a version line under the title (addendum §7.10). */
+const VWP = [WP[0], { p: 'Version 1.2, November 2023. Prepared by the policy team.' }, ...WP.slice(1)];
+
 const clone = (m) => structuredClone(m);
 const idx = (m, pred) => m.findIndex(pred);
 const paraWith = (m, s) => idx(m, (x) => 'p' in x && x.p.includes(s));
@@ -82,6 +85,15 @@ const CASES = [
   { name: 'uc03-heading-removed', base: WP, formats: ['docx', 'md'], edit: (m) => { m.splice(idx(m, (x) => x.text === '2. Evidence'), 1); return m; }, expect: ['removed'] },
   { name: 'uc07-table-row-lost', base: WP, formats: ['docx', 'md'], edit: (m) => { m[idx(m, (x) => 'table' in x)].table.splice(2, 1); return m; }, expect: ['removed'] },
   { name: 'uc09-heading-level', base: WP, formats: ['docx', 'md', 'pdf'], edit: (m) => { m[idx(m, (x) => x.text === '3. Recommendations')].h = 3; return m; }, expect: ['formatting'] },
+  // ---- phase 3: new claims, quotes, limits, required headings, version numbers ----
+  { name: 'uc04-invented-claims', base: WP, formats: ['docx', 'md'], edit: (m) => { m.splice(paraWith(m, 'Around 42%') + 1, 0, { p: 'A 2021 survey by the Housing Research Centre found that 67% of renters had moved at least twice, and one landlord said "the market simply cannot keep up with demand" (Smith et al., 2021).' }); return m; }, expect: ['added', 'newClaim', 'newClaim', 'newClaim', 'newClaim'] },
+  { name: 'uc04-statistic-inserted', base: WP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'These figures cover'); m[i].p = m[i].p.replace('social housing,', 'social housing, which houses about 85,000 households across the state,'); return m; }, expect: ['wording', 'newClaim'] },
+  { name: 'uc05-quote-changed', base: WP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'One tenant told us'); m[i].p = m[i].p.replace('every lease ended', 'each lease ended'); return m; }, expect: ['wording', 'quote'] },
+  { name: 'uc06-over-word-limit', base: WP, formats: ['docx', 'md'], settings: { wordLimit: 250 }, edit: (m) => m, expect: ['wordLimit'] },
+  { name: 'uc03-required-heading-missing', base: WP, formats: ['docx', 'md'], settings: { requiredHeadings: ['Background', 'Evidence', 'Recommendations', 'Costings'] }, edit: (m) => m, expect: ['requiredHeading'] },
+  { name: 'uc03-required-heading-order', base: WP, formats: ['md'], settings: { requiredHeadings: ['2. Evidence', '1. Background'] }, edit: (m) => m, expect: ['requiredHeading'] },
+  { name: 'uc11-version-not-updated', base: VWP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'Around 42%'); m[i].p = m[i].p.replace('42%', '24%'); return m; }, expect: ['number', 'versionNumber'] },
+  { name: 'uc11-version-backwards', base: VWP, formats: ['docx', 'md'], edit: (m) => { const i = paraWith(m, 'Version 1.2'); m[i].p = m[i].p.replace('1.2', '1.1'); return m; }, expect: ['number', 'versionNumber'] },
   { name: 'whitespace-quotes', formats: ['docx', 'md', 'txt'], trivial: true, edit: (m) => m.map((x) => ('p' in x ? { ...x, p: x.p.replace(/'/g, '’').replace(/, /g, ',  ').replace('each review', 'each review') + '  ' } : x)), expect: [] },
 ];
 
@@ -176,7 +188,7 @@ const WRITERS = { txt: async (m) => new TextEncoder().encode(toTxt(m)), md: asyn
 
 /**
  * @returns {Promise<{ name: string, type: string, original: { name: string, bytes: Uint8Array }, edited: { name: string, bytes: Uint8Array },
- *   expect: { categories: string[], trivial?: boolean, redMeta?: string[], gate?: 'type-mismatch' | 'similarity' } }[]>}
+ *   expect: { categories: string[], trivial?: boolean, redMeta?: string[], settings?: Partial<import('../../src/settings').Settings>, gate?: 'type-mismatch' | 'similarity' } }[]>}
  */
 export async function buildFixtures() {
   const out = [];
@@ -184,7 +196,7 @@ export async function buildFixtures() {
     for (const type of c.formats) {
       const orig = (c.original ?? ((m) => m))(clone(c.base ?? BASE));
       const edited = c.edit(clone(orig));
-      out.push({ name: `${c.name}.${type}`, type, original: { name: `original.${type}`, bytes: await WRITERS[type](orig) }, edited: { name: `edited.${type}`, bytes: await WRITERS[type](edited) }, expect: { categories: c.expect, trivial: !!c.trivial, redMeta: c.redMeta ?? [] } });
+      out.push({ name: `${c.name}.${type}`, type, original: { name: `original.${type}`, bytes: await WRITERS[type](orig) }, edited: { name: `edited.${type}`, bytes: await WRITERS[type](edited) }, expect: { categories: c.expect, trivial: !!c.trivial, redMeta: c.redMeta ?? [], settings: c.settings } });
     }
   }
   for (const type of ['md', 'docx']) {

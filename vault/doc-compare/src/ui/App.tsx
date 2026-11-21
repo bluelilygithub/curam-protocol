@@ -188,7 +188,7 @@ export function App() {
     const id = runId.current;
     compareInWorker(docs[0], docs[1], settings).then((r) => { if (id === runId.current) setResult(r); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.trivial, settings.fileSizeChangePct, settings.wordCountDropPct]);
+  }, [settings.trivial, settings.fileSizeChangePct, settings.wordCountDropPct, settings.wordLimit, settings.pageLimit, settings.excludeReferences, settings.requiredHeadings]);
 
   useEffect(() => () => pdfPair.current?.destroy(), []);
 
@@ -322,6 +322,11 @@ export function App() {
                 <input value={label} onChange={(ev) => setLabel(ev.target.value)} placeholder="e.g. Housing submission, draft 3" maxLength={120}
                   title="A name for this check, so you can find it again in Saved checks. Leave it empty to use the edited file's name and today's date." />
               </label>
+              <label className="field narrow" data-guide="word-limit">Word limit (optional)
+                <input type="number" min={1} step={50} value={settings.wordLimit ?? ''} placeholder="e.g. 3000"
+                  onChange={(ev) => { const n = Number(ev.target.value); setSettings({ ...settings, wordLimit: ev.target.value && n > 0 ? Math.round(n) : null }); }}
+                  title="The submission's word limit. If the edited version is over it, that is a red item. The reference list is not counted (change this in Settings)." />
+              </label>
               {savedId && <span className="muted small">Saved as "{checks.find((c) => c.id === savedId)?.label ?? label}" · <button className="link" onClick={() => setView('saved')} title="See all your saved checks.">Saved checks</button></span>}
               {!savedId && checks.length > 0 && <button className="link" onClick={() => setView('saved')} title="Open a check you ran before.">Open a saved check ({checks.length})</button>}
             </div>
@@ -367,6 +372,7 @@ export function App() {
         {view === 'review' && (hasResults ? (
           <ReviewView
             changes={all}
+            words={result!.words}
             decisions={decisions}
             persistent={!!store?.persistent}
             onDecide={decide}

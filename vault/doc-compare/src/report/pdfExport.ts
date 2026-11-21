@@ -67,6 +67,8 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   y += 6;
   const p = progress(items);
   line(`Decisions: ${decisionsSummary(items)} (${p.decided} of ${p.total} decided).`, 10, true);
+  const w = x.result.words;
+  if (w) line(`Words: ${w.original.toLocaleString('en-AU')} in the original, ${w.edited.toLocaleString('en-AU')} in the edited version${w.limit ? `; limit ${w.limit.toLocaleString('en-AU')}${w.edited > w.limit ? ` (over by ${(w.edited - w.limit).toLocaleString('en-AU')})` : ' (within the limit)'}` : ''}${w.referencesExcluded ? '; reference list not counted' : ''}.`, 10);
   y += 8;
   if (items.length) {
     line('Items to decide', 12, true);
