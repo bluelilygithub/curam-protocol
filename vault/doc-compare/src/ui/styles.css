@@ -202,6 +202,32 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .decision-restore, .decision-accept { color: var(--added); background: var(--added-bg); }
 .decision-later { color: var(--warn); background: var(--warn-bg); }
 
+/* label and saved checks */
+.label-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+.label-row .field { flex: 1; min-width: 240px; max-width: 520px; }
+.label-row .field input { max-width: none; width: 100%; box-sizing: border-box; }
+.saved { display: flex; flex-direction: column; gap: 10px; }
+.saved-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.saved-bar input[type="search"] { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); flex: 1; min-width: 220px; max-width: 420px; }
+.saved-bar .btn { margin-left: auto; }
+.saved p { margin: 0; }
+.saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.saved-list li { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 14px; }
+.saved-list li.current { border-color: var(--color-primary); }
+.saved-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.saved-label { font-weight: 600; font-size: 15px; text-align: left; color: var(--color-text); word-break: break-word; }
+.link-plain { background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; transition: opacity 200ms; }
+.link-plain:hover { opacity: 0.7; }
+.saved-status { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.saved-actions { grid-column: 1 / -1; }
+.rename { font: inherit; font-size: 15px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--color-primary); background: var(--color-bg); color: var(--color-text); }
+.confirm { gap: 6px; }
+.btn.danger { background: #ef4444; border-color: #ef4444; color: #fff; }
+.verdict-badge-red { color: var(--removed); background: var(--removed-bg); }
+.verdict-badge-amber { color: var(--warn); background: var(--warn-bg); }
+.verdict-badge-green { color: var(--added); background: var(--added-bg); }
+@media (max-width: 640px) { .saved-list li { grid-template-columns: 1fr; } .saved-status { justify-content: flex-start; } }
+
 /* the shared themed tooltip (planner-core TooltipHost look="vault"): the same card as Vault's own Tooltip */
 .rp-tooltip { position: fixed; z-index: 70; pointer-events: none; width: max-content; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .btn.icon { padding: 4px 10px; font-size: 16px; line-height: 1.2; }

@@ -8,7 +8,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_doc_compare_completed';
 
-const TOTAL_STEPS = 13;
+const TOTAL_STEPS = 14;
 
 // Shepherd keeps earlier cards in the page (hidden), so the counter goes into this step's own card, not the first one found.
 function injectStepCounter(stepIndex, card) {
@@ -94,6 +94,10 @@ export function startDocCompareTour(goTool) {
   step('dc-compare', 'Compare documents',
     'Drop the original on the left and the AI-edited version on the right, or press Choose file. Both must be the same type: PDF, Word (.docx), Markdown or plain text. Then press Compare.',
     FRAME, 'compare', 'top');
+
+  step('dc-saved', 'Label it and come back later',
+    'Type a label above the file boxes (optional). Every check is saved in this browser under that label, with both files and your decisions. Saved checks lists them: search by label or file name, open one to pick up where you left off, rename it, or delete it.',
+    FRAME, 'saved', 'top');
 
   step('dc-checks', 'Two checks first',
     'DocCompare stops if the two files are different types, and warns (with Compare anyway) if they look like different documents. When it finishes, a summary of what changed appears here, with buttons to every result.',

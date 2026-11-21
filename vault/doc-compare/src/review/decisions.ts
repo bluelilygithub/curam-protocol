@@ -1,3 +1,4 @@
+import { run } from './db';
 import type { Decisions } from './verdict';
 
 /**
@@ -9,49 +10,34 @@ import type { Decisions } from './verdict';
 export interface DecisionStore {
   load(pairKey: string): Promise<Decisions>;
   save(pairKey: string, decisions: Decisions): Promise<void>;
+  remove(pairKey: string): Promise<void>;
   persistent: boolean;
 }
 
-const DB = 'doc-compare';
-const STORE = 'decisions';
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
 export function indexedDbStore(): DecisionStore {
-  let db: Promise<IDBDatabase> | undefined;
-  const get = () => (db ??= openDb());
   return {
     persistent: true,
     async load(pairKey) {
-      const d = await get();
-      return new Promise((resolve, reject) => {
-        const req = d.transaction(STORE, 'readonly').objectStore(STORE).get(pairKey);
-        req.onsuccess = () => resolve((req.result as { decisions?: Decisions } | undefined)?.decisions ?? {});
-        req.onerror = () => reject(req.error);
-      });
+      const r = await run<{ decisions?: Decisions } | undefined>('decisions', 'readonly', (s) => s.get(pairKey));
+      return r?.decisions ?? {};
     },
     async save(pairKey, decisions) {
-      const d = await get();
-      return new Promise((resolve, reject) => {
-        const tx = d.transaction(STORE, 'readwrite');
-        tx.objectStore(STORE).put({ decisions, savedAt: new Date().toISOString() }, pairKey);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
+      await run('decisions', 'readwrite', (s) => s.put({ decisions, savedAt: new Date().toISOString() }, pairKey));
+    },
+    async remove(pairKey) {
+      await run('decisions', 'readwrite', (s) => s.delete(pairKey));
     },
   };
 }
 
 export function memoryStore(): DecisionStore {
   const m = new Map<string, Decisions>();
-  return { persistent: false, async load(k) { return { ...(m.get(k) ?? {}) }; }, async save(k, d) { m.set(k, { ...d }); } };
+  return {
+    persistent: false,
+    async load(k) { return { ...(m.get(k) ?? {}) }; },
+    async save(k, d) { m.set(k, { ...d }); },
+    async remove(k) { m.delete(k); },
+  };
 }
 
 /** IndexedDB when this browser allows it, else memory. */

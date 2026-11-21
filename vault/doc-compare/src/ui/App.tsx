@@ -16,7 +16,9 @@ import { AuthorReviewButton, ChangesView, EmptyView, MetadataView, PagesView, Re
 import { SettingsPanel } from './SettingsDrawer';
 import { ReviewView } from './ReviewView';
 import { defaultStore, pairKeyOf, type DecisionStore } from '../review/decisions';
-import type { Decision, Decisions } from '../review/verdict';
+import { progress, reviewItems, verdictOf, type Decision, type Decisions } from '../review/verdict';
+import { defaultChecks, toFile, upsertCheck, type CheckStore, type SavedCheck } from '../review/savedChecks';
+import { SavedChecksView } from './SavedChecksView';
 
 type Phase = 'idle' | 'reading' | 'similarity' | 'gate2' | 'comparing' | 'done';
 
@@ -59,6 +61,13 @@ export function App() {
   const [pairKey, setPairKey] = useState<string>();
   const [decisions, setDecisions] = useState<Decisions>({});
   useEffect(() => { void defaultStore().then(setStore); }, []);
+  // saved checks: every comparison, with a label, kept in this browser so it can be opened again
+  const [checkStore, setCheckStore] = useState<CheckStore>();
+  const [checks, setChecks] = useState<SavedCheck[]>([]);
+  const [savedId, setSavedId] = useState<string>();
+  const [label, setLabel] = useState('');
+  const refreshChecks = async (s = checkStore) => { if (s) setChecks(await s.list().catch(() => [])); };
+  useEffect(() => { void defaultChecks().then((s) => { setCheckStore(s); void refreshChecks(s); }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const decide = (key: string, d: Decision | null) => {
     setDecisions((prev) => {
       const next = { ...prev };
@@ -90,15 +99,24 @@ export function App() {
     setLayout({ status: 'off', done: 0, total: 0, pages: [] }); setViewerPage(undefined);
   };
 
-  const pick = (which: 'original' | 'edited', f: File | undefined) => { reset(); (which === 'original' ? setOriginal : setEdited)(f); };
-
-  async function start() {
-    if (!original || !edited) return;
+  // a new file after a saved check means a new check: its label must not carry over (a label typed before choosing files is kept)
+  const pick = (which: 'original' | 'edited', f: File | undefined) => {
     reset();
+    if (savedId) { setSavedId(undefined); setLabel(''); }
+    (which === 'original' ? setOriginal : setEdited)(f);
+  };
+
+  // the two files of the comparison in progress (a saved check is opened and compared in one click, before state updates land)
+  const filesRef = useRef<[File, File]>(undefined);
+
+  async function start(o = original, e = edited) {
+    if (!o || !e) return;
+    reset();
+    filesRef.current = [o, e];
     const id = runId.current;
     try {
       setPhase('reading');
-      const pair = await readPair(original, edited);
+      const pair = await readPair(o, e);
       if (id !== runId.current) return;
       setDocs(pair);
       setPhase('similarity');
@@ -119,10 +137,11 @@ export function App() {
     const r = await compareInWorker(pair[0], pair[1], settings);
     if (id !== runId.current) return;
     // earlier decisions for these exact two files (same hashes), so a reload or a re-run keeps them
+    const [o, e] = filesRef.current!;
     let saved: Decisions = {};
     let key: string | undefined;
     try {
-      key = await pairKeyOf(original!, edited!);
+      key = await pairKeyOf(o, e);
       if (store) saved = await store.load(key);
     } catch { /* decisions start empty */ }
     if (id !== runId.current) return;
@@ -130,6 +149,14 @@ export function App() {
     setDecisions(saved);
     setResult(r);
     setPhase('done');
+    // every comparison is saved with its label, so it can be found and opened again (one saved check per pair of files)
+    if (key && checkStore) {
+      try {
+        const c = await upsertCheck(checkStore, { pairKey: key, label, original: o, edited: e, sourceType: pair[0].sourceType });
+        setSavedId(c.id); setLabel(c.label);
+        void refreshChecks();
+      } catch { say('This check could not be saved in this browser.'); }
+    }
     if (!embedded) setView('review'); // verdict first (inside Vault, the page around the app picks the next tool)
     if (pair[0].sourceType === 'pdf' && pair[0].pages && pair[1].pages) {
       const big = Math.max(pair[0].pages.length, pair[1].pages.length) > settings.maxPagesForLayout;
@@ -139,12 +166,13 @@ export function App() {
   }
 
   async function runLayout(pair = docs!, id = runId.current) {
-    if (!original || !edited) return;
+    const files = filesRef.current;
+    if (!files) return;
     const pages = alignPages(pair[0].pages!, pair[1].pages!);
     setLayout({ status: 'running', done: 0, total: pages.length, pages: [] });
     layoutSignal.current = { cancelled: false };
     try {
-      pdfPair.current ??= await PdfPair.open(original, edited);
+      pdfPair.current ??= await PdfPair.open(files[0], files[1]);
       const out = await compareLayout(pdfPair.current, pages, settings.layoutPixelRatio, (done, total) => { if (id === runId.current) setLayout((l) => ({ ...l, done, total })); }, layoutSignal.current);
       if (id === runId.current) setLayout({ status: 'done', done: pages.length, total: pages.length, pages: out });
     } catch (e) {
@@ -178,6 +206,42 @@ export function App() {
 
   const all = useMemo(() => [...(result?.changes ?? []), ...layoutChanges], [result, layoutChanges]);
   const filters = useChangeFilters(all, settings.showTrivial);
+
+  // keep the saved check's verdict and progress in step with the decisions, for the Saved checks list
+  useEffect(() => {
+    if (!checkStore || !savedId || phase !== 'done' || !result) return;
+    const items = reviewItems(all, decisions);
+    const p = progress(items);
+    const verdict = verdictOf(items);
+    const counts = { red: items.filter((i) => i.tier === 'red').length, amber: items.filter((i) => i.tier === 'amber').length, decided: p.decided, total: p.total };
+    void checkStore.get(savedId).then(async (c) => {
+      if (!c || (c.verdict === verdict && JSON.stringify(c.counts) === JSON.stringify(counts))) return;
+      await checkStore.put({ ...c, verdict, counts });
+      void refreshChecks();
+    }).catch(() => {});
+  }, [decisions, result, savedId, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openSaved = (c: SavedCheck) => {
+    const o = toFile(c.original), e = toFile(c.edited);
+    setOriginal(o); setEdited(e); setLabel(c.label); setSavedId(c.id);
+    setView('compare');
+    void start(o, e);
+  };
+  const renameSaved = async (c: SavedCheck, newLabel: string) => {
+    if (!checkStore) return;
+    await checkStore.put({ ...c, label: newLabel });
+    if (c.id === savedId) setLabel(newLabel);
+    void refreshChecks();
+    say(`Renamed to "${newLabel}".`);
+  };
+  const deleteSaved = async (c: SavedCheck) => {
+    if (!checkStore) return;
+    await checkStore.remove(c.id);
+    await store?.remove(c.pairKey).catch(() => {});
+    if (c.id === savedId) setSavedId(undefined);
+    void refreshChecks();
+    say(`Deleted "${c.label}" and its decisions from this browser.`);
+  };
 
   const busy = phase === 'reading' || phase === 'similarity' || phase === 'comparing';
   const stage = { reading: 'Reading both files…', similarity: 'Checking they are the same document…', comparing: 'Comparing content and formatting…' }[phase as 'reading'];
@@ -238,7 +302,7 @@ export function App() {
             <p className="muted">Compare an original document with an LLM-edited version and catch anything it skipped or changed.</p>
           </div>
           <div className="top-actions">
-            <span className="privacy" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded, sent to an AI model or saved.">🔒 Files never leave your computer</span>
+            <span className="privacy" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded or sent to an AI model; each check is saved in this browser only.">🔒 Files never leave your computer</span>
             <button className="btn icon" onClick={() => setInfoOpen(true)} aria-label="How DocCompare works" title="How DocCompare works: what it checks, how to read the results, and what it cannot do.">ⓘ</button>
           </div>
           <nav className="tabs" aria-label="Tools">
@@ -248,17 +312,25 @@ export function App() {
           </nav>
         </header>
       )}
-      {embedded && <span className="privacy privacy-embedded" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded, sent to an AI model or saved.">🔒 Files never leave your computer</span>}
+      {embedded && <span className="privacy privacy-embedded" tabIndex={0} title="Both files are read and compared inside this browser tab. Nothing is uploaded or sent to an AI model; each check is saved in this browser only.">🔒 Files never leave your computer</span>}
 
       <main data-guide={view}>
         {view === 'compare' && (
           <>
+            <div className="label-row" data-guide="check-label">
+              <label className="field">Label (optional)
+                <input value={label} onChange={(ev) => setLabel(ev.target.value)} placeholder="e.g. Housing submission, draft 3" maxLength={120}
+                  title="A name for this check, so you can find it again in Saved checks. Leave it empty to use the edited file's name and today's date." />
+              </label>
+              {savedId && <span className="muted small">Saved as "{checks.find((c) => c.id === savedId)?.label ?? label}" · <button className="link" onClick={() => setView('saved')} title="See all your saved checks.">Saved checks</button></span>}
+              {!savedId && checks.length > 0 && <button className="link" onClick={() => setView('saved')} title="Open a check you ran before.">Open a saved check ({checks.length})</button>}
+            </div>
             <section className="drops" aria-label="Files to compare" data-guide="files">
               <DropZone label="Original" hint="The document before the AI edited it." file={original} onFile={(f) => pick('original', f)} />
               <DropZone label="Edited (LLM output)" hint="The version the AI produced." file={edited} onFile={(f) => pick('edited', f)} />
             </section>
             <div className="compare-row" data-guide="compare-button">
-              <button className="btn primary" disabled={!original || !edited || busy} onClick={start} title={!original || !edited ? 'Choose both files first.' : 'Compare the two files. Nothing leaves this browser tab.'}>{busy ? 'Comparing…' : hasResults ? 'Compare again' : 'Compare'}</button>
+              <button className="btn primary" disabled={!original || !edited || busy} onClick={() => void start()} title={!original || !edited ? 'Choose both files first.' : 'Compare the two files. Nothing leaves this browser tab.'}>{busy ? 'Comparing…' : hasResults ? 'Compare again' : 'Compare'}</button>
               {busy && <span className="progress" role="status" aria-live="polite"><span className="spinner" aria-hidden="true" />{stage}</span>}
             </div>
             {error && <div className="gate gate-stop" role="alert" data-guide="file-check"><strong>Can't compare these files.</strong> {error}</div>}
@@ -323,6 +395,18 @@ export function App() {
         ) : needResults('Nothing to report yet'))}
 
         {view === 'settings' && <SettingsPanel settings={settings} onChange={setSettings} />}
+
+        {view === 'saved' && (
+          <SavedChecksView
+            checks={checks}
+            currentId={savedId}
+            persistent={!!checkStore?.persistent}
+            onOpen={openSaved}
+            onRename={(c, l) => void renameSaved(c, l)}
+            onDelete={(c) => void deleteSaved(c)}
+            onNew={() => { pick('original', undefined); setEdited(undefined); setLabel(''); setView('compare'); }}
+          />
+        )}
       </main>
 
       {viewerPage !== undefined && pdfPair.current && (

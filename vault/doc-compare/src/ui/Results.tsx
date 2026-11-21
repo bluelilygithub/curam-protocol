@@ -8,7 +8,7 @@ import { SEVERITY_RANK } from '../report/severity';
 import type { Settings } from '../settings';
 
 type SortKey = 'id' | 'location' | 'category' | 'severity';
-export type ViewId = 'compare' | 'review' | 'changes' | 'metadata' | 'pages' | 'report' | 'settings';
+export type ViewId = 'compare' | 'saved' | 'review' | 'changes' | 'metadata' | 'pages' | 'report' | 'settings';
 export interface FilterPreset { categories?: string[]; severities?: string[] }
 
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];

@@ -7,6 +7,7 @@
 
 export const DOC_COMPARE_TOOLS = [
   { id: 'compare', label: 'Compare documents', group: 'Compare', icon: 'compare' },
+  { id: 'saved', label: 'Saved checks', group: 'Compare', icon: 'history' },
   { id: 'review', label: 'Verdict and review', group: 'Results', icon: 'shield' },
   { id: 'changes', label: 'All changes', group: 'Results', icon: 'list-checks' },
   { id: 'metadata', label: 'File details', group: 'Results', icon: 'file-text' },
@@ -18,13 +19,14 @@ export const DOC_COMPARE_TOOLS = [
 export const GROUPS = ['Compare', 'Results', 'Share and set up'];
 
 export const GROUP_TIPS = {
-  Compare: 'Choose the original and the AI-edited file and compare them. Your files never leave your computer.',
+  Compare: 'Choose the original and the AI-edited file and compare them, or open a check you saved before. Your files never leave your computer.',
   Results: 'Is it ready? The verdict and the items to decide first; then every change in a table, the file details, and (for PDFs) the pages side by side.',
   'Share and set up': 'Download a report of the comparison, and choose what counts as a change.',
 };
 
 export const TOOL_TIPS = {
   compare: 'Drop in the original and the AI-edited version (PDF, Word, Markdown or text) and press Compare. Two checks run first: the files must be the same type, and they should look like versions of the same document.',
+  saved: 'Every check you run is saved here with its label: search by label or file name, open one to come back to it (your decisions come back too), rename it, or delete it. Kept in this browser only.',
   review: 'The verdict (Not ready to submit, Review recommended, or No significant changes found) and a card for each change you need to decide: Restore, Accept or Fix later. Your decisions are kept in this browser.',
   changes: 'Every change in one table, including the minor ones: removed, added, moved, wording, typos, numbers and dates, formatting and layout, with severity. Filter, search, sort, and open a row to see the exact words that changed.',
   metadata: 'The two files\' details side by side (size, dates, author, and counts of pages, words, headings, tables and images), with anything suspicious flagged, such as a word count that dropped.',
@@ -35,6 +37,7 @@ export const TOOL_TIPS = {
 
 export const TOOL_BLURBS = {
   compare: 'Choose the original and the edited file, then press Compare.',
+  saved: 'Find, open, rename or delete the checks you have run.',
   review: 'Is it ready to submit? Decide each change that matters, most serious first.',
   changes: 'Every difference between the two files, including the minor ones.',
   metadata: 'Size, dates, author and counts for both files, with suspicious changes flagged.',
@@ -158,9 +161,10 @@ export const DOC_COMPARE_GOALS = [
 // The longer text for the (i) "How DocCompare works" box, shown once per browser and from the (i) button.
 export const HOW_IT_WORKS = [
   ['What it is for', 'When an AI edits a document it sometimes drops a paragraph, changes a number or quietly rewords a sentence. DocCompare puts the original and the edited version side by side and lists every difference, with missing content shown first and most prominently.'],
-  ['Your files stay on your computer', 'Both files are read and compared inside this browser tab. Nothing is uploaded, nothing is sent to an AI model, and nothing is saved. Leave the page and the comparison is gone, so download the PDF report if you want to keep it.'],
-  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation. The compass beside the title runs a 13-step guided tour (also in Settings, DocCompare Tour).'],
+  ['Your files stay on your computer', 'Both files are read and compared inside this browser tab. Nothing is uploaded and nothing is sent to an AI model. Each check is saved in this browser only (Saved checks), so it is there when you come back on this computer, and gone if you delete it or clear this browser\'s site data. Download the PDF report to keep a copy anywhere else.'],
+  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation. The compass beside the title runs a 14-step guided tour (also in Settings, DocCompare Tour).'],
   ['Choosing files', 'In Compare documents, drop a file on Original and another on Edited (LLM output), or press Choose file. Both must be the same type: PDF, Word (.docx), Markdown (.md) or plain text (.txt). Old Word .doc files must be saved as .docx first. A scanned PDF with no text in it cannot be read, and a password-protected PDF must be unlocked first.'],
+  ['Labels and saved checks', 'Type a label above the two file boxes (optional; otherwise the edited file name and the date are used). Every comparison is then saved under that label, with both files and your decisions, in this browser. Saved checks lists them, newest first: search by label or file name, Open one to come back to it (the comparison runs again and your decisions come back), Rename it, or Delete it (it asks Yes or No, and removes the files and decisions too). Comparing the same two files again updates the same saved check instead of adding a copy. Nothing is uploaded, so another browser or computer will not see them, and clearing this browser\'s site data removes them.'],
   ['The two checks before comparing', 'First, the file types must match, or DocCompare stops and says why. Second, it scores how alike the two files are (0 to 100, from matching headings, shared wording and structure). Below the threshold in Settings (60 unless changed) it warns that they may not be versions of the same document, lists the reasons, and lets you Cancel or Compare anyway. Compare anyway is noted in the report.'],
   ['The verdict', 'After comparing you see one of three verdicts. Not ready to submit: a red item (removed content, a changed figure, a big cut) has not been decided, or is marked Fix later. Review recommended: no red items are open, but some amber ones (rewording, added text, structure) are. No significant changes found: only minor changes, or everything is decided. A card for each item says what happened, why it matters and what to do. Restore copies the original text so you can paste it back; Accept records the change was intended; Fix later keeps it open. Your decisions are kept in this browser for these two files, so they are still there if you reload or compare the same files again. The verdict shows what changed; it does not check whether the content is accurate.'],
   ['Reading the results', 'The summary bar counts each kind of change; press one to see only those in Changes. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to see the words that changed (struck through in red for removed, underlined in green for added).'],
@@ -175,7 +179,9 @@ export const HOW_IT_WORKS = [
 // Everything the guide can point at: the six tools plus the parts inside them. `tool` is the tool (view) the Open button shows.
 export const GUIDE_TOOLS = [
   { id: 'compare', label: 'Compare documents', tool: 'compare' },
+  { id: 'check-label', label: 'Label', tool: 'compare' },
   { id: 'files', label: 'Original and Edited files', tool: 'compare' },
+  { id: 'saved', label: 'Saved checks', tool: 'saved' },
   { id: 'compare-button', label: 'Compare button', tool: 'compare' },
   { id: 'file-check', label: 'File type check', tool: 'compare' },
   { id: 'same-document', label: 'Same-document check', tool: 'compare' },

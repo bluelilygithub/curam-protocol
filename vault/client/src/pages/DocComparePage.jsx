@@ -200,6 +200,11 @@ export default function DocComparePage() {
                   <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
                     Compare the LLM-edited version with your original. You get a verdict, and a card for each change that matters: restore it, accept it, or fix it later.
                   </p>
+                  <Tooltip text="Every check you run is saved in this browser with its label. Find one, open it again, rename it or delete it.">
+                    <button type="button" onClick={() => openTool('saved')} className="text-sm mt-2 underline transition-opacity hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+                      Or open a saved check
+                    </button>
+                  </Tooltip>
                 </div>
                 <Tooltip text="Choose your original and the edited version, compare them, and see the verdict and the changes to decide.">
                   <button type="button" onClick={() => startGoal(CHECK_GOAL)} className="px-6 py-3 rounded-xl text-base font-semibold transition-opacity hover:opacity-80"
