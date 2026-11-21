@@ -150,7 +150,9 @@ export default function DocComparePage() {
   }
 
   const hintFor = (id) => {
-    if (id === 'compare' || id === 'settings') return undefined;
+    // places to start from: open a project or a saved check before anything is compared
+    if (id === 'compare' || id === 'settings' || id === 'projects' || id === 'saved') return undefined;
+    if (id === 'timeline' && !app.results) return 'Open or start a project first';
     if (!app.results) return 'Compare two files first';
     if (id === 'pages' && !app.pdf) return 'PDF files only';
     return undefined;
