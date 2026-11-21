@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "243b00d4",
+   "fullHash": "243b00d4f31d348ea0a81b24fbc7fa41af87d465",
+   "committedAt": "2026-11-22T07:05:23+10:00",
+   "author": "mrb",
+   "area": "DocCompare",
+   "subject": "DocCompare tour: Projects and Timeline steps",
+   "filesChanged": 5,
+   "insertions": 13,
+   "deletions": 5,
+   "goal": "Show people in the guided tour how to check a document over several drafts with projects, rounds and the timeline.",
+   "whatChanged": "The DocCompare tour gains two steps. \"Projects: every draft against your original\" (step 7, after saved checks) shows the Projects screen and explains \"Save this as your original?\", adding the latest version as the next round, and Export / Import. \"Rounds and the timeline\" (step 10, after the verdict) shows Timeline and explains the round summary, the card notes (New in this round, Not fixed, Changed again), Resolved, the timeline table, making the latest round the new original and compacting old rounds. The tour is now 17 steps; the count is updated in the Settings tour list, the (i) box, the guide catalogue and docs/doc-compare.md.",
+   "filesImpacted": [
+    "client/src/utils/tours/docCompareTour.js",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "server/services/docCompareTutor.js",
+    "docs/doc-compare.md"
+   ],
+   "benefit": "Projects, the biggest addition to DocCompare, can now be found from the tour.",
+   "concerns": "On a fresh page the Timeline step shows Timeline's \"No project open\" message behind the card, as no project is open. Checked in the real local Vault (production build): all 17 steps with \"Step n of 17\", the Projects and Timeline steps on their screens, no page errors."
+  },
+  {
    "author": "mrb",
    "area": "DocCompare",
    "commit": "5e2a0d99",
