@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { itemKey, type Decisions } from '../review/verdict';
 import { describe } from './messages';
 import { CATEGORY_LABEL, type Change, type Severity } from './model';
 import { latin1 } from './pdfExport';
@@ -12,11 +13,14 @@ import { latin1 } from './pdfExport';
 // the wording of every instruction lives in the message catalogue (messages.ts)
 export { actionFor } from './messages';
 
-/** The items the author gets: every non-trivial change, plus only the metadata flags worth acting on. Most serious first, then document order. */
-export function authorItems(changes: Change[]): Change[] {
+/**
+ * The items the author gets: every non-trivial change, plus only the file-detail flags worth acting on, minus the changes the person
+ * accepted in the review (they were intended, so there is nothing for the author to do). Most serious first, then document order.
+ */
+export function authorItems(changes: Change[], decisions: Decisions = {}): Change[] {
   const rank: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
   return changes
-    .filter((c) => !c.trivial && (c.category !== 'metadata' || c.severity !== 'low'))
+    .filter((c) => !c.trivial && (c.category !== 'metadata' || c.severity !== 'low') && decisions[itemKey(c)]?.decision !== 'accept')
     .sort((a, b) => rank[a.severity] - rank[b.severity] || a.id - b.id);
 }
 
@@ -26,6 +30,7 @@ export interface AuthorInput {
   fileNames: [string, string];
   similarity: number;
   override: boolean;
+  decisions?: Decisions;
 }
 
 const SECTIONS: { sev: Severity; title: string; intro: string; colour: [number, number, number] }[] = [
@@ -40,7 +45,8 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const M = 48, width = W - M * 2, bottom = H - 50;
   let y = M;
-  const items = authorItems(x.changes);
+  const items = authorItems(x.changes, x.decisions);
+  const acceptedCount = authorItems(x.changes).length - items.length;
 
   const font = (size: number, style: 'normal' | 'bold' | 'italic' = 'normal', colour: [number, number, number] = [30, 30, 30]) => doc.setFont('helvetica', style).setFontSize(size).setTextColor(...colour);
   const lines = (text: string, w = width) => doc.splitTextToSize(latin1(text), w) as string[];
@@ -68,6 +74,7 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
   y += 92;
   para(items.length ? `${items.length} item${items.length === 1 ? '' : 's'} to work through.` : 'No changes need action: the edited version matches the original.', 11, 'bold');
   if (x.trivialCount) para(`${x.trivialCount} difference${x.trivialCount === 1 ? '' : 's'} in spacing, quotes or invisible characters were ignored and are not listed.`, 9, 'normal', [90, 90, 90]);
+  if (acceptedCount) para(`${acceptedCount} change${acceptedCount === 1 ? ' was' : 's were'} accepted as intended in the review and ${acceptedCount === 1 ? 'is' : 'are'} not listed.`, 9, 'normal', [90, 90, 90]);
   y += 6;
   para('How to use this list', 11, 'bold');
   para('Each item says where it is, what to do, and shows the original and edited text. Text in red was removed; text in green was added. Tick the box when the item is done, or note why the change should stay.', 10);

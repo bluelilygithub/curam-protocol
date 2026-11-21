@@ -14,6 +14,9 @@ import { InfoModal, infoSeen } from './InfoModal';
 import { PageViewer } from './PageViewer';
 import { AuthorReviewButton, ChangesView, EmptyView, MetadataView, PagesView, ReportView, SummaryBar, useChangeFilters, type FilterPreset, type Layout, type ViewId } from './Results';
 import { SettingsPanel } from './SettingsDrawer';
+import { ReviewView } from './ReviewView';
+import { defaultStore, pairKeyOf, type DecisionStore } from '../review/decisions';
+import type { Decision, Decisions } from '../review/verdict';
 
 type Phase = 'idle' | 'reading' | 'similarity' | 'gate2' | 'comparing' | 'done';
 
@@ -51,6 +54,28 @@ export function App() {
   const layoutSignal = useRef({ cancelled: false });
   const runId = useRef(0);
   const toastTimer = useRef<number>(undefined);
+  // review decisions (addendum §6.2): kept in this browser per pair of files
+  const [store, setStore] = useState<DecisionStore>();
+  const [pairKey, setPairKey] = useState<string>();
+  const [decisions, setDecisions] = useState<Decisions>({});
+  useEffect(() => { void defaultStore().then(setStore); }, []);
+  const decide = (key: string, d: Decision | null) => {
+    setDecisions((prev) => {
+      const next = { ...prev };
+      if (d) next[key] = { decision: d, decidedAt: new Date().toISOString() }; else delete next[key];
+      if (store && pairKey) void store.save(pairKey, next).catch(() => say('Could not save that decision in this browser.'));
+      return next;
+    });
+  };
+  const decideMany = (keys: string[]) => {
+    setDecisions((prev) => {
+      const at = new Date().toISOString();
+      const next = { ...prev };
+      for (const k of keys) next[k] = { decision: 'accept', decidedAt: at };
+      if (store && pairKey) void store.save(pairKey, next).catch(() => say('Could not save those decisions in this browser.'));
+      return next;
+    });
+  };
 
   const setView = (v: ViewId, self = true) => { selfMove.current = self; setViewState(v); window.scrollTo(0, 0); };
   const setSettings = (s: Settings) => { setSettingsState(s); saveSettings(s); };
@@ -61,6 +86,7 @@ export function App() {
     layoutSignal.current.cancelled = true;
     pdfPair.current?.destroy(); pdfPair.current = undefined;
     setPhase('idle'); setError(undefined); setDocs(undefined); setSim(undefined); setOverride(false); setResult(undefined);
+    setPairKey(undefined); setDecisions({});
     setLayout({ status: 'off', done: 0, total: 0, pages: [] }); setViewerPage(undefined);
   };
 
@@ -92,8 +118,19 @@ export function App() {
     setPhase('comparing');
     const r = await compareInWorker(pair[0], pair[1], settings);
     if (id !== runId.current) return;
+    // earlier decisions for these exact two files (same hashes), so a reload or a re-run keeps them
+    let saved: Decisions = {};
+    let key: string | undefined;
+    try {
+      key = await pairKeyOf(original!, edited!);
+      if (store) saved = await store.load(key);
+    } catch { /* decisions start empty */ }
+    if (id !== runId.current) return;
+    setPairKey(key);
+    setDecisions(saved);
     setResult(r);
     setPhase('done');
+    if (!embedded) setView('review'); // verdict first (inside Vault, the page around the app picks the next tool)
     if (pair[0].sourceType === 'pdf' && pair[0].pages && pair[1].pages) {
       const big = Math.max(pair[0].pages.length, pair[1].pages.length) > settings.maxPagesForLayout;
       if (big) setLayout({ status: 'waiting', done: 0, total: 0, pages: [] });
@@ -227,9 +264,10 @@ export function App() {
             {error && <div className="gate gate-stop" role="alert" data-guide="file-check"><strong>Can't compare these files.</strong> {error}</div>}
             {phase === 'gate2' && sim && docs && (
               <div className="gate gate-warn" role="alertdialog" aria-labelledby="g2-title" data-guide="same-document">
-                <h2 id="g2-title">These files may not be versions of the same document</h2>
-                <p>Similarity score <strong>{sim.score}</strong> / 100 (threshold {settings.similarityThreshold}).</p>
-                {sim.reasons.length > 0 && <ul>{sim.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+                <h2 id="g2-title">These look like different documents</h2>
+                <p>{sim.reasons[0] ? `(${sim.reasons[0][0].toLowerCase()}${sim.reasons[0].slice(1)}) ` : ''}Check you've picked the right files.</p>
+                {sim.reasons.length > 1 && <ul>{sim.reasons.slice(1).map((r) => <li key={r}>{r}</li>)}</ul>}
+                <p className="muted small">Similarity {sim.score} out of 100; below {settings.similarityThreshold} counts as different.</p>
                 <div className="row">
                   <button className="btn" onClick={reset} title="Stop here and choose different files.">Cancel</button>
                   <button className="btn primary" onClick={() => { setOverride(true); void compare(docs, runId.current); }} title="Compare them anyway. The report will say this check was overridden.">Compare anyway</button>
@@ -242,16 +280,30 @@ export function App() {
                 <SummaryBar all={all} layoutChanges={layoutChanges} result={result!} settings={settings} onShowTrivial={(v) => setSettings({ ...settings, showTrivial: v })} onPick={(cat?: Category) => goChanges({ categories: cat ? [cat] : [] })} />
                 <p className="gate-summary muted">File types match ✓ · Similarity {sim.score}/100{sim.score < settings.similarityThreshold && override ? ' · compared anyway (below threshold)' : ''}{isPdf && layout.status === 'running' ? ` · comparing pages ${layout.done}/${layout.total}…` : ''}</p>
                 <div className="row">
-                  <button className="btn primary" onClick={() => goChanges()} title="See every change in a table you can filter, search and sort.">See all changes</button>
+                  <button className="btn primary" onClick={() => setView('review')} title="Is it ready to submit? The verdict and a card for each change to decide.">See the verdict</button>
+                  <button className="btn" onClick={() => goChanges()} title="See every change in a table you can filter, search and sort.">All changes</button>
                   <button className="btn" onClick={() => setView('metadata')} title="Compare the two files' size, dates, author and counts.">File details</button>
                   {isPdf && <button className="btn" onClick={() => setView('pages')} title="See which PDF pages look different, side by side.">PDF pages</button>}
-                  <AuthorReviewButton all={all} trivialCount={result!.trivialCount} fileNames={[original!.name, edited!.name]} sim={sim} override={override} primary={false} />
+                  <AuthorReviewButton all={all} trivialCount={result!.trivialCount} fileNames={[original!.name, edited!.name]} sim={sim} override={override} decisions={decisions} primary={false} />
                   <button className="btn" onClick={() => setView('report')} title="Download a PDF of this comparison for your own records.">PDF report</button>
                 </div>
               </section>
             )}
           </>
         )}
+
+        {view === 'review' && (hasResults ? (
+          <ReviewView
+            changes={all}
+            decisions={decisions}
+            persistent={!!store?.persistent}
+            onDecide={decide}
+            onDismissSimilar={decideMany}
+            onShowAll={() => goChanges({})}
+            onShowIn={(c) => { filters.clear(); filters.setSearch(c.location); setView('changes'); }}
+            say={say}
+          />
+        ) : needResults('No verdict yet'))}
 
         {view === 'changes' && (hasResults ? (
           <>
@@ -267,7 +319,7 @@ export function App() {
             : <PagesView layout={layout} threshold={settings.layoutPixelRatio} maxPages={settings.maxPagesForLayout} onRunLayout={() => void runLayout()} onOpenPage={openPage} />)}
 
         {view === 'report' && (hasResults && sim ? (
-          <ReportView result={result!} all={all} layoutChanges={layoutChanges} layout={layout} sim={sim} override={override} settings={settings} fileNames={[original!.name, edited!.name]} f={filters} onEditFilters={() => setView('changes')} />
+          <ReportView result={result!} all={all} layoutChanges={layoutChanges} layout={layout} sim={sim} override={override} settings={settings} fileNames={[original!.name, edited!.name]} f={filters} decisions={decisions} onEditFilters={() => setView('changes')} />
         ) : needResults('Nothing to report yet'))}
 
         {view === 'settings' && <SettingsPanel settings={settings} onChange={setSettings} />}

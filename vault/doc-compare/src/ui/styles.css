@@ -172,6 +172,36 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .page-list img, .thumb-blank { width: 64px; height: 84px; object-fit: cover; object-position: top; border-radius: 4px; border: 1px solid var(--color-border); background: #fff; display: flex; align-items: center; justify-content: center; color: var(--color-muted); }
 .page-label { display: flex; flex-direction: column; font-size: 13px; }
 
+/* verdict and review queue (addendum §6) */
+.review { display: flex; flex-direction: column; gap: 12px; }
+.verdict { display: flex; gap: 16px; align-items: center; padding: 18px 20px; border-radius: 12px; border: 2px solid; }
+.verdict h2 { font-size: 22px; margin: 0 0 4px; }
+.verdict-sentence { margin: 0; font-size: 15px; }
+.verdict-icon { font-size: 30px; line-height: 1; width: 40px; text-align: center; }
+.verdict-red { background: var(--removed-bg); border-color: var(--removed); color: var(--removed); }
+.verdict-amber { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.verdict-green { background: var(--added-bg); border-color: var(--added); color: var(--added); }
+.verdict .verdict-sentence { color: var(--color-text); }
+.accuracy-note { margin: 0; font-size: 12px; color: var(--color-muted); }
+.review-bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.review-bar .btn { margin-left: auto; }
+.cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-left-width: 5px; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.card-red { border-left-color: var(--removed); }
+.card-amber { border-left-color: var(--warn); }
+.card.decided { opacity: 0.75; }
+.card.decided-later { opacity: 1; }
+.card.focused { box-shadow: 0 0 0 2px var(--color-primary); }
+.card p { margin: 0; }
+.card-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.card-summary { font-weight: 600; font-size: 15px; }
+.card-why { font-size: 13px; color: var(--color-muted); }
+.card-action { font-size: 13px; }
+.tier-red { color: var(--removed); background: var(--removed-bg); }
+.tier-amber { color: var(--warn); background: var(--warn-bg); }
+.decision-restore, .decision-accept { color: var(--added); background: var(--added-bg); }
+.decision-later { color: var(--warn); background: var(--warn-bg); }
+
 /* the shared themed tooltip (planner-core TooltipHost look="vault"): the same card as Vault's own Tooltip */
 .rp-tooltip { position: fixed; z-index: 70; pointer-events: none; width: max-content; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .btn.icon { padding: 4px 10px; font-size: 16px; line-height: 1.2; }

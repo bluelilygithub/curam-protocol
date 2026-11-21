@@ -26,8 +26,17 @@ const CATALOG = [
     does: 'The second check. It scores how alike the two files are from 0 to 100 (matching headings, shared wording and structure). Below the threshold (60 unless changed in Settings) an amber box lists the reasons and offers Cancel or Compare anyway.',
     notes: 'Compare anyway is allowed and is recorded in the report. A low score usually means the wrong file was picked.' },
   // ---- Results ----
-  { id: 'changes', label: 'Changes', group: 'Results',
-    does: 'The tool listing every change in one table: number, location (section and paragraph, page, or table row and column), change type, the original text, the edited text and severity (High, Medium or Low). Press a row, or Enter on it, to see the words that changed (red struck-through for removed, green underlined for added), and for a removed section or table row the list of everything in it.',
+  { id: 'review', label: 'Verdict and review', group: 'Results',
+    does: 'The tool that opens first after comparing (and the second step of "Check a document", the large panel on the start screen): the verdict, one sentence on what the LLM changed, and a card for each change that needs a decision, red ones first. Each card says what happened, why it matters and what to do, with the original and edited text.',
+    notes: 'Decisions are kept in this browser for these two exact files, so they are still there after a reload or when the same files are compared again; nothing is uploaded. Minor changes (typos, small formatting, page layout, file details) are not on the cards; they are under All changes.' },
+  { id: 'verdict', label: 'Verdict', group: 'Results',
+    does: 'The large banner at the top of Verdict and review. Not ready to submit: a red item (removed content, a changed figure, a section cut by more than 15%) has no decision or is marked Fix later. Review recommended: no red items are open but some amber ones (rewording, added text, moved text, structure) are. No significant changes found: only minor changes, or everything decided.',
+    notes: 'It shows what changed, not whether the content is accurate, and it never says a document is safe or correct. The PDF report carries the same verdict, and while a red item is open every page has an UNRESOLVED ISSUES watermark that cannot be turned off.' },
+  { id: 'review-queue', label: 'Review cards', group: 'Results',
+    does: 'The cards under the verdict. Red cards: Restore (copies the original text to the clipboard to paste back, and records the decision), Accept (the change was intended), Fix later (stays open; the verdict stays red). Amber cards: Accept, and Dismiss all similar to accept every open change of that kind at once. Undo takes a decision back; Show in all changes finds the change in the full table. A counter shows how many are decided; Hide decided hides the rest.',
+    notes: 'Keyboard: R restore, A accept, L fix later, arrow keys to move between cards. Restore does not change the document itself: the person pastes the copied text back into their own file.' },
+  { id: 'changes', label: 'All changes', group: 'Results',
+    does: 'The tool listing every change in one table, including the minor ones: number, location (section and paragraph, page, or table row and column), change type, the original text, the edited text and severity (High, Medium or Low). Press a row, or Enter on it, to see the words that changed (red struck-through for removed, green underlined for added), and for a removed section or table row the list of everything in it.',
     notes: 'High means removed content, removed sections or table rows, changed numbers or dates, or a big word-count drop. A wording change that drops a large part of a paragraph is also High. It is empty until two files have been compared.' },
   { id: 'summary', label: 'Summary bar', group: 'Results',
     does: 'The row at the top of Changes (and under the Compare button once done) counting each kind of change, for example "1 section missing" or "12 wording changes". Missing sections, removed content and number changes are shown in red. Pressing an item shows only that kind in the table.',
@@ -61,7 +70,7 @@ const CATALOG = [
     does: 'The (i) button beside the DocCompare title in the tool list opens a plain-language guide to the whole page. It also opens by itself the first time.',
     notes: '' },
   { id: 'tour', label: 'Guided tour', group: 'Compare',
-    does: 'The compass button beside the DocCompare title (also Settings, DocCompare Tour) runs an 11-step tour: the jobs, the tool list, Compare documents and its two checks, Changes, File details and PDF pages, the review for the author, Settings, and this guide. It switches to each tool as it goes.',
+    does: 'The compass button beside the DocCompare title (also Settings, DocCompare Tour) runs a 13-step tour: Check a document, the jobs, the tool list, Compare documents and its two checks, Changes, File details and PDF pages, the review for the author, Settings, and this guide. It switches to each tool as it goes.',
     notes: 'It only shows the page; it never chooses files or compares. Esc or Skip Tour ends it.' },
 ];
 
@@ -71,7 +80,8 @@ const RULES = [
   'Removed content, removed sections and table rows, and changed numbers or dates are marked High severity.',
   'Spaces, line breaks, curly versus straight quotes, dashes and invisible characters are trivial: hidden but counted, and chosen in Settings.',
   'Page comparison (PDF pages and the page viewer) is for PDFs only.',
-  'The results tools (Changes, File details, PDF pages, PDF report) are empty until two files have been compared in Compare documents.',
+  'The results tools (Verdict and review, All changes, File details, PDF pages, PDF report) are empty until two files have been compared in Compare documents.',
+  'The verdict shows what changed, not whether anything is accurate; never call a document safe, correct or verified.',
   'DocCompare reports differences; it does not decide which version is right or fix either file.',
   'The Open buttons in this chat only switch to a tool (they show a tool, scroll to a part of it, or open the guide box or the page viewer); they never choose files, compare or delete anything.',
 ];

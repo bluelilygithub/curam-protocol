@@ -7,7 +7,8 @@
 
 export const DOC_COMPARE_TOOLS = [
   { id: 'compare', label: 'Compare documents', group: 'Compare', icon: 'compare' },
-  { id: 'changes', label: 'Changes', group: 'Results', icon: 'list-checks' },
+  { id: 'review', label: 'Verdict and review', group: 'Results', icon: 'shield' },
+  { id: 'changes', label: 'All changes', group: 'Results', icon: 'list-checks' },
   { id: 'metadata', label: 'File details', group: 'Results', icon: 'file-text' },
   { id: 'pages', label: 'PDF pages', group: 'Results', icon: 'columns' },
   { id: 'report', label: 'PDF report', group: 'Share and set up', icon: 'download' },
@@ -18,13 +19,14 @@ export const GROUPS = ['Compare', 'Results', 'Share and set up'];
 
 export const GROUP_TIPS = {
   Compare: 'Choose the original and the AI-edited file and compare them. Your files never leave your computer.',
-  Results: 'What changed: every change in a table, the file details, and (for PDFs) the pages side by side.',
+  Results: 'Is it ready? The verdict and the items to decide first; then every change in a table, the file details, and (for PDFs) the pages side by side.',
   'Share and set up': 'Download a report of the comparison, and choose what counts as a change.',
 };
 
 export const TOOL_TIPS = {
   compare: 'Drop in the original and the AI-edited version (PDF, Word, Markdown or text) and press Compare. Two checks run first: the files must be the same type, and they should look like versions of the same document.',
-  changes: 'Every change in one table: removed, added, moved, wording, typos, numbers and dates, formatting and layout, with severity. Filter, search, sort, and open a row to see the exact words that changed.',
+  review: 'The verdict (Not ready to submit, Review recommended, or No significant changes found) and a card for each change you need to decide: Restore, Accept or Fix later. Your decisions are kept in this browser.',
+  changes: 'Every change in one table, including the minor ones: removed, added, moved, wording, typos, numbers and dates, formatting and layout, with severity. Filter, search, sort, and open a row to see the exact words that changed.',
   metadata: 'The two files\' details side by side (size, dates, author, and counts of pages, words, headings, tables and images), with anything suspicious flagged, such as a word count that dropped.',
   pages: 'For two PDFs: every page drawn and compared pixel by pixel. See which pages look different and open them side by side with the changes in red.',
   report: 'Two PDFs: a review to send back to the author (every change, with what to fix and a tick box), and a comparison report for your records (the checks, summary, file details, the changes with your filters, and changed PDF pages).',
@@ -33,7 +35,8 @@ export const TOOL_TIPS = {
 
 export const TOOL_BLURBS = {
   compare: 'Choose the original and the edited file, then press Compare.',
-  changes: 'Every difference between the two files, most serious first when sorted by severity.',
+  review: 'Is it ready to submit? Decide each change that matters, most serious first.',
+  changes: 'Every difference between the two files, including the minor ones.',
   metadata: 'Size, dates, author and counts for both files, with suspicious changes flagged.',
   pages: 'PDF pages compared as pictures, side by side with the changes in red.',
   report: 'A to-do list to send back to the author, and a comparison report for your records.',
@@ -43,6 +46,15 @@ export const TOOL_BLURBS = {
 // The "What do you want to do?" jobs (components/JobStart.jsx). Each step names a tool above; `filter` preselects the Changes table
 // (categories and severities as in doc-compare/src/report/model.ts). After Compare finishes, the page moves on to the job's next step.
 export const DOC_COMPARE_GOALS = [
+  {
+    // shown as the large "Is it ready to submit?" panel above the other jobs (DocComparePage.jsx), not as a card
+    id: 'check', title: 'Check a document before you submit', icon: 'shield',
+    blurb: 'Compare the LLM-edited version with your original and get a verdict, then decide each change that matters.',
+    steps: [
+      { tool: 'compare', note: 'Choose your original and the LLM-edited version, then press Compare.' },
+      { tool: 'review', note: 'Read the verdict, then Restore, Accept or Fix later each card. The verdict turns from red once every red item is decided.' },
+    ],
+  },
   {
     id: 'missing', title: 'Check the AI did not leave anything out', icon: 'alert-triangle',
     blurb: 'Find removed paragraphs, missing sections and dropped table rows.',
@@ -147,9 +159,10 @@ export const DOC_COMPARE_GOALS = [
 export const HOW_IT_WORKS = [
   ['What it is for', 'When an AI edits a document it sometimes drops a paragraph, changes a number or quietly rewords a sentence. DocCompare puts the original and the edited version side by side and lists every difference, with missing content shown first and most prominently.'],
   ['Your files stay on your computer', 'Both files are read and compared inside this browser tab. Nothing is uploaded, nothing is sent to an AI model, and nothing is saved. Leave the page and the comparison is gone, so download the PDF report if you want to keep it.'],
-  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation. The compass beside the title runs an 11-step guided tour (also in Settings, DocCompare Tour).'],
+  ['Where to start', 'Pick a job on the "What do you want to do?" screen (for example "Check the AI did not leave anything out") and DocCompare walks you through it, or pick a tool in the list on the left. Hover any tool or button for a short explanation. The compass beside the title runs a 13-step guided tour (also in Settings, DocCompare Tour).'],
   ['Choosing files', 'In Compare documents, drop a file on Original and another on Edited (LLM output), or press Choose file. Both must be the same type: PDF, Word (.docx), Markdown (.md) or plain text (.txt). Old Word .doc files must be saved as .docx first. A scanned PDF with no text in it cannot be read, and a password-protected PDF must be unlocked first.'],
   ['The two checks before comparing', 'First, the file types must match, or DocCompare stops and says why. Second, it scores how alike the two files are (0 to 100, from matching headings, shared wording and structure). Below the threshold in Settings (60 unless changed) it warns that they may not be versions of the same document, lists the reasons, and lets you Cancel or Compare anyway. Compare anyway is noted in the report.'],
+  ['The verdict', 'After comparing you see one of three verdicts. Not ready to submit: a red item (removed content, a changed figure, a big cut) has not been decided, or is marked Fix later. Review recommended: no red items are open, but some amber ones (rewording, added text, structure) are. No significant changes found: only minor changes, or everything is decided. A card for each item says what happened, why it matters and what to do. Restore copies the original text so you can paste it back; Accept records the change was intended; Fix later keeps it open. Your decisions are kept in this browser for these two files, so they are still there if you reload or compare the same files again. The verdict shows what changed; it does not check whether the content is accurate.'],
   ['Reading the results', 'The summary bar counts each kind of change; press one to see only those in Changes. Removed content, removed sections and changed numbers or dates are marked High, because they are what an AI edit most often gets wrong. The table lists each change with where it is, what it was and what it became; press a row to see the words that changed (struck through in red for removed, underlined in green for added).'],
   ['Kinds of change', 'Removed and Added: whole paragraphs, sections or table rows. Moved: the same text in a new place. Wording: words changed inside a paragraph (marked High when a large part was dropped). Typo: one small word fix. Number/date: anything with a digit changed. Formatting: headings, lists, bold, italic, fonts and sizes. Layout: PDF pages that look different. Metadata: file size, dates, author and counts, for example a word count that dropped.'],
   ['Trivial changes', 'Differences in spaces, line breaks, curly or straight quotes, dashes and invisible characters are hidden by default but still counted ("7 trivial changes hidden"). Tick that box to show them, or choose in Settings which of them count as trivial.'],
@@ -166,7 +179,10 @@ export const GUIDE_TOOLS = [
   { id: 'compare-button', label: 'Compare button', tool: 'compare' },
   { id: 'file-check', label: 'File type check', tool: 'compare' },
   { id: 'same-document', label: 'Same-document check', tool: 'compare' },
-  { id: 'changes', label: 'Changes', tool: 'changes' },
+  { id: 'review', label: 'Verdict and review', tool: 'review' },
+  { id: 'verdict', label: 'Verdict', tool: 'review' },
+  { id: 'review-queue', label: 'Review cards', tool: 'review' },
+  { id: 'changes', label: 'All changes', tool: 'changes' },
   { id: 'summary', label: 'Summary bar', tool: 'changes' },
   { id: 'trivial', label: 'Trivial changes', tool: 'changes' },
   { id: 'filters', label: 'Filters and search', tool: 'changes' },

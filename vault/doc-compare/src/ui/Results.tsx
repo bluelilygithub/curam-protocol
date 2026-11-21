@@ -3,11 +3,12 @@ import type { LayoutPage } from '../compare/layout';
 import { CATEGORY_ICON, CATEGORY_LABEL, type Category, type Change, type ComparisonResult, type Severity, type SimilarityResult } from '../report/model';
 import { authorItems, downloadAuthorPdf } from '../report/authorReport';
 import { exportPdf } from '../report/pdfExport';
+import type { Decisions } from '../review/verdict';
 import { SEVERITY_RANK } from '../report/severity';
 import type { Settings } from '../settings';
 
 type SortKey = 'id' | 'location' | 'category' | 'severity';
-export type ViewId = 'compare' | 'changes' | 'metadata' | 'pages' | 'report' | 'settings';
+export type ViewId = 'compare' | 'review' | 'changes' | 'metadata' | 'pages' | 'report' | 'settings';
 export interface FilterPreset { categories?: string[]; severities?: string[] }
 
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
@@ -272,17 +273,18 @@ export function PagesView({ layout, threshold, maxPages, onRunLayout, onOpenPage
 
 export function ReportView(p: {
   result: ComparisonResult; all: Change[]; layoutChanges: Change[]; layout: Layout; sim: SimilarityResult; override: boolean;
-  settings: Settings; fileNames: [string, string]; f: Filters; onEditFilters: () => void;
+  settings: Settings; fileNames: [string, string]; f: Filters; onEditFilters: () => void; decisions: Decisions;
 }) {
   const [landscape, setLandscape] = useState(true);
   const real = p.all.filter((c) => !c.trivial).length;
   const pages = p.layout.pages.filter((x) => x.thumb).length;
   return (
     <>
-    <AuthorReviewCard all={p.all} trivialCount={p.result.trivialCount} fileNames={p.fileNames} sim={p.sim} override={p.override} />
+    <AuthorReviewCard all={p.all} trivialCount={p.result.trivialCount} fileNames={p.fileNames} sim={p.sim} override={p.override} decisions={p.decisions} />
     <div className="report-card">
       <h2>Comparison report</h2>
       <p>For your own records. The report is a PDF with:</p>
+      <ul><li>first, the verdict, the summary and your decisions on each item (with an <strong>UNRESOLVED ISSUES</strong> watermark on every page while a red item is open or marked Fix later); then, as the full detail:</li></ul>
       <ul>
         <li>the two file names, the date, and the two checks (similarity {p.sim.score}/100{p.override ? ', compared anyway' : ''});</li>
         <li>counts of each kind of change by severity, and the file details table;</li>
@@ -305,25 +307,25 @@ export function ReportView(p: {
 
 export const AUTHOR_TIP = 'Download a PDF to send back to whoever made the edit: every change (not just the filtered ones), most serious first, each with what to do, a tick box, and the original and edited text. Made here, in this browser tab.';
 
-export function AuthorReviewButton({ all, trivialCount, fileNames, sim, override, primary = true }: {
-  all: Change[]; trivialCount: number; fileNames: [string, string]; sim: SimilarityResult; override: boolean; primary?: boolean;
+export function AuthorReviewButton({ all, trivialCount, fileNames, sim, override, decisions, primary = true }: {
+  all: Change[]; trivialCount: number; fileNames: [string, string]; sim: SimilarityResult; override: boolean; decisions: Decisions; primary?: boolean;
 }) {
   return (
     <button className={`btn${primary ? ' primary' : ''}`} data-guide="author-report"
-      onClick={() => downloadAuthorPdf({ changes: all, trivialCount, fileNames, similarity: sim.score, override: override && sim.score < 100 })}
+      onClick={() => downloadAuthorPdf({ changes: all, trivialCount, fileNames, similarity: sim.score, override: override && sim.score < 100, decisions })}
       title={AUTHOR_TIP}>
       Download review for the author
     </button>
   );
 }
 
-function AuthorReviewCard(p: { all: Change[]; trivialCount: number; fileNames: [string, string]; sim: SimilarityResult; override: boolean }) {
-  const items = authorItems(p.all);
+function AuthorReviewCard(p: { all: Change[]; trivialCount: number; fileNames: [string, string]; sim: SimilarityResult; override: boolean; decisions: Decisions }) {
+  const items = authorItems(p.all, p.decisions);
   const n = (s: Severity) => items.filter((c) => c.severity === s).length;
   return (
     <div className="report-card author-card">
       <h2>Review for the author</h2>
-      <p>A complete to-do list to send back to whoever made the edit: <strong>{n('high')} must fix</strong>, {n('medium')} to review and {n('low')} minor, each with what to do, where it is, a tick box, and the original and edited text (removed words in red, added in green). It always lists every change, whatever filters are set in Changes; tiny spacing and quote differences are only counted.</p>
+      <p>A complete to-do list to send back to whoever made the edit: <strong>{n('high')} must fix</strong>, {n('medium')} to review and {n('low')} minor, each with what to do, where it is, a tick box, and the original and edited text (removed words in red, added in green). It always lists every change, whatever filters are set in Changes; tiny spacing and quote differences are only counted, and changes you accepted in Verdict and review are left out.</p>
       <div className="toolbar"><AuthorReviewButton {...p} /></div>
     </div>
   );

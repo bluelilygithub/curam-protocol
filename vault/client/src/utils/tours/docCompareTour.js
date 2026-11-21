@@ -8,7 +8,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_doc_compare_completed';
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 13;
 
 // Shepherd keeps earlier cards in the page (hidden), so the counter goes into this step's own card, not the first one found.
 function injectStepCounter(stepIndex, card) {
@@ -79,12 +79,16 @@ export function startDocCompareTour(goTool) {
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
 
-  step('dc-jobs', 'Start with a job',
-    'Pick what you want to do, for example "Check the AI did not leave anything out" or "Check numbers and dates were not changed". DocCompare opens the right tool, and after you compare it moves on to the next step with the right filter already set.',
+  step('dc-ready', 'Is it ready to submit?',
+    'The quickest way in. Press Check a document, choose your original and the LLM-edited version, and DocCompare gives you a verdict and a card for each change that matters.',
+    '[data-tour="doc-compare-check"]', 'start');
+
+  step('dc-jobs', 'Or start with a job',
+    'Pick a narrower job, for example "Check the AI did not leave anything out" or "Check numbers and dates were not changed". DocCompare opens the right tool, and after you compare it moves on to the next step with the right filter already set.',
     '[data-tour="doc-compare-jobs"]', 'start');
 
   step('dc-menu', 'Or pick a tool',
-    'Every tool is also in this list: Compare documents, then the results (Changes, File details, PDF pages), then PDF report and Settings. A tool that needs results says "Compare two files first" until you have compared. Hover any tool for what it does.',
+    'Every tool is also in this list: Compare documents, then the results (Verdict and review, All changes, File details, PDF pages), then PDF report and Settings. A tool that needs results says "Compare two files first" until you have compared. Hover any tool for what it does.',
     '[data-tour="doccompare-menu"]', null, 'right');
 
   step('dc-compare', 'Compare documents',
@@ -95,8 +99,12 @@ export function startDocCompareTour(goTool) {
     'DocCompare stops if the two files are different types, and warns (with Compare anyway) if they look like different documents. When it finishes, a summary of what changed appears here, with buttons to every result.',
     FRAME, 'compare', 'top');
 
-  step('dc-changes', 'Changes',
-    'Every difference in one table: removed, added, moved, wording, typos, numbers and dates, formatting and layout, each marked High, Medium or Low. Filter and search above the table, and press a row to see the exact words that changed, red for removed and green for added.',
+  step('dc-review', 'The verdict comes first',
+    'After comparing you see the verdict: Not ready to submit, Review recommended, or No significant changes found. Below it, a card for each change that matters says what happened and why it matters. Restore copies the original text to paste back, Accept records the change was intended, Fix later keeps it open. Your decisions are kept in this browser. The verdict shows what changed, not whether the content is accurate.',
+    FRAME, 'review', 'top');
+
+  step('dc-changes', 'All changes',
+    'Every difference in one table, including the minor ones: removed, added, moved, wording, typos, numbers and dates, formatting and layout, each marked High, Medium or Low. Filter and search above the table, and press a row to see the exact words that changed, red for removed and green for added.',
     FRAME, 'changes', 'top');
 
   step('dc-details', 'File details and PDF pages',

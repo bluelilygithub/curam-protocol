@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import { mapQuotes } from '../compare/normalize';
 import type { LayoutPage } from '../compare/layout';
+import { ACCURACY_NOTE, VERDICT_TEXT, decisionsSummary, progress, reviewItems, summarySentence, verdictOf, type Decisions, type Verdict } from '../review/verdict';
 import { CATEGORY_LABEL, type Category, type Change, type ComparisonResult, type SimilarityResult } from './model';
 
 const APP_VERSION = '0.1.0';
@@ -24,24 +25,73 @@ export interface ExportInput {
   visible: Change[];
   filtersNote: string;
   landscape: boolean;
+  decisions?: Decisions;
 }
 
-export function exportPdf(x: ExportInput): void {
+const VERDICT_COLOUR: Record<Verdict, [number, number, number]> = { red: RED, amber: [146, 64, 14], green: GREEN };
+const DECISION_WORD = { restore: 'Restore', accept: 'Accepted', later: 'Fix later' } as const;
+export const WATERMARK = 'UNRESOLVED ISSUES — NOT READY TO SUBMIT';
+
+/** Builds the comparison report (returned, so it can be tested); exportPdf saves it. */
+export function buildReportPdf(x: ExportInput): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
   const margin = 40;
   let y = margin;
-  const line = (text: string, size = 10, bold = false) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal').setFontSize(size);
-    for (const l of doc.splitTextToSize(latin1(text), doc.internal.pageSize.getWidth() - margin * 2) as string[]) { doc.text(l, margin, y); y += size * 1.35; }
+  const line = (text: string, size = 10, bold = false, colour: [number, number, number] = [30, 30, 30]) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal').setFontSize(size).setTextColor(...colour);
+    for (const l of doc.splitTextToSize(latin1(text), doc.internal.pageSize.getWidth() - margin * 2) as string[]) {
+      if (y > doc.internal.pageSize.getHeight() - margin) { doc.addPage(); y = margin; }
+      doc.text(l, margin, y); y += size * 1.35;
+    }
+    doc.setTextColor(30, 30, 30);
   };
   const after = () => ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 18);
 
-  line('DocCompare report', 18, true);
+  // ---- page 1: the verdict (addendum §8) ----
+  const items = reviewItems(x.all, x.decisions ?? {});
+  const verdict = verdictOf(items);
+  const W = doc.internal.pageSize.getWidth();
+  line('Submission check', 18, true);
   y += 4;
   line(`Original: ${x.fileNames[0]}`);
   line(`Edited: ${x.fileNames[1]}`);
-  line(`Compared: ${new Date().toLocaleString()} · DocCompare ${APP_VERSION}`);
+  line(`Checked: ${new Date().toLocaleString()} · DocCompare ${APP_VERSION}`);
+  y += 10;
+  doc.setFillColor(...VERDICT_COLOUR[verdict]).roundedRect(margin, y, W - margin * 2, 46, 6, 6, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(255, 255, 255).text(latin1(VERDICT_TEXT[verdict].title), margin + 16, y + 30);
+  doc.setTextColor(30, 30, 30);
+  y += 66;
+  line(summarySentence(x.all), 11);
+  y += 4;
+  line(ACCURACY_NOTE, 9, false, [90, 90, 90]);
   y += 6;
+  const p = progress(items);
+  line(`Decisions: ${decisionsSummary(items)} (${p.decided} of ${p.total} decided).`, 10, true);
+  y += 8;
+  if (items.length) {
+    line('Items to decide', 12, true);
+    autoTable(doc, {
+      startY: y,
+      head: [['', 'What happened', 'Where', 'Decision']],
+      body: items.map((i) => [i.tier === 'red' ? 'Red' : 'Amber', cut(i.change.summary, 220), cut(i.change.location, 80), i.decision ? `${DECISION_WORD[i.decision.decision]}\n${new Date(i.decision.decidedAt).toLocaleString()}` : 'Not decided']),
+      styles: { fontSize: 8, cellPadding: 3, valign: 'top' },
+      headStyles: { fillColor: [155, 91, 70] },
+      columnStyles: { 0: { cellWidth: 40 }, 2: { cellWidth: 110 }, 3: { cellWidth: 90 } },
+      didParseCell: (d) => {
+        if (d.section !== 'body') return;
+        if (d.column.index === 0) { d.cell.styles.textColor = d.cell.raw === 'Red' ? RED : [146, 64, 14]; d.cell.styles.fontStyle = 'bold'; }
+        if (d.column.index === 3 && (d.cell.raw === 'Not decided' || String(d.cell.raw).startsWith('Fix later'))) d.cell.styles.textColor = RED;
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = after();
+  }
+
+  // ---- the existing report, as the full detail ----
+  doc.addPage();
+  y = margin;
+  line('Full detail', 16, true);
+  y += 4;
   line('Checks', 12, true);
   line('File type check: passed (same type)');
   line(`Same-document similarity: ${x.sim.score}/100 (threshold ${x.settings.similarityThreshold})${x.override ? ' - below threshold; "Compare anyway" was used' : ''}`);
@@ -112,8 +162,27 @@ export function exportPdf(x: ExportInput): void {
     }
   }
 
+  // any red item open or marked Fix later: every page carries the watermark (cannot be turned off; addendum §8)
+  if (verdict === 'red') {
+    const n = doc.getNumberOfPages();
+    for (let pg = 1; pg <= n; pg++) {
+      doc.setPage(pg);
+      const pw = doc.internal.pageSize.getWidth(), ph = doc.internal.pageSize.getHeight();
+      doc.saveGraphicsState();
+      doc.setGState(new (doc as unknown as { GState: new (o: { opacity: number }) => unknown }).GState({ opacity: 0.13 }) as never);
+      doc.setFont('helvetica', 'bold').setFontSize(pw > ph ? 34 : 26).setTextColor(...RED);
+      doc.text(latin1(WATERMARK), pw / 2, ph / 2, { align: 'center', angle: 35, baseline: 'middle' } as never);
+      doc.restoreGraphicsState();
+      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...RED).text(latin1(WATERMARK), pw / 2, ph - 16, { align: 'center' });
+    }
+    doc.setTextColor(30, 30, 30);
+  }
+  return doc;
+}
+
+export function exportPdf(x: ExportInput): void {
   const base = x.fileNames[0].replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  doc.save(`comparison_${base}_${date}.pdf`);
+  buildReportPdf(x).save(`comparison_${base}_${date}.pdf`);
 }

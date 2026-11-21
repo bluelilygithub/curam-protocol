@@ -28,6 +28,9 @@ const LAST_TOOL_KEY = 'vault:doc-compare:lastTool';
 const readLocal = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const writeLocal = (k, v) => { try { localStorage.setItem(k, v); } catch { /* not remembered */ } };
 const labelFor = (id) => DOC_COMPARE_TOOLS.find((t) => t.id === id)?.label || id;
+// "Check a document" is the large panel above the jobs; the rest are the job cards
+const CHECK_GOAL = DOC_COMPARE_GOALS.find((g) => g.id === 'check');
+const OTHER_GOALS = DOC_COMPARE_GOALS.filter((g) => g.id !== 'check');
 
 export default function DocComparePage() {
   const getIcon = useIcon();
@@ -80,11 +83,13 @@ export default function DocComparePage() {
       if (typeof d.tool === 'string' && KNOWN.has(d.tool)) setGuideTool(d.tool);
       setApp({ results: !!d.results, pdf: !!d.pdf });
       if (d.cause === 'self' && TOOL_IDS.includes(d.view) && toolRef.current !== 'start') setTool(d.view);
-      // a job moves on by itself once Compare has finished
+      // once Compare has finished: a job moves on to its next step; without a job, the verdict comes first (addendum §6)
       const g = goalRef.current;
       if (d.results && !hadResults.current && g && toolRef.current === g.steps[0].tool && g.steps[1]) {
         pendingFilter.current = g.steps[1].filter || null;
         setTool(g.steps[1].tool);
+      } else if (d.results && !hadResults.current && !g && toolRef.current === 'compare') {
+        setTool('review');
       }
       hadResults.current = !!d.results;
     };
@@ -185,9 +190,26 @@ export default function DocComparePage() {
 
         <main className="flex-1 min-w-0 flex flex-col p-6 gap-4" style={{ background: 'var(--color-bg)' }}>
           {tool === 'start' && (
-            <div className="max-w-5xl space-y-4">
+            <div className="max-w-5xl space-y-6">
+              <section className="rounded-2xl border p-6 flex flex-col sm:flex-row sm:items-center gap-4" data-tour="doc-compare-check" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+                <div className="flex-1">
+                  <h2 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+                    <span style={{ color: 'var(--color-primary)' }}>{getIcon('shield', { size: 20 })}</span>
+                    Is it ready to submit?
+                  </h2>
+                  <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+                    Compare the LLM-edited version with your original. You get a verdict, and a card for each change that matters: restore it, accept it, or fix it later.
+                  </p>
+                </div>
+                <Tooltip text="Choose your original and the edited version, compare them, and see the verdict and the changes to decide.">
+                  <button type="button" onClick={() => startGoal(CHECK_GOAL)} className="px-6 py-3 rounded-xl text-base font-semibold transition-opacity hover:opacity-80"
+                    style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>
+                    Check a document
+                  </button>
+                </Tooltip>
+              </section>
               <JobStart
-                goals={DOC_COMPARE_GOALS}
+                goals={OTHER_GOALS}
                 intro="Pick a job and DocCompare walks you through it, or choose a tool on the left. Your files are compared in this browser and never leave your computer."
                 onPick={startGoal}
                 labelFor={labelFor}
