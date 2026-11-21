@@ -65,6 +65,9 @@ export function openGuideTool(id: string, h: GuideHooks): boolean {
       case 'save-project':
         if (!h.show(id)) { h.show('files'); h.toast('Choose the original file first: "Save this as your original?" appears under the two file boxes. (Inside an open project you add the latest version instead.)'); }
         break;
+      case 'versions-mode':
+        if (!h.show(id)) h.toast('Close the open project first (Close project in Compare documents): intentionally different versions are a one-off comparison, not a project round.');
+        break;
       case 'add-round':
       case 'new-original':
       case 'compact':

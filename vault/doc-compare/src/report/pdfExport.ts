@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import { mapQuotes } from '../compare/normalize';
 import type { LayoutPage } from '../compare/layout';
+import { SECTION_STATUS_LABEL, stillCheck } from '../compare/sections';
 import { ACCURACY_NOTE, VERDICT_TEXT, decisionsSummary, progress, reviewItems, summarySentence, verdictOf, type Decisions, type Verdict } from '../review/verdict';
 import { CATEGORY_LABEL, type Category, type Change, type ComparisonResult, type SimilarityResult } from './model';
 
@@ -27,6 +28,7 @@ export interface ExportInput {
   landscape: boolean;
   decisions?: Decisions;
   project?: ProjectReport;
+  versions?: boolean; // intentionally different versions (addendum §0.2): titled Version comparison, no verdict, no watermark
 }
 
 /** A project round in the report (addendum §8): its summary, the timeline, and every replacement of the original. */
@@ -62,6 +64,42 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   const items = reviewItems(x.all, x.decisions ?? {});
   const verdict = verdictOf(items);
   const W = doc.internal.pageSize.getWidth();
+  if (x.versions) {
+    line('Version comparison', 18, true);
+    y += 4;
+    line(`Version A: ${x.fileNames[0]}`);
+    line(`Version B: ${x.fileNames[1]}`);
+    line(`Compared: ${new Date().toLocaleString()} · DocCompare ${APP_VERSION}`);
+    y += 8;
+    line('These versions are meant to differ, so there is no verdict and nothing to decide. Numbers and quotes are still listed below: a statistic or a quote should not differ between versions.', 10);
+    y += 4;
+    line(ACCURACY_NOTE, 9, false, [90, 90, 90]);
+    y += 8;
+    const groups = x.result.sections ?? [];
+    line('Sections', 12, true);
+    autoTable(doc, {
+      startY: y,
+      head: [['Section', 'Status', 'Words in A', 'Words in B']],
+      body: groups.map((g) => [cut(g.titleB ? `${g.title} / ${g.titleB}` : g.title, 120), `${SECTION_STATUS_LABEL[g.status]}${g.similarity !== undefined ? ` (${g.similarity}% alike)` : ''}`, String(g.wordsA), String(g.wordsB)]),
+      styles: { fontSize: 8, cellPadding: 3, valign: 'top' },
+      headStyles: { fillColor: [155, 91, 70] },
+      margin: { left: margin, right: margin },
+    });
+    y = after();
+    const still = stillCheck(x.all);
+    line(still.length ? `Still check: ${still.length} number or quote change${still.length === 1 ? '' : 's'}` : 'No numbers or quotes differ between the versions.', 12, true);
+    if (still.length) {
+      autoTable(doc, {
+        startY: y,
+        head: [['What', 'Where', 'Version A', 'Version B']],
+        body: still.map((c) => [cut(c.summary, 160), cut(c.location, 80), cut(c.original, 200), cut(c.edited, 200)]),
+        styles: { fontSize: 8, cellPadding: 3, valign: 'top' },
+        headStyles: { fillColor: [155, 91, 70] },
+        margin: { left: margin, right: margin },
+      });
+      y = after();
+    }
+  } else {
   line('Submission check', 18, true);
   y += 4;
   if (x.project) line(`Project: ${x.project.name} · round ${x.project.round} of ${x.project.rounds}`, 11, true);
@@ -100,6 +138,8 @@ export function buildReportPdf(x: ExportInput): jsPDF {
       margin: { left: margin, right: margin },
     });
     y = after();
+  }
+
   }
 
   // ---- a project: the timeline and every replacement of the original (never left out, §7.7) ----
@@ -197,7 +237,7 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   }
 
   // any red item open or marked Fix later: every page carries the watermark (cannot be turned off; addendum §8)
-  if (verdict === 'red') {
+  if (verdict === 'red' && !x.versions) {
     const n = doc.getNumberOfPages();
     for (let pg = 1; pg <= n; pg++) {
       doc.setPage(pg);
@@ -218,5 +258,5 @@ export function exportPdf(x: ExportInput): void {
   const base = x.fileNames[0].replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  buildReportPdf(x).save(`comparison_${base}_${date}.pdf`);
+  buildReportPdf(x).save(`${x.versions ? 'version_comparison' : 'comparison'}_${base}_${date}.pdf`);
 }

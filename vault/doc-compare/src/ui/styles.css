@@ -180,6 +180,7 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .verdict-icon { font-size: 30px; line-height: 1; width: 40px; text-align: center; }
 .verdict-red { background: var(--removed-bg); border-color: var(--removed); color: var(--removed); }
 .verdict-amber { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.verdict-none { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text); }
 .verdict-green { background: var(--added-bg); border-color: var(--added); color: var(--added); }
 .verdict .verdict-sentence { color: var(--color-text); }
 .accuracy-note { margin: 0; font-size: 12px; color: var(--color-muted); }

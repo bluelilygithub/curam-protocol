@@ -29,4 +29,4 @@ function call<T>(msg: Record<string, unknown>): Promise<T> {
 }
 
 export const similarityInWorker = (a: NormalizedDoc, b: NormalizedDoc) => call<SimilarityResult>({ type: 'similarity', a, b });
-export const compareInWorker = (a: NormalizedDoc, b: NormalizedDoc, settings: Settings) => call<ComparisonResult>({ type: 'compare', a, b, settings });
+export const compareInWorker = (a: NormalizedDoc, b: NormalizedDoc, settings: Settings, versions = false) => call<ComparisonResult>({ type: 'compare', a, b, settings, versions });

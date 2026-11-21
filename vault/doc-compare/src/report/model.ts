@@ -67,11 +67,22 @@ export interface WordCounts {
   sections: { title: string; original: number; edited: number }[];
 }
 
+/** A section of two intentionally different versions (addendum §0.2). */
+export interface SectionGroup {
+  title: string;
+  titleB?: string; // the heading in B when it differs
+  status: 'both' | 'reworded' | 'onlyA' | 'onlyB';
+  wordsA: number;
+  wordsB: number;
+  similarity?: number; // 0-100, for worded differently
+}
+
 export interface ComparisonResult {
   changes: Change[];
   trivialCount: number;
   metadata: MetaRow[];
   words?: WordCounts;
+  sections?: SectionGroup[]; // set only when comparing intentionally different versions
 }
 
 export const CATEGORY_LABEL: Record<Category, string> = {

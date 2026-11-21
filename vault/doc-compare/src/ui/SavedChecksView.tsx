@@ -54,7 +54,8 @@ export function SavedChecksView({ checks, currentId, persistent, onOpen, onRenam
                 <span className="muted small">Saved {fmtDate(c.createdAt)}{c.updatedAt !== c.createdAt ? ` · last opened ${fmtDate(c.updatedAt)}` : ''} · {fmtSize(checkSize(c))}</span>
               </div>
               <div className="saved-status">
-                {c.verdict && <span className={`badge verdict-badge-${c.verdict}`}>{VERDICT_TEXT[c.verdict].icon} {VERDICT_TEXT[c.verdict].title}</span>}
+                {c.versions && <span className="badge" title="Compared as intentionally different versions: no verdict.">⇄ Version comparison</span>}
+                {c.verdict && !c.versions && <span className={`badge verdict-badge-${c.verdict}`}>{VERDICT_TEXT[c.verdict].icon} {VERDICT_TEXT[c.verdict].title}</span>}
                 {c.counts && c.counts.total > 0 && <span className="muted small">{c.counts.decided} of {c.counts.total} decided</span>}
                 {c.id === currentId && <span className="badge">Open now</span>}
               </div>

@@ -10,6 +10,7 @@ import { align } from './align';
 import { compareContent, type NewChange } from './content';
 import { compareTableShapes } from './formatting';
 import { runPostChecks } from './postChecks';
+import { sectionGroups } from './sections';
 import { wordCounts } from '../checks/limits';
 import { referenceBlockIds } from '../checks/docText';
 import { referenceCount } from '../checks/references';
@@ -17,7 +18,8 @@ import { referenceCount } from '../checks/references';
 export { similarity };
 
 /** Content, formatting and metadata comparison of two read documents (no DOM; runs in the worker or in tests). */
-export function compareDocs(a: NormalizedDoc, b: NormalizedDoc, settings: Settings): ComparisonResult {
+/** `versions`: the two are meant to differ (addendum §0.2): the result also groups the sections; the checks run as usual. */
+export function compareDocs(a: NormalizedDoc, b: NormalizedDoc, settings: Settings, versions = false): ComparisonResult {
   const ops = align(a.blocks, b.blocks);
   // reference-list entries are compared as references (checks/references.ts), not as paragraphs, so each finding shows once
   const refA = referenceBlockIds(a), refB = referenceBlockIds(b);
@@ -27,7 +29,7 @@ export function compareDocs(a: NormalizedDoc, b: NormalizedDoc, settings: Settin
   changes.push(...runPostChecks(a, b, ops, settings, changes));
   const counted = (d: NormalizedDoc) => ({ ...d.metadata, referenceCount: referenceCount(d), noteCount: (d.notes ?? []).filter((n) => n.kind !== 'link').length });
   const meta = compareMetadata(counted(a), counted(b), settings);
-  return { changes: numbered([...changes, ...meta.changes]), trivialCount, metadata: meta.rows, words: wordCounts(a, b, settings) };
+  return { changes: numbered([...changes, ...meta.changes]), trivialCount, metadata: meta.rows, words: wordCounts(a, b, settings), ...(versions ? { sections: sectionGroups(a, b) } : {}) };
 }
 
 /** Tier, plain-language summary / why it matters / action, and origin, from the message catalogue (addendum §2). */

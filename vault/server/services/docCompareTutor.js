@@ -16,6 +16,9 @@ const CATALOG = [
   { id: 'save-project', label: 'Save as a project', group: 'Compare',
     does: 'The box "Save this as your original?" under the two file boxes in Compare documents, ticked by default once an original is chosen. Ticked, Compare creates a project (named from the Project name box, the document title or the file name) with the edited file as round 1. Unticked, the two files are compared once and kept under Saved checks.',
     notes: 'A project keeps the original as a clean copy so every later draft is checked against it.' },
+  { id: 'versions-mode', label: 'Intentionally different versions', group: 'Compare',
+    does: 'The box "These are intentionally different versions" in Compare documents (one-off comparisons only). Ticked, the two files become Version A and Version B, the same-document warning only appears below a score of 30, and after comparing Verdict and review shows a Version comparison: no verdict and nothing to decide, the sections grouped as in both versions, worded differently, only in A and only in B, and any numbers or quotes that differ listed to check. The PDF report is titled Version comparison, with no verdict and no watermark.',
+    notes: 'Ticking it unticks "Save this as your original?": project rounds always get the full review. A saved check remembers it was a version comparison.' },
   { id: 'add-round', label: 'Add the latest version', group: 'Compare',
     does: 'Inside an open project, Compare documents shows the original as kept, one box "Add the latest version (round N)", a Note for this round box and Check this version. The draft is checked against the original plus every change already accepted, and against the previous round.',
     notes: 'The same file as the original or an earlier round is not added again ("This is the same file as round 3"). The file type and same-document checks still apply. Close project leaves it (it stays in Projects).' },
@@ -127,6 +130,7 @@ const RULES = [
   'A statistic, quote, citation, link or source in added or changed text that is not in the original is a red New claim; a reworded or removed direct quote is red; over the word or page limit is red; a missing required heading is red and one out of order amber; a version number that did not change with the content is amber, one that went backwards red.',
   'A reference or footnote that was removed, added or changed, and a citation that points to nothing or to a different source, are red; a renumbered reference list, numbering gaps or renumbered paragraphs, spelling switched between Australian and US, and dropped defined terms or unexplained acronyms are amber. In a PDF, references and footnotes are found by best effort.',
   'A project keeps the original as a clean copy; each later draft is a round, checked against the original plus the accepted changes and against the previous round. Projects are kept in this browser only and can be exported as one .doccompare file.',
+  'Two versions meant to differ ("These are intentionally different versions") get no verdict and no decisions: sections are grouped as in both, worded differently, only in A, only in B, and differing numbers and quotes are still listed. Not available for project rounds.',
   'DocCompare reports differences; it does not decide which version is right or fix either file.',
   'The Open buttons in this chat only switch to a tool (they show a tool, scroll to a part of it, or open the guide box or the page viewer); they never choose files, compare or delete anything.',
 ];

@@ -7,7 +7,7 @@ import { compareInWorker, similarityInWorker } from '../compare/workerClient';
 import { GateError, type NormalizedDoc } from '../readers/types';
 import type { Category, Change, ComparisonResult, SimilarityResult } from '../report/model';
 import { SEVERITY } from '../report/severity';
-import { loadSettings, saveSettings, type Settings } from '../settings';
+import { loadSettings, saveSettings, VERSIONS_SIMILARITY, type Settings } from '../settings';
 import { DropZone } from './DropZone';
 import { currentGuideTool, isView, openGuideTool, type GuideHooks } from './guide';
 import { InfoModal, infoSeen } from './InfoModal';
@@ -27,6 +27,7 @@ import { itemKey } from '../review/verdict';
 import type { ProjectReport } from '../report/pdfExport';
 import { fmtSize, ProjectsView, type ImportConflict, type Quota } from './ProjectsView';
 import { TimelineView } from './TimelineView';
+import { VersionsView } from './VersionsView';
 
 /** Saves a Blob as a file on this computer (the export of a project). */
 function download(blob: Blob, name: string) {
@@ -94,6 +95,10 @@ export function App() {
   const [roundNo, setRoundNo] = useState<number>(); // the round on screen; undefined = the latest
   const [roundOnly, setRoundOnly] = useState(false);
   const [asProject, setAsProject] = useState(true); // "Save as a project", ticked by default (§7.2)
+  // "These are intentionally different versions" (§0.2): one-off comparisons only, never a project round
+  const [versions, setVersions] = useState(false);
+  const quickVersions = versions && !project;
+  const threshold = quickVersions ? VERSIONS_SIMILARITY : settings.similarityThreshold;
   const [latestFile, setLatestFile] = useState<File>();
   const [note, setNote] = useState('');
   const [quota, setQuota] = useState<Quota>();
@@ -187,7 +192,7 @@ export function App() {
       if (id !== runId.current) return;
       setSim(s);
       simRef.current = s;
-      if (s.score < settings.similarityThreshold) { setPhase('gate2'); return; }
+      if (s.score < threshold) { setPhase('gate2'); return; }
       await compare(pair, id);
     } catch (e) {
       if (id !== runId.current) return;
@@ -198,9 +203,9 @@ export function App() {
 
   async function compare(pair: [NormalizedDoc, NormalizedDoc], id: number) {
     if (projectRef.current) return addRoundFlow(pair, id);
-    if (asProject) return startProjectFlow(pair, id);
+    if (asProject && !versions) return startProjectFlow(pair, id);
     setPhase('comparing');
-    const r = await compareInWorker(pair[0], pair[1], settings);
+    const r = await compareInWorker(pair[0], pair[1], settings, versions);
     if (id !== runId.current) return;
     // earlier decisions for these exact two files (same hashes), so a reload or a re-run keeps them
     const [o, e] = filesRef.current!;
@@ -218,7 +223,7 @@ export function App() {
     // every comparison is saved with its label, so it can be found and opened again (one saved check per pair of files)
     if (key && checkStore) {
       try {
-        const c = await upsertCheck(checkStore, { pairKey: key, label, original: o, edited: e, sourceType: pair[0].sourceType });
+        const c = await upsertCheck(checkStore, { pairKey: key, label, original: o, edited: e, sourceType: pair[0].sourceType, versions });
         setSavedId(c.id); setLabel(c.label);
         void refreshChecks();
       } catch { say('This check could not be saved in this browser.'); }
@@ -254,7 +259,7 @@ export function App() {
     if (projectRef.current) { void updateProject((p) => recheckLatest(p, compareFn)); return; }
     if (phase !== 'done' || !docs) return;
     const id = runId.current;
-    compareInWorker(docs[0], docs[1], settings).then((r) => { if (id === runId.current) setResult(r); }).catch(() => {});
+    compareInWorker(docs[0], docs[1], settings, versions).then((r) => { if (id === runId.current) setResult(r); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.trivial, settings.fileSizeChangePct, settings.wordCountDropPct, settings.wordLimit, settings.pageLimit, settings.excludeReferences, settings.includeFootnotes, settings.requiredHeadings, settings.glossary]);
 
@@ -298,7 +303,7 @@ export function App() {
 
   // keep the saved check's verdict and progress in step with the decisions, for the Saved checks list
   useEffect(() => {
-    if (!checkStore || !savedId || phase !== 'done' || !result) return;
+    if (!checkStore || !savedId || phase !== 'done' || !result || versions) return; // versions: no verdict to keep
     const items = reviewItems(all, decisions);
     const p = progress(items);
     const verdict = verdictOf(items);
@@ -313,6 +318,7 @@ export function App() {
   const openSaved = (c: SavedCheck) => {
     const o = toFile(c.original), e = toFile(c.edited);
     setOriginal(o); setEdited(e); setLabel(c.label); setSavedId(c.id);
+    setAsProject(false); setVersions(!!c.versions);
     setView('compare');
     void start(o, e);
   };
@@ -602,14 +608,17 @@ export function App() {
                   {!savedId && checks.length > 0 && <button className="link" onClick={() => setView('saved')} title="Open a check you ran before.">Open a saved check ({checks.length})</button>}
                 </div>
                 <section className="drops" aria-label="Files to compare" data-guide="files">
-                  <DropZone label="Original" hint="The document before the AI edited it." file={original} onFile={(f) => pick('original', f)} />
-                  <DropZone label="Edited (LLM output)" hint="The version the AI produced." file={edited} onFile={(f) => pick('edited', f)} />
+                  <DropZone label={versions ? 'Version A' : 'Original'} hint={versions ? 'One version, for example the long one.' : 'The document before the AI edited it.'} file={original} onFile={(f) => pick('original', f)} />
+                  <DropZone label={versions ? 'Version B' : 'Edited (LLM output)'} hint={versions ? 'The other version, for example the short one.' : 'The version the AI produced.'} file={edited} onFile={(f) => pick('edited', f)} />
                 </section>
                 {original && (
                   <label className="inline save-project" data-guide="save-project" title="A project keeps a clean copy of your original, so every later draft is checked against it and you can see what was fixed round by round. Untick to compare these two files once (kept under Saved checks).">
-                    <input type="checkbox" checked={asProject} onChange={(ev) => setAsProject(ev.target.checked)} /> Save this as your original? We'll keep a clean copy so every later draft is checked against it (a project).
+                    <input type="checkbox" checked={asProject && !versions} disabled={versions} onChange={(ev) => setAsProject(ev.target.checked)} /> Save this as your original? We'll keep a clean copy so every later draft is checked against it (a project).
                   </label>
                 )}
+                <label className="inline save-project" data-guide="versions-mode" title="For two versions meant to differ, such as a long and a short one, or one for government and one for industry. There is no verdict and nothing to decide: the sections are grouped, and numbers and quotes that differ are still listed. The same-document warning only shows below 30. Not for projects.">
+                  <input type="checkbox" checked={versions} onChange={(ev) => { reset(); setVersions(ev.target.checked); if (ev.target.checked) setAsProject(false); }} /> These are intentionally different versions
+                </label>
                 <div className="compare-row" data-guide="compare-button">
                   <button className="btn primary" disabled={!original || !edited || busy} onClick={() => void start()} title={!original || !edited ? 'Choose both files first.' : 'Compare the two files. Nothing leaves this browser tab.'}>{busy ? 'Comparing…' : hasResults ? 'Compare again' : 'Compare'}</button>
                   {busy && <span className="progress" role="status" aria-live="polite"><span className="spinner" aria-hidden="true" />{stage}</span>}
@@ -622,7 +631,7 @@ export function App() {
                 <h2 id="g2-title">These look like different documents</h2>
                 <p>{sim.reasons[0] ? `(${sim.reasons[0][0].toLowerCase()}${sim.reasons[0].slice(1)}) ` : ''}Check you've picked the right files.</p>
                 {sim.reasons.length > 1 && <ul>{sim.reasons.slice(1).map((r) => <li key={r}>{r}</li>)}</ul>}
-                <p className="muted small">Similarity {sim.score} out of 100; below {settings.similarityThreshold} counts as different.</p>
+                <p className="muted small">Similarity {sim.score} out of 100; below {threshold} counts as different{quickVersions ? ' for intentionally different versions' : ''}.</p>
                 <div className="row">
                   <button className="btn" onClick={reset} title="Stop here and choose different files.">Cancel</button>
                   <button className="btn primary" onClick={() => { setOverride(true); overrideRef.current = true; void compare(docs, runId.current); }} title="Compare them anyway. The report will say this check was overridden.">Compare anyway</button>
@@ -634,14 +643,14 @@ export function App() {
                 <h2>{project && round ? `Round ${round.number} checked` : 'Comparison done'}</h2>
                 {project && round && round.number > 1 && <p><strong>{summaryLine(round.number, round.summary)}</strong></p>}
                 <SummaryBar all={all} layoutChanges={layoutChanges} result={shown!} settings={settings} onShowTrivial={(v) => setSettings({ ...settings, showTrivial: v })} onPick={(cat?: Category) => goChanges({ categories: cat ? [cat] : [] })} />
-                <p className="gate-summary muted">File types match ✓ · Similarity {shownSim.score}/100{shownSim.score < settings.similarityThreshold && (project ? round?.override : override) ? ' · compared anyway (below threshold)' : ''}{isPdf && layout.status === 'running' ? ` · comparing pages ${layout.done}/${layout.total}…` : ''}</p>
+                <p className="gate-summary muted">File types match ✓ · Similarity {shownSim.score}/100{shownSim.score < threshold && (project ? round?.override : override) ? ' · compared anyway (below threshold)' : ''}{isPdf && layout.status === 'running' ? ` · comparing pages ${layout.done}/${layout.total}…` : ''}</p>
                 <div className="row">
-                  <button className="btn primary" onClick={() => setView('review')} title="Is it ready to submit? The verdict and a card for each change to decide.">See the verdict</button>
+                  <button className="btn primary" onClick={() => setView('review')} title={quickVersions ? 'The sections in both versions, worded differently, or only in one, and any numbers or quotes that differ.' : 'Is it ready to submit? The verdict and a card for each change to decide.'}>{quickVersions ? 'See the version comparison' : 'See the verdict'}</button>
                   <button className="btn" onClick={() => goChanges()} title="See every change in a table you can filter, search and sort.">All changes</button>
                   <button className="btn" onClick={() => setView('metadata')} title="Compare the two files' size, dates, author and counts.">File details</button>
                   {isPdf && <button className="btn" onClick={() => setView('pages')} title="See which PDF pages look different, side by side.">PDF pages</button>}
                   {project && <button className="btn" onClick={() => setView('timeline')} title="Every round of this project: what was fixed, what is new, and the verdict.">Timeline</button>}
-                  <AuthorReviewButton all={all} trivialCount={shown!.trivialCount} fileNames={fileNames} sim={shownSim} override={project ? !!round?.override : override} decisions={shownDecisions} primary={false} />
+                  {!quickVersions && <AuthorReviewButton all={all} trivialCount={shown!.trivialCount} fileNames={fileNames} sim={shownSim} override={project ? !!round?.override : override} decisions={shownDecisions} primary={false} />}
                   <button className="btn" onClick={() => setView('report')} title="Download a PDF of this comparison for your own records.">PDF report</button>
                 </div>
               </section>
@@ -649,7 +658,10 @@ export function App() {
           </>
         )}
 
-        {view === 'review' && (hasResults ? (
+        {view === 'review' && hasResults && quickVersions && (
+          <VersionsView sections={shown!.sections ?? []} changes={all} words={shown!.words} onShowAll={() => goChanges({})} onShowIn={(c) => { filters.clear(); filters.setSearch(c.location); setView('changes'); }} />
+        )}
+        {view === 'review' && !(hasResults && quickVersions) && (hasResults ? (
           <ReviewView
             changes={all}
             words={shown!.words}
@@ -689,7 +701,7 @@ export function App() {
             : <PagesView layout={layout} threshold={settings.layoutPixelRatio} maxPages={settings.maxPagesForLayout} onRunLayout={() => void runLayout()} onOpenPage={openPage} />)}
 
         {view === 'report' && (hasResults && shownSim && fileNames ? (
-          <ReportView result={shown!} all={all} layoutChanges={layoutChanges} layout={layout} sim={shownSim} override={project ? !!round?.override : override} settings={settings} fileNames={fileNames} f={filters} decisions={shownDecisions} project={projectReport} onEditFilters={() => setView('changes')} />
+          <ReportView result={shown!} all={all} layoutChanges={layoutChanges} layout={layout} sim={shownSim} override={project ? !!round?.override : override} settings={settings} fileNames={fileNames} f={filters} decisions={shownDecisions} project={projectReport} versions={quickVersions} onEditFilters={() => setView('changes')} />
         ) : needResults('Nothing to report yet'))}
 
         {view === 'settings' && <SettingsPanel settings={settings} onChange={setSettings} />}

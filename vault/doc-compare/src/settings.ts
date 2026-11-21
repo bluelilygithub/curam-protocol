@@ -38,6 +38,9 @@ export const DEFAULT_SETTINGS: Settings = {
   glossary: [],
 };
 
+/** Intentionally different versions warn only below this similarity (addendum §0.2), instead of the Settings threshold. */
+export const VERSIONS_SIMILARITY = 30;
+
 const KEY = 'doc-compare:settings';
 
 export function loadSettings(): Settings {

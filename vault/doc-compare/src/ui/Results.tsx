@@ -300,18 +300,18 @@ export function PagesView({ layout, threshold, maxPages, onRunLayout, onOpenPage
 
 export function ReportView(p: {
   result: ComparisonResult; all: Change[]; layoutChanges: Change[]; layout: Layout; sim: SimilarityResult; override: boolean;
-  settings: Settings; fileNames: [string, string]; f: Filters; onEditFilters: () => void; decisions: Decisions; project?: ProjectReport;
+  settings: Settings; fileNames: [string, string]; f: Filters; onEditFilters: () => void; decisions: Decisions; project?: ProjectReport; versions?: boolean;
 }) {
   const [landscape, setLandscape] = useState(true);
   const real = p.all.filter((c) => !c.trivial).length;
   const pages = p.layout.pages.filter((x) => x.thumb).length;
   return (
     <>
-    <AuthorReviewCard all={p.all} trivialCount={p.result.trivialCount} fileNames={p.fileNames} sim={p.sim} override={p.override} decisions={p.decisions} />
+    {!p.versions && <AuthorReviewCard all={p.all} trivialCount={p.result.trivialCount} fileNames={p.fileNames} sim={p.sim} override={p.override} decisions={p.decisions} />}
     <div className="report-card">
-      <h2>Comparison report</h2>
+      <h2>{p.versions ? 'Version comparison report' : 'Comparison report'}</h2>
       <p>For your own records. The report is a PDF with:</p>
-      <ul><li>first, the verdict, the summary and your decisions on each item (with an <strong>UNRESOLVED ISSUES</strong> watermark on every page while a red item is open or marked Fix later); then, as the full detail:</li>{p.project && <li>for the project <strong>{p.project.name}</strong>: the round summary, the timeline of all {p.project.rounds} rounds and every time the original was replaced (with the reason);</li>}</ul>
+      <ul>{p.versions ? <li>first, titled <strong>Version comparison</strong> with no verdict: the sections in both versions, worded differently, only in A and only in B, and any numbers or quotes that differ; then, as the full detail:</li> : <><li>first, the verdict, the summary and your decisions on each item (with an <strong>UNRESOLVED ISSUES</strong> watermark on every page while a red item is open or marked Fix later); then, as the full detail:</li>{p.project && <li>for the project <strong>{p.project.name}</strong>: the round summary, the timeline of all {p.project.rounds} rounds and every time the original was replaced (with the reason);</li>}</>}</ul>
       <ul>
         <li>the two file names, the date, and the two checks (similarity {p.sim.score}/100{p.override ? ', compared anyway' : ''});</li>
         <li>counts of each kind of change by severity, and the file details table;</li>
