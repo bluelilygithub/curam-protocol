@@ -2622,7 +2622,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>DocCompare Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                15-step tour — checking a document, jobs, the tool list, comparing, labels and saved checks, the verdict and review cards, versions meant to differ, all changes, file details and PDF pages, the review for the author, settings, the guide
+                17-step tour — checking a document, jobs, the tool list, comparing, labels and saved checks, projects, the verdict and review cards, rounds and the timeline, versions meant to differ, all changes, file details and PDF pages, the review for the author, settings, the guide
               </p>
             </div>
             <button

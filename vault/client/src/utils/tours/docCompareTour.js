@@ -8,7 +8,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_doc_compare_completed';
 
-const TOTAL_STEPS = 15;
+const TOTAL_STEPS = 17;
 
 // Shepherd keeps earlier cards in the page (hidden), so the counter goes into this step's own card, not the first one found.
 function injectStepCounter(stepIndex, card) {
@@ -99,6 +99,10 @@ export function startDocCompareTour(goTool) {
     'Type a label above the file boxes (optional). Every check is saved in this browser under that label, with both files and your decisions. Saved checks lists them: search by label or file name, open one to pick up where you left off, rename it, or delete it.',
     FRAME, 'saved', 'top');
 
+  step('dc-projects', 'Projects: every draft against your original',
+    'Reviewing the same document more than once? Leave "Save this as your original?" ticked when you compare, and DocCompare keeps a clean copy of your original as a project. Next time, open the project here and add the latest version: it becomes the next round, checked against your original and the changes you already accepted. Projects lists them all, with Export to save one as a .doccompare file and Import to bring it back.',
+    FRAME, 'projects', 'top');
+
   step('dc-checks', 'Two checks first',
     'DocCompare stops if the two files are different types, and warns (with Compare anyway) if they look like different documents. When it finishes, a summary of what changed appears here, with buttons to every result.',
     FRAME, 'compare', 'top');
@@ -106,6 +110,10 @@ export function startDocCompareTour(goTool) {
   step('dc-review', 'The verdict comes first',
     'After comparing you see the verdict: Not ready to submit, Review recommended, or No significant changes found. Below it, a card for each change that matters says what happened and why it matters. Restore copies the original text to paste back, Accept records the change was intended, Fix later keeps it open. Your decisions are kept in this browser. The verdict shows what changed, not whether the content is accurate.',
     FRAME, 'review', 'top');
+
+  step('dc-timeline', 'Rounds and the timeline',
+    'In a project, the verdict says what happened since the last round: "Round 3: 2 issues fixed, 1 not fixed, 1 new change", and each card is marked New in this round, Not fixed, or Changed again. Fixed and accepted items move to Resolved. Timeline lists every round with its words, issues and verdict, marks the round that lost the most words, and is where you make the latest round the new original (a reason is required) or compact old rounds to free space.',
+    FRAME, 'timeline', 'top');
 
   step('dc-versions', 'Versions meant to differ',
     'Comparing a long and a short version, or one for government and one for industry? Tick "These are intentionally different versions" under the file boxes before you compare. There is then no verdict and nothing to decide: Verdict and review becomes a Version comparison that groups the sections as in both versions, worded differently, only in A and only in B, and still lists any figures or quotes that differ. The PDF report is titled Version comparison. It is for one-off checks, not projects.',
