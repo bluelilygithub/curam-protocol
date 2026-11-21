@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2e86f9eb",
+   "fullHash": "2e86f9ebaafbad173c6217213e84f338a447ad21",
+   "committedAt": "2026-11-21T14:44:19+10:00",
+   "author": "mrb",
+   "subject": "DocCompare: labels and saved checks (search, open again, rename, delete)",
+   "filesChanged": 15,
+   "insertions": 436,
+   "deletions": 49,
+   "area": "DocCompare",
+   "goal": "Let the owner label a comparison, come back to it later, and find or delete past comparisons.",
+   "whatChanged": "Compare documents gains an optional Label box. Every successful comparison is saved in the browser's IndexedDB (src/review/savedChecks.ts; database doc-compare upgraded to v2 with a new 'checks' store, opened by the shared src/review/db.ts) with its label (or the edited file's name and the date), both files as Blobs, the file-pair key, and its latest verdict and decided count, kept in step as decisions change; comparing the same two files again updates the same saved check. New Saved checks tool (Compare group, and 'Or open a saved check' on the start panel; src/ui/SavedChecksView.tsx): newest first, search by label or file name (every word must match), Open (rebuilds the files and re-runs the comparison; decisions come back because they are keyed by the same file hashes), Rename, and Delete with an inline Delete? Yes / No that also removes the files and decisions. Starting a new check after a saved one clears the old label. Decision store gains remove(). App start() now takes the files explicitly (a saved check is opened and compared in one click). Wording that said 'nothing is saved' corrected in the guide, the (i) box and the privacy tooltip; guide catalogue gains saved and check-label; tour grows to 14 steps.",
+   "filesImpacted": [
+    "doc-compare/src/review/savedChecks.ts",
+    "doc-compare/src/review/db.ts",
+    "doc-compare/src/review/decisions.ts",
+    "doc-compare/src/ui/SavedChecksView.tsx",
+    "doc-compare/src/ui/App.tsx",
+    "doc-compare/src/ui/Results.tsx",
+    "doc-compare/src/ui/guide.ts",
+    "doc-compare/src/ui/styles.css",
+    "doc-compare/tests/savedChecks.test.ts",
+    "client/src/pages/DocComparePage.jsx",
+    "client/src/pages/docCompare/docCompareTools.mjs",
+    "client/src/utils/tours/docCompareTour.js",
+    "client/src/pages/SettingsPage.jsx",
+    "server/services/docCompareTutor.js",
+    "docs/doc-compare.md"
+   ],
+   "benefit": "Comparisons are no longer lost when the page closes: each one can be named, found by search, reopened with its decisions, renamed or deleted.",
+   "concerns": "Saved checks and their files live in this browser only: another browser or computer does not see them, clearing site data removes them, and a deleted check cannot be recovered (no recycle bin; export comes with projects in phase 5). Every comparison is saved automatically, so storage grows with use; the list shows sizes but there is no quota warning yet. Checked with 123 app tests and in the real local Vault (production build and CSP): labelled and unlabelled saves, verdict and decided count in the list, search, survival across a reload, reopening with decisions restored, rename, Delete with Yes / No, and upgrading a phase-2 v1 database without losing decisions. Not yet run on Railway."
+  },
+  {
    "commit": "726e0f03",
    "fullHash": "726e0f03d6d5649aa1e2b59cefc7bd736b2a82ca",
    "committedAt": "2026-11-21T10:15:27+10:00",
