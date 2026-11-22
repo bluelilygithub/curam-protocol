@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "45975aaa",
+   "fullHash": "45975aaacade7650020b8678f05fca1494dff336",
+   "committedAt": "2026-11-22T14:50:11+10:00",
+   "author": "mrb",
+   "area": "Claude Code costs",
+   "subject": "Rename the Ponytail page to \"Claude Code costs\"; bigger Ponytail map for Vault",
+   "filesChanged": 9,
+   "insertions": 17,
+   "deletions": 12,
+   "goal": "Give the admin Ponytail report a name that says what it shows, and let the Ponytail plugin's codebase map reach Contract Review and DocCompare.",
+   "whatChanged": "The /ponytail page is now called \"Claude Code costs\" in the menu, heading, (i) box title and Code Map's Context tab, with a line saying the figures come from the Ponytail plugin. The plugin itself is the unmodified upstream Ponytail (v5.3.3) and keeps its name, and so do the URL, tables, files and webhook (the menu search still finds \"ponytail\"). The docs, CLAUDE.md, key-files and the briefing's doc description were updated, and the briefing's rules.md hash was refreshed (its rules did not change). New vault/.claude/settings.json sets PONYTAIL_MAP_CHARS=12000: the plugin's session-start map of what already exists grows from 2,000 characters (about 15 of 150 Vault folders) to about 66 folders, including client/src/pages/contractReview and parts of doc-compare.",
+   "filesImpacted": [
+    ".claude/settings.json",
+    "CLAUDE.md",
+    "client/src/config/appNavigation.js",
+    "client/src/pages/PonytailPage.jsx",
+    "client/src/pages/codeMap/ContextView.jsx",
+    "docs/key-files.md",
+    "docs/ponytail-report.md",
+    "server/services/codeMap/briefing/docs.js",
+    "server/services/codeMap/briefing/rules.md"
+   ],
+   "benefit": "The menu says what the page is for, and Claude Code sessions started in vault/ know the Contract Review and DocCompare code exists before searching.",
+   "concerns": "The map setting only applies when Claude Code is started in the vault folder, and costs about 3K tokens per session. It was checked by running the plugin's map script with the same budget, not in a new session. Saved menu layouts store ids, so they pick up the new label."
+  },
+  {
    "commit": "83ec9499",
    "fullHash": "83ec9499ff455a3643476c6233c83f025abce784",
    "committedAt": "2026-11-22T14:49:52+10:00",
