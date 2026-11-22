@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2489b59a",
+   "fullHash": "2489b59aba0d0aa04656927ddcfbaaa09f03e89e",
+   "committedAt": "2026-11-22T15:23:00+10:00",
+   "author": "mrb",
+   "area": "YouTube",
+   "subject": "YouTube: Download (yt-dlp) and Chapters in the watch window",
+   "filesChanged": 12,
+   "insertions": 613,
+   "deletions": 8,
+   "goal": "Let the owner download a YouTube video or its audio from the watch window, and see a video's own chapters, using yt-dlp.",
+   "whatChanged": "Two buttons under the player. Download opens a window: video up to 720p or 1080p (MP4) or audio only (MP3), and a box to tick confirming the person may download it (theirs, Creative Commons, or with the owner's permission); the server refuses without confirmRights. A background yt-dlp job (server/services/youtubeDownload.js, in memory; one per person, two across the server, 20-minute timeout, 2 GB cap) saves it to a temp folder while the window polls progress; Save file fetches it once through apiClient.download and the server deletes it; unfetched files go after 30 minutes. yt-dlp errors become plain sentences (bot block, 403, age restriction, private, live, too big, no ffmpeg). Chapters lists the video's own chapters, from its description's timestamps (one cached Data API call, YouTube's rule) or else from yt-dlp, which includes automatic chapters; clicking one reloads the player there. Routes: GET /api/youtube/chapters/:videoId, POST /api/youtube/download, GET /api/youtube/download/:id and /:id/file (route manifest and ownership bindings updated). The guide catalogue (chapters, download), the (i) box, the guide test and docs/youtube-agent.md were updated; the old 'no download' paragraph now explains why the rule changed.",
+   "filesImpacted": [
+    "client/src/pages/YoutubePage.jsx",
+    "client/src/pages/youtube/ChaptersPanel.jsx",
+    "client/src/pages/youtube/DownloadDialog.jsx",
+    "client/src/pages/youtube/youtubeTools.mjs",
+    "docs/youtube-agent.md",
+    "server/routes/youtube.js",
+    "server/services/youtubeDownload.js",
+    "server/services/youtubeDownload.test.js",
+    "server/services/youtubeTutor.js",
+    "server/services/youtubeTutor.test.js",
+    "server/testing/ownershipBindings.json",
+    "server/testing/routeManifest.json"
+   ],
+   "benefit": "Videos the owner may download (their own, Creative Commons) can be saved or turned into audio without leaving Vault, and long videos can be skimmed by their own chapters at no cost.",
+   "concerns": "YouTube's terms allow downloading only with permission; the tick box is the only check, so a false confirmation is the person's risk. YouTube often blocks cloud servers, so downloads on Railway may need YOUTUBE_COOKIES and can still fail; the image's yt-dlp is only as new as the last base build. Guitar's fixed player clients (tv_embedded,android_vr,web) got HTTP 403 on video data with yt-dlp 2026.10.26, so Download uses yt-dlp's defaults; Guitar itself was not changed or checked. The file is held in browser memory while saving, so very large files are slow. Tested: youtubeDownload.test.js (5, yt-dlp faked) and youtubeTutor.test.js; locally with a real yt-dlp: chapters for 'Me at the zoo' (3) and Big Buck Bunny (none), the job flow end to end with a single-file format, and the browser (chapters jump the player, the Download button stays off until the box is ticked, progress, error shown, phone width, no page errors). Not tested: a full 720p/1080p/MP3 download, which needs ffmpeg (in the image, not on this PC), or anything on Railway."
+  },
+  {
    "commit": "215409b1",
    "fullHash": "215409b1938e69c402a9501c5cf7e644384ef946",
    "committedAt": "2026-11-22T14:57:46+10:00",
