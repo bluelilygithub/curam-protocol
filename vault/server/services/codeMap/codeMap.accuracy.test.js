@@ -10,7 +10,7 @@
 const assert = require('assert');
 const path = require('path');
 const { analyze } = require('./index');
-const { collectFiles } = require('./files');
+const { collectFiles, appOf } = require('./files');
 const sample = require('./__fixtures__/sample-data.json');
 
 const ROOT = path.resolve(__dirname, '../../..');
@@ -27,7 +27,8 @@ const OWN_LINES = {
   'client/src/providers/iconMap.js': (l) => l.includes("'code-map':"),
 };
 const all = collectFiles(ROOT);
-const files = Object.fromEntries(Object.entries(all).filter(([f]) => !OWN_PREFIXES.some((p) => f.startsWith(p))));
+// Embedded apps (doc-compare/ etc.) were not read at 40bf883 either.
+const files = Object.fromEntries(Object.entries(all).filter(([f]) => !appOf(f) && !OWN_PREFIXES.some((p) => f.startsWith(p))));
 for (const [f, own] of Object.entries(OWN_LINES)) files[f] = files[f].split('\n').map((l) => (own(l) ? '' : l)).join('\n');
 const full = analyze({ root: ROOT, files: all, log: null });
 const r = analyze({ root: ROOT, files, log: null });

@@ -46,6 +46,7 @@ The accuracy test compares the analyzer with the Python prototype's output at co
 2. Client code: everything reachable by imports from the tool's page. Server code: everything reachable from the route files of the tool's own API mounts in `server/index.js`. A mount belongs to the tool whose page path or feature flag matches it.
 3. A file reached by three or more tools is **shared**: it belongs to none of them, and the rules do not check it for any tool. The rest is **owned** by the tools that reach it.
 4. Test files count for a tool when they import its owned code.
+5. **Embedded apps.** DocCompare, the cellar, room and garden planners and Route Tracer are separate apps shown in an iframe. Their `src/` and `tests/` folders (TypeScript included) are read too, and every file in them is owned by that tool (`EMBEDDED_APPS` in `files.js`). The apiClient, icons and modals rules (`vaultOnly`) skip that code, because those apps have their own conventions. `import type` lines are not counted as links, since TypeScript drops them. `planner-core/`, which the planners share, is not read.
 
 The import graph is built with regexes and path resolution, not a parser. `require()` and `import` with a literal path are followed; a path built at runtime is not.
 

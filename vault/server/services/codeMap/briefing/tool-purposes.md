@@ -17,6 +17,7 @@
 - `codeMap` — Reads Vault's own source: every tool, the code it owns, how it follows the house rules, ranked findings, and this briefing.
 - `documentRedaction` — Finds and redacts personal or sensitive details in documents before they are shared or sent to an AI.
 - `contractReview` — Upload a contract and get clause-by-clause risk flags, a plain-English summary, obligations and suggested redlines (not legal advice).
+- `docCompare` — Compare two versions of a document in the browser: what changed, what went missing, and whether it is ready to send; files never leave the browser.
 - `pdf` — PDF toolkit: merge, split, convert, compress and edit PDFs; nothing is stored.
 - `fonts` — Customise Google Fonts (variable axes, subsets) and download them, with licence checks.
 - `restyle` — Style editor: load or paste a page and its CSS, see a live preview, click an element to change its look, export the CSS.
@@ -59,4 +60,4 @@
 - `goals` — Goal setting built on the 7 Habits: a personal mission statement, roles and goals.
 - `student` — Quizzes and study help for a student.
 - `usage` — AI usage and cost by model and tool.
-- `ponytail` — Ponytail report: what each Claude Code task cost and reused, next to the code written each day.
+- `ponytail` — Claude Code costs (fed by the Ponytail plugin): what each Claude Code task cost and reused, next to the code written each day.

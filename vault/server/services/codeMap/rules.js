@@ -5,7 +5,7 @@
 // Ported from the "convention checks" block of specs/code-map/reference/analyze.py. To add a convention, add one entry.
 
 const path = require('path');
-const { splitLines } = require('./files');
+const { splitLines, appOf } = require('./files');
 const { kebab } = require('./ownership');
 
 const MODEL_RX = /['"`](claude-(?:opus|sonnet|haiku|3|instant)[\w.-]*|gemini-\d[\w.-]*|gpt-[34o][\w.-]*|deepseek-[\w.-]+)['"`]/;
@@ -137,6 +137,7 @@ const RULES = [
   },
   {
     id: 'apiClient',
+    vaultOnly: true,
     label: 'apiClient',
     severity: 'medium',
     area: 'Conventions',
@@ -232,6 +233,7 @@ const RULES = [
   },
   {
     id: 'icons',
+    vaultOnly: true,
     label: 'getIcon',
     severity: 'low',
     area: 'UI system',
@@ -244,6 +246,7 @@ const RULES = [
   },
   {
     id: 'modals',
+    vaultOnly: true,
     label: 'Shared Dialog',
     severity: 'low',
     area: 'UI system',
@@ -319,7 +322,9 @@ function pyRound(x) {
 // Runs every rule on a tool and adds checks, score, fails, warns, lifecycle, defaultOn.
 function applyRules(t, ctx, rules = RULES) {
   const c = {};
-  for (const r of rules) c[r.id] = r.test(t, ctx);
+  // vaultOnly rules check Vault's own client code, not an embedded app (it has no apiClient, Dialog or getIcon).
+  const vaultView = { ...t, ownedClient: (t.ownedClient || []).filter((f) => !appOf(f)) };
+  for (const r of rules) c[r.id] = r.test(r.vaultOnly ? vaultView : t, ctx);
   const vals = Object.values(c);
   const pass = vals.filter((v) => v.status === 'pass').length;
   const total = vals.filter((v) => v.status !== 'na').length;

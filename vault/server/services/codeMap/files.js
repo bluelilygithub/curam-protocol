@@ -10,8 +10,16 @@ const EXTS = ['.js', '.jsx', '.mjs', '.cjs'];
 // __fixtures__ is skipped so the Code Map's own test tree is not counted as Vault code (not in the Python reference).
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', '.git', 'coverage', '__pycache__', '__fixtures__']);
 const BASES = ['server', 'client/src'];
+// Tools whose real code is a separate app shown in an iframe: its src/ and tests/ (TypeScript too) count as that tool's client code.
+const EMBEDDED_APPS = { docCompare: 'doc-compare', cellarPlanner: 'cellar-planner', roomPlanner: 'room-planner', gardenPlanner: 'garden-planner', routeTracer: 'route-tracer' };
+const APP_EXTS = [...EXTS, '.ts', '.tsx'];
 
-const TEST_RE = /\.(test|spec)\.(m?js|jsx|cjs)$/;
+const TEST_RE = /\.(test|spec)\.(m?js|jsx|cjs|tsx?)$/;
+
+// The tool id whose embedded app holds this file, or null for Vault's own code.
+function appOf(f) {
+  return Object.keys(EMBEDDED_APPS).find((id) => f.startsWith(`${EMBEDDED_APPS[id]}/`)) || null;
+}
 
 function isTest(f) {
   return TEST_RE.test(f) || f.includes('/__tests__/');
@@ -61,6 +69,13 @@ function collectFiles(root) {
       if (hasExt(name, EXTS)) files[toRel(root, p)] = readText(p);
     });
   }
+  for (const dir of Object.values(EMBEDDED_APPS)) {
+    for (const sub of ['src', 'tests']) {
+      walk(path.join(root, dir, sub), (p, name) => {
+        if (hasExt(name, APP_EXTS) && !name.endsWith('.d.ts')) files[toRel(root, p)] = readText(p);
+      });
+    }
+  }
   return files;
 }
 
@@ -84,4 +99,4 @@ function splitLines(src) {
   return lines;
 }
 
-module.exports = { EXTS, SKIP_DIRS, isTest, readText, walk, toRel, collectFiles, locOf, buildLoc, splitLines, hasExt };
+module.exports = { EXTS, APP_EXTS, EMBEDDED_APPS, appOf, SKIP_DIRS, isTest, readText, walk, toRel, collectFiles, locOf, buildLoc, splitLines, hasExt };

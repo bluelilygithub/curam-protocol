@@ -328,4 +328,27 @@ test('result shape: the sample-data keys plus findings', () => {
   assert.strictEqual(JSON.stringify(result).length < 1024 * 1024, true);
 });
 
+test('embedded app: its TypeScript is owned by the tool, type-only imports ignored, Vault-only rules skip it', () => {
+  const { EMBEDDED_APPS } = require('./files');
+  EMBEDDED_APPS.recipes = 'recipe-app'; // a fixture tool stands in for docCompare & co.
+  try {
+    const app = {
+      'recipe-app/src/main.tsx': "import { shell } from './ui/shell';\nfetch('/api/recipes/list');\nshell();\n",
+      'recipe-app/src/ui/shell.tsx': "import type { Opts } from '../main';\nexport function shell() { return '<div class=\"fixed inset-0\">'; }\n",
+      'recipe-app/tests/shell.test.ts': "import { shell } from '../src/ui/shell';\n",
+    };
+    const { deps } = buildGraph(app);
+    assert.deepStrictEqual([...deps.get('recipe-app/src/main.tsx')], ['recipe-app/src/ui/shell.tsx'], '.tsx resolves');
+    assert.ok(!deps.has('recipe-app/src/ui/shell.tsx'), 'import type is not a link');
+    const r = analyze({ root: ROOT, files: { ...files, ...app }, log: null });
+    const t = r.tools.find((x) => x.id === 'recipes');
+    assert.ok(t.ownedClient.includes('recipe-app/src/main.tsx') && t.ownedClient.includes('recipe-app/src/ui/shell.tsx'));
+    assert.ok(t.tests.includes('recipe-app/tests/shell.test.ts'));
+    assert.strictEqual(t.checks.apiClient.status, T.recipes.checks.apiClient.status, 'raw fetch in the app is not an apiClient gap');
+    assert.strictEqual(t.checks.modals.status, T.recipes.checks.modals.status, 'its own overlay is not a Dialog gap');
+  } finally {
+    delete EMBEDDED_APPS.recipes;
+  }
+});
+
 console.log(`codeMap.test.js: ${passed} passed`);

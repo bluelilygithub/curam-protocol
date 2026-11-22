@@ -4,7 +4,7 @@
 // Port of the "reach sets" and "tool-to-tool coupling" blocks of specs/code-map/reference/analyze.py.
 
 const { bfs } = require('./imports');
-const { isTest } = require('./files');
+const { isTest, EMBEDDED_APPS } = require('./files');
 const { mountsForApi, seg } = require('./mounts');
 
 // A file reached by this many tools or more is shared, not owned.
@@ -76,6 +76,10 @@ function computeOwnership({ files, loc, deps, tools, mounts, config = OWNER_CONF
 
   const clientReach = {};
   for (const t of tools) clientReach[t.id] = t.clientEntries.length ? bfs(t.clientEntries, deps) : new Set();
+  for (const t of tools) {
+    const dir = EMBEDDED_APPS[t.id];
+    if (dir) for (const f of Object.keys(files)) if (f.startsWith(`${dir}/`)) clientReach[t.id].add(f);
+  }
   const clientCount = countReach(clientReach);
   const cc = (f) => clientCount.get(f) || 0;
 
