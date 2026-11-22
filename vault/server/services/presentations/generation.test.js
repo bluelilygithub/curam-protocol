@@ -29,7 +29,7 @@ async function run() {
   assert.equal(outline.title, 'Quarterly update');
   assert.equal(outline.nSlides, 6);
   assert.equal(outline.slides.length, 6, 'short outlines are padded to the asked length');
-  assert.equal(calls[0].modelId, 'light-model');
+  assert.equal(calls[0].modelId, 'standard-model', 'with no explicit pick the default/standard tier wins over light');
   assert.match(calls[0].prompt, /Explain the quarter/);
   assert.equal(calls[0].opts.signal, null);
 
@@ -44,18 +44,23 @@ async function run() {
   const noModels = { ...deps, getModelsForUser: async () => ({ light: null, standard: null }) };
   await assert.rejects(() => generateOutline({ userId: 7, brief: 'x', deps: noModels }), /No AI model/);
 
-  // An explicit, already-validated selection wins over the standard tier. The route does the validation.
+  // An explicit, already-validated selection wins over both tiers for BOTH calls. The route does the validation.
   const selectedCalls = [];
   const selectedDeps = {
     ...deps,
     callModel: async (modelId, prompt, opts) => {
       selectedCalls.push({ modelId, prompt, opts });
-      return { text: 'not json', model: modelId, inputTokens: 3, outputTokens: 4 };
+      return {
+        text: selectedCalls.length === 1 ? `\`\`\`json\n${outlineJson}\n\`\`\`` : 'not json',
+        model: modelId, inputTokens: 3, outputTokens: 4,
+      };
     },
   };
+  const pickedOutline = await generateOutline({ userId: 7, brief: 'x', model: 'picked-model', deps: selectedDeps });
+  assert.equal(pickedOutline.title, 'Quarterly update');
   const picked = await generateDeck({ userId: 7, outline, theme: { id: 'paper' }, model: 'picked-model', deps: selectedDeps });
-  assert.equal(selectedCalls.length, 1);
-  assert.equal(selectedCalls[0].modelId, 'picked-model');
+  assert.equal(selectedCalls.length, 2);
+  assert.ok(selectedCalls.every((c) => c.modelId === 'picked-model'), 'outline and slides use the same picked model');
   assert.equal(picked.themeId, 'paper', 'a schema slip still falls back to the outline');
 
   // Provider auth failures must not reach the browser as raw SDK JSON — and must not silently

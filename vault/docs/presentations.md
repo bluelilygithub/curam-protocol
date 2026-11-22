@@ -90,8 +90,8 @@ The HTML preview, PDF and PNGs render from this model. The PPTX is built from th
 ## Generation pipeline
 
 1. **Source normalisation** — `import` (`server/services/presentations/sources.js`) extracts text from PDF (`pdf-parse`), DOCX (`mammoth`), TXT/MD, or a safe-fetched URL; images are kept as asset references under the user's upload folder. The brief tool accepts typed text directly.
-2. **Outline** — `generation.js` asks the workspace `light` model (falling back to `standard`) for a short JSON outline: deck title, subtitle, 6–12 slides, each with a layout hint, heading and 2–4 bullets. Output is parsed strictly and clamped. The outline deliberately keeps using the light tier even when a person picks a model.
-3. **Slides** — the same `generation.js` asks the workspace `standard` model (falling back to `light`) to expand the outline into the canonical deck JSON. A model explicitly chosen on the page replaces the `standard` slot after it has been validated server-side. Unknown layouts fall back to `bullets`; text is length-capped.
+2. **Outline** — `generation.js` asks the same text model as the slides (the validated page selection, otherwise `default_model`, with `standard`/`light` tiers only as fallbacks) for a short JSON outline: deck title, subtitle, 6–12 slides, each with a layout hint, heading and 2–4 bullets. Output is parsed strictly and clamped.
+3. **Slides** — the same `generation.js` asks that same resolved model to expand the outline into the canonical deck JSON. Unknown layouts fall back to `bullets`; text is length-capped.
 4. **Preview** — `PresentationPreview.jsx` renders the canonical JSON as HTML using the selected theme; the server-side renderer in `server/services/presentations/render.js` produces the same HTML for export.
 5. **Export** — `server/services/presentations/export.js` writes PPTX with `pptxgenjs`, PDF with Playwright's `page.pdf()`, per-slide PNGs zipped with `archiver`, and a self-contained HTML file with assets inlined as data URLs. Finished files are kept per user under `{UPLOAD_DIR}/presentations/{userId}/exports/` until they are replaced.
 
@@ -99,7 +99,7 @@ All model calls use `getModelsForUser(userId)` and `callModel()`; usage is logge
 
 ### Model selection
 
-Presentations follows the same rule as Chat. The page loader calls `useModels()` (Settings → AI & Chat: `vault_models` and `default_model`) and reads `memberModelSelection` from Feature Access. Admins may always choose; members may choose only when that flag is on. The effective choice is the picked model, otherwise `defaultModel`, otherwise the first configured text model. The sidebar picker lists text models only, and the selected id is sent with `POST /api/presentations/create`.
+Presentations follows the same rule as Chat. The page loader calls `useModels()` (Settings → AI & Chat: `vault_models` and `default_model`) and reads `memberModelSelection` from Feature Access. Admins may always choose; members may choose only when that flag is on. The effective choice is the picked model, otherwise `defaultModel`, otherwise the first configured text model. That one id drives both generation calls and the guide. The sidebar picker lists text models only, and the selected id is sent with `POST /api/presentations/create`.
 
 `server/utils/userModelSelection.js` repeats the permission check at the HTTP boundary. It accepts an explicit id only when that person is allowed to choose and the id is a text model in the user's resolved `vault_models` catalog (admin fallback included). A member with selection off has the id ignored; an allowed caller who sends an unknown or non-text id gets a 400 and no provider call. Generation still falls back to the resolver's `standard`/`light` tiers when no valid selection is present.
 
@@ -180,7 +180,7 @@ Long work returns `202 { jobId }`, follows the Video Tools background-job patter
 ## Tests
 
 - `node server/services/presentations/schema.test.js` — canonical deck validation and clamping.
-- `node server/services/presentations/generation.test.js` — outline/slide prompt plumbing, explicit model override and friendly provider errors with stubbed models; no network.
+- `node server/services/presentations/generation.test.js` — outline/slide prompt plumbing, the same validated model for both calls, default-model precedence and friendly provider errors with stubbed models; no network.
 - `node server/utils/userModelSelection.test.js` — admin/member permission and configured text-id validation; no database.
 - `node server/services/guideCore.test.js` — guide tier fallback, explicit model and friendly provider errors; no database.
 - `node server/services/presentations/export.test.js` — PPTX/PDF/PNG generation from a fixture deck.

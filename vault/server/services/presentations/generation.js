@@ -1,8 +1,8 @@
 'use strict';
 
-// Prompt plumbing for Presentations. Only two model calls are needed: a light model makes the outline,
-// the standard model (or a route-validated selection) expands it into the canonical deck. Tier ids come
-// from Settings via getModelsForUser(); no model id is hard-coded here.
+// Prompt plumbing for Presentations. Only two model calls are needed: the same resolved text model makes
+// the outline and the deck. The route-validated selection (or default_model) wins; tier ids are fallbacks
+// from Settings via getModelsForUser(). No model id is hard-coded here.
 
 const { normalizeDeck, normalizeOutline, deckFromOutline, text, SOURCE_MAX } = require('./schema');
 const { modelCallError } = require('../../utils/modelCallError');
@@ -91,11 +91,11 @@ async function callJson(modelId, prompt, { maxTokens = 2400, feature, userId, de
   return parseJson(answer);
 }
 
-/** Make a clamped outline. A malformed model answer throws a plain 502. */
-async function generateOutline({ userId, brief, sourceText = '', imageRefs = [], deps = {} }) {
+/** Make a clamped outline. Uses the same validated selection/default as the slides; tiers are only fallbacks. */
+async function generateOutline({ userId, brief, sourceText = '', imageRefs = [], model, deps = {} }) {
   const getModels = getResolver(deps);
-  const models = await getModels(userId);
-  const modelId = models.light || models.standard;
+  const models = model ? {} : await getModels(userId);
+  const modelId = model || models.standard || models.light;
   if (!modelId) {
     throw Object.assign(new Error('No AI model is set up for this workspace. Add a model in Settings.'), { status: 503 });
   }

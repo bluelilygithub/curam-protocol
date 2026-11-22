@@ -121,7 +121,7 @@ export default function CreateDeck() {
 
         {model && (
           <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-            Slides will be written with {getModelShortName(model)}. The outline still uses the workspace light model.
+            The outline and slides will both be written with {getModelShortName(model)}.
           </p>
         )}
 
