@@ -38,7 +38,7 @@ node server/services/codeMap/security.test.js
 node server/services/codeMap/liveCheck.test.js
 ```
 
-The accuracy test compares the analyzer with the Python prototype's output at commit 40bf883. It leaves out the Code Map's own files and blanks its single lines in shared files, so it keeps comparing like with like. As Vault changes, the differences it prints grow on purpose: read and explain them; do not tune the analyzer to hit the old numbers.
+The accuracy test runs today's analyzer on Vault exactly as it was at commit 40bf883 (read from git into a temp folder, `vault-codemap-40bf8834`, once) and compares it with the Python prototype's output from that commit. The input never changes, so new Vault code cannot make it drift: any difference it prints means the analyzer itself changed. Explain such a difference; do not tune the analyzer to hit the old numbers. It needs git and the repo history, so it skips (and passes) where there is none.
 
 ## How it works out what belongs to which tool
 

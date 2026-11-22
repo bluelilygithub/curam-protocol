@@ -1,39 +1,56 @@
 'use strict';
 
-// node server/services/codeMap/codeMap.accuracy.test.js
-// Runs the analyzer on this repo and compares it with the Python prototype's output from commit 40bf883
-// (__fixtures__/sample-data.json, copied from specs/code-map/reference/). It asserts the brief's accuracy
-// check (60 tools, 145 mounts, 11 cycles, 404 test files, per-tool scores within 5) and prints every other
-// difference so it can be explained. As Vault changes after 40bf883 these numbers will drift on purpose:
-// read the printed differences, explain them, and do not tune the analyzer to hit the old numbers.
+// node server/services/codeMap/codeMap.accuracy.test.js   (needs git and the repo's history; local only)
+// Runs today's analyzer on Vault exactly as it was at commit 40bf883, read from git, and compares it with the Python
+// prototype's output from that commit (__fixtures__/sample-data.json, copied from specs/code-map/reference/). Same input,
+// so later Vault changes cannot make it drift; a difference means the analyzer itself changed. It asserts the brief's
+// accuracy check (60 tools, 145 mounts, 11 cycles, 404 test files, per-tool scores within 5) and prints every other
+// difference so it can be explained. If an analyzer change is meant to differ, explain it; do not tune to the old numbers.
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { analyze } = require('./index');
-const { collectFiles, appOf } = require('./files');
+const { EXTS } = require('./files');
 const sample = require('./__fixtures__/sample-data.json');
 
-const ROOT = path.resolve(__dirname, '../../..');
-// The Code Map's own code did not exist at 40bf883, so it is left out to compare like with like: its service folder, its route file
-// and test, its weekly cron, its guide, its page, views and tour, and its single lines in shared files (blanked, so later line numbers stay
-// the same): the mounts and cron start in server/index.js, the guide registry entry, the menu entry, the App.jsx import and route, the icon.
-const OWN = 'server/services/codeMap/';
-const OWN_PREFIXES = [OWN, 'server/routes/codeMap', 'server/cron/codeMapCron', 'server/services/codeMapTutor', 'client/src/pages/CodeMapPage', 'client/src/pages/codeMap/', 'client/src/utils/tours/codeMapTour'];
-const OWN_LINES = {
-  'server/index.js': (l) => l.includes("app.use('/api/code-map") || l.includes("require('./cron/codeMapCron')"),
-  'client/src/config/appNavigation.js': (l) => l.includes("id: 'codeMap'"),
-  'client/src/App.jsx': (l) => l.includes('CodeMapPage'),
-  'server/config/guides.js': (l) => l.includes("'code-map':"),
-  'client/src/providers/iconMap.js': (l) => l.includes("'code-map':"),
-};
-const all = collectFiles(ROOT);
-// Embedded apps (doc-compare/ etc.) were not read at 40bf883 either.
-const files = Object.fromEntries(Object.entries(all).filter(([f]) => !appOf(f) && !OWN_PREFIXES.some((p) => f.startsWith(p))));
-for (const [f, own] of Object.entries(OWN_LINES)) files[f] = files[f].split('\n').map((l) => (own(l) ? '' : l)).join('\n');
-const full = analyze({ root: ROOT, files: all, log: null });
-const r = analyze({ root: ROOT, files, log: null });
-console.log(`Whole repo now: ${full.summary.files} files, ${full.summary.tests} tests, ${full.summary.tools} tools, ${full.summary.mounts} mounts, ${full.cycles.length} cycles`);
-console.log(`Without ${OWN} (${Object.keys(all).length - Object.keys(files).length} files): compared with the prototype below.`);
+const COMMIT = '40bf8834';
+const VAULT = path.resolve(__dirname, '../../..');
+const SNAP = path.join(os.tmpdir(), `vault-codemap-${COMMIT}`);
+const DONE = path.join(SNAP, '.complete');
+
+// Writes what the analyzer reads (server/ and client/src/ source, docs/, the route manifest) at COMMIT into SNAP, once.
+function snapshot() {
+  if (fs.existsSync(DONE)) return;
+  const git = (args, input) => execFileSync('git', args, { cwd: VAULT, input, maxBuffer: 512 * 1024 * 1024 });
+  const prefix = git(['rev-parse', '--show-prefix']).toString().trim(); // 'vault/'; ls-tree already prints paths relative to it
+  const names = git(['ls-tree', '-r', '--name-only', COMMIT, '--', 'server', 'client/src', 'docs']).toString().split('\n')
+    .filter(Boolean)
+    .filter((f) => f.startsWith('docs/') || f === 'server/testing/routeManifest.json' || EXTS.some((e) => f.endsWith(e)));
+  const out = git(['cat-file', '--batch'], names.map((f) => `${COMMIT}:${prefix}${f}`).join('\n') + '\n');
+  fs.rmSync(SNAP, { recursive: true, force: true });
+  let at = 0;
+  for (const f of names) {
+    const nl = out.indexOf(10, at);
+    const size = Number(out.toString('latin1', at, nl).split(' ')[2]);
+    const dest = path.join(SNAP, f);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, out.subarray(nl + 1, nl + 1 + size));
+    at = nl + 1 + size + 1;
+  }
+  fs.writeFileSync(DONE, COMMIT);
+}
+
+try {
+  snapshot();
+} catch (e) {
+  console.log(`codeMap.accuracy.test.js: skipped (could not read commit ${COMMIT} from git: ${e.message.split('\n')[0]})`);
+  process.exit(0);
+}
+const r = analyze({ root: SNAP, log: null });
+console.log(`Vault at ${COMMIT}: ${r.summary.files} files, ${r.summary.tests} tests, ${r.summary.tools} tools, ${r.summary.mounts} mounts, ${r.cycles.length} cycles`);
 
 const diffs = [];
 const note = (s) => diffs.push(s);
