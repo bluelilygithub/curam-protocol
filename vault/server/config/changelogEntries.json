@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0242ec72",
+   "fullHash": "0242ec721f3bbb261e55b7122d15b1e60d70f545",
+   "committedAt": "2026-11-22T19:10:14+10:00",
+   "author": "mrb",
+   "area": "Presentations, Onboarding, Documentation",
+   "subject": "Presentations: slide decks, guide chat, tour and docs",
+   "filesChanged": 53,
+   "insertions": 4401,
+   "deletions": 0,
+   "goal": "Add a simpler Vault slide-deck tool at /presentations, with the same shell as Graphics and Video Tools, complete onboarding and accurate docs, behind a preview feature flag.",
+   "whatChanged": "A new Presentations page with six tools (Create deck, Import source, Themes, Slide editor, Export, My decks) in four groups, four start jobs, plain-English tooltips and per-tool (?) help, voice on text fields, Use in… handoff and a guide chat served by /api/presentations-tutor that never reads a deck. A canonical schemaVersion 1 deck model drives the HTML preview and the PPTX (pptxgenjs), PDF (Playwright page.pdf), per-slide PNG zip and standalone HTML exports; sources cover PDF, DOCX, TXT/MD, web URL and images. Six built-in themes, saved themes and .pptx/.potx theme import use Brand Kit as an override; model calls go through getModelsForUser/callModel/logUsage with no hard-coded ids. Long work uses one active background job per person with Cancel/Resume and a 30-minute result cache; decks and saved themes live in presentation_decks/presentation_templates and delete through the recycle bin. A six-step Shepherd tour is wired to Settings → Tours, the page's compass button and /presentations?tour=1. The presentations flag is in both feature-access files (member flag, default off, lifecycle preview; admins always allowed), all 23 routes are in the route manifest, and docs/presentations.md and docs/features.md now describe the shipped files, APIs, storage and onboarding.",
+   "filesImpacted": [
+    "client/src/pages/PresentationsPage.jsx",
+    "client/src/pages/presentations/toolRegistry.js",
+    "client/src/pages/presentations/PresentationsGuide.jsx",
+    "client/src/pages/presentations/tools/SlideEditor.jsx",
+    "client/src/utils/tours/presentationsTour.js",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/App.jsx",
+    "client/src/config/appNavigation.js",
+    "client/src/utils/featureAccess.js",
+    "server/config/featureAccess.js",
+    "server/config/guides.js",
+    "server/index.js",
+    "server/routes/presentations.js",
+    "server/services/presentations/schema.js",
+    "docs/presentations.md"
+   ],
+   "benefit": "Admins can open a working slide-deck tool now and members can be let in with one flag; one canonical deck keeps preview and exports in step, and the tour, tooltips, help and guide chat make the six tools discoverable without reading docs.",
+   "concerns": "The flag is off by default, so members see nothing until an admin enables presentations. Tests were run directly: schema, generation, export, jobs, templates, presentationGoals, guides, featureAccess, test:nav and the client build all pass. Not checked: a browser or Railway run, and the full cross-user route test (needs a throwaway Postgres). Export files are written under the user's uploads/presentations/{userId}/exports folder and have no cleanup job yet. No new npm dependencies were added."
+  },
+  {
    "commit": "d4dda83d",
    "fullHash": "d4dda83d7da7aa28a728dd61fe82ccb8e20f3fb9",
    "committedAt": "2026-11-22T15:51:57+10:00",
