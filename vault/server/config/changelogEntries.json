@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "6a2bd834",
+   "fullHash": "6a2bd83452cd4188cff255007bf588c3fc79b81d",
+   "committedAt": "2026-11-22T12:55:00+10:00",
+   "author": "mrb",
+   "area": "Contract Review",
+   "subject": "Contract Review: (i) box and a tour that switches tools",
+   "filesChanged": 5,
+   "insertions": 132,
+   "deletions": 204,
+   "goal": "Give Contract Review the same help as DocCompare: an (i) box that explains it once, and a tour that walks through every tool.",
+   "whatChanged": "The (i) beside the title opens the shared How This Works box (ToolInfoModal), which also opens once on the first visit: what it is for, where to start, why it asks which party you are, the verdict, what happens to the file, the verification badges, and that suggested changes are advisory. It replaces the custom help dialog. The guided tour is rewritten: 16 steps, each switching to its tool as DocCompare's does (the What am I signing up to? panel, the jobs, the tool list, New review, Which party are you?, the verdict, clauses and risk flags, Obligations, Ask about it, Documents and revisions, Compare revisions, Your contracts, PDF report, help, the guide), with \"Step n of 16\" in each card. Settings -> Contract Review Tour and the floating tour button open /contract-review?tour=1; the Settings description lists the 16 steps.",
+   "filesImpacted": [
+    "client/src/components/TourButton.jsx",
+    "client/src/pages/ContractReviewPage.jsx",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/contractReview/contractReviewTools.mjs",
+    "client/src/utils/tours/contractReviewTour.js"
+   ],
+   "benefit": "One way to learn the tool, consistent with DocCompare, and the tour shows each screen instead of describing it.",
+   "concerns": "With no contract open, the contract steps show the \"Open one of yours\" card behind the tour card; the card text explains each tool."
+  },
+  {
    "commit": "2511fc7c",
    "fullHash": "2511fc7c59370ba0b10f60bd7ff3e7a9747fcf8e",
    "committedAt": "2026-11-22T12:52:41+10:00",
