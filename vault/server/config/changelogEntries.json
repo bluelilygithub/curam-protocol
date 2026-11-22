@@ -2,6 +2,31 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "83ec9499",
+   "fullHash": "83ec9499ff455a3643476c6233c83f025abce784",
+   "committedAt": "2026-11-22T14:49:52+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Code Map: read the embedded apps (DocCompare, planners, Route Tracer)",
+   "filesChanged": 8,
+   "insertions": 63,
+   "deletions": 11,
+   "goal": "Cover DocCompare (and the other iframe apps) in Code Map, not just the small Vault page around them.",
+   "whatChanged": "Code Map now reads the src/ and tests/ folders of the embedded apps (doc-compare, cellar-planner, room-planner, garden-planner, route-tracer), TypeScript included, and counts every file there as owned by its tool (EMBEDDED_APPS in files.js). The import resolver tries .ts/.tsx; `import type` lines are not counted as links, since TypeScript drops them. The apiClient, icons and modals rules are marked vaultOnly and skip app code. DocCompare goes from 4 files / 765 lines / 1 test to 66 files / 7,431 lines / 12 tests; cellar 866 to 9,750 lines, room 56 to 13,700, garden 56 to 10,385, route 121 to 5,701. No tool's score changed. Three real import cycles inside the apps now show (doc-compare numbering/content, garden PlantLibrary/PlantPhotos, route-tracer Panels/Shell/ToolList). DocCompare's purpose line was added to the briefing's tool-purposes.md. Contract Review was already fully covered.",
+   "filesImpacted": [
+    "docs/code-map.md",
+    "server/services/codeMap/briefing/tool-purposes.md",
+    "server/services/codeMap/codeMap.accuracy.test.js",
+    "server/services/codeMap/codeMap.test.js",
+    "server/services/codeMap/files.js",
+    "server/services/codeMap/imports.js",
+    "server/services/codeMap/ownership.js",
+    "server/services/codeMap/rules.js"
+   ],
+   "benefit": "The DocCompare and planner rows in Code Map now show their real size, tests and structure.",
+   "concerns": "planner-core/ (shared by the planners) is still not read. Explain and plan a fix only quotes server/ and client/src/ files, so it will not quote app code. A run is about 2.1 s and 370 KB, up from about 115 KB. The accuracy test was already failing before this change (62 tools, it expects 60, drift it warns about); this change keeps app files out of that comparison. Tests: codeMap.test.js (28, one new) and the rest of the Code Map suite pass."
+  },
+  {
    "commit": "81ff36c1",
    "fullHash": "81ff36c1c04a5fc1bb69f1dfc8c382aa4f0204fb",
    "committedAt": "2026-11-22T13:03:58+10:00",
