@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "25a94de5",
+   "fullHash": "25a94de58d2e65458b2194634d08c348a51a8b36",
+   "committedAt": "2026-11-22T12:50:45+10:00",
+   "author": "mrb",
+   "area": "Contract Review",
+   "subject": "Contract Review: tool sidebar and job screen, one file per screen",
+   "filesChanged": 13,
+   "insertions": 1856,
+   "deletions": 1521,
+   "goal": "Make Contract Review work like DocCompare: a tool list on the left and a \"What do you want to do?\" screen, so it is clear where to start and what each part does.",
+   "whatChanged": "Contract Review now opens on a job screen: a \"What am I signing up to?\" panel with Review a contract (and a link to your existing contracts), and six job cards (Check a new revision, See it from the other side, What do I have to do and when?, Find something in a contract, Send a review to someone), each walking through its tools with the shared JobBar. The old list view, detail view and in-contract nav are replaced by one ToolSidebar: Contracts (New review, Your contracts), This contract (Risk review, Obligations, Ask about it, Documents & reviews, Compare revisions, Parties & actions) and Share (PDF report). The contract tools stay visible but say \"Open or start a contract first\" until one is open; the open contract shows in the sidebar with a close button. Opening a contract goes to Risk review (or the job's next step); refreshing it keeps the current tool. Q&A and the report are their own tools. \"Next time, open on the tool I used last\" works as in DocCompare. The 2,283-line page is split into client/src/pages/contractReview/ (one file per screen, shared.jsx, context.js, contractReviewTools.mjs); the page keeps the state and API calls.",
+   "filesImpacted": [
+    "client/src/pages/ContractReviewPage.jsx",
+    "client/src/pages/contractReview/AskView.jsx",
+    "client/src/pages/contractReview/CompareView.jsx",
+    "client/src/pages/contractReview/ContractsView.jsx",
+    "client/src/pages/contractReview/DocumentsView.jsx",
+    "client/src/pages/contractReview/NewReviewView.jsx",
+    "client/src/pages/contractReview/ObligationsView.jsx",
+    "client/src/pages/contractReview/OverviewView.jsx",
+    "client/src/pages/contractReview/ReportView.jsx",
+    "client/src/pages/contractReview/ReviewView.jsx",
+    "client/src/pages/contractReview/context.js",
+    "client/src/pages/contractReview/contractReviewTools.mjs",
+    "client/src/pages/contractReview/shared.jsx"
+   ],
+   "benefit": "The same layout and job screen as DocCompare; each screen can now be changed on its own.",
+   "concerns": "No API or server change. ?crmClientId= still opens Your contracts filtered to that contact. The tour is updated in a later commit."
+  },
+  {
    "commit": "243b00d4",
    "fullHash": "243b00d4f31d348ea0a81b24fbc7fa41af87d465",
    "committedAt": "2026-11-22T07:05:23+10:00",
