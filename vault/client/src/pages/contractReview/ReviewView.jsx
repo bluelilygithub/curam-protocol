@@ -2,6 +2,7 @@ import React from 'react';
 import Tooltip from '../../components/Tooltip';
 import { CARD, FIELD, FOCUS_RING, PrimaryButton, SecondaryButton, RISK_BADGE, VERIFY_BADGE, COVERAGE_BADGE, ROLE_OPTIONS, Badge, formatEtaRemaining } from './shared';
 import { useContractReview } from './context';
+import { reviewVerdict } from './verdict.mjs';
 
 // A clause's source text, risk status and explanation previously sat in one
 // dense paragraph with no separation — a UX review specifically asked for
@@ -73,30 +74,21 @@ function ClauseCard({ c, getIcon, onDismiss, onOverride, indent = false }) {
   );
 }
 
-// At-a-glance summary shown above the clause list — risk counts, obligation
-// counts, and major dates, so the user isn't forced to scroll the whole
-// clause list just to know whether anything needs attention.
-function ReviewSummaryBar({ contract, review, obligations, getIcon, onJumpToRisky }) {
-  const clauses = review?.clauses || [];
-  const counts = { risky: 0, unclear: 0, standard: 0 };
-  for (const c of clauses) {
-    if (c.isContextOnly) continue;
-    if (counts[c.riskLevel] != null) counts[c.riskLevel] += 1;
-  }
-  const overdue = obligations.filter((o) => o.derivedStatus === 'overdue' && o.userState !== 'handled').length;
-  const upcoming = obligations.filter((o) => o.derivedStatus === 'upcoming' && o.userState !== 'handled').length;
+// The verdict, first on Risk review (like DocCompare's "Is it ready to submit?"): a headline for the reviewed party, what to do
+// first, then the counts. Worked out in verdict.mjs from what the review returned; it never says the contract is safe.
+const VERDICT_LOOK = {
+  risky: { color: '#991b1b', bg: '#fee2e2', icon: 'alert-triangle' },
+  unclear: { color: '#92400e', bg: '#fef3c7', icon: 'alert-triangle' },
+  clear: { color: 'var(--color-primary)', bg: 'var(--color-bg)', icon: 'shield-check' },
+};
 
+function VerdictCard({ contract, review, obligations, getIcon, onShow, onTool }) {
+  const party = (contract.parties || []).find((p) => p.id === review.userPartyId);
+  const v = reviewVerdict({ clauses: review.clauses || [], obligations, coverageReport: review.coverageReport || [], partyName: party?.name });
+  const look = VERDICT_LOOK[v.level];
   const dateBits = [];
   if (contract?.effectiveDate) dateBits.push(`Effective ${new Date(contract.effectiveDate).toLocaleDateString()}`);
   if (contract?.termLengthMonths) dateBits.push(`${contract.termLengthMonths}-month term`);
-
-  const recommendation = counts.risky > 0
-    ? `Start with the ${counts.risky} risky clause${counts.risky === 1 ? '' : 's'} below.`
-    : counts.unclear > 0
-      ? `${counts.unclear} clause${counts.unclear === 1 ? ' needs' : 's need'} a closer look.`
-      : overdue > 0
-        ? `${overdue} obligation${overdue === 1 ? ' is' : 's are'} overdue — see the Obligations tab.`
-        : 'No risky clauses flagged for your confirmed party.';
 
   const Stat = ({ label, value, color }) => (
     <div className="rounded-lg border px-3 py-2 text-center" style={FIELD}>
@@ -104,29 +96,41 @@ function ReviewSummaryBar({ contract, review, obligations, getIcon, onJumpToRisk
       <div className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{label}</div>
     </div>
   );
+  const link = `text-xs font-medium hover:opacity-70 rounded underline ${FOCUS_RING}`;
 
   return (
-    <div className="rounded-lg border p-4" style={CARD}>
-      <h2 className="text-base font-semibold mb-3">At a glance</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <Stat label="Risky" value={counts.risky} color={counts.risky ? '#991b1b' : undefined} />
-        <Stat label="Unclear" value={counts.unclear} color={counts.unclear ? '#92400e' : undefined} />
-        <Stat label="Standard" value={counts.standard} />
-        <Stat label="Overdue / upcoming" value={`${overdue} / ${upcoming}`} color={overdue ? '#991b1b' : undefined} />
+    <section className="rounded-2xl border p-5 space-y-3" style={{ ...CARD, borderColor: look.color, borderWidth: 2 }} data-tour="contract-review-verdict" data-guide="verdict" aria-label="Verdict">
+      <div className="flex items-start gap-3">
+        <span className="rounded-full p-2 shrink-0" style={{ background: look.bg, color: look.color }}>{getIcon(look.icon, { size: 20 })}</span>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold" style={{ color: look.color }}>{v.title}</h2>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text)' }}>{v.sentence}</p>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {v.counts.risky > 0 && <button type="button" onClick={() => onShow('risky')} className={link} style={{ color: 'var(--color-primary)' }}>Show the risky clauses</button>}
+            {v.counts.unclear > 0 && <button type="button" onClick={() => onShow('unclear')} className={link} style={{ color: 'var(--color-primary)' }}>Show the unclear clauses</button>}
+            <button type="button" onClick={() => onTool('obligations')} className={link} style={{ color: 'var(--color-primary)' }}>What you would have to do</button>
+          </div>
+        </div>
       </div>
-      {dateBits.length > 0 && (
-        <div className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>{dateBits.join(' · ')}</div>
+      {v.notes.length > 0 && (
+        <ul className="text-sm space-y-1 pl-1">
+          {v.notes.map((n) => (
+            <li key={n.id} className="flex items-start gap-2">
+              {getIcon('arrow-right', { size: 14, style: { color: look.color, marginTop: 3, flexShrink: 0 } })}
+              <span>{n.text}{n.tool && <> <button type="button" onClick={() => onTool(n.tool)} className={link} style={{ color: 'var(--color-primary)' }}>Open Obligations</button></>}</span>
+            </li>
+          ))}
+        </ul>
       )}
-      <div className="flex items-center gap-2 text-sm rounded-lg p-2" style={{ background: 'var(--color-bg)' }}>
-        {getIcon('arrow-right', { size: 14, style: { color: 'var(--color-primary)', flexShrink: 0 } })}
-        <span>{recommendation}</span>
-        {counts.risky > 0 && (
-          <button onClick={onJumpToRisky} className={`ml-auto text-xs font-medium hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>
-            Jump to risky clauses
-          </button>
-        )}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Stat label="Risky" value={v.counts.risky} color={v.counts.risky ? '#991b1b' : undefined} />
+        <Stat label="Unclear" value={v.counts.unclear} color={v.counts.unclear ? '#92400e' : undefined} />
+        <Stat label="Standard" value={v.counts.standard} />
+        <Stat label="Overdue / upcoming" value={`${v.overdue} / ${v.upcoming}`} color={v.overdue ? '#991b1b' : undefined} />
       </div>
-    </div>
+      {dateBits.length > 0 && <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{dateBits.join(' · ')}</div>}
+      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Counts what the review flagged for this party. Informational only, not legal advice.</p>
+    </section>
   );
 }
 
@@ -219,7 +223,7 @@ function groupClauses(clauses) {
 
 // Risk review: which party you are, progress, then the summary, clauses and definitions of the open review.
 export default function ReviewView() {
-  const { getIcon, contract, review, obligations, pickedPartyId, setPickedPartyId, manualPartyName, setManualPartyName, manualPartyRole, setManualPartyRole, partyNameDrafts, setPartyNameDrafts, clauseFilter, setClauseFilter, clauseSort, setClauseSort, contractReviews, reviewAsPartyId, setReviewAsPartyId, switchPerspectiveOpen, setSwitchPerspectiveOpen, openReview, confirmRole, savePartyField, addManualPartyAndConfirm, recordCorrection, reviewAsParty } = useContractReview();
+  const { getIcon, setTool, contract, review, obligations, pickedPartyId, setPickedPartyId, manualPartyName, setManualPartyName, manualPartyRole, setManualPartyRole, partyNameDrafts, setPartyNameDrafts, clauseFilter, setClauseFilter, clauseSort, setClauseSort, contractReviews, reviewAsPartyId, setReviewAsPartyId, switchPerspectiveOpen, setSwitchPerspectiveOpen, openReview, confirmRole, savePartyField, addManualPartyAndConfirm, recordCorrection, reviewAsParty } = useContractReview();
 
   return (
     <div className="space-y-4">
@@ -338,6 +342,10 @@ export default function ReviewView() {
 
     {review?.status === 'complete' && (
       <>
+        <VerdictCard
+          contract={contract} review={review} obligations={obligations} getIcon={getIcon} onTool={setTool}
+          onShow={(level) => { setClauseFilter(level); setClauseSort('order'); document.getElementById('cr-clauses-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        />
         {(() => {
           const reviewingAs = (contract.parties || []).find((p) => p.id === review.userPartyId);
           return (
@@ -393,13 +401,6 @@ export default function ReviewView() {
           <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
             Analysis cost: ${Number(review.costUsd).toFixed(4)}
           </div>
-        )}
-
-        {(review.clauses || []).length > 0 && (
-          <ReviewSummaryBar
-            contract={contract} review={review} obligations={obligations} getIcon={getIcon}
-            onJumpToRisky={() => { setClauseFilter('risky'); setClauseSort('order'); document.getElementById('cr-clauses-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-          />
         )}
 
         {review.coverageReport?.length > 0 && (
