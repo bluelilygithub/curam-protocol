@@ -20,6 +20,7 @@ import {
   PRESENTATIONS_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, TOOL_HELP, HOW_IT_WORKS, labelFor,
 } from './presentations/presentationsTools.mjs';
 import PresentationsGuide from './presentations/PresentationsGuide';
+import Slideshow from './presentations/Slideshow';
 import { addHistory, historyEnabled, setHistoryEnabled } from './presentations/historyStore.mjs';
 import {
   PresentationContext, emptyDeck, normalizeDeck, readJson, usePresentationJob, JobStatusCard,
@@ -189,6 +190,11 @@ export default function PresentationsPage() {
   }, []);
   const startGoal = (g) => { setGoal(g); openToolById(g.steps[0].tool); };
   const backToStart = () => { setGoal(null); setTool('start'); };
+  // The full-screen slideshow, opened from any tool with present(slideIndex).
+  const [show, setShow] = useState(null);
+  const present = useCallback((start = 0) => { if (deck.slides.length) setShow({ start }); }, [deck.slides.length]);
+  const chooseTransition = useCallback((id) => setDeck((prev) => ({ ...prev, transition: id })), [setDeck]);
+
   // The design style (layout decoration) lives on the deck, so the preview, saves and every export carry it.
   const chooseDesign = useCallback((id) => setDeck((prev) => ({ ...prev, designId: id })), [setDeck]);
   const chooseTheme = useCallback((id) => {
@@ -204,14 +210,14 @@ export default function PresentationsPage() {
   const ctx = useMemo(() => ({
     tool, setTool: openToolById, openTool: openToolById, setHelpTool,
     deck, setDeck, meta, sourceText, setSourceText, imageRefs, setImageRefs,
-    themeId, chooseTheme, chooseDesign, applyBrand, setApplyBrand, sourceType, setSourceType,
+    themeId, chooseTheme, chooseDesign, chooseTransition, present, applyBrand, setApplyBrand, sourceType, setSourceType,
     savedDeckId, setSavedDeckId, exportFile, setExportFile,
     historyOn, setHistoryOn,
     job, startJob, cancelJob, resumeJob, dismissJob,
     saveDeck, loadDeck, takeIncomingFile, toast,
     defaultModel,
   }), [
-    tool, openToolById, deck, setDeck, meta, sourceText, imageRefs, themeId, chooseTheme, chooseDesign, applyBrand,
+    tool, openToolById, deck, setDeck, meta, sourceText, imageRefs, themeId, chooseTheme, chooseDesign, chooseTransition, present, applyBrand,
     sourceType, savedDeckId, exportFile, historyOn, setHistoryOn, job, startJob, cancelJob, resumeJob,
     dismissJob, saveDeck, loadDeck, takeIncomingFile, toast,
     defaultModel,
@@ -326,6 +332,16 @@ export default function PresentationsPage() {
               ))}
             </ul>
           </ToolInfoModal>
+        )}
+
+        {show && (
+          <Slideshow
+            deck={deck}
+            applyBrand={applyBrand}
+            start={show.start}
+            onClose={() => setShow(null)}
+            onTransition={chooseTransition}
+          />
         )}
 
         <PresentationsGuide currentTool={tool} onOpenTool={openToolById} />

@@ -5,6 +5,8 @@
 
 // The slide layouts and design styles live with their geometry (layouts.js), shared by the preview and every export.
 const { LAYOUTS, DESIGN_IDS, DESIGNS } = require('./layouts');
+// How the full-screen slideshow moves between slides (client Slideshow.jsx). Kept on the deck so a saved deck remembers it.
+const TRANSITIONS = ['none', 'fade', 'push', 'wipe', 'zoom'];
 const MIN_SLIDES = 6;
 const MAX_SLIDES = 20;
 const DEFAULT_SLIDES = 10;
@@ -113,6 +115,7 @@ function normalizeDeck(input, { allowSlides = MIN_SLIDES } = {}) {
     subtitle: text(input.subtitle, 240),
     themeId: text(input.themeId, 80) || 'paper',
     designId: DESIGN_IDS.includes(input.designId) ? input.designId : 'clean',
+    transition: TRANSITIONS.includes(input.transition) ? input.transition : 'fade',
     aspect,
     slides,
   };
@@ -170,7 +173,7 @@ function normalizeOutline(raw) {
 
 module.exports = {
   SOURCE_MAX,
-  LAYOUTS, DESIGNS, DESIGN_IDS, MIN_SLIDES, MAX_SLIDES, DEFAULT_SLIDES, BUILTIN_THEMES, PresentationError,
+  LAYOUTS, DESIGNS, DESIGN_IDS, TRANSITIONS, MIN_SLIDES, MAX_SLIDES, DEFAULT_SLIDES, BUILTIN_THEMES, PresentationError,
   text, clampInt, resolveTheme, sanitizeCustomTheme, normalizeDeck, normalizeSlide, normalizeColumns,
   deckFromOutline, normalizeOutline,
 };

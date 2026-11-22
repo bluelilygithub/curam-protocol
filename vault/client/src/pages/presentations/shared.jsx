@@ -8,6 +8,14 @@ import { setToolHandoff } from '../../utils/toolHandoff.mjs';
 // Same ids and order as server/services/presentations/layouts.js (the geometry for the preview and every export).
 export const LAYOUTS = ['title', 'section', 'bullets', 'agenda', 'two-column', 'comparison', 'three-column', 'stats', 'quote', 'timeline', 'picture', 'full-picture', 'closing'];
 export const COLUMN_LAYOUTS = { comparison: 2, 'three-column': 3, stats: 4 };
+// Same ids as server/services/presentations/schema.js TRANSITIONS.
+export const TRANSITIONS = [
+  { id: 'none', label: 'None', tip: 'Cut straight to the next slide.' },
+  { id: 'fade', label: 'Fade', tip: 'The next slide fades in over the last one.' },
+  { id: 'push', label: 'Push', tip: 'The next slide pushes the last one off to the side.' },
+  { id: 'wipe', label: 'Wipe', tip: 'The next slide is uncovered from left to right.' },
+  { id: 'zoom', label: 'Zoom', tip: 'The next slide grows into place.' },
+];
 export const ASPECTS = ['16:9', '4:3', '1:1'];
 export const BUILTIN_THEMES = ['paper', 'ink', 'warm', 'ocean', 'forest', 'mono'];
 
@@ -74,7 +82,7 @@ const text = (v) => (typeof v === 'string' ? v : (v == null ? '' : String(v)));
 const capped = (v, n) => text(v).slice(0, n);
 
 export function emptyDeck() {
-  return { schemaVersion: 1, title: '', subtitle: '', themeId: 'paper', designId: 'clean', aspect: '16:9', slides: [] };
+  return { schemaVersion: 1, title: '', subtitle: '', themeId: 'paper', designId: 'clean', transition: 'fade', aspect: '16:9', slides: [] };
 }
 
 /** Defensive client-side normalisation of anything that comes back from the API or from a handoff file. */
@@ -106,6 +114,7 @@ export function normalizeDeck(raw, maxSlides = 20) {
     subtitle: capped(src.subtitle, 240),
     themeId: capped(src.themeId, 80) || 'paper',
     designId: capped(src.designId, 40) || 'clean',
+    transition: ['none', 'fade', 'push', 'wipe', 'zoom'].includes(src.transition) ? src.transition : 'fade',
     aspect: ASPECTS.includes(src.aspect) ? src.aspect : '16:9',
     slides,
   };

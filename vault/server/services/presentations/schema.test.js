@@ -51,4 +51,18 @@ assert.throws(() => s.normalizeDeck({ slides: Array.from({ length: 21 }, () => (
   assert.equal(outline.slides[19].title, 'Slide 20');
 }
 
+{
+  // design, transition and columns are kept; unknown values fall back
+  const { normalizeDeck: norm, TRANSITIONS } = require('./schema');
+  const one = { slides: [{ layout: 'stats', title: 'N', columns: [{ heading: '42%', bullets: ['Growth', ''] }, { heading: '', bullets: [] }] }] };
+  const deck = norm({ ...one, designId: 'banded', transition: 'push' });
+  assert.equal(deck.designId, 'banded');
+  assert.equal(deck.transition, 'push');
+  assert.deepEqual(deck.slides[0].columns, [{ heading: '42%', bullets: ['Growth'] }]);
+  const odd = norm({ ...one, designId: 'nope', transition: 'spin' });
+  assert.equal(odd.designId, 'clean');
+  assert.equal(odd.transition, 'fade');
+  assert.ok(TRANSITIONS.includes('none') && TRANSITIONS.includes('fade'));
+}
+
 console.log('presentations schema tests passed');

@@ -5,15 +5,24 @@ import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
 import { useIcon } from '../../../providers/IconProvider';
 import { takeToolHandoff } from '../../../utils/toolHandoff.mjs';
 import PresentationPreview from '../PresentationPreview';
+import { parseLines, syncDraft } from '../lines.mjs';
 import {
-  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, COLUMN_LAYOUTS, FIELD_STYLE, LAYOUTS, LAYOUT_HELP, LAYOUT_LABELS, PRIMARY_STYLE, ROW, SECONDARY_STYLE,
+  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, COLUMN_LAYOUTS, FIELD_STYLE, LAYOUTS, LAYOUT_HELP, LAYOUT_LABELS, PRIMARY_STYLE, ROW, SECONDARY_STYLE, SELECT, TRANSITIONS,
   DeckHandoff, InlineDelete, ToolHeader, readDeckFile, usePresentations,
 } from '../shared';
+
+/** A one-item-per-line box that keeps what is typed (spaces, new lines) and hands the deck the cleaned list (lines.mjs). */
+function LinesField({ lines, onLines, ...props }) {
+  const [draft, setDraft] = useState(() => (lines || []).join('\n'));
+  const joined = (lines || []).join('\n');
+  useEffect(() => { setDraft((d) => syncDraft(d, lines)); }, [joined]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <VoiceInput type="textarea" value={draft} onChange={(v) => { setDraft(v); onLines(parseLines(v)); }} append {...props} />;
+}
 
 export default function SlideEditor() {
   const getIcon = useIcon();
   const {
-    deck, setDeck, meta, saveDeck, savedDeckId, openTool, toast,
+    deck, setDeck, meta, saveDeck, savedDeckId, openTool, toast, present, chooseTransition,
   } = usePresentations();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [showPreview, setShowPreview] = useState(true);
@@ -100,6 +109,21 @@ export default function SlideEditor() {
                   <VoiceInput value={deck.subtitle} onChange={(subtitle) => setDeck((prev) => ({ ...prev, subtitle }))} label="Deck subtitle" placeholder="Subtitle (optional)" />
                 </Tooltip>
               </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="block space-y-1 min-w-[12rem]">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Transition between slides</span>
+                  <Tooltip text={(TRANSITIONS.find((t) => t.id === (deck.transition || 'fade')) || {}).tip || 'How the slideshow moves between slides.'}>
+                    <select value={deck.transition || 'fade'} onChange={(e) => chooseTransition(e.target.value)} className={SELECT} style={FIELD_STYLE}>
+                      {TRANSITIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                    </select>
+                  </Tooltip>
+                </label>
+                <Tooltip text="Play the whole deck full screen from the first slide.">
+                  <button type="button" onClick={() => present(0)} className={BTN_PRIMARY} style={PRIMARY_STYLE}>
+                    <span className="inline-flex items-center gap-1.5">{getIcon('play', { size: 13 })} Present</span>
+                  </button>
+                </Tooltip>
+              </div>
             </div>
 
             {deck.slides.map((slide, i) => (
@@ -118,6 +142,11 @@ export default function SlideEditor() {
                     </select>
                   </Tooltip>
                   <span className="flex-1" />
+                  <Tooltip text="Play the slideshow full screen, starting from this slide.">
+                    <button type="button" onClick={() => present(i)} aria-label={`Present from slide ${i + 1}`} className={BTN_QUIET} style={{ color: 'var(--color-primary)' }}>
+                      {getIcon('play', { size: 14 })}
+                    </button>
+                  </Tooltip>
                   <Tooltip text="Move this slide earlier.">
                     <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move slide ${i + 1} earlier`} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>
                       {getIcon('chevron-up', { size: 14 })}
@@ -152,13 +181,11 @@ export default function SlideEditor() {
                             <VoiceInput value={col.heading} onChange={(heading) => updateColumn(i, ci, { heading })} label={`${stats ? 'Number' : 'Heading'} ${ci + 1} for slide ${i + 1}`} placeholder={stats ? 'e.g. 42%' : 'Heading'} />
                           </Tooltip>
                           <Tooltip text={stats ? 'What the number measures, in a few words.' : 'One point per line.'}>
-                            <VoiceInput
-                              type="textarea"
+                            <LinesField
                               rows={stats ? 2 : 3}
-                              value={(col.bullets || []).join('\n')}
-                              onChange={(v) => updateColumn(i, ci, { bullets: v.split(/\r?\n/).map((b) => b.trim()).filter(Boolean) })}
+                              lines={col.bullets}
+                              onLines={(bullets) => updateColumn(i, ci, { bullets })}
                               label={`${stats ? 'Label' : 'Points'} ${ci + 1} for slide ${i + 1}`}
-                              append
                               placeholder={stats ? 'e.g. Customer growth' : 'First point\nSecond point'}
                             />
                           </Tooltip>
@@ -169,7 +196,7 @@ export default function SlideEditor() {
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Tooltip text="One bullet per line. On a title or picture slide this is used as supporting text.">
-                    <VoiceInput type="textarea" rows={4} value={slide.bullets.join('\n')} onChange={(v) => updateSlide(i, { bullets: v.split(/\r?\n/).map((b) => b.trim()).filter(Boolean) })} label={`Bullets for slide ${i + 1}`} append placeholder={'First point\nSecond point'} />
+                    <LinesField rows={4} lines={slide.bullets} onLines={(bullets) => updateSlide(i, { bullets })} label={`Bullets for slide ${i + 1}`} placeholder={'First point\nSecond point'} />
                   </Tooltip>
                   <Tooltip text="A paragraph for this slide, where the layout uses one.">
                     <VoiceInput type="textarea" rows={4} value={slide.body} onChange={(body) => updateSlide(i, { body })} label={`Body for slide ${i + 1}`} append placeholder="Body text (optional)" />

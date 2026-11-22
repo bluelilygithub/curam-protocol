@@ -17,7 +17,7 @@ const FORMATS = [
 
 export default function ExportDeck() {
   const {
-    deck, setDeck, savedDeckId, applyBrand, setApplyBrand, meta, exportFile, startJob, openTool, toast,
+    deck, setDeck, savedDeckId, applyBrand, setApplyBrand, meta, exportFile, startJob, openTool, toast, present,
   } = usePresentations();
   const [format, setFormat] = useState('pptx');
   const [busy, setBusy] = useState(false);
@@ -127,6 +127,9 @@ export default function ExportDeck() {
                 </button>
               </Tooltip>
             )}
+            <Tooltip text="Play the deck full screen in Vault instead of downloading it. Transitions play here; the PPTX keeps plain slide changes.">
+              <button type="button" onClick={() => present(0)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Present</button>
+            </Tooltip>
             <Tooltip text="Go back and change the slides before exporting.">
               <button type="button" onClick={() => openTool('slides')} className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit slides</button>
             </Tooltip>

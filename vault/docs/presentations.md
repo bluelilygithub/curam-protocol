@@ -116,6 +116,14 @@ If a provider rejects the key or the call fails, `server/utils/modelCallError.js
 
 ---
 
+## Slideshow (Present)
+
+`client/src/pages/presentations/Slideshow.jsx` plays the current deck full screen. It asks `POST /api/presentations/preview` for the same HTML as the preview and the PDF, splits it into one page per slide (`slideshowKeys.mjs` `slidePages`) and shows each in its own sandboxed frame scaled to the screen, so the show looks exactly like the exports. It opens from Present on every preview, the Slide editor (also ▶ on each slide card to start there) and Export, through the shared `Dialog` (raw mode: focus trap, Escape, focus returns) and the Fullscreen API; leaving full screen with Escape ends the show, while the full-screen button keeps it open in the window.
+
+Keys (`slideshowKeys.mjs` `keyStep`): → ↓ Space Page Down Enter N next, ← ↑ Backspace Page Up P back, Home End, a slide number then Enter jumps, Escape ends. Clicking the slide goes forward. The bottom bar (previous, a numbered slide list, next, transition, full screen, End show) hides after 2.5 s without the mouse and comes back on mouse move or focus.
+
+**Transitions** (`deck.transition`: `none`, `fade` default, `push`, `wipe`, `zoom`) are CSS animations between two frames; push and wipe follow the direction of travel. The choice is saved with the deck and can be changed in the Slide editor or during the show. They play in Vault's slideshow only: `pptxgenjs` writes no slide transitions, so a PPTX changes slides plainly, and the PDF has no transitions.
+
 ## Designs and themes
 
 A **design** (`deck.designId`) lays out and decorates every slide: Clean, Underline (accent bar under titles), Banded (titles in a coloured band; title slides get a band across the middle), Sidebar (accent strip down the left), Split (tinted right panel; title slides split into a colour block and text), Framed (inset accent frame), Bold (title, section and closing slides fill with the accent colour) and Corner (accent triangle and dot). Designs are code (`layouts.js` `DESIGNS`) and work with any colour theme. Themes shows them as a gallery of two sample slides each, drawn from the server's own `plan()` in the deck's current colours; Create deck has a Design picker too.
@@ -193,6 +201,8 @@ Long work returns `202 { jobId }`, follows the Video Tools background-job patter
 - `node server/utils/userModelSelection.test.js` — admin/member permission and configured text-id validation; no database.
 - `node server/services/guideCore.test.js` — guide tier fallback, explicit model and friendly provider errors; no database.
 - `node server/services/presentations/export.test.js` — PPTX/PDF/PNG generation from a fixture deck, then every layout in every design and aspect: the HTML carries the words and the PPTX builds.
+- `node client/src/pages/presentations/slideshowKeys.test.mjs` — slideshow keys (next, back, Home/End, number then Enter, Escape), fitting a slide to the screen, splitting the rendered HTML into one page per slide.
+- `node client/src/pages/presentations/lines.test.mjs` — one-per-line boxes keep typed spaces and new lines while the deck gets the cleaned list.
 - `node server/services/presentations/layouts.test.js` — the geometry: every shape and box stays on the slide in every design, aspect and layout, circles stay round, column and stats fallbacks; no files.
 - `node server/services/presentations/jobs.test.js` — job lifecycle, cancel/resume and the 30-minute result cache.
 - `node server/routes/presentations/templates.test.js` — theme sanitising and import rules.

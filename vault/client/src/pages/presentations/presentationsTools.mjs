@@ -36,7 +36,7 @@ export const TOOL_BLURBS = {
   create: 'A brief in plain words is enough. Add imported text or pictures if you have them.',
   import: 'Up to 10 files at once, or one web page. The extracted text is editable before you use it.',
   templates: 'A design lays out and decorates every slide; a colour theme sets colours, font and title size. Your Brand Kit can be laid over the top.',
-  slides: 'Edit the words, pictures and order of the slides. The preview and every export use this one deck.',
+  slides: 'Edit the words, pictures and order of the slides, pick a transition, and press Present to play the deck full screen.',
   export: 'PPTX keeps the words editable; PDF, HTML and PNGs render from the same preview.',
   decks: 'Saved decks live on the server. Recent decks are an opt-in list kept only in this browser.',
 };
@@ -82,6 +82,8 @@ export const TOOL_HELP = {
       'Comparison, Three columns and Big numbers have their own column boxes',
       'Add, delete and reorder slides, up to the server’s slide limit',
       'The live preview uses the same renderer as PDF and PNG export',
+      'Present plays the deck full screen: arrow keys, Space and Page Up/Down move, type a number and press Enter to jump, Escape ends the show',
+      'Choose a transition between slides: None, Fade, Push, Wipe or Zoom. It is saved with the deck',
       'Save to My decks, or hand the deck to another tool with Use in…',
     ],
   },

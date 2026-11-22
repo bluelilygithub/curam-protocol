@@ -14,7 +14,7 @@ const DEBOUNCE_MS = 600; // wait until typing pauses, so the preview is not rebu
  * renderer for PDF and PNG export, so what is seen here is what is downloaded. No scripts are needed in the iframe.
  */
 export default function PresentationPreview({ deck, compact = false }) {
-  const { applyBrand } = usePresentations();
+  const { applyBrand, present } = usePresentations();
   const getIcon = useIcon();
   const [html, setHtml] = useState('');
   const [error, setError] = useState('');
@@ -47,7 +47,12 @@ export default function PresentationPreview({ deck, compact = false }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{busy ? 'Updating preview…' : 'Preview'}</span>
+        <span className="text-xs font-medium flex-1" style={{ color: 'var(--color-muted)' }}>{busy ? 'Updating preview…' : 'Preview'}</span>
+        <Tooltip text="Play the whole deck full screen, with transitions. Arrow keys move between slides; type a number and press Enter to jump.">
+          <button type="button" onClick={() => present(0)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
+            {getIcon('play', { size: 12 })} Present
+          </button>
+        </Tooltip>
         <Tooltip text="Rebuild the preview from the current deck now. It also rebuilds by itself a moment after you stop typing.">
           <button
             type="button"
