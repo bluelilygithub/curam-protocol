@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "215409b1",
+   "fullHash": "215409b1938e69c402a9501c5cf7e644384ef946",
+   "committedAt": "2026-11-22T14:57:46+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Code Map: read planner-core and follow @planner-core imports",
+   "filesChanged": 6,
+   "insertions": 41,
+   "deletions": 16,
+   "goal": "Cover planner-core, the code the planners, DocCompare and Vault's client share, in Code Map.",
+   "whatChanged": "Code Map now reads planner-core/src (26 TypeScript files) and follows `@planner-core/...` imports, the alias the apps' and Vault's Vite configs use (ALIASES in files.js; the import regex and resolver accept it). Embedded apps now follow their own imports from their files, so they reach the planner-core files they use. planner-core belongs to no single tool: each file goes to the tools that import it, shared at three or more like any other file. Room Planner owns 12 planner-core files, Garden Planner 8 and Route Tracer 1; the rest, including the speech recognizer that Vault's useVoice hook uses, count as shared. The apiClient, icons and modals rules skip planner-core (isAppCode). No tool's score changed. The docs describe it, and codeMap.test.js covers alias resolution, ownership and the rule skip.",
+   "filesImpacted": [
+    "docs/code-map.md",
+    "server/services/codeMap/codeMap.test.js",
+    "server/services/codeMap/files.js",
+    "server/services/codeMap/imports.js",
+    "server/services/codeMap/ownership.js",
+    "server/services/codeMap/rules.js"
+   ],
+   "benefit": "The shared planner code shows up in Code Map, and the tools that depend on it now list it.",
+   "concerns": "planner-core/src/types.ts has no importers in the graph because it is only imported with `import type`, which Code Map ignores on purpose. Only the @planner-core alias is known; any new alias must be added to ALIASES. The accuracy test still passes (0 differences), since 40bf883 had no planner-core files to read."
+  },
+  {
    "commit": "4568d430",
    "fullHash": "4568d430a5162c1644674bb0e0d68327515f2829",
    "committedAt": "2026-11-22T14:55:09+10:00",
