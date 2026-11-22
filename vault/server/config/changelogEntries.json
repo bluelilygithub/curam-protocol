@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "81ff36c1",
+   "fullHash": "81ff36c1c04a5fc1bb69f1dfc8c382aa4f0204fb",
+   "committedAt": "2026-11-22T13:03:58+10:00",
+   "author": "mrb",
+   "area": "Contract Review",
+   "subject": "Contract Review: show the close-contract cross; no nested main",
+   "filesChanged": 1,
+   "insertions": 3,
+   "deletions": 3,
+   "goal": "Fix two problems found when checking the new Contract Review layout in the browser.",
+   "whatChanged": "The cross that closes the open contract (in the tool list) asked for an icon named 'close', which the icon map does not have, so the button was empty and invisible; it now uses 'x'. The tool area was a second <main> inside Vault's own <main>; it is now a div, so screen readers see one main region.",
+   "filesImpacted": [
+    "client/src/pages/ContractReviewPage.jsx"
+   ],
+   "benefit": "The open contract can be closed from the tool list.",
+   "concerns": "Checked in the local Vault (production build, sample contract): the (i) box on the first visit, the job screen and its five jobs, the locked tools and their hint, a job moving on when a contract opens, the verdict (red, party named, overdue / missing clause / unverified notes, before everything else, Show the risky clauses filters the list), every tool, the guide's Open button (with a faked answer), closing the contract, the 16-step tour, no sideways scroll at phone width, no page errors."
+  },
+  {
    "commit": "8ce2c95c",
    "fullHash": "8ce2c95ce72ff982d8873b57c3d9e3008c3a39ba",
    "committedAt": "2026-11-22T12:59:18+10:00",
