@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore, { runWithStepLog } from '../store/processingStore';
@@ -10,10 +10,10 @@ import ToolSidebar from '../components/ToolSidebar';
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { startContractReviewTour, TOUR_KEY as CR_TOUR_KEY } from '../utils/tours/contractReviewTour';
-import Dialog from '../components/Dialog';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { ContractReviewContext } from './contractReview/context';
 import { CARD, PrimaryButton, SecondaryButton, Badge, CONTRACT_STATUS_BADGE, contractTypeLabel, NotLegalAdviceBanner, formatEtaRemaining } from './contractReview/shared';
-import { CONTRACT_REVIEW_TOOLS, CONTRACT_TOOL_IDS, CONTRACT_REVIEW_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS } from './contractReview/contractReviewTools.mjs';
+import { CONTRACT_REVIEW_TOOLS, CONTRACT_TOOL_IDS, CONTRACT_REVIEW_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS } from './contractReview/contractReviewTools.mjs';
 import NewReviewView from './contractReview/NewReviewView';
 import ContractsView from './contractReview/ContractsView';
 import ReviewView from './contractReview/ReviewView';
@@ -43,114 +43,13 @@ const VIEWS = {
   documents: DocumentsView, compare: CompareView, overview: OverviewView, report: ReportView,
 };
 
-function ContractReviewHelp({ onClose, getIcon }) {
-  const STAGES = [
-    { stage: 'Extraction & segmentation', what: 'PDF/DOCX text pulled out and split into individually addressable clauses (numbered where possible).' },
-    { stage: 'Type detection', what: "The contract's type (lease, employment, services, NDA, etc.) is identified to steer which checks apply." },
-    { stage: 'Party extraction', what: 'Every named party is detected. Analysis pauses here until you confirm which one is you — see Part 2 below.' },
-    { stage: 'Definitions', what: "Defined terms (\"Confidential Information\" etc.) are extracted and verified against the source text." },
-    { stage: 'Clause classification & risk scoring', what: 'Each clause is scored Risky / Unclear / Standard specifically for your confirmed party — the same clause can score differently for the other side.' },
-    { stage: 'Obligations', what: 'Dates, deadlines, and recurring duties are extracted with their trigger (absolute date, recurring rule, or an anchor event like "30 days after termination").' },
-    { stage: 'Summary', what: 'A short plain-English summary of the whole document, each point tagged with how well it could be verified against the source text.' },
-  ];
-
-  return (
-    <Dialog raw onClose={onClose}
-        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
-        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
-        panelClassName="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
-        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 720, maxHeight: '90dvh' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="flex items-center gap-2">
-            {getIcon('book', { size: 16 })}
-            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Contract Review — How it works</span>
-          </div>
-          <button
-            onClick={onClose}
-            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
-          >
-            {getIcon('close', { size: 18 })}
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="overflow-y-auto px-6 py-5 space-y-6 text-sm" style={{ color: 'var(--color-text)' }}>
-          <p style={{ color: 'var(--color-muted)' }}>
-            Upload a contract and it runs through a fixed pipeline, then two things stay in your hands throughout: whose side the risk flags are scored for, and whether any given flag actually applies to your situation.
-          </p>
-
-          <section className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 1 — The analysis pipeline</h2>
-            <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
-              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
-                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)', width: '32%' }}>Stage</th>
-                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)' }}>What happens</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {STAGES.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: i < STAGES.length - 1 ? `1px solid var(--color-border)` : 'none' }}>
-                      <td className="px-4 py-3 align-top font-medium" style={{ color: 'var(--color-text)' }}>{row.stage}</td>
-                      <td className="px-4 py-3 align-top" style={{ color: 'var(--color-muted)' }}>{row.what}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 2 — Why it asks "which party are you?"</h2>
-            <p style={{ color: 'var(--color-muted)' }}>
-              A termination clause that's risky for a tenant can be entirely standard for a landlord. Risk scoring can't be neutral, so analysis pauses after party extraction until you confirm your side — correcting a detected name or role right there if it's wrong, or adding yourself manually if nobody was detected at all. You can later run an independent review of the same document as a different party without disturbing this one.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 3 — Verification badges</h2>
-            <ul className="space-y-1 text-xs list-disc list-inside" style={{ color: 'var(--color-muted)' }}>
-              <li><strong style={{ color: 'var(--color-text)' }}>Verified</strong> — the clause/quote text was matched back to the source document exactly.</li>
-              <li><strong style={{ color: 'var(--color-text)' }}>Verified (approx.)</strong> — matched after normalizing whitespace/punctuation, not a byte-for-byte match.</li>
-              <li><strong style={{ color: 'var(--color-text)' }}>Unverified</strong> — could not be confirmed against the source text. Treat with more caution than a verified flag.</li>
-            </ul>
-          </section>
-
-          <section className="rounded-xl p-4 border-l-4" style={{ background: 'var(--color-bg)', borderLeftColor: 'var(--color-primary)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
-            <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Suggested redlines are advisory only</p>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Any suggested redline text is copy-paste-only wording for you to bring to a negotiation or a lawyer — it is never applied to the document automatically, and nothing here is legal advice.
-            </p>
-          </section>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3 border-t shrink-0 flex justify-end" style={{ borderColor: 'var(--color-border)' }}>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
-            style={{ background: 'var(--color-primary)', color: '#fff' }}
-          >
-            Got it
-          </button>
-        </div>
-      </Dialog>
-  );
-}
-
 export default function ContractReviewPage() {
-  const navigate = useNavigate();
-  const [helpOpen, setHelpOpen] = useState(false);
+  const info = useToolInfoModal('vault_contract_review_info_seen');
   const getIcon = useIcon();
   const isAdmin = useAuthStore((s) => s.user?.isAdmin);
   const processing = useProcessingStore();
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const crmClientIdFilter = searchParams.get('crmClientId') || null;
 
   // 'start' is the job screen (not a tool); every other value is a tool id from CONTRACT_REVIEW_TOOLS
@@ -788,7 +687,19 @@ export default function ContractReviewPage() {
     setContract(null); setReview(null); currentReviewIdRef.current = null;
     setTool('contracts');
   };
-  const startTour = () => { try { localStorage.removeItem(CR_TOUR_KEY); } catch { /* ignore */ } startContractReviewTour(navigate); };
+  // the guided tour switches tools the same way the list does ('start' = the job screen)
+  const startTour = () => {
+    info.close();
+    try { localStorage.removeItem(CR_TOUR_KEY); } catch { /* ignore */ }
+    startContractReviewTour((id) => { if (id === 'start') backToStart(); else setTool(id); });
+  };
+  // Settings -> Contract Review Tour (and the floating tour button) open /contract-review?tour=1
+  useEffect(() => {
+    if (!searchParams.get('tour')) return;
+    const next = new URLSearchParams(searchParams); next.delete('tour');
+    setSearchParams(next, { replace: true });
+    setTimeout(startTour, 400);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!enabled) {
     return (
@@ -818,7 +729,6 @@ export default function ContractReviewPage() {
   return (
     <div style={{ background: 'var(--color-bg)', color: 'var(--color-text)', minHeight: '100dvh' }}>
       <NotLegalAdviceBanner />
-      {helpOpen && <ContractReviewHelp onClose={() => setHelpOpen(false)} getIcon={getIcon} />}
       <VoiceInputProvider lang="en-AU">
         <ContractReviewContext.Provider value={ctx}>
           <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-5rem)]">
@@ -828,7 +738,7 @@ export default function ContractReviewPage() {
               groups={MENU}
               current={tool}
               onSelect={setTool}
-              onInfo={() => setHelpOpen(true)}
+              onInfo={info.open}
               infoTip="How Contract Review works: why it asks which party you are, what the badges mean, and what it cannot do."
               onTour={startTour}
               tourTip="Take the guided tour of Contract Review: the jobs, each tool, the verdict and the guide."
@@ -861,7 +771,7 @@ export default function ContractReviewPage() {
               )}
             </ToolSidebar>
 
-            <main className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }}>
+            <main className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="contract-review-main">
               <div className="max-w-5xl space-y-4">
                 {tool === 'start' && (
                   <div className="space-y-6">
@@ -953,6 +863,19 @@ export default function ContractReviewPage() {
           </div>
         </ContractReviewContext.Provider>
       </VoiceInputProvider>
+
+      {info.show && (
+        <ToolInfoModal title="How Contract Review Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Upload a contract and get a plain-English review for your side. Pick a job on the start screen or a tool in the list on the left; hover any tool for a plain explanation. Not sure where to start? Press the round button at the bottom right and tell the guide what you want to do.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
     </div>
   );
 

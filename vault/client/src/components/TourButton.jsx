@@ -9,7 +9,7 @@ import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '.
 import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
 import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
-import { startContractReviewTour, TOUR_KEY as CONTRACT_REVIEW_TOUR_KEY } from '../utils/tours/contractReviewTour';
+import { TOUR_KEY as CONTRACT_REVIEW_TOUR_KEY } from '../utils/tours/contractReviewTour';
 
 export default function TourButton() {
   const location = useLocation();
@@ -53,7 +53,7 @@ export default function TourButton() {
     else if (isProductScout) startProductScoutTour(navigate);
     else if (isRecipes) startRecipesTour(navigate);
     else if (isPropertyScenario) startPropertyScenarioTour(navigate);
-    else if (isContractReview) startContractReviewTour(navigate);
+    else if (isContractReview) navigate('/contract-review?tour=1'); // the page runs its own tour (it switches tools)
   };
 
   let label;

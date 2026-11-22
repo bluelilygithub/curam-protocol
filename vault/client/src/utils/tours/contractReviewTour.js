@@ -2,13 +2,18 @@ import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import './goalsTour.css';
 
+// The Contract Review tour (compass button beside the title in the tool list, Settings -> Contract Review Tour, or /contract-review?tour=1).
+// Like DocCompare's: a step about a tool switches to that tool (goTool, the same as clicking it in the list) and points at the main area.
+// With no contract open, a contract tool shows "Open one of yours"; the card text says what the tool holds.
+
 export const TOUR_KEY = 'vault_tour_contract_review_completed';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 16;
 
-function injectStepCounter(stepIndex) {
+// Shepherd keeps earlier cards in the page (hidden), so the counter goes into this step's own card, not the first one found.
+function injectStepCounter(stepIndex, card) {
   requestAnimationFrame(() => {
-    const el = document.querySelector('.shepherd-element.vault-tour');
+    const el = card || document.querySelector('.shepherd-element.vault-tour');
     if (!el) return;
     let counter = el.querySelector('.vault-tour-step-count');
     if (!counter) {
@@ -22,14 +27,16 @@ function injectStepCounter(stepIndex) {
 }
 
 function safeBeforeShow(tour, stepId, selector) {
-  const el = document.querySelector(selector);
-  if (!el) {
+  if (!document.querySelector(selector)) {
     const step = tour.getById(stepId);
     if (step) step.options.attachTo = undefined;
   }
 }
 
-export function startContractReviewTour(navigate) {
+const MAIN = '[data-tour="contract-review-main"]';
+
+/** goTool(id) shows a tool ('new', 'contracts', 'review', ...) or the job screen ('start'). */
+export function startContractReviewTour(goTool) {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
 
   const tour = new Shepherd.Tour({
@@ -46,102 +53,100 @@ export function startContractReviewTour(navigate) {
   const btnSecondary = (text, action) => ({ text, action, classes: 'vault-tour-btn-secondary' });
   const btnBack = () => btnSecondary('← Back', () => tour.back());
   const btnNext = { text: 'Next →', action: () => tour.next() };
+  const done = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } };
+  const show = (tool, stepId, selector) => () => new Promise((resolve) => {
+    if (tool) goTool(tool);
+    setTimeout(() => { safeBeforeShow(tour, stepId, selector); resolve(); }, 450);
+  });
+  let n = 0;
+  const step = (id, title, text, selector, tool, on = 'bottom') => {
+    const i = ++n;
+    tour.addStep({
+      id, title, text,
+      attachTo: selector ? { element: selector, on } : undefined,
+      beforeShowPromise: show(tool, id, selector || 'body'),
+      when: { show() { injectStepCounter(i, this.getElement()); } },
+      buttons: [btnBack(), btnNext],
+    });
+  };
 
-  // ── Step 1: Welcome ──────────────────────────────────────────────────────
+  n++;
   tour.addStep({
     id: 'cr-welcome',
     title: 'Contract Review — Quick Tour',
-    text: "Upload a contract (PDF or DOCX) and get an automated review: parties, definitions, clause-by-clause risk flags, extracted obligations with deadlines, and a Q&A assistant grounded in the actual document text. It's informational only — always confirm important decisions with a qualified lawyer.",
-    when: { show() { injectStepCounter(1); } },
-    buttons: [
-      btnSecondary('Skip Tour', () => tour.cancel()),
-      { text: 'Start Tour →', action: () => tour.next() },
-    ],
+    text: 'Upload a contract (PDF or Word) and get a plain-English review: who the parties are, which clauses are risky or unclear for your side and why, what you would have to do and by when, and answers to your questions quoted from the contract. It is informational only: always confirm important decisions with a qualified lawyer.',
+    when: { show() { injectStepCounter(1, this.getElement()); } },
+    buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
 
-  // ── Step 2: Upload ───────────────────────────────────────────────────────
+  step('cr-check', 'What am I signing up to?',
+    'The quickest way in. Press Review a contract, give it a title and drop in the file. Contract Review asks which party you are, then gives you a verdict for your side and every clause that matters.',
+    '[data-tour="contract-review-check"]', 'start');
+
+  step('cr-jobs', 'Or start with a job',
+    'Pick a narrower job, for example "Check a new revision" or "What do I have to do, and when?". Contract Review opens the right tool, and once you open the contract it moves on to the next step. The bar above each tool shows where you are.',
+    '[data-tour="contract-review-jobs"]', 'start');
+
+  step('cr-menu', 'Or pick a tool',
+    'Every tool is also in this list. New review and Your contracts work on their own; the tools under This contract need a contract open first and say "Open or start a contract first" until then. The open contract is shown at the top, with a cross to close it. Hover any tool for what it does.',
+    '[data-tour="contract-review-menu"]', null, 'right');
+
+  step('cr-new', 'New review',
+    'Give the contract a title (only for finding it again) and drop in the PDF or Word (.docx) file, then press Upload & review. The text is pulled out, split into clauses, and the contract type and parties are found straight away.',
+    '[data-tour="contract-review-upload"]', 'new');
+
+  step('cr-party', 'Which party are you?',
+    'A clause that is risky for a tenant can be standard for a landlord, so the review pauses until you confirm which party is you. Fix a detected name or role there if it is wrong, or add yourself if no party was found. The rest of the review is scored for that party.',
+    MAIN, 'review', 'top');
+
+  step('cr-verdict', 'The verdict comes first',
+    'Risk review opens with a verdict for your side: Read before you sign when a clause is risky, Worth a closer look when one is unclear, or No risky clauses flagged. Links take you to those clauses or to your obligations. It counts what was flagged; it never says a contract is safe.',
+    MAIN, 'review', 'top');
+
+  step('cr-clauses', 'Clauses and risk flags',
+    'Below the verdict: the summary, then every clause, Risky, Unclear or Standard, with why it matters and a suggested change to copy into a negotiation (never applied to the document). Verified means the text was matched back to the document. Filter or sort them, and press Not risky for me on a flag that does not apply. Review as a different party starts a separate review for the other side.',
+    MAIN, 'review', 'top');
+
+  step('cr-obligations', 'Obligations: what you have to do',
+    'Deadlines, notice periods and recurring duties, with who owes each one. Filter by owner, status or date, fix an owner or date, mark one done, Send to Tasks, or Export .ics for your calendar. Obligations in a draft that is not yet signed are labelled as such.',
+    MAIN, 'obligations', 'top');
+
+  step('cr-ask', 'Ask about it',
+    'Ask in your own words, such as "how much notice do I need to give?". The answer comes from the contract\'s own text and quotes the clause, from any document or revision under the contract.',
+    MAIN, 'ask', 'top');
+
+  step('cr-documents', 'Documents, revisions and what changed',
+    'Every document and revision under the contract. Upload new revision reviews the new version again and shows What changed by itself. Mark a draft as executed once it is signed, or run a review of a document as another party.',
+    MAIN, 'documents', 'top');
+
+  step('cr-compare', 'Compare revisions',
+    'Choose whose side to look from, then any two reviewed versions. Each change says whether the risk went up or down and what to do (accept, negotiate or investigate), as a list or in two columns.',
+    MAIN, 'compare', 'top');
+
+  step('cr-contracts', 'Your contracts',
+    'Every contract you have reviewed, with its type and status. Open one to come back to it, or select several and delete them. Parties & actions holds the parties (link each to a CRM contact), legal hold, expired or terminated, and the history.',
+    MAIN, 'contracts', 'top');
+
+  step('cr-report', 'PDF report',
+    'Download the review as a PDF (the parties and your role, every flag with its reason and suggested change, and the obligations) or type an email address and send it.',
+    MAIN, 'report', 'top');
+
+  step('cr-help', 'Help is always here',
+    'The (i) beside the title explains how Contract Review works, and the compass runs this tour again.',
+    '[aria-label="How Contract Review works"]', null, 'right');
+
+  const last = ++n;
   tour.addStep({
-    id: 'cr-upload',
-    title: 'Upload & Review',
-    text: "Give the contract a title, attach the PDF or DOCX, and click Upload & review. The pipeline runs text extraction, clause segmentation, contract-type detection, and party extraction right away — you'll usually be asked to confirm which party you are before the rest of the analysis continues.",
-    attachTo: { element: '[data-tour="contract-review-upload"]', on: 'bottom' },
-    beforeShowPromise() {
-      return new Promise(resolve => {
-        navigate('/contract-review');
-        setTimeout(() => {
-          safeBeforeShow(tour, 'cr-upload', '[data-tour="contract-review-upload"]');
-          resolve();
-        }, 600);
-      });
-    },
-    when: { show() { injectStepCounter(2); } },
-    buttons: [btnBack(), btnNext],
+    id: 'cr-guide',
+    title: 'Ask the guide',
+    text: 'Not sure where to start? Press the round button and say what you want to do, by typing or talking. The guide points you to the right tools in order. It explains Contract Review; it does not read your contracts or give legal advice.',
+    attachTo: { element: '[aria-label="Open the Contract Review guide"]', on: 'left' },
+    beforeShowPromise: show('start', 'cr-guide', '[aria-label="Open the Contract Review guide"]'),
+    when: { show() { injectStepCounter(last, this.getElement()); } },
+    buttons: [btnBack(), { text: 'Finish Tour ✓', action() { done(); tour.complete(); } }],
   });
 
-  // ── Step 3: Confirm your party ───────────────────────────────────────────
-  tour.addStep({
-    id: 'cr-party',
-    title: 'Which Party Are You?',
-    text: "Risk scoring is one-sided by design — a clause that's risky for the tenant may be standard for the landlord. Confirming your party unblocks the rest of the analysis. You can correct a detected name or role right there before confirming, or add yourself manually if no parties were found at all.",
-    when: { show() { injectStepCounter(3); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 4: Clauses & risk flags ─────────────────────────────────────────
-  tour.addStep({
-    id: 'cr-clauses',
-    title: 'Clauses & Risk Flags',
-    text: "Every clause is scored Risky, Unclear, or Standard for your confirmed party, with a plain-English reason and an advisory (copy-paste only) suggested redline. A Verified badge means the clause text was matched back to the source document; Unverified means it couldn't be confirmed word-for-word. Filter by severity or re-sort, and dismiss or override any flag that doesn't apply to you.",
-    when: { show() { injectStepCounter(4); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 5: Ask about this contract ──────────────────────────────────────
-  tour.addStep({
-    id: 'cr-qa',
-    title: 'Ask About This Contract',
-    text: "Ask a plain-English question — \"how much notice do I need to give to terminate?\" — and get an answer grounded in the actual clause text, with a quoted citation back to the document. It searches every document and revision under the contract, not just the one currently open.",
-    when: { show() { injectStepCounter(5); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 6: Obligations ──────────────────────────────────────────────────
-  tour.addStep({
-    id: 'cr-obligations',
-    title: 'Obligations — What You Need to Do',
-    text: "Dates, deadlines, and recurring duties extracted from the contract land on the Obligations tab. Assign the obligor, mark items done, send any obligation to Tasks, or export the whole list as a calendar (.ics). Obligations on a draft (not-yet-executed) document are clearly labelled as such.",
-    when: { show() { injectStepCounter(6); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 7: Documents & revisions ────────────────────────────────────────
-  tour.addStep({
-    id: 'cr-revisions',
-    title: 'Documents, Revisions & What Changed',
-    text: "Upload a new revision of a document and it's fully re-reviewed. \"What changed\" compares it against the version it replaced — added, removed, and edited clauses, plus any risk-level shifts. Mark a draft as executed once it's signed, or run an independent review of the same document as a different party.",
-    when: { show() { injectStepCounter(7); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 8: Reports ───────────────────────────────────────────────────────
-  tour.addStep({
-    id: 'cr-report',
-    title: 'PDF Report & Email',
-    text: "Download a PDF report — banner, parties and role, every flag with its reason and redline, and obligations — or send it straight to an email address. Look for the compass and info icons next to the page title any time you want to retake this tour or re-read how the tool works.",
-    when: { show() { injectStepCounter(8); } },
-    buttons: [
-      btnBack(),
-      {
-        text: 'Finish Tour ✓',
-        action() {
-          localStorage.setItem(TOUR_KEY, '1');
-          tour.complete();
-        },
-      },
-    ],
-  });
-
-  tour.on('cancel', () => localStorage.setItem(TOUR_KEY, '1'));
+  tour.on('cancel', done);
   tour.start();
   return tour;
 }

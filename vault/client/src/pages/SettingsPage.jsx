@@ -48,7 +48,7 @@ import { TOUR_KEY as TALK_TOUR_KEY } from '../utils/tours/talkTour';
 import { TOUR_KEY as FITNESS_TOUR_KEY } from '../utils/tours/fitnessTour';
 import { TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/musicTour';
 import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
-import { startContractReviewTour, TOUR_KEY as CONTRACT_REVIEW_TOUR_KEY } from '../utils/tours/contractReviewTour';
+import { TOUR_KEY as CONTRACT_REVIEW_TOUR_KEY } from '../utils/tours/contractReviewTour';
 import { startRoomPlannerTour, TOUR_KEY as ROOM_PLANNER_TOUR_KEY } from '../utils/tours/roomPlannerTour';
 import { startGardenPlannerTour, TOUR_KEY as GARDEN_PLANNER_TOUR_KEY } from '../utils/tours/gardenPlannerTour';
 import { startRouteTracerTour, TOUR_KEY as ROUTE_TRACER_TOUR_KEY } from '../utils/tours/routeTracerTour';
@@ -3000,13 +3000,13 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Contract Review Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                8-step tour — upload & review, party confirmation, risk flags, Q&A, obligations, revisions, PDF report
+                16-step tour — the jobs, the tool list, a new review, which party you are, the verdict, clauses and risk flags, obligations, asking about a contract, documents and revisions, comparing revisions, your contracts, the PDF report, the guide
               </p>
             </div>
             <button
               onClick={() => {
                 localStorage.removeItem(CONTRACT_REVIEW_TOUR_KEY);
-                setTimeout(() => startContractReviewTour(navigate), 200);
+                navigate('/contract-review?tour=1');
               }}
               className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
