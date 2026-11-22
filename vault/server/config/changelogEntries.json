@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "92d163aa",
+   "fullHash": "92d163aa18be2702800dc68aecd66fd1c43976ca",
+   "committedAt": "2026-11-23T05:16:35+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Code Map: commit the Understand-Anything knowledge graph",
+   "filesChanged": 7,
+   "insertions": 122990,
+   "deletions": 0,
+   "goal": "Give the Code Map Knowledge graph tab a real graph of Vault to show.",
+   "whatChanged": "The first /understand run (Understand-Anything plugin, run in Claude Code) over Vault's server/ and client/: 1731 files, with tests, fixtures' test code, docs, specs, scripts, shelf and the separate planner apps excluded by .ua/.understandignore. .ua/knowledge-graph.json (5.6 MB) holds 7732 nodes (1694 files, 5952 functions, 48 classes, 34 configs, 4 Docker/service files) and 17792 links (5286 imports, which is every import the scan found, plus contains, exports, 1870 calls and a few others), 10 layers with named groups, and a 12-step guided tour. .ua/code-lessons.json explains 35 tour files section by section. .ua/fingerprints.json and meta.json let later /understand runs only re-read changed files; config.json and .understandignore keep the run settings. .gitignore now also leaves out the plugin's .ua/tmp/ and .ua/.trash-*/ scratch folders.",
+   "filesImpacted": [
+    ".gitignore",
+    ".ua/.understandignore",
+    ".ua/code-lessons.json",
+    ".ua/config.json",
+    ".ua/fingerprints.json",
+    ".ua/knowledge-graph.json",
+    ".ua/meta.json"
+   ],
+   "benefit": "The Knowledge graph tab shows a plain-language map of Vault: every file and function with a summary, layers, and a tour that walks a newcomer from the entry points to deployment.",
+   "concerns": "The summaries were written by an AI model, many from function names and header comments rather than full reads, and calls between files analysed in different batches are sparse; treat them as a guide, not fact. Two tour statements were checked against the code and corrected (sign-in uses auth_sessions tokens, not JWTs; db.js runs initSchema itself). The graph reflects commit ad69260a and goes stale until /understand is run again. It adds about 9 MB to the repo, and the whole 5.6 MB graph is sent to the browser when the tab opens. A scan found no secrets or email addresses in the graph or lessons, but seed.js itself still hard-codes a login email and password. Checked: the plugin's validator (0 issues) and Vault's loader reading the file locally. Not checked: the tab in a browser with this graph, or on Railway."
+  },
+  {
    "commit": "4a19f348",
    "fullHash": "4a19f348b2f0eebd11b7ac2ba6f9d83925ad331f",
    "committedAt": "2026-11-22T19:54:03+10:00",
