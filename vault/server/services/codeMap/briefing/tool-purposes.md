@@ -14,7 +14,7 @@
 - `admin` — Admin dashboard: user accounts and workspace activity.
 - `pcHealth` — Report on the admin's own computer (drive space, memory, processes), compared scan to scan.
 - `changelog` — What each commit did, why, and its concerns, grouped by day, week or month, with search and "Ask the changelog".
-- `codeMap` — Reads Vault's own source: every tool, the code it owns, how it follows the house rules, ranked findings, and this briefing.
+- `codeMap` — Reads Vault's own source: every tool, the code it owns, how it follows the house rules, ranked findings, this briefing, and the Understand-Anything knowledge graph when one is committed.
 - `documentRedaction` — Finds and redacts personal or sensitive details in documents before they are shared or sent to an AI.
 - `contractReview` — Upload a contract and get clause-by-clause risk flags, a plain-English summary, obligations and suggested redlines (not legal advice).
 - `docCompare` — Compare two versions of a document in the browser: what changed, what went missing, and whether it is ready to send; files never leave the browser.
