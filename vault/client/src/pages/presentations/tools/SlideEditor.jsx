@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import api from '../../../utils/apiClient';
+import Dialog from '../../../components/Dialog';
 import EmptyState from '../../../components/EmptyState';
 import Tooltip from '../../../components/Tooltip';
 import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
@@ -69,6 +70,25 @@ function RichField({ value, onChange, label, placeholder, rows = 2 }) {
         className={`w-full rounded-xl border px-3 py-2 text-sm overflow-auto ${rows > 2 ? 'min-h-[5rem]' : ''}`}
         style={FIELD_STYLE}
       />
+    </div>
+  );
+}
+
+/** A thumbnail with its own caption and action buttons, used for generated and attached pictures. */
+function PictureTile({ src, label, onPreview, children }) {
+  return (
+    <div className="w-40 space-y-2 rounded-xl border p-2" style={FIELD_STYLE}>
+      <button
+        type="button"
+        onClick={onPreview}
+        aria-label={`Preview ${label}`}
+        className="block w-full rounded-lg border overflow-hidden transition-opacity duration-200 hover:opacity-70"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+      >
+        <img src={src} alt={label} className="h-24 w-full object-contain" />
+      </button>
+      <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{label}</p>
+      <div className="flex flex-wrap gap-1">{children}</div>
     </div>
   );
 }
@@ -169,6 +189,9 @@ export default function SlideEditor() {
   const [richOn, setRichOn] = useState({});
   const [rewrite, setRewrite] = useState({ instruction: '', index: null, busy: false });
   const [adding, setAdding] = useState(false);
+  const [generating, setGenerating] = useState(null); // slide id with an image request in flight
+  const [generated, setGenerated] = useState({}); // slide id -> generated asset refs waiting to be inserted
+  const [picturePreview, setPicturePreview] = useState(null); // { src, slideId, from, extraIndex }
 
   // Another tool can hand a whole deck here as a JSON file.
   useEffect(() => {
@@ -224,7 +247,14 @@ export default function SlideEditor() {
     return { ...prev, slides };
   });
 
-  const makePlaceholder = async (index, { imagePrompt = '', silent = false } = {}) => {
+  const slideIdAt = (index) => deck.slides[index]?.id || `slide-${index}`;
+  const slideIndexFor = (slideId) => deck.slides.findIndex((s) => s.id === slideId);
+
+  // Ask the image router for one owned asset ref. This deliberately does not touch the deck: a person should be able to
+  // preview the result and choose whether to insert it. Deck creation and Add slide still insert one automatically.
+  const requestPlaceholder = async (index, { slideId, imagePrompt = '', silent = false } = {}) => {
+    const key = slideId || slideIdAt(index);
+    setGenerating(key);
     try {
       const res = await api.post('/api/presentations/placeholders', {
         deckTitle: deck.title,
@@ -235,32 +265,76 @@ export default function SlideEditor() {
       const data = await readJson(res, 'A placeholder picture could not be made.');
       if (!data.imageRef) {
         if (data.warning && !silent) toast(data.warning, 'warn');
-        return;
+        return '';
       }
-      setDeck((prev) => ({
-        ...prev,
-        slides: prev.slides.map((slide, j) => (j === index
-          ? ['picture', 'full-picture'].includes(slide.layout)
-            ? { ...slide, imageRef: data.imageRef }
-            : { ...slide, images: [...(slide.images || []), { id: `img-${Date.now()}`, ref: data.imageRef, x: 58, y: 52, w: 36, h: 36, fit: 'contain' }] }
-          : slide)),
-      }));
+      return data.imageRef;
     } catch (err) {
       if (!silent) toast(err.message || 'A placeholder picture could not be made.', 'warn');
+      return '';
+    } finally {
+      setGenerating(null);
     }
   };
+
+  const addPictureToSlide = (index, src) => patchSlide(index, (slide) => (
+    ['picture', 'full-picture'].includes(slide.layout)
+      ? { ...slide, imageRef: src }
+      : { ...slide, images: [...(slide.images || []), {
+        id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        ref: src, x: 58, y: 52, w: 36, h: 36, fit: 'contain',
+      }] }
+  ));
+
+  const usePictureAsMain = (index, src, extraIndex = null) => patchSlide(index, (slide) => ({
+    ...slide,
+    imageRef: src,
+    images: extraIndex === null ? (slide.images || []) : (slide.images || []).filter((_, j) => j !== extraIndex),
+  }));
+
+  const generateForSlide = async (index) => {
+    const slide = deck.slides[index];
+    if (!slide) return;
+    const src = await requestPlaceholder(index, { slideId: slide.id, imagePrompt: slide.imagePrompt });
+    if (!src) return;
+    setGenerated((prev) => ({ ...prev, [slide.id]: [...(prev[slide.id] || []), src] }));
+    toast('Picture ready — preview it below, then add it to the slide.', 'success');
+  };
+
+  const dropGenerated = (slideId, at) => setGenerated((prev) => ({
+    ...prev,
+    [slideId]: (prev[slideId] || []).filter((_, j) => j !== at),
+  }));
+
+  const insertGenerated = (index, slideId, at) => {
+    const src = generated[slideId]?.[at];
+    if (!src) return;
+    addPictureToSlide(index, src);
+    dropGenerated(slideId, at);
+    toast('Picture added to this slide.', 'success');
+  };
+
+  const openPreview = (src, slideId, from = 'tray', extraIndex = null) => setPicturePreview({ src, slideId, from, extraIndex });
 
   const addSlide = async () => {
     const index = deck.slides.length;
     if (index >= (meta?.maxSlides || 20)) return;
-    setDeck((prev) => ({ ...prev, slides: [...prev.slides, newSlide(index)] }));
+    const slide = newSlide(index);
+    setDeck((prev) => ({ ...prev, slides: [...prev.slides, slide] }));
     setAdding(true);
-    await makePlaceholder(index, { silent: true });
+    const src = await requestPlaceholder(index, { slideId: slide.id, silent: true });
+    if (src) addPictureToSlide(index, src);
     setAdding(false);
   };
 
   const deleteSlide = (index) => {
+    const slideId = slideIdAt(index);
     setDeck((prev) => ({ ...prev, slides: prev.slides.filter((_, i) => i !== index) }));
+    setGenerated((prev) => {
+      const next = { ...prev };
+      delete next[slideId];
+      return next;
+    });
+    if (picturePreview?.slideId === slideId) setPicturePreview(null);
     setConfirmDelete(null);
   };
 
@@ -393,11 +467,14 @@ export default function SlideEditor() {
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{LAYOUT_HELP[slide.layout]}</p>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Tooltip text={slide.layout === 'quote' ? 'Who said the quote.' : 'The heading on this slide.'}>
-                    <VoiceInput value={slide.title} onChange={(title) => updateSlide(i, { title })} label={`Title for slide ${i + 1}`} placeholder={slide.layout === 'quote' ? 'Who said it' : 'Slide title'} />
-                  </Tooltip>
                   <label className="block space-y-1">
-                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Slide background (optional)</span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{slide.layout === 'quote' ? 'Speaker (optional)' : 'Heading'}</span>
+                    <Tooltip text={slide.layout === 'quote' ? 'Who said the quote.' : 'The heading on this slide.'}>
+                      <VoiceInput value={slide.title} onChange={(title) => updateSlide(i, { title })} label={`Title for slide ${i + 1}`} placeholder={slide.layout === 'quote' ? 'Who said it' : 'Slide title'} />
+                    </Tooltip>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Slide background (optional)</span>
                     <Tooltip text="A hex colour for just this slide. Leave blank to use the colour theme.">
                       <VoiceInput value={slide.background || ''} onChange={(background) => updateSlide(i, { background })} label={`Background for slide ${i + 1}`} placeholder="#ffffff" />
                     </Tooltip>
@@ -510,15 +587,46 @@ export default function SlideEditor() {
                     <VoiceInput type="textarea" rows={2} value={slide.notes} onChange={(notes) => updateSlide(i, { notes })} label={`Notes for slide ${i + 1}`} append placeholder="Notes (optional)" />
                   </Tooltip>
                 </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <VoiceInput value={slide.imagePrompt || ''} onChange={(imagePrompt) => updateSlide(i, { imagePrompt })} label={`Picture prompt for slide ${i + 1}`} placeholder="Placeholder picture idea (optional)" />
-                  <Tooltip text="Make a small, low-cost AI placeholder picture for this slide. It goes in your own assets and is saved with the deck.">
-                    <button type="button" onClick={() => makePlaceholder(i, { imagePrompt: slide.imagePrompt })} className={BTN_SECONDARY} style={SECONDARY_STYLE}>AI placeholder</button>
-                  </Tooltip>
+                <div className={`${ROW} space-y-3`} style={FIELD_STYLE}>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="block min-w-[16rem] flex-1 space-y-1">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>AI picture idea</span>
+                      <Tooltip text="Describe the simple illustration you want. Each generated picture is small, low-cost and saved in your own assets.">
+                        <VoiceInput value={slide.imagePrompt || ''} onChange={(imagePrompt) => updateSlide(i, { imagePrompt })} label={`Picture prompt for slide ${i + 1}`} placeholder="e.g. a calm map of the project stages" />
+                      </Tooltip>
+                    </label>
+                    <Tooltip text="Generate one picture. It appears below so you can preview it before deciding whether to add it.">
+                      <button type="button" onClick={() => generateForSlide(i)} disabled={generating === slide.id} className={BTN_SECONDARY} style={SECONDARY_STYLE}>
+                        {generating === slide.id ? 'Making picture…' : 'Generate AI picture'}
+                      </button>
+                    </Tooltip>
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Generated pictures wait here until you add them. Pictures added automatically when a deck or slide is made are already on their slides and can be previewed here.
+                  </p>
+                  {(generated[slide.id] || []).length > 0 && (
+                    <div className="flex flex-wrap gap-3">
+                      {(generated[slide.id] || []).map((src, gi) => (
+                        <PictureTile key={`${src}-${gi}`} src={src} label={`Generated picture ${gi + 1}`} onPreview={() => openPreview(src, slide.id)}>
+                          <Tooltip text="Add this picture to the slide, keeping any picture already there.">
+                            <button type="button" onClick={() => insertGenerated(i, slide.id, gi)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Add to slide</button>
+                          </Tooltip>
+                          <Tooltip text="Make this the large picture for this slide.">
+                            <button type="button" onClick={() => { usePictureAsMain(i, src); dropGenerated(slide.id, gi); toast('Picture set as the slide picture.', 'success'); }} className={BTN_SECONDARY} style={SECONDARY_STYLE}>Use as slide picture</button>
+                          </Tooltip>
+                          <button type="button" onClick={() => dropGenerated(slide.id, gi)} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Discard</button>
+                        </PictureTile>
+                      ))}
+                    </div>
+                  )}
+                  {slide.imageRef && (
+                    <div className="flex flex-wrap gap-3">
+                      <PictureTile src={slide.imageRef} label="Current slide picture" onPreview={() => openPreview(slide.imageRef, slide.id, 'main')}>
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Already on this slide</span>
+                      </PictureTile>
+                    </div>
+                  )}
                 </div>
-                {slide.imageRef && (
-                  <img src={slide.imageRef} alt={`Slide ${i + 1}`} className="max-h-40 rounded-lg border object-contain" style={{ borderColor: 'var(--color-border)' }} />
-                )}
 
                 <details className="rounded-xl border p-3 space-y-3" style={FIELD_STYLE}>
                   <summary className="cursor-pointer text-xs font-medium" style={{ color: 'var(--color-text)' }}>
@@ -530,6 +638,15 @@ export default function SlideEditor() {
                         <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Picture {ii + 1}</span>
                         <button type="button" onClick={() => removeListItem(i, 'images', ii)} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Remove</button>
                       </div>
+                      {image.ref && (
+                        <div className="flex flex-wrap gap-3">
+                          <PictureTile src={image.ref} label={`Picture ${ii + 1} preview`} onPreview={() => openPreview(image.ref, slide.id, 'extra', ii)}>
+                            <Tooltip text="Make this the large picture for this slide.">
+                              <button type="button" onClick={() => { usePictureAsMain(i, image.ref, ii); toast('Picture set as the slide picture.', 'success'); }} className={BTN_SECONDARY} style={SECONDARY_STYLE}>Use as slide picture</button>
+                            </Tooltip>
+                          </PictureTile>
+                        </div>
+                      )}
                       <VoiceInput value={image.ref} onChange={(ref) => updateList(i, 'images', ii, { ref })} label={`Picture ${ii + 1} reference`} placeholder="Asset path or image URL" />
                       <div className="grid grid-cols-4 gap-2">
                         {['x', 'y', 'w', 'h'].map((key) => (
@@ -617,6 +734,83 @@ export default function SlideEditor() {
           </div>
         </div>
       )}
+
+      {picturePreview && (() => {
+        const index = slideIndexFor(picturePreview.slideId);
+        const from = picturePreview.from;
+        const discardTrayCopy = () => setGenerated((prev) => ({
+          ...prev,
+          [picturePreview.slideId]: (prev[picturePreview.slideId] || []).filter((src) => src !== picturePreview.src),
+        }));
+        return (
+          <Dialog
+            title={from === 'tray' ? 'Generated picture' : 'Picture on this slide'}
+            size="lg"
+            onClose={() => setPicturePreview(null)}
+            footer={(
+              <>
+                {from === 'tray' && index >= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addPictureToSlide(index, picturePreview.src);
+                      discardTrayCopy();
+                      setPicturePreview(null);
+                      toast('Picture added to this slide.', 'success');
+                    }}
+                    className={BTN_PRIMARY}
+                    style={PRIMARY_STYLE}
+                  >Add to slide</button>
+                )}
+                {index >= 0 && from !== 'main' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      usePictureAsMain(index, picturePreview.src, from === 'extra' ? picturePreview.extraIndex : null);
+                      if (from === 'tray') discardTrayCopy();
+                      setPicturePreview(null);
+                      toast('Picture set as the slide picture.', 'success');
+                    }}
+                    className={BTN_SECONDARY}
+                    style={SECONDARY_STYLE}
+                  >Use as slide picture</button>
+                )}
+                {from === 'extra' && index >= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { removeListItem(index, 'images', picturePreview.extraIndex); setPicturePreview(null); }}
+                    className={BTN_QUIET}
+                    style={{ color: 'var(--color-muted)' }}
+                  >Remove from slide</button>
+                )}
+                {from === 'main' && index >= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { updateSlide(index, { imageRef: '' }); setPicturePreview(null); }}
+                    className={BTN_QUIET}
+                    style={{ color: 'var(--color-muted)' }}
+                  >Remove from slide</button>
+                )}
+                <button type="button" onClick={() => setPicturePreview(null)} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Close</button>
+              </>
+            )}
+          >
+            <div className="space-y-3">
+              <img
+                src={picturePreview.src}
+                alt="Large picture preview"
+                className="max-h-[60vh] w-full rounded-xl border object-contain"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+              />
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                {from === 'tray'
+                  ? 'This picture is saved in your Vault assets but is not on the slide yet. Add it as an extra picture, or make it the large slide picture.'
+                  : 'This picture is already saved with the deck. Choose Use as slide picture to make it the large picture.'}
+              </p>
+            </div>
+          </Dialog>
+        );
+      })()}
     </section>
   );
 }

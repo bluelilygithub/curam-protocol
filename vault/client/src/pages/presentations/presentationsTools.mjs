@@ -26,7 +26,7 @@ export const TOOL_TIPS = {
   create: 'Write a brief, set the audience, tone, length and slide count, and optionally review the outline first. Low-cost AI placeholder pictures can be added as the deck is made.',
   import: 'Pull text and pictures from a PDF, Word document, text file, web page or images. A .pptx/.potx file opens straight into the slide editor as an editable deck.',
   templates: 'Pick a design (how slides are laid out and decorated) and a colour theme. Save your own colours, import them from PowerPoint, or apply your Brand Kit on top.',
-  slides: 'Change the words, pictures, layout and order of the slides. Add shapes, charts, tables and inline formatting, rewrite one slide, and undo or redo edits. Presenter view shows notes, the next slide and a timer.',
+  slides: 'Change the words, pictures, layout and order of the slides. Generate and preview AI pictures before inserting them, add shapes, charts, tables and inline formatting, rewrite one slide, and undo or redo edits. Presenter view shows notes, the next slide and a timer.',
   export: 'Download the deck as an editable PPTX with speaker notes, a PDF with notes pages, an HTML preview or a zip of PNGs with notes.txt. Finished files can be downloaded again.',
   decks: 'Open saved decks, duplicate or delete them, roll back to a saved version (including autosaves), re-download exports, and see decks opened recently on this device.',
 };
@@ -84,7 +84,8 @@ export const TOOL_HELP = {
       'Comparison, Three columns and Big numbers have their own column boxes',
       'Undo and redo with the buttons or Ctrl+Z / Ctrl+Shift+Z outside a text field; duplicate, add, delete and reorder slides',
       'Add extra pictures and shapes, bar/line/pie charts, tables, slide backgrounds and inline bold/italic/underline formatting',
-      'Ask the model to rewrite one slide in place, or make a small AI placeholder picture for a new or existing slide',
+      'Ask the model to rewrite one slide in place, or describe a small AI picture and generate one',
+      'Generated AI pictures wait in a tray: preview each one, then Add to slide or Use as slide picture. Pictures added automatically with a new deck or slide can be previewed and promoted here too',
       'The live preview uses the same renderer as PDF and PNG export',
       'Present plays the deck full screen: arrow keys, Space and Page Up/Down move, type a number and press Enter to jump, Escape ends the show',
       'Presenter view (V) shows speaker notes, the next slide and a pauseable timer that can be reset',

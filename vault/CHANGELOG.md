@@ -4,6 +4,19 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (presentations-ai-picture-preview)
+
+### Presentations — generated AI pictures can be previewed and inserted
+Generating a picture in the slide editor no longer silently drops it onto the slide. Each result waits in a per-slide tray with a thumbnail and a larger preview: **Add to slide** keeps it as an extra picture, while **Use as slide picture** promotes it to the main picture. Pictures already attached to a slide now have thumbnails with the same preview and promote actions, so the automatic placeholders added with new decks and slides can be reviewed too.
+
+### Presentations — slide editor field alignment
+The slide heading helper text and input now share the same grid wrapper and styling as the background-colour field, so they line up instead of sitting a row lower.
+
+### Chat helpers and docs
+The Presentations guide, tool tips, per-tool help and feature documentation now explain the preview-and-insert flow.
+
+---
+
 ## 2026-11-23 (presentations-presenter-placeholders)
 
 ### Presentations — presenter view, outline review and notes in every export
