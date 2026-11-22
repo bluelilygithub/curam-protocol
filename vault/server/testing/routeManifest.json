@@ -4123,6 +4123,18 @@
   "DELETE /api/youtube/ai-transcript/:videoId": {
    "class": "authed"
   },
+  "GET /api/youtube/chapters/:videoId": {
+   "class": "authed"
+  },
+  "POST /api/youtube/download": {
+   "class": "authed"
+  },
+  "GET /api/youtube/download/:id": {
+   "class": "authed"
+  },
+  "GET /api/youtube/download/:id/file": {
+   "class": "authed"
+  },
   "POST /api/youtube/ask": {
    "class": "authed"
   },

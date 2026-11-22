@@ -47,6 +47,8 @@
     "api/videos/jobs/:id": null,
     "api/youtube/channel/:channelId": null,
     "api/youtube/comments/:videoId": null,
+    "api/youtube/chapters/:videoId": null,
+    "api/youtube/download/:id": null,
     "api/youtube/history/:id": "youtube_search_history",
     "api/youtube/lists/:id": "youtube_saved_lists",
     "api/youtube/lists/:id/items/:videoId": null,

@@ -34,8 +34,8 @@ const CATALOG = [
     does: 'Create note is a button with the others under the player (and on each favourite). It adds a new note to Notes about the video (once it exists, the button becomes Open note and takes you to that note, so you never make a second one by accident; if the note is deleted the button goes back to Create note): title, link, channel and length, its category and tags if it is saved, the Main points and Insights summary if already written, and the transcript in readable paragraphs with clickable times, then an empty My notes section to write in. The category and tags go on the note as tags.',
     notes: 'No AI is asked, so it is instant and free. If YouTube will not give the captions and there is no saved or AI-written transcript, the note says so. Edit the note afterwards in Notes.' },
   { id: 'watch', label: 'Watch window', group: 'Watch and study',
-    does: 'Click any video to watch it here, on YouTube\'s own player. Buttons under it: Insights & Ask, Transcript, Comments, More from this channel, + Follow channel, save as a favourite, and Open on YouTube.',
-    notes: 'Vault never downloads or stores the video; it plays from YouTube.' },
+    does: 'Click any video to watch it here, on YouTube\'s own player. Buttons under it: Insights & Ask, Transcript, Comments, Chapters, Download, More from this channel, + Follow channel, save as a favourite, and Open on YouTube.',
+    notes: 'It plays from YouTube; watching never downloads or stores the video (only Download does, when asked).' },
   { id: 'insights', label: 'Insights', group: 'Watch and study',
     does: 'Press Insights & Ask under the player. Write notes for this video produces a short summary, key points, chapters, things to do and quotes, each with a time you can click to jump the video there. The notes are written once and kept for next time; Refresh writes them again.',
     notes: 'They are written by AI from the video\'s captions only (or an AI-written transcript if the video had none), and they can contain mistakes. A very long video is read only as far as the AI can take, and the panel says so.' },
@@ -51,6 +51,12 @@ const CATALOG = [
   { id: 'comments', label: 'Comments', group: 'Watch and study',
     does: 'The Comments button shows the video\'s top public comments with author, likes and how long ago, and Load more for the next page.',
     notes: 'Read only. A video with comments turned off says so.' },
+  { id: 'chapters', label: 'Chapters', group: 'Watch and study',
+    does: 'The Chapters button under the player lists the video\'s own chapters with their times; click one to jump the video there.',
+    notes: 'They come from the times in the video\'s description, or YouTube\'s automatic chapters. Free, no AI and no captions needed. Many videos have none; Insights writes AI chapters from the captions instead.' },
+  { id: 'download', label: 'Download', group: 'Watch and study',
+    does: 'The Download button under the player saves the video, up to 720p or 1080p as MP4, or only its sound as MP3. Pick one, tick that you may download it, and press Download; the server fetches it with a progress bar (closing the window does not stop it; press Download again to come back). Then Save file puts it in your downloads.',
+    notes: 'Only for videos you may download: your own, Creative Commons, or with the owner\'s permission, as YouTube\'s terms allow nothing else. Files up to 2 GB; one download at a time; the file is deleted from the server once saved, or after 30 minutes. YouTube sometimes blocks cloud servers, so a download can fail.' },
 ];
 
 const RULES = [
@@ -62,7 +68,7 @@ const RULES = [
 ];
 
 const NOT_POSSIBLE = [
-  'Downloading a video or its audio (Vault only plays videos from YouTube).',
+  'Downloading a whole playlist or channel at once, or videos over 2 GB (Download does one video at a time).',
   'Understanding what is shown or heard beyond the captions: charts, demonstrations, music or tone.',
   'Posting, liking, subscribing or replying to comments, or managing your own channel.',
   'Email or phone alerts when a new video appears (new videos show on the Following tab and in Needs attention only).',

@@ -11,6 +11,8 @@ import { toSpeakable } from './talk/talkUtils.mjs';
 import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
 import AiTranscriptDialog from './youtube/AiTranscriptDialog';
+import DownloadDialog from './youtube/DownloadDialog';
+import ChaptersPanel from './youtube/ChaptersPanel';
 import FavLabelsDialog from './youtube/FavLabelsDialog';
 import { offerUndo } from '../utils/binUndo';
 import SelectBar from './youtube/SelectBar';
@@ -656,6 +658,8 @@ function VideoModal({ video, isFav, noteId, onClose, onToggleFav, onMoreFromChan
   const [showTranscript, setShowTranscript] = useState(false);
   const [showComments, setShowComments]     = useState(false);
   const [showStudy, setShowStudy]           = useState(false);
+  const [showChapters, setShowChapters]     = useState(false);
+  const [showDownload, setShowDownload]     = useState(false);
   const [startAt, setStartAt]               = useState(0); // seconds; changing it reloads the player at that moment
 
   useEffect(() => {
@@ -715,6 +719,16 @@ function VideoModal({ video, isFav, noteId, onClose, onToggleFav, onMoreFromChan
                 Comments
               </button>
             </Tooltip>
+            <Tooltip text="The video's own chapters (from its description, or YouTube's automatic ones). Click one to jump there. Free, and no captions needed.">
+              <button onClick={() => setShowChapters((v) => !v)} aria-expanded={showChapters} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: showChapters ? 'var(--color-primary)' : 'var(--color-bg)', border: '1px solid var(--color-border)', color: showChapters ? '#fff' : 'var(--color-muted)' }}>
+                Chapters
+              </button>
+            </Tooltip>
+            <Tooltip text="Save this video, or just its sound, to your computer. Only for videos you may download: your own, Creative Commons, or with the owner's permission.">
+              <button onClick={() => setShowDownload(true)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                Download
+              </button>
+            </Tooltip>
             {video.channelId && onMoreFromChannel && (
               <Tooltip text="See other videos from this same channel.">
                 <button onClick={() => onMoreFromChannel(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
@@ -760,8 +774,10 @@ function VideoModal({ video, isFav, noteId, onClose, onToggleFav, onMoreFromChan
             </Tooltip>
           </div>
         </div>
+        {showChapters && <ChaptersPanel video={video} onSeek={(sec) => setStartAt(Math.max(1, sec))} />}
         {showStudy && <VideoStudyPanel video={video} onSeek={(sec) => setStartAt(Math.max(1, sec))} onClose={() => setShowStudy(false)} />}
       </div>
+      {showDownload && <DownloadDialog video={video} onClose={() => setShowDownload(false)} />}
       {showTranscript && <TranscriptPanel video={video} onClose={() => setShowTranscript(false)} onSeek={(sec) => setStartAt(Math.max(1, sec))} />}
       {showComments && <CommentsPanel video={video} onClose={() => setShowComments(false)} />}
     </div>

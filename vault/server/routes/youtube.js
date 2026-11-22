@@ -15,6 +15,9 @@
  * POST /insights             — write them (once; refresh to redo)
  * POST /ask                  — answer a question about a video from its captions, with timestamps
  * POST /note-draft           — the Notes text for a video (the page saves it through /api/notes)
+ * GET  /chapters/:videoId    — the video's own chapters (description timestamps, else yt-dlp)
+ * POST /download             — start a yt-dlp download { videoId, kind, title, confirmRights: true }
+ * GET  /download/:id         — its progress; GET /download/:id/file — the file, once, then deleted
  *
  * Requires env: YOUTUBE_API_KEY
  */
@@ -37,6 +40,7 @@ const mainPointsLib = require('../services/youtubeMainPoints');
 const labelsLib = require('../services/youtubeLabels');
 const { decodeHtml, decodeFields } = require('../services/htmlText');
 const { aiLimiter } = require('../middleware/aiRateLimit');
+const { createDownloads, createChapters } = require('../services/youtubeDownload');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -46,6 +50,10 @@ const aiTranscripts = createAiTranscripts({ pool, ytGet: (p) => youtubeApi.ytGet
 
 // Every Data API call goes through the cache and the daily quota count (services/youtubeApi.js).
 const ytGet = (path) => youtubeApi.ytGet(pool, path);
+
+// yt-dlp downloads (background jobs, files deleted once fetched) and the videos' own chapters.
+const downloads = createDownloads();
+const videoChapters = createChapters();
 
 // ── NLP parse ────────────────────────────────────────────────────────────────
 
@@ -1086,6 +1094,51 @@ router.delete('/ai-transcript/:videoId', async (req, res) => {
     await pool.query('DELETE FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, req.params.videoId]); // they were written from that transcript
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'No saved transcript.' });
   } catch (err) { console.error('[youtube/ai-transcript delete]', err.message); res.status(500).json({ error: 'Could not delete it.' }); }
+});
+
+// ── Chapters and Download (yt-dlp; services/youtubeDownload.js) ───────────────
+
+// The video's own chapters: the timestamps in its description (one cached Data API call), else what yt-dlp finds (incl. automatic chapters).
+router.get('/chapters/:videoId', async (req, res) => {
+  const { videoId } = req.params;
+  if (!VIDEO_ID.test(videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    let description = '';
+    try {
+      const data = await ytGet(`/youtube/v3/videos?part=snippet&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(getKey())}`);
+      description = (data && data.items && data.items[0] && data.items[0].snippet && data.items[0].snippet.description) || '';
+    } catch (_) { /* no description: yt-dlp is still asked */ }
+    res.json(await videoChapters(videoId, description));
+  } catch (err) { console.error('[youtube/chapters]', err.message); res.status(500).json({ error: 'Could not read the chapters.' }); }
+});
+
+// Start a download. The person must confirm they have the right to download this video (their own, Creative Commons, or with permission).
+router.post('/download', (req, res) => {
+  const { videoId, kind, title, confirmRights } = req.body || {};
+  if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
+  if (confirmRights !== true) return res.status(400).json({ error: 'Confirm you have the right to download this video first.' });
+  try {
+    const r = downloads.start(req.user.id, videoId, String(kind || ''), String(title || '').slice(0, 300));
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    res.status(202).json({ job: r.job });
+  } catch (err) { console.error('[youtube/download start]', err.message); res.status(500).json({ error: 'Could not start the download.' }); }
+});
+
+router.get('/download/:id', (req, res) => {
+  const job = downloads.status(req.user.id, String(req.params.id));
+  if (!job) return res.status(404).json({ error: 'That download is gone (it was fetched, expired after 30 minutes, or the server restarted).' });
+  res.json({ job });
+});
+
+// The finished file, once: it is deleted from the server as soon as it has been sent.
+router.get('/download/:id/file', (req, res) => {
+  const id = String(req.params.id);
+  const f = downloads.file(req.user.id, id);
+  if (!f) return res.status(404).json({ error: 'That file is not ready or has already been fetched.' });
+  res.download(f.file, f.filename, (err) => {
+    if (err && !res.headersSent) res.status(500).json({ error: 'Could not send the file.' });
+    downloads.remove(id);
+  });
 });
 
 module.exports = router;
