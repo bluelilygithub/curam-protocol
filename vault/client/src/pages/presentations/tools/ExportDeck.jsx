@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../utils/apiClient';
+import EmptyState from '../../../components/EmptyState';
 import Tooltip from '../../../components/Tooltip';
 import { takeToolHandoff } from '../../../utils/toolHandoff.mjs';
 import {
-  CARD_STYLE, FIELD_STYLE, Notice, ToolHeader, readDeckFile, usePresentations,
+  BTN_PRIMARY, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, PRIMARY_STYLE, SECONDARY_STYLE,
+  Notice, ToolHeader, readDeckFile, usePresentations,
 } from '../shared';
 
 const FORMATS = [
@@ -58,21 +60,38 @@ export default function ExportDeck() {
 
   return (
     <section className="space-y-4">
-      <ToolHeader id="export" title="Export" blurb="PPTX keeps the words editable; PDF, HTML and PNGs render from the same preview." />
+      <ToolHeader id="export" title="Export" />
 
       {deck.slides.length === 0 ? (
-        <Notice tone="warn">There is no deck to export yet. Make one in Create deck, or open a saved deck from My decks.</Notice>
+        <div className={CARD} style={CARD_STYLE}>
+          <EmptyState
+            icon="download"
+            title="No deck to export yet"
+            body="Make a deck in Create deck, or open a saved one from My decks, then come back to download it."
+            action={(
+              <div className="flex flex-wrap justify-center gap-2">
+                <Tooltip text="Write a brief and make a first deck.">
+                  <button type="button" onClick={() => openTool('create')} className={BTN_PRIMARY} style={PRIMARY_STYLE}>Create a deck</button>
+                </Tooltip>
+                <Tooltip text="Open a deck you saved before.">
+                  <button type="button" onClick={() => openTool('decks')} className={BTN_SECONDARY} style={SECONDARY_STYLE}>My decks</button>
+                </Tooltip>
+              </div>
+            )}
+          />
+        </div>
       ) : (
-        <div className="rounded-2xl border p-4 space-y-4" style={CARD_STYLE}>
+        <div className={CARD} style={CARD_STYLE}>
           <div className="grid sm:grid-cols-2 gap-2">
             {FORMATS.map((f) => (
-              <Tooltip key={f.id} text={f.desc}>
+              <Tooltip key={f.id} text={`Export as ${f.label}: ${f.desc}`}>
                 <button
                   type="button"
                   onClick={() => setFormat(f.id)}
                   disabled={busy}
-                  className="rounded-xl border p-3 text-left text-xs hover:opacity-70 transition-opacity disabled:opacity-40"
-                  style={{ ...FIELD_STYLE, borderColor: format === f.id ? 'var(--color-primary)' : 'var(--color-border)' }}
+                  aria-pressed={format === f.id}
+                  className="w-full rounded-xl border p-4 text-left text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                  style={{ ...FIELD_STYLE, borderColor: format === f.id ? 'var(--color-primary)' : 'var(--color-border)', borderWidth: format === f.id ? 2 : 1 }}
                 >
                   <span className="block text-sm font-medium" style={{ color: format === f.id ? 'var(--color-primary)' : 'var(--color-text)' }}>{f.label}</span>
                   <span className="block mt-1" style={{ color: 'var(--color-muted)' }}>{f.desc}</span>
@@ -81,7 +100,7 @@ export default function ExportDeck() {
             ))}
           </div>
 
-          <Tooltip text={meta?.brandKit?.available ? 'Lay your Brand Kit colours and logo over the chosen theme in the export.' : 'No saved Brand Kit yet — set one up in Graphics first.'}>
+          <Tooltip text={meta?.brandKit?.available ? 'Lay your Brand Kit colours and logo over the chosen theme in the export.' : 'No saved Brand Kit yet. Set one up in Graphics first.'}>
             <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
               <input type="checkbox" checked={applyBrand} onChange={(e) => setApplyBrand(e.target.checked)} />
               Apply Brand Kit
@@ -95,21 +114,21 @@ export default function ExportDeck() {
                 type="button"
                 onClick={submit}
                 disabled={busy}
-                className="px-4 py-2 rounded-xl text-sm font-medium hover:opacity-80 disabled:opacity-40 transition-opacity"
-                style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
+                className={BTN_PRIMARY}
+                style={PRIMARY_STYLE}
               >
                 {busy ? 'Starting export…' : 'Export deck'}
               </button>
             </Tooltip>
             {exportFile?.jobId && (
               <Tooltip text={`Download the finished ${exportFile.format || format} file.`}>
-                <button type="button" onClick={download} className="px-3 py-2 rounded-xl text-xs font-medium border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                <button type="button" onClick={download} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
                   Download {String(exportFile.format || format).toUpperCase()}
                 </button>
               </Tooltip>
             )}
             <Tooltip text="Go back and change the slides before exporting.">
-              <button type="button" onClick={() => openTool('slides')} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit slides</button>
+              <button type="button" onClick={() => openTool('slides')} className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit slides</button>
             </Tooltip>
           </div>
         </div>

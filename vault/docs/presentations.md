@@ -13,7 +13,9 @@ It is deliberately **not** a clone of Presenton. It keeps the useful feature set
 | Layer | Files |
 |---|---|
 | Page shell | `client/src/pages/PresentationsPage.jsx` |
-| Tool registry and jobs | `client/src/pages/presentations/toolRegistry.js`, `client/src/pages/presentations/presentationGoals.mjs` |
+| Tool list, tips and help | `client/src/pages/presentations/presentationsTools.mjs` (the `ToolSidebar` groups, hover tips, the line under each tool, the (?) and (i) boxes; shared with the guide's catalogue) |
+| Tool components and jobs | `client/src/pages/presentations/toolRegistry.js` (lazy components by id), `client/src/pages/presentations/presentationGoals.mjs` |
+| Shared pieces | `client/src/pages/presentations/shared.jsx`: the deck model, the job hook, and DESIGN.md class strings (`CARD`, `ROW`, `SELECT`, `BTN_PRIMARY`, `BTN_SECONDARY`, `BTN_QUIET`), `InlineDelete`, `themeOptions` |
 | Tool screens | `client/src/pages/presentations/tools/*.jsx` |
 | Shared preview/export UI | `client/src/pages/presentations/PresentationPreview.jsx`, `client/src/pages/presentations/shared.jsx` |
 | Browser history | `client/src/pages/presentations/historyStore.mjs` |
@@ -24,7 +26,7 @@ It is deliberately **not** a clone of Presenton. It keeps the useful feature set
 | Tables | `presentation_decks`, `presentation_templates` in `server/db.js` |
 | Recycle bin | `server/services/recycleBin/adapters/presentations.js` |
 
-The page uses the same shell as Graphics and Video Tools: grouped left sidebar, “What do you want to do?” start screen, job bar, tooltips, (i) help, voice on text fields, `Use in…` handoff, and a guide chat.
+The page uses the same shell as Contract Review and DocCompare: the shared `ToolSidebar` (tool search with a microphone, `/` to jump to it, groups that open and close, a hint on Slide editor and Export until a deck exists), the “What do you want to do?” start screen, `BackToJobs` and the job bar, then one line describing the open tool. Every control has a tooltip; loading uses `Skeleton`, empty lists use `EmptyState`, routine deletes confirm in place (`InlineDelete`). The preview rebuilds by itself 600 ms after typing stops (Refresh rebuilds at once). Theme pickers show each theme's own colours and names.
 
 ## Onboarding in the app
 
@@ -187,6 +189,7 @@ Long work returns `202 { jobId }`, follows the Video Tools background-job patter
 - `node server/services/presentations/jobs.test.js` — job lifecycle, cancel/resume and the 30-minute result cache.
 - `node server/routes/presentations/templates.test.js` — theme sanitising and import rules.
 - `node client/src/pages/presentations/presentationGoals.test.mjs` — every job step names a real tool.
+- `node server/services/presentationsTutor.test.js` — the guide's catalogue matches `presentationsTools.mjs` (ids, labels, groups, tips), the guide's safety wording, every job step is a real tool and every tool has a (?) box; no model is called.
 - `node server/config/guides.test.js` — the guide catalogue (including `presentations`) still resolves.
 - `npm run test:nav` and `npm run build` — navigation/route checks and the client build.
 

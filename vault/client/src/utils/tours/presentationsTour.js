@@ -72,8 +72,8 @@ export function startPresentationsTour() {
     id: 'presentations-sidebar',
     title: 'The tool list',
     text: 'The left-hand list holds all six tools, grouped as Make (Create deck, Import source), Design (Themes, Slide editor), Finish (Export) and Library (My decks). Click a group to open or close it. The search box filters by name or plain description — press / to jump to it, or use its microphone to speak. Hover any group or tool for a short explanation.',
-    attachTo: { element: '[data-tour="presentations-sidebar"]', on: 'right' },
-    beforeShowPromise: () => Promise.resolve(before('presentations-sidebar', '[data-tour="presentations-sidebar"]')()),
+    attachTo: { element: '[data-tour="presentations-menu"]', on: 'right' },
+    beforeShowPromise: () => Promise.resolve(before('presentations-sidebar', '[data-tour="presentations-menu"]')()),
     when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
@@ -82,8 +82,8 @@ export function startPresentationsTour() {
     id: 'presentations-help',
     title: 'Help when you need it',
     text: 'The (i) next to the title opens “How Presentations Works” once. Each tool also has a (?) button with its own short help, and the microphone works on text fields such as the brief and the tool search. Nothing here counts as a tool — they are just ways to get unstuck.',
-    attachTo: { element: '[data-tour="presentations-info"]', on: 'bottom' },
-    beforeShowPromise: () => Promise.resolve(before('presentations-help', '[data-tour="presentations-info"]')()),
+    attachTo: { element: '[aria-label="How Presentations works"]', on: 'bottom' },
+    beforeShowPromise: () => Promise.resolve(before('presentations-help', '[aria-label="How Presentations works"]')()),
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });

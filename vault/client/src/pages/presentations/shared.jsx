@@ -18,6 +18,36 @@ export const CARD_STYLE = {
   borderColor: 'var(--color-border)',
   background: 'var(--color-surface)',
 };
+// Class strings from client/DESIGN.md, so every Presentations tool shapes its cards, rows, fields and buttons the same way.
+export const CARD = 'rounded-2xl border p-6 space-y-4';
+export const ROW = 'rounded-xl border p-4';
+export const SELECT = 'w-full px-3 py-2.5 rounded-xl border text-sm';
+export const BTN_PRIMARY = 'px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40';
+export const BTN_SECONDARY = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40';
+export const BTN_QUIET = 'inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40';
+export const PRIMARY_STYLE = { background: 'var(--color-primary)', color: 'var(--color-on-primary)' };
+export const SECONDARY_STYLE = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
+export const LAYOUT_LABELS = { title: 'Title', bullets: 'Bullets', 'two-column': 'Two column', picture: 'Picture', closing: 'Closing' };
+
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+/**
+ * One shape for every theme the pickers show: a built-in id string, a built-in object from GET /templates (id, label, bg, text,
+ * primary) or a saved row ({ id: row id, name, theme: { id, ... } }). A saved theme is used on a deck by its theme id and deleted
+ * by its row id.
+ */
+export function themeOptions(list) {
+  return (Array.isArray(list) ? list : []).map((t) => {
+    if (typeof t === 'string') return { id: t, label: cap(t) };
+    const theme = t?.theme && typeof t.theme === 'object' ? t.theme : t;
+    const id = String(theme?.id || t?.id || 'paper');
+    return {
+      id,
+      label: t?.name || theme?.label || cap(id),
+      bg: theme?.bg, text: theme?.text, primary: theme?.primary,
+      rowId: t?.theme ? t.id : undefined,
+    };
+  });
+}
 
 const text = (v) => (typeof v === 'string' ? v : (v == null ? '' : String(v)));
 const capped = (v, n) => text(v).slice(0, n);
@@ -189,28 +219,47 @@ export function usePresentations() {
   return ctx;
 }
 
-/** Tool heading with the standard (i) help button. */
-export function ToolHeader({ id, title, blurb }) {
+/** Tool heading with the standard (?) help button. The line describing the tool is shown by the page (TOOL_BLURBS). */
+export function ToolHeader({ id, title }) {
   const getIcon = useIcon();
   const { setHelpTool } = usePresentations();
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h2>
-        <Tooltip text={`How ${title.toLowerCase()} works`}>
-          <button
-            type="button"
-            aria-label={`Help for ${title}`}
-            onClick={() => setHelpTool(id)}
-            className="hover:opacity-60 transition-opacity"
-            style={{ color: 'var(--color-muted)', lineHeight: 1 }}
-          >
-            {getIcon('help-circle', { size: 14 })}
-          </button>
-        </Tooltip>
-      </div>
-      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{blurb}</p>
+    <div className="flex items-center gap-2">
+      <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h2>
+      <Tooltip text={`How ${title} works: what it does and what it cannot do.`}>
+        <button
+          type="button"
+          aria-label={`How ${title} works`}
+          onClick={() => setHelpTool(id)}
+          className="transition-opacity duration-200 hover:opacity-60"
+          style={{ color: 'var(--color-muted)', lineHeight: 1 }}
+        >
+          {getIcon('help-circle', { size: 14 })}
+        </button>
+      </Tooltip>
     </div>
+  );
+}
+
+/** Inline Yes/No for a routine delete (DESIGN.md: high-stakes deletes use ConfirmModal, routine ones confirm in place). */
+export function InlineDelete({ pending, onAsk, onConfirm, onCancel, what, disabled }) {
+  if (!pending) {
+    return (
+      <Tooltip text={`Delete ${what}. It goes to the recycle bin for 30 days.`}>
+        <button type="button" onClick={onAsk} disabled={disabled} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Delete</button>
+      </Tooltip>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="text-xs" style={{ color: 'var(--color-text)' }}>Delete?</span>
+      <Tooltip text={`Yes, delete ${what}.`}>
+        <button type="button" onClick={onConfirm} disabled={disabled} className={BTN_QUIET} style={{ color: '#991b1b' }}>Yes</button>
+      </Tooltip>
+      <Tooltip text="No, keep it.">
+        <button type="button" onClick={onCancel} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>No</button>
+      </Tooltip>
+    </span>
   );
 }
 
@@ -223,7 +272,7 @@ export function JobStatusCard() {
     && !['cancelled', 'canceled'].includes(String(job.status || '').toLowerCase());
   const canResume = !busy && !!job.id;
   return (
-    <div className="rounded-2xl border p-3 space-y-2" style={CARD_STYLE}>
+    <div className={ROW} style={CARD_STYLE} role="status" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
           {job.kind === 'export' ? 'Export' : 'Deck build'}
@@ -235,25 +284,28 @@ export function JobStatusCard() {
         <span className="flex-1" />
         {busy && (
           <Tooltip text="Stop this job. Anything already saved stays saved.">
-            <button type="button" onClick={cancelJob} className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              Cancel
-            </button>
+            <button type="button" onClick={cancelJob} className={BTN_SECONDARY} style={SECONDARY_STYLE}>Cancel</button>
           </Tooltip>
         )}
         {canResume && (
           <Tooltip text="Pick this job up again where it stopped.">
-            <button type="button" onClick={resumeJob} className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+            <button type="button" onClick={resumeJob} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
               {getIcon('refresh-cw', { size: 12 })} Resume
             </button>
           </Tooltip>
         )}
         <Tooltip text="Hide this job status.">
-          <button type="button" onClick={dismissJob} className="text-xs px-2 py-1 rounded-lg hover:opacity-70" style={{ color: 'var(--color-muted)' }}>
+          <button type="button" onClick={dismissJob} aria-label="Hide the job status" className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>
             {getIcon('x', { size: 14 })}
           </button>
         </Tooltip>
       </div>
-      {job.error && <p className="text-xs" style={{ color: '#991b1b' }}>{job.error}</p>}
+      {busy && typeof job.progress === 'number' && (
+        <div className="h-1.5 mt-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+          <span className="block h-full transition-all duration-200" style={{ width: `${Math.max(4, Math.min(100, job.progress))}%`, background: 'var(--color-primary)' }} />
+        </div>
+      )}
+      {job.error && <p className="text-xs mt-2" style={{ color: '#991b1b' }}>{job.error}</p>}
     </div>
   );
 }
@@ -282,7 +334,7 @@ export function DeckHandoff({ deck }) {
       <select
         value=""
         onChange={(e) => { if (e.target.value) send(e.target.value); e.target.value = ''; }}
-        className="text-xs px-2 py-1.5 rounded-lg border cursor-pointer"
+        className="text-xs px-3 py-1.5 rounded-lg border cursor-pointer"
         style={FIELD_STYLE}
         aria-label="Use deck in another tool"
       >

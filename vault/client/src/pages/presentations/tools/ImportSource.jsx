@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
-import { CARD_STYLE, Notice, ToolHeader, readJson, usePresentations } from '../shared';
+import {
+  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, PRIMARY_STYLE, ROW, SECONDARY_STYLE,
+  Notice, ToolHeader, readJson, usePresentations,
+} from '../shared';
 
 const ACCEPT = '.pdf,.doc,.docx,.txt,.md,.markdown,.pptx,.potx,image/*';
 
@@ -63,8 +66,8 @@ export default function ImportSource() {
 
   return (
     <section className="space-y-4">
-      <ToolHeader id="import" title="Import source" blurb="Up to 10 files at once, or one web page. The extracted text is editable before you use it." />
-      <div className="rounded-2xl border p-4 space-y-4" style={CARD_STYLE}>
+      <ToolHeader id="import" title="Import source" />
+      <div className={CARD} style={CARD_STYLE}>
         <div className="space-y-2">
           <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Files</span>
           <div className="flex flex-wrap items-center gap-2">
@@ -72,15 +75,15 @@ export default function ImportSource() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="px-3 py-2 rounded-xl text-xs font-medium border hover:opacity-70 transition-opacity"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                className={BTN_SECONDARY}
+                style={SECONDARY_STYLE}
               >
                 {files.length ? 'Add more files' : 'Choose files'}
               </button>
             </Tooltip>
             {files.length > 0 && (
               <Tooltip text="Remove every chosen file.">
-                <button type="button" onClick={() => setFiles([])} className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Clear all</button>
+                <button type="button" onClick={() => setFiles([])} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Clear all</button>
               </Tooltip>
             )}
             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{files.length}/10 files</span>
@@ -91,12 +94,12 @@ export default function ImportSource() {
             e.target.value = '';
           }} />
           {files.length > 0 && (
-            <ul className="space-y-1 rounded-xl border p-3" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+            <ul className={`${ROW} space-y-1`} style={FIELD_STYLE}>
               {files.map((f, i) => (
                 <li key={`${f.name}-${i}`} className="flex items-center gap-2 text-xs">
                   <span className="flex-1 truncate" style={{ color: 'var(--color-text)' }}>{f.name}</span>
                   <Tooltip text={`Remove ${f.name}.`}>
-                    <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Remove</button>
+                    <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Remove</button>
                   </Tooltip>
                 </li>
               ))}
@@ -107,8 +110,8 @@ export default function ImportSource() {
               type="button"
               onClick={importFiles}
               disabled={busy || !files.length}
-              className="px-4 py-2 rounded-xl text-sm font-medium hover:opacity-80 disabled:opacity-40 transition-opacity"
-              style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
+              className={BTN_PRIMARY}
+              style={PRIMARY_STYLE}
             >
               {busy ? 'Importing…' : 'Import files'}
             </button>
@@ -128,10 +131,10 @@ export default function ImportSource() {
                 type="button"
                 onClick={importUrl}
                 disabled={busy || !url.trim()}
-                className="px-3 py-2 rounded-xl text-xs font-medium border hover:opacity-70 disabled:opacity-40 transition-opacity"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                className={`${BTN_SECONDARY} py-2.5`}
+                style={SECONDARY_STYLE}
               >
-                Fetch URL
+                {busy ? 'Fetching…' : 'Fetch page'}
               </button>
             </Tooltip>
           </div>
@@ -162,8 +165,8 @@ export default function ImportSource() {
               <button
                 type="button"
                 onClick={() => openTool('create')}
-                className="px-4 py-2 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity"
-                style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
+                className={BTN_PRIMARY}
+                style={PRIMARY_STYLE}
               >
                 Continue to Create deck
               </button>

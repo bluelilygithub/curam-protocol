@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
+import EmptyState from '../../../components/EmptyState';
 import Tooltip from '../../../components/Tooltip';
 import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
+import { useIcon } from '../../../providers/IconProvider';
 import { takeToolHandoff } from '../../../utils/toolHandoff.mjs';
 import PresentationPreview from '../PresentationPreview';
 import {
-  CARD_STYLE, FIELD_STYLE, LAYOUTS, DeckHandoff, Notice, ToolHeader, readDeckFile, usePresentations,
+  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, LAYOUTS, LAYOUT_LABELS, PRIMARY_STYLE, SECONDARY_STYLE,
+  DeckHandoff, InlineDelete, ToolHeader, readDeckFile, usePresentations,
 } from '../shared';
 
 export default function SlideEditor() {
-  const { deck, setDeck, meta, saveDeck, openTool, toast } = usePresentations();
+  const getIcon = useIcon();
+  const {
+    deck, setDeck, meta, saveDeck, savedDeckId, openTool, toast,
+  } = usePresentations();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [showPreview, setShowPreview] = useState(true);
 
@@ -49,20 +55,31 @@ export default function SlideEditor() {
 
   return (
     <section className="space-y-4">
-      <ToolHeader id="slides" title="Slide editor" blurb="Everything here is the canonical deck: the preview and every export render from this one model." />
+      <ToolHeader id="slides" title="Slide editor" />
 
       {deck.slides.length === 0 ? (
-        <div className="rounded-2xl border p-6 space-y-3" style={CARD_STYLE}>
-          <p className="text-sm" style={{ color: 'var(--color-text)' }}>There are no slides in this deck yet.</p>
-          <Tooltip text="Write a brief and generate a first draft to edit here.">
-            <button type="button" onClick={() => openTool('create')} className="px-4 py-2 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>Create a deck</button>
-          </Tooltip>
+        <div className={CARD} style={CARD_STYLE}>
+          <EmptyState
+            icon="layers"
+            title="No slides yet"
+            body="Make a first draft from a brief, or open a saved deck, and its slides appear here to edit."
+            action={(
+              <div className="flex flex-wrap justify-center gap-2">
+                <Tooltip text="Write a brief and generate a first draft to edit here.">
+                  <button type="button" onClick={() => openTool('create')} className={BTN_PRIMARY} style={PRIMARY_STYLE}>Create a deck</button>
+                </Tooltip>
+                <Tooltip text="Open a deck you saved before.">
+                  <button type="button" onClick={() => openTool('decks')} className={BTN_SECONDARY} style={SECONDARY_STYLE}>My decks</button>
+                </Tooltip>
+              </div>
+            )}
+          />
         </div>
       ) : (
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start gap-4">
+        <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start gap-4">
           <div className="space-y-4">
-            <div className="rounded-2xl border p-4 space-y-3" style={CARD_STYLE}>
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Deck details</h3>
+            <div className={CARD} style={CARD_STYLE}>
+              <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Deck details</h3>
               <div className="grid sm:grid-cols-2 gap-3">
                 <Tooltip text="The title shown on the first slide and in your saved decks.">
                   <VoiceInput value={deck.title} onChange={(title) => setDeck((prev) => ({ ...prev, title }))} label="Deck title" placeholder="Deck title" />
@@ -74,37 +91,38 @@ export default function SlideEditor() {
             </div>
 
             {deck.slides.map((slide, i) => (
-              <div key={slide.id} className="rounded-2xl border p-4 space-y-3" style={CARD_STYLE}>
+              <div key={slide.id} className={CARD} style={CARD_STYLE}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Slide {i + 1}</span>
-                  <Tooltip text="How this slide is arranged by the renderer.">
+                  <Tooltip text="How this slide is arranged: Title, Bullets, Two column, Picture or Closing.">
                     <select
                       value={slide.layout}
                       onChange={(e) => updateSlide(i, { layout: e.target.value })}
-                      className="text-xs px-2 py-1 rounded-lg border"
+                      className="text-xs px-3 py-1.5 rounded-lg border"
                       style={FIELD_STYLE}
                       aria-label={`Layout for slide ${i + 1}`}
                     >
-                      {LAYOUTS.map((layout) => <option key={layout} value={layout}>{layout}</option>)}
+                      {LAYOUTS.map((layout) => <option key={layout} value={layout}>{LAYOUT_LABELS[layout] || layout}</option>)}
                     </select>
                   </Tooltip>
                   <span className="flex-1" />
                   <Tooltip text="Move this slide earlier.">
-                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>↑</button>
+                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move slide ${i + 1} earlier`} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>
+                      {getIcon('chevron-up', { size: 14 })}
+                    </button>
                   </Tooltip>
                   <Tooltip text="Move this slide later.">
-                    <button type="button" onClick={() => move(i, 1)} disabled={i === deck.slides.length - 1} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>↓</button>
+                    <button type="button" onClick={() => move(i, 1)} disabled={i === deck.slides.length - 1} aria-label={`Move slide ${i + 1} later`} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>
+                      {getIcon('chevron-down', { size: 14 })}
+                    </button>
                   </Tooltip>
-                  {confirmDelete === i ? (
-                    <>
-                      <button type="button" onClick={() => deleteSlide(i)} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#991b1b' }}>Delete</button>
-                      <button type="button" onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-1 rounded-lg" style={{ color: 'var(--color-muted)' }}>Cancel</button>
-                    </>
-                  ) : (
-                    <Tooltip text="Remove this slide from the deck.">
-                      <button type="button" onClick={() => setConfirmDelete(i)} className="text-xs px-2 py-1 rounded-lg hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
-                    </Tooltip>
-                  )}
+                  <InlineDelete
+                    pending={confirmDelete === i}
+                    onAsk={() => setConfirmDelete(i)}
+                    onConfirm={() => deleteSlide(i)}
+                    onCancel={() => setConfirmDelete(null)}
+                    what={`slide ${i + 1} from the deck (save the deck to keep the change)`}
+                  />
                 </div>
                 <Tooltip text="The heading on this slide.">
                   <VoiceInput value={slide.title} onChange={(title) => updateSlide(i, { title })} label={`Title for slide ${i + 1}`} placeholder="Slide title" />
@@ -133,30 +151,33 @@ export default function SlideEditor() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Tooltip text={`Add an empty slide (up to ${maxSlides} in a deck).`}>
-                <button type="button" onClick={addSlide} disabled={deck.slides.length >= maxSlides} className="px-3 py-2 rounded-xl text-xs font-medium border hover:opacity-70 disabled:opacity-40 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>+ Add slide</button>
+                <button type="button" onClick={addSlide} disabled={deck.slides.length >= maxSlides} className={BTN_SECONDARY} style={SECONDARY_STYLE}>
+                  {getIcon('plus', { size: 13 })} Add slide
+                </button>
               </Tooltip>
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{deck.slides.length}/{maxSlides} slides</span>
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{deck.slides.length} of {maxSlides} slides</span>
             </div>
 
             <div className="rounded-2xl border p-4 flex flex-wrap items-center gap-2" style={CARD_STYLE}>
-              <Tooltip text={meta?.brandKit ? 'Update the saved deck with these edits.' : 'Save this deck so you can find it again in My decks.'}>
-                <button type="button" onClick={() => saveDeck().catch((err) => toast(err.message || 'Could not save the deck.', 'error'))} className="px-4 py-2 rounded-xl text-sm font-medium hover:opacity-80 transition-opacity" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>Save deck</button>
+              <Tooltip text={savedDeckId ? 'Update the saved deck in My decks with these edits.' : 'Save this deck so you can find it again in My decks.'}>
+                <button type="button" onClick={() => saveDeck().catch((err) => toast(err.message || 'Could not save the deck.', 'error'))} className={BTN_PRIMARY} style={PRIMARY_STYLE}>
+                  {savedDeckId ? 'Save changes' : 'Save deck'}
+                </button>
               </Tooltip>
               <DeckHandoff deck={deck} />
               <Tooltip text="Make the finished files from these slides.">
-                <button type="button" onClick={() => openTool('export')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Export →</button>
+                <button type="button" onClick={() => openTool('export')} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Export →</button>
               </Tooltip>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Tooltip text="Show or hide the HTML preview of the current deck.">
-              <button type="button" onClick={() => setShowPreview((v) => !v)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+          <div className="space-y-2 xl:sticky xl:top-4">
+            <Tooltip text="Show or hide the preview of the current deck. It rebuilds by itself a moment after you stop typing.">
+              <button type="button" onClick={() => setShowPreview((v) => !v)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
                 {showPreview ? 'Hide preview' : 'Show preview'}
               </button>
             </Tooltip>
             {showPreview && <PresentationPreview deck={deck} compact />}
-            <Notice>Click Refresh in the preview after an edit if it has not caught up yet.</Notice>
           </div>
         </div>
       )}

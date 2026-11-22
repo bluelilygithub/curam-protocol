@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../utils/apiClient';
 import EmptyState from '../../../components/EmptyState';
+import Skeleton from '../../../components/Skeleton';
 import Tooltip from '../../../components/Tooltip';
 import {
   addHistory, getHistoryDeck, listHistory, removeHistory,
 } from '../historyStore.mjs';
 import {
-  CARD_STYLE, FIELD_STYLE, DeckHandoff, Notice, ToolHeader, readJson, usePresentations,
+  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, PRIMARY_STYLE, ROW, SECONDARY_STYLE,
+  DeckHandoff, InlineDelete, Notice, ToolHeader, readJson, usePresentations,
 } from '../shared';
 
 const when = (value) => {
   const d = value ? new Date(value) : null;
-  return d && !Number.isNaN(d.getTime()) ? d.toLocaleString() : '—';
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 };
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 export default function MyDecks() {
   const {
@@ -65,7 +68,7 @@ export default function MyDecks() {
   const remove = async (id) => {
     setBusy(true);
     try {
-      await api.delete(`/api/presentations/decks/${encodeURIComponent(id)}`);
+      await readJson(await api.delete(`/api/presentations/decks/${encodeURIComponent(id)}`), 'Could not delete that deck.');
       setConfirmDelete(null);
       await refresh();
       toast('Deck deleted (it stays in the recycle bin for 30 days).', 'success');
@@ -114,25 +117,29 @@ export default function MyDecks() {
 
   return (
     <section className="space-y-4">
-      <ToolHeader id="decks" title="My decks" blurb="Saved decks live on the server. Recent decks are an opt-in list kept only in this browser." />
+      <ToolHeader id="decks" title="My decks" />
 
-      <div className="rounded-2xl border p-4 space-y-3" style={CARD_STYLE}>
+      <div className={CARD} style={CARD_STYLE}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Saved decks{max == null ? '' : ` (${max} limit)`}</h3>
+          <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Saved decks{max == null ? '' : ` (${decks.length} of ${max})`}</h3>
           <div className="flex flex-wrap items-center gap-2">
             <Tooltip text="Save the deck you are working on as a new entry, even if it was saved before.">
-              <button type="button" onClick={saveCurrent} disabled={busy || !deck.slides.length} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Save current as new</button>
+              <button type="button" onClick={saveCurrent} disabled={busy || !deck.slides.length} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Save current as new</button>
             </Tooltip>
             {deck.slides.length > 0 && <DeckHandoff deck={deck} />}
           </div>
         </div>
 
-        {loading ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading decks…</p> : decks.length === 0 ? (
+        {loading ? <Skeleton lines={3} className="h-14" label="Loading saved decks" /> : decks.length === 0 ? (
           <EmptyState
             icon="layers"
             title="No saved decks yet"
-            body="Make a deck from a brief or import, then save it here so you can come back to it."
-            action={<button type="button" onClick={() => openTool('create')} className="px-3 py-2 rounded-xl text-sm font-medium" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>Create a deck</button>}
+            body="Make a deck from a brief or an import, then save it here so you can come back to it."
+            action={(
+              <Tooltip text="Write a brief and make a first deck.">
+                <button type="button" onClick={() => openTool('create')} className={BTN_PRIMARY} style={PRIMARY_STYLE}>Create a deck</button>
+              </Tooltip>
+            )}
           />
         ) : (
           <ul className="space-y-2">
@@ -140,30 +147,28 @@ export default function MyDecks() {
               const id = String(item.id);
               const saved = item.data || item.deck || {};
               return (
-                <li key={id} className="rounded-xl border p-3 space-y-2" style={FIELD_STYLE}>
-                  <div className="flex flex-wrap items-start gap-2">
+                <li key={id} className={ROW} style={FIELD_STYLE}>
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="min-w-[12rem] flex-1">
                       <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{item.title || saved.title || 'Untitled deck'}</p>
                       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {saved.themeId || item.themeId || 'paper'} · {Array.isArray(saved.slides) ? saved.slides.length : 0} slides · updated {when(item.updatedAt)}
+                        {cap(saved.themeId || item.themeId || 'paper')} · {Array.isArray(saved.slides) ? saved.slides.length : 0} slides · updated {when(item.updatedAt)}
                       </p>
                     </div>
                     <Tooltip text="Open this deck in the slide editor.">
-                      <button type="button" onClick={() => open(id)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Open</button>
+                      <button type="button" onClick={() => open(id)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Open</button>
                     </Tooltip>
                     <Tooltip text="Make a copy before changing this one.">
-                      <button type="button" onClick={() => duplicate(id)} disabled={busy} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Duplicate</button>
+                      <button type="button" onClick={() => duplicate(id)} disabled={busy} className={BTN_SECONDARY} style={SECONDARY_STYLE}>Duplicate</button>
                     </Tooltip>
-                    {confirmDelete === id ? (
-                      <>
-                        <button type="button" onClick={() => remove(id)} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#991b1b' }}>Delete</button>
-                        <button type="button" onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-1 rounded-lg" style={{ color: 'var(--color-muted)' }}>Cancel</button>
-                      </>
-                    ) : (
-                      <Tooltip text="Delete this deck (it goes to the recycle bin).">
-                        <button type="button" onClick={() => setConfirmDelete(id)} className="text-xs px-2 py-1 rounded-lg hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
-                      </Tooltip>
-                    )}
+                    <InlineDelete
+                      pending={confirmDelete === id}
+                      onAsk={() => setConfirmDelete(id)}
+                      onConfirm={() => remove(id)}
+                      onCancel={() => setConfirmDelete(null)}
+                      what="this deck"
+                      disabled={busy}
+                    />
                   </div>
                 </li>
               );
@@ -172,9 +177,9 @@ export default function MyDecks() {
         )}
       </div>
 
-      <div className="rounded-2xl border p-4 space-y-3" style={CARD_STYLE}>
+      <div className={CARD} style={CARD_STYLE}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>On this device</h3>
+          <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>On this device</h3>
           <Tooltip text="Keep a list of decks you open recently in this browser only. This is a convenience, never a backup.">
             <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
               <input type="checkbox" checked={historyOn} onChange={(e) => toggleHistory(e.target.checked)} />
@@ -185,18 +190,18 @@ export default function MyDecks() {
         {!historyOn ? (
           <Notice>Recent decks are off. Turn them on if you want a quick way back to decks you opened in this browser.</Notice>
         ) : recent.length === 0 ? (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No decks opened recently on this device.</p>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No decks opened recently on this device. Decks you open or make appear here.</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {recent.map((entry) => (
-              <li key={entry.id} className="rounded-xl border px-3 py-2 flex flex-wrap items-center gap-2" style={FIELD_STYLE}>
-                <span className="flex-1 min-w-[10rem] text-xs" style={{ color: 'var(--color-text)' }}>{entry.title || 'Untitled deck'}</span>
+              <li key={entry.id} className={`${ROW} flex flex-wrap items-center gap-2`} style={FIELD_STYLE}>
+                <span className="flex-1 min-w-[10rem] text-sm" style={{ color: 'var(--color-text)' }}>{entry.title || 'Untitled deck'}</span>
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{when(entry.createdAt)}</span>
                 <Tooltip text="Open this recently viewed deck.">
-                  <button type="button" onClick={() => openRecent(entry.id)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Open</button>
+                  <button type="button" onClick={() => openRecent(entry.id)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Open</button>
                 </Tooltip>
                 <Tooltip text="Forget this deck on this device (the server copy is untouched).">
-                  <button type="button" onClick={() => deleteRecent(entry.id)} className="text-xs px-2 py-1 rounded-lg hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Remove</button>
+                  <button type="button" onClick={() => deleteRecent(entry.id)} className={BTN_QUIET} style={{ color: 'var(--color-muted)' }}>Remove</button>
                 </Tooltip>
               </li>
             ))}

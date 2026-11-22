@@ -5,6 +5,8 @@ import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import Tooltip from '../components/Tooltip';
+import Skeleton from '../components/Skeleton';
+import ToolSidebar from '../components/ToolSidebar';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { startPresentationsTour, TOUR_KEY as PRESENTATIONS_TOUR_KEY } from '../utils/tours/presentationsTour';
@@ -15,126 +17,16 @@ import { useModels } from '../hooks/useModels';
 import { getModelShortName } from '../utils/models';
 import { TOOL_COMPONENTS } from './presentations/toolRegistry';
 import { PRESENTATION_GOALS } from './presentations/presentationGoals.mjs';
+import {
+  PRESENTATIONS_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, TOOL_HELP, HOW_IT_WORKS, labelFor,
+} from './presentations/presentationsTools.mjs';
 import PresentationsGuide from './presentations/PresentationsGuide';
 import { addHistory, historyEnabled, setHistoryEnabled } from './presentations/historyStore.mjs';
 import {
-  PresentationContext, emptyDeck, normalizeDeck, readJson, usePresentationJob, CARD_STYLE, JobStatusCard,
+  PresentationContext, emptyDeck, normalizeDeck, readJson, usePresentationJob, JobStatusCard,
 } from './presentations/shared';
 
-// The six tools, in the same four groups as the docs. Hover text is deliberately plain English.
-const TOOL_GROUPS = [
-  {
-    id: 'make',
-    label: 'Make',
-    tip: 'Start a deck: from a written brief, or from a document, web page or pictures.',
-    tools: [
-      { id: 'create', label: 'Create deck', desc: 'Brief → outline → slides in the chosen theme' },
-      { id: 'import', label: 'Import source', desc: 'PDF, DOCX, TXT/MD, web URL or images → text and pictures' },
-    ],
-  },
-  {
-    id: 'design',
-    label: 'Design',
-    tip: 'Choose how the deck looks, then edit its words and pictures.',
-    tools: [
-      { id: 'templates', label: 'Themes', desc: 'Built-in themes, saved themes, PowerPoint theme import, Brand Kit' },
-      { id: 'slides', label: 'Slide editor', desc: 'Edit titles and body text, swap images, add and reorder slides' },
-    ],
-  },
-  {
-    id: 'finish',
-    label: 'Finish',
-    tip: 'Make the finished files: editable PowerPoint, PDF, HTML preview or PNGs.',
-    tools: [{ id: 'export', label: 'Export', desc: 'PPTX, PDF, HTML preview or per-slide PNGs' }],
-  },
-  {
-    id: 'library',
-    label: 'Library',
-    tip: 'Decks saved on the server and decks recently opened on this device.',
-    tools: [{ id: 'decks', label: 'My decks', desc: 'Saved decks, browser history, reopen/duplicate/delete' }],
-  },
-];
-
-const TOOL_TIPS = {
-  create: 'Write a short brief and make a slide deck from it, using the theme you chose. Runs in the background; you can edit the result afterwards.',
-  import: 'Pull the text and pictures out of a PDF, Word document, text file, web page or images, ready to make into slides.',
-  templates: 'Pick a built-in theme, save your own, import colours and fonts from a PowerPoint theme, or apply your Brand Kit on top.',
-  slides: 'Change the words, pictures and order of the slides. Everything is kept in one deck so the preview and exports stay in step.',
-  export: 'Download the deck as an editable PPTX, a PDF, an HTML preview or one PNG per slide.',
-  decks: 'Open decks you saved, duplicate or delete them, and see decks you opened recently on this device.',
-};
-
-const TOOL_HELP = {
-  create: {
-    title: 'Create deck',
-    what: 'Give Vault a brief in plain language and it writes a short outline, then fills it out as slides.',
-    features: [
-      '6–12 slides by default, with a 20-slide maximum',
-      'Uses the workspace models configured by your admin, not a hard-coded provider',
-      'Works from a brief alone, or from text and images brought in by Import source',
-      'Runs in the background with progress, Cancel and Resume',
-      'The finished deck opens in the slide editor — nothing is exported until you ask',
-    ],
-  },
-  import: {
-    title: 'Import source',
-    what: 'Turn documents, web pages and pictures into source material for a deck.',
-    features: [
-      'PDF, DOCX, TXT/MD, .pptx/.potx and images — up to 10 files at once',
-      'Or paste a web page URL to fetch its text safely on the server',
-      'Extracted text appears in an editable box before you use it',
-      'Images become references the slide editor and preview can show directly',
-      'Files handed over from another Vault tool are picked up automatically',
-    ],
-  },
-  templates: {
-    title: 'Themes',
-    what: 'Choose the look of the deck before you generate it, or save your own theme.',
-    features: [
-      'Six built-in themes: paper, ink, warm, ocean, forest and mono',
-      'Save a theme with your own colours, font and title size',
-      'Importing a .pptx/.potx takes its colours and fonts, not its PowerPoint masters',
-      'Brand Kit is an override on top of the chosen theme',
-      'The current deck is previewed so you can see the effect',
-    ],
-  },
-  slides: {
-    title: 'Slide editor',
-    what: 'Make the deck say what you want, then save it.',
-    features: [
-      'Edit deck title, subtitle and each slide’s title, body, bullets, image and notes',
-      'Use one of five layouts: title, bullets, two-column, picture or closing',
-      'Add, delete and reorder slides, up to the server’s slide limit',
-      'Live HTML preview uses the same renderer as PDF and PNG export',
-      'Save to My decks, or hand the deck to another tool with Use in…',
-    ],
-  },
-  export: {
-    title: 'Export',
-    what: 'Make the finished files from the current deck.',
-    features: [
-      'PPTX keeps text as editable text boxes',
-      'PDF and per-slide PNGs render from the same HTML as the preview',
-      'HTML preview is a single self-contained file',
-      'Apply the Brand Kit override at export time if you want it',
-      'Long exports run in the background with progress and Cancel',
-    ],
-  },
-  decks: {
-    title: 'My decks',
-    what: 'Find a deck again and manage your library.',
-    features: [
-      'Open a saved deck straight into the slide editor',
-      'Duplicate a deck before trying a big change',
-      'Deleted decks go to the recycle bin for 30 days',
-      'Recent decks on this device are opt-in browser history, not a backup',
-    ],
-  },
-};
-
-const ALL_TOOLS = TOOL_GROUPS.flatMap((g) => g.tools);
-const labelFor = (id) => ALL_TOOLS.find((t) => t.id === id)?.label || id;
-const groupFor = (id) => TOOL_GROUPS.find((g) => g.tools.some((t) => t.id === id))?.id || 'make';
+const ALL_TOOLS = PRESENTATIONS_TOOLS;
 
 const OPEN_ON_LAST_KEY = 'vault_presentations_open_on_last';
 const LAST_TOOL_KEY = 'vault_presentations_last_tool';
@@ -181,10 +73,8 @@ export default function PresentationsPage() {
   }, [chatModel, chatModels]);
 
   const [tool, setTool] = useState(initialTool);
-  const [openGroup, setOpenGroup] = useState(() => groupFor(initialTool()));
   const [goal, setGoal] = useState(null);
   const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
-  const [search, setSearch] = useState('');
   const [helpTool, setHelpTool] = useState(null);
   const [visited, setVisited] = useState(() => new Set());
 
@@ -226,7 +116,7 @@ export default function PresentationsPage() {
   // Settings -> Presentations Tour opens /presentations?tour=1. Wait until access is known so members with the flag get it too.
   useEffect(() => {
     if (!canUse || !searchParams.has('tour')) return;
-    setTool('start'); setGoal(null); setOpenGroup('make');
+    setTool('start'); setGoal(null);
     const next = new URLSearchParams(searchParams); next.delete('tour');
     setSearchParams(next, { replace: true });
     const timer = setTimeout(() => startPresentationsTour(), 300);
@@ -235,7 +125,7 @@ export default function PresentationsPage() {
 
   const startTour = () => {
     try { localStorage.removeItem(PRESENTATIONS_TOUR_KEY); } catch (_) { /* ignore */ }
-    setTool('start'); setGoal(null); setOpenGroup('make');
+    setTool('start'); setGoal(null);
     setTimeout(startPresentationsTour, 100);
   };
 
@@ -306,7 +196,6 @@ export default function PresentationsPage() {
 
   const openToolById = useCallback((id) => {
     if (!ALL_TOOLS.some((t) => t.id === id)) return;
-    setOpenGroup(groupFor(id));
     setTool(id);
   }, []);
   const startGoal = (g) => { setGoal(g); openToolById(g.steps[0].tool); };
@@ -337,17 +226,21 @@ export default function PresentationsPage() {
     effectiveModel, chatModels, canSelectModel,
   ]);
 
-  const query = search.trim().toLowerCase();
-  const filteredGroups = TOOL_GROUPS
-    .map((g) => ({ ...g, tools: g.tools.filter((t) => !query || t.label.toLowerCase().includes(query) || (TOOL_TIPS[t.id] || '').toLowerCase().includes(query)) }))
-    .filter((g) => g.tools.length);
+  // ToolSidebar groups (components/ToolSidebar.jsx): the list, tips and icons come from presentationsTools.mjs, shared with the guide.
+  // Tools that need a deck say what to do first, like Contract Review's "Open or start a contract first".
+  const hintFor = (id) => ((id === 'slides' || id === 'export') && !deck.slides.length ? 'Make or open a deck first' : undefined);
+  const MENU = GROUPS.map((label) => ({
+    label,
+    tip: GROUP_TIPS[label],
+    tools: PRESENTATIONS_TOOLS.filter((t) => t.group === label).map((t) => ({ ...t, tip: TOOL_TIPS[t.id], hint: hintFor(t.id) })),
+  }));
 
   const renderTools = () => ALL_TOOLS.map(({ id }) => {
     const Tool = TOOL_COMPONENTS[id];
     if (!Tool || !(visited.has(id) || tool === id)) return null;
     return (
       <div key={id} hidden={tool !== id}>
-        <Suspense fallback={<p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}>
+        <Suspense fallback={<Skeleton lines={4} className="h-10" label={`Loading ${labelFor(id)}`} />}>
           <Tool active={tool === id} />
         </Suspense>
       </div>
@@ -360,86 +253,22 @@ export default function PresentationsPage() {
     <PresentationContext.Provider value={ctx}>
       <VoiceInputProvider lang="en-AU">
         <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
-          <aside
-            data-tour="presentations-sidebar"
-            className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+          <ToolSidebar
+            title="Presentations"
+            icon="monitor"
+            groups={MENU}
+            current={tool}
+            onSelect={openToolById}
+            onInfo={appInfo.open}
+            infoTip="How Presentations works: the four groups, the jobs on the start screen and the one deck behind every export."
+            onTour={startTour}
+            tourTip="Take the guided tour of Presentations: the jobs, the tool list, help and the guide."
           >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
-                {getIcon('monitor', { size: 16 })}
-              </div>
-              <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Presentations</h1>
-              <Tooltip text="How Presentations works">
-                <button
-                  type="button"
-                  data-tour="presentations-info"
-                  aria-label="How Presentations works"
-                  onClick={appInfo.open}
-                  className="hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--color-muted)', lineHeight: 1 }}
-                >
-                  {getIcon('info', { size: 13 })}
-                </button>
-              </Tooltip>
-              <Tooltip text="Take the guided tour of Presentations">
-                <button
-                  type="button"
-                  data-tour="presentations-tour"
-                  aria-label="Take the guided tour of Presentations"
-                  onClick={startTour}
-                  className="hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--color-muted)', lineHeight: 1 }}
-                >
-                  {getIcon('compass', { size: 14 })}
-                </button>
-              </Tooltip>
-            </div>
-
-            {canSelectModel && chatModels.length > 0 && (
-              <label className="block space-y-1" data-tour="presentations-model">
-                <span className="text-[11px] font-medium" style={{ color: 'var(--color-muted)' }}>AI model</span>
-                <Tooltip text="Choose the model used to write slides and answer the guide. Your admin's Settings choice is used until you pick one here.">
-                  <select
-                    value={effectiveModel}
-                    onChange={(e) => setChatModel(e.target.value)}
-                    aria-label="AI model for Presentations"
-                    className="w-full px-2 py-1.5 rounded-lg border text-xs"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    {chatModels.map((m) => <option key={m.id} value={m.id}>{getModelShortName(m.id)}</option>)}
-                  </select>
-                </Tooltip>
-              </label>
-            )}
-            {!canSelectModel && effectiveModel && (
-              <p className="text-[10px] truncate" style={{ color: 'var(--color-muted)' }}>
-                Using {getModelShortName(effectiveModel)}
-              </p>
-            )}
-
-            {appInfo.show && (
-              <ToolInfoModal title="How Presentations Works" onClose={appInfo.close}>
-                <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                  Six tools across four groups. Presentations opens on “What do you want to do?”: pick a job and its tools open one step at a time, with “Back to all jobs” above every tool. Hover any group or tool for a plain explanation. The guide chat at the bottom right can point you at the right tools, but it cannot see your decks.
-                </p>
-                <div className="rounded-lg p-3 text-sm space-y-2" style={{ ...CARD_STYLE, border: '1px solid var(--color-border)' }}>
-                  <p style={{ color: 'var(--color-text)' }}><strong>Make</strong> — Create deck writes a short outline and turns it into slides from a brief. Import source pulls text and pictures from documents, web pages and images.</p>
-                  <p style={{ color: 'var(--color-text)' }}><strong>Design</strong> — Themes picks a look (or brings one from PowerPoint, or from your Brand Kit). Slide editor changes the words, pictures and slide order.</p>
-                  <p style={{ color: 'var(--color-text)' }}><strong>Finish</strong> — Export makes an editable PPTX, a PDF, an HTML preview or per-slide PNGs.</p>
-                  <p style={{ color: 'var(--color-text)' }}><strong>Library</strong> — My decks reopens, duplicates and deletes saved decks; opt-in recent decks are kept in this browser only.</p>
-                </div>
-                <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                  There is one canonical deck model behind the preview and every export, so they do not drift apart. Long jobs run in the background with progress, Cancel and Resume.
-                </p>
-              </ToolInfoModal>
-            )}
-
             <Tooltip text="Go back to the list of jobs (brief, document, brand, saved deck).">
               <button
                 type="button"
                 onClick={backToStart}
-                className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity duration-200 hover:opacity-70"
                 style={{
                   borderColor: tool === 'start' ? 'var(--color-primary)' : 'var(--color-border)',
                   color: tool === 'start' ? 'var(--color-primary)' : 'var(--color-text)',
@@ -451,94 +280,73 @@ export default function PresentationsPage() {
               </button>
             </Tooltip>
 
-            <Tooltip text="Filter the tool list below by name or description.">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tools…"
-                className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none focus:border-[var(--color-primary)]"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
-            </Tooltip>
+            {canSelectModel && chatModels.length > 0 && (
+              <label className="block space-y-1" data-tour="presentations-model">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>AI model</span>
+                <Tooltip text="Choose the model used to write slides and answer the guide. Your admin's Settings choice is used until you pick one here.">
+                  <select
+                    value={effectiveModel}
+                    onChange={(e) => setChatModel(e.target.value)}
+                    aria-label="AI model for Presentations"
+                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {chatModels.map((m) => <option key={m.id} value={m.id}>{getModelShortName(m.id)}</option>)}
+                  </select>
+                </Tooltip>
+              </label>
+            )}
+            {!canSelectModel && effectiveModel && (
+              <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
+                Using {getModelShortName(effectiveModel)}
+              </p>
+            )}
+          </ToolSidebar>
 
-            {filteredGroups.map((group) => {
-              const open = openGroup === group.id || Boolean(query);
-              return (
-                <div key={group.id}>
-                  <Tooltip text={group.tip} side="right">
-                    <button
-                      type="button"
-                      onClick={() => setOpenGroup((prev) => (prev === group.id ? null : group.id))}
-                      className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
-                      style={{ color: 'var(--color-primary)' }}
-                    >
-                      {open ? '▼' : '▶'} {group.label}
-                    </button>
-                  </Tooltip>
-                  {open && (
-                    <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
-                      {group.tools.map((t) => (
-                        <li key={t.id}>
-                          <Tooltip text={TOOL_TIPS[t.id]} side="right">
-                            <button
-                              type="button"
-                              onClick={() => openToolById(t.id)}
-                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-                              style={{
-                                background: tool === t.id ? 'var(--color-bg)' : 'transparent',
-                                color: tool === t.id ? 'var(--color-text)' : 'var(--color-muted)',
-                              }}
-                            >
-                              {t.label}
-                            </button>
-                          </Tooltip>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+          <div className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="presentations-main">
+            <div className="max-w-[1700px] space-y-4">
+              {tool === 'start' ? (
+                <div data-tour="presentations-jobs">
+                  <JobStart
+                    goals={PRESENTATION_GOALS}
+                    intro="Turn a brief, document, web page or set of pictures into a small slide deck you can edit and export. Pick a job and Presentations opens just the tools you need, in order, or choose a tool on the left."
+                    onPick={startGoal}
+                    labelFor={labelFor}
+                    openOnLast={openOnLast}
+                    onToggleOpenOnLast={(on) => { setOpenOnLast(on); writeLocal(OPEN_ON_LAST_KEY, on ? '1' : '0'); }}
+                    appName="Presentations"
+                  />
                 </div>
-              );
-            })}
-          </aside>
+              ) : (
+                <div className="space-y-3">
+                  <BackToJobs onBack={backToStart} toolLabel={labelFor(tool)} goal={stepIndex(goal, tool) >= 0 ? goal : null} />
+                  <JobBar goal={goal} mode={tool} onStep={openToolById} labelFor={labelFor} carry="the deck stays with you" />
+                  <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
+                </div>
+              )}
 
-          <main data-tour="presentations-main" className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-6xl">
-            {tool !== 'start' && (
-              <BackToJobs onBack={backToStart} toolLabel={labelFor(tool)} goal={stepIndex(goal, tool) >= 0 ? goal : null} />
-            )}
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              {tool === 'start' && 'Turn a brief, document, web page or set of pictures into a small slide deck you can edit and export.'}
-              {tool === 'create' && 'Write a brief and let the workspace models make a first deck in your chosen theme.'}
-              {tool === 'import' && 'Bring text and pictures in from files or a web page, ready for Create deck.'}
-              {tool === 'templates' && 'Choose the look of the deck before you generate it, or apply your Brand Kit.'}
-              {tool === 'slides' && 'Edit the words, pictures and order of the slides, then save the deck.'}
-              {tool === 'export' && 'Download the deck as PPTX, PDF, HTML or per-slide PNGs.'}
-              {tool === 'decks' && 'Saved decks and decks recently opened on this device.'}
-            </p>
+              {job && <JobStatusCard />}
 
-            {tool === 'start' && (
-              <div data-tour="presentations-jobs">
-                <JobStart
-                  goals={PRESENTATION_GOALS}
-                  intro="Pick what you are trying to make. We will open just the tools you need, in order."
-                  onPick={startGoal}
-                  labelFor={labelFor}
-                  openOnLast={openOnLast}
-                  onToggleOpenOnLast={(on) => { setOpenOnLast(on); writeLocal(OPEN_ON_LAST_KEY, on ? '1' : '0'); }}
-                  appName="Presentations"
-                />
-              </div>
-            )}
-            <JobBar goal={goal} mode={tool} onStep={openToolById} labelFor={labelFor} carry="the deck stays with you" />
-
-            {job && <JobStatusCard />}
-
-            {tool !== 'start' && <div className="space-y-6">{renderTools()}</div>}
-          </main>
+              {tool !== 'start' && renderTools()}
+            </div>
+          </div>
         </div>
 
+        {appInfo.show && (
+          <ToolInfoModal title="How Presentations Works" onClose={appInfo.close}>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+              Six tools in four groups. Presentations opens on “What do you want to do?”: pick a job and its tools open one step at a time, with “Back to all jobs” above every tool. Hover any group or tool for a plain explanation. The guide chat at the bottom right can point you at the right tools, but it cannot see your decks.
+            </p>
+            <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+              {HOW_IT_WORKS.map(([heading, text]) => (
+                <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+              ))}
+            </div>
+          </ToolInfoModal>
+        )}
+
         {helpTool && TOOL_HELP[helpTool] && (
-          <ToolInfoModal title={TOOL_HELP[helpTool].title} onClose={() => setHelpTool(null)}>
+          <ToolInfoModal title={`How ${labelFor(helpTool)} Works`} onClose={() => setHelpTool(null)}>
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP[helpTool].what}</p>
             <ul className="space-y-1.5">
               {TOOL_HELP[helpTool].features.map((feat) => (
