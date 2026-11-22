@@ -106,12 +106,12 @@ export default function PonytailPage() {
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>{getIcon('gauge', { size: 18 })}</div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Ponytail</h1>
+                <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Claude Code costs</h1>
                 <Tooltip text="What this page shows, where the figures come from, and what they cannot tell you.">
-                  <button type="button" onClick={info.open} aria-label="How the Ponytail report works" className="transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('info', { size: 14 })}</button>
+                  <button type="button" onClick={info.open} aria-label="How Claude Code costs works" className="transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('info', { size: 14 })}</button>
                 </Tooltip>
               </div>
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>What each Claude Code task cost, how much it reused, and how much code was written those days.</p>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>What each Claude Code task cost, how much it reused, and how much code was written those days. The figures come from the Ponytail plugin.</p>
             </div>
             <Tooltip text="Jump to the setup: make a key, copy the webhook address, or import the CSV.">
               <a href="#ponytail-setup" className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Setup</a>
@@ -119,7 +119,7 @@ export default function PonytailPage() {
           </header>
 
           {info.show && (
-            <ToolInfoModal title="How the Ponytail report works" onClose={info.close}>
+            <ToolInfoModal title="How Claude Code costs works" onClose={info.close}>
               <div className="text-sm space-y-2" style={{ color: 'var(--color-text)' }}>
                 <p><strong>Where it comes from.</strong> The Ponytail plugin in Claude Code sends one row per task after every turn: its cost so far, turns, minutes Claude worked, tokens, how many functions it reused or wrote, and the last test result. A task is one session, or the part of one after a /clear. The row is replaced on every turn, so a task shows its latest figures.</p>
                 <p><strong>Reuse</strong> is the share of functions a task used that already existed, out of all it used or wrote. Tasks that touched fewer than 3 functions have no share.</p>

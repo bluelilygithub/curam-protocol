@@ -1,6 +1,6 @@
-# Ponytail report
+# Claude Code costs (the Ponytail report)
 
-`/ponytail`, admin only (Business group, next to Changelog). No feature flag, guide chat or tour: it is an admin report, like Changelog and Code Map. Built 2026-11-19.
+`/ponytail`, admin only (Business group, next to Changelog). Its menu label and heading are **Claude Code costs** (renamed 2026-11-22 from "Ponytail", the plugin that feeds it); the URL, tables, files and webhook keep the `ponytail` name. No feature flag, guide chat or tour: it is an admin report, like Changelog and Code Map. Built 2026-11-19.
 
 [Ponytail](https://github.com/DietrichGebert/ponytail) is a Claude Code plugin. Its "band" counts each task's cost, turns, agent time, tokens, function reuse and last test result. This page receives those rows and shows them next to the code written per day, so the owner can judge whether Ponytail really reduces code.
 

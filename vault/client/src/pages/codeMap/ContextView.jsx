@@ -133,7 +133,7 @@ function Report({ sections }) {
               ))}
             </div>
           </Section>
-          <Section title="Working pattern" tip="A 30-day summary from the Ponytail report, if there is any data.">
+          <Section title="Working pattern" tip="A 30-day summary from Claude Code costs (sent by the Ponytail plugin), if there is any data.">
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
               {pattern ? `${fmt(pattern.tasks)} tasks, $${pattern.cost.toFixed(2)} in all, average reuse ${pattern.avgReuse == null ? 'not measured' : `${Math.round(pattern.avgReuse)}%`}.` : 'No Ponytail data for the last 30 days.'}
             </p>
