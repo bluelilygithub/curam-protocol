@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d041d9d9",
+   "fullHash": "d041d9d9f0795442510b74f0ca52fb3bf4b73fad",
+   "committedAt": "2026-11-22T15:46:36+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Code Map: list the Knowledge graph tab in key-files and the briefing",
+   "filesChanged": 2,
+   "insertions": 2,
+   "deletions": 2,
+   "goal": "Keep the two places that describe Code Map's parts in step with the new Knowledge graph tab.",
+   "whatChanged": "docs/key-files.md's Code Map entry names the Knowledge graph tab (knowledgeGraph.js, GET /api/code-map/knowledge-graph, KnowledgeGraphView.jsx, no AI) and its test. The Context briefing's tool purpose for codeMap (briefing/tool-purposes.md) mentions the knowledge graph. Docs only; Code Map's own analysis already assigns the new files to the codeMap tool (checked with a local run: owned client and server files, the API call found, no new findings, score unchanged at 91).",
+   "filesImpacted": [
+    "docs/key-files.md",
+    "server/services/codeMap/briefing/tool-purposes.md"
+   ],
+   "benefit": "Claude sessions and the Context briefing see the tab exists, so later work on Code Map does not miss it.",
+   "concerns": "None noted. buildBriefing.test.js passes."
+  },
+  {
    "commit": "0ce9e0b4",
    "fullHash": "0ce9e0b4a5bf7e337d94fd0b80465060abfb7e8f",
    "committedAt": "2026-11-22T15:44:13+10:00",
