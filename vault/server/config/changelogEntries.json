@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7aae4648",
+   "fullHash": "7aae464824dfc6617b3282bd2c3dc1c16d983481",
+   "committedAt": "2026-11-23T07:38:09+10:00",
+   "author": "mrb",
+   "area": "Presentations",
+   "subject": "Presentations: full-screen slideshow with transitions; fix spaces in bullet boxes",
+   "filesChanged": 15,
+   "insertions": 454,
+   "deletions": 17,
+   "goal": "Let a deck be presented full screen with transitions and slide navigation, and fix typing spaces in the bullet boxes.",
+   "whatChanged": "New Slideshow.jsx plays the deck full screen: it asks POST /api/presentations/preview for the same HTML as the preview and PDF, splits it into one page per slide (slideshowKeys.mjs slidePages) and shows each in a sandboxed frame scaled to the screen. It opens from Present on every preview, the Slide editor (and a play button on each slide card to start there) and Export, through the shared Dialog in raw mode and the Fullscreen API. Keys (slideshowKeys.mjs keyStep): arrows, Space, Page Up/Down, N/P, Home/End, a number then Enter to jump, Escape to end; a click goes forward. A bottom bar (previous, numbered slide list, next, transition, full screen, End show) hides after 2.5 s idle. Transitions none, fade (default), push, wipe and zoom are CSS animations; deck.transition is a new field in the server and client deck model, set in the Slide editor or during the show and saved with the deck. Bug fix: the bullet and column-point boxes rebuilt their text from the cleaned list on every keystroke, so a typed space at the end of a line or a new line vanished; LinesField now keeps the typed draft (lines.mjs syncDraft) and gives the deck the cleaned list. Help text, the guide catalogue and docs/presentations.md describe the slideshow; new tests slideshowKeys.test.mjs and lines.test.mjs, and schema.test.js checks design, transition and columns.",
+   "filesImpacted": [
+    "client/src/pages/PresentationsPage.jsx",
+    "client/src/pages/presentations/PresentationPreview.jsx",
+    "client/src/pages/presentations/Slideshow.jsx",
+    "client/src/pages/presentations/lines.mjs",
+    "client/src/pages/presentations/lines.test.mjs",
+    "client/src/pages/presentations/presentationsTools.mjs",
+    "client/src/pages/presentations/shared.jsx",
+    "client/src/pages/presentations/slideshowKeys.mjs",
+    "client/src/pages/presentations/slideshowKeys.test.mjs",
+    "client/src/pages/presentations/tools/ExportDeck.jsx",
+    "client/src/pages/presentations/tools/SlideEditor.jsx",
+    "docs/presentations.md",
+    "server/services/presentations/schema.js",
+    "server/services/presentations/schema.test.js",
+    "server/services/presentationsTutor.js"
+   ],
+   "benefit": "A deck can be presented straight from Vault, looking exactly like its exports, with transitions and quick navigation; bullets can be typed normally.",
+   "concerns": "The slideshow was not tried in a real browser: full screen, the transitions and the keys are covered by the logic tests and one split slide rendered in headless Chromium. Transitions play only in Vault's slideshow; pptxgenjs writes none, so PPTX downloads change slides plainly. Hover tips on the control bar may not show in full screen (they render outside the full-screen element). The show is built from the deck as it is when it opens; edits made elsewhere during a show appear next time."
+  },
+  {
    "commit": "1c602750",
    "fullHash": "1c6027502b043929f8dfde26a3ce16435b80549c",
    "committedAt": "2026-11-23T06:55:17+10:00",
