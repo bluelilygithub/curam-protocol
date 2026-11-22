@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4a19f348",
+   "fullHash": "4a19f348b2f0eebd11b7ac2ba6f9d83925ad331f",
+   "committedAt": "2026-11-22T19:54:03+10:00",
+   "author": "mrb",
+   "area": "Presentations, Model Selection",
+   "subject": "Presentations: honour default model for outlines",
+   "filesChanged": 6,
+   "insertions": 24,
+   "deletions": 19,
+   "goal": "Stop the outline step from ignoring the workspace default model and unexpectedly calling an Anthropic key.",
+   "whatChanged": "generateOutline() now accepts the same route-validated `model` that create.js already passes to generateDeck(), so the outline, slides and guide all use the picked model or default_model. The resolver tiers are now only fallbacks, with standard preferred over light instead of light preferred over standard. Updated the CreateDeck active-model line, the Presentations guide rule, docs/presentations.md and docs/features.md to say the same model writes the outline and slides. generation.test.js now proves both calls use the explicit pick and that standard wins over light when no pick is sent.",
+   "filesImpacted": [
+    "server/services/presentations/generation.js",
+    "server/services/presentations/generation.test.js",
+    "client/src/pages/presentations/tools/CreateDeck.jsx",
+    "server/services/presentationsTutor.js",
+    "docs/presentations.md",
+    "docs/features.md"
+   ],
+   "benefit": "The default model shown in Settings is now actually used for every Presentations model call, so a DeepSeek default no longer triggers an Anthropic outline call and a 401.",
+   "concerns": "Tier fallbacks remain for callers that send no explicit model. The previous changelog entry still describes the old light-tier outline behaviour as it was at that commit. generation.test.js passes; the client text change is display-only and the full build passed before it. Not checked in a browser or on Railway. No new npm dependencies."
+  },
+  {
    "commit": "d6ccf6ea",
    "fullHash": "d6ccf6ea89ba757269e66eb097358ed7dd855f93",
    "committedAt": "2026-11-22T19:40:12+10:00",
