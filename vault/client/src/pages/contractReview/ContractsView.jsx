@@ -7,7 +7,7 @@ export default function ContractsView() {
   const { getIcon, contracts, selectedContractIds, pendingDeleteId, setPendingDeleteId, pendingBulkDelete, setPendingBulkDelete, contract, review, toggleContractSelected, toggleSelectAllContracts, deleteContractFromList, deleteSelectedContracts, openContract } = useContractReview();
 
   return (
-    <div data-tour="contract-review-contracts">
+    <div data-tour="contract-review-contracts" data-guide="contracts">
   <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
     <h2 className="text-base font-semibold">Your contracts</h2>
     {contracts.length > 0 && (

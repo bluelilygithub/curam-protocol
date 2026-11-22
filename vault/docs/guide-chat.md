@@ -116,6 +116,8 @@ New guides can skip copying the older guides' server code: `server/services/guid
 
 ## The DocCompare guide
 
+**Contract Review guide** (`guideId` `contract-review`, `POST /api/contract-review-tutor`, flag `contractReview`, `server/services/contractReviewTutor.js` on `guideCore.js`, `server/routes/contractReviewTutor.js` on `guideRouter.js`, wrapper `client/src/pages/contractReview/ContractReviewTutorChat.jsx`). An Open button switches the page's tool and scrolls to `data-guide="<id>"`; `info` and `tour` open the (i) box and the tour. It sees no contract, review or answer, and never gives legal advice. `client/src/pages/contractReview/contractReviewTools.mjs` (`GUIDE_TOOLS`) and the catalogue are kept in step by `node server/services/contractReviewTutor.test.js`.
+
 **DocCompare guide** (`guideId` `doc-compare`, `POST /api/doc-compare-tutor`, flag `docCompare`, `server/services/docCompareTutor.js` on `guideCore.js`, `server/routes/docCompareTutor.js` on `guideRouter.js`, wrapper `client/src/pages/docCompare/DocCompareTutorChat.jsx`). DocCompare runs in an iframe (`vault/doc-compare/`), so like Route Tracer the Open buttons go through `postMessage` (`doc-compare:open` / `doc-compare:context`, same origin only); the app scrolls to and highlights `data-guide="<id>"`, or opens Settings, the (i) box or the page viewer (`doc-compare/src/ui/guide.ts`). It sees no file or result: the files never leave the browser. `client/src/pages/docCompare/docCompareTools.mjs` is the list the app, the host page and the guide share; `node server/services/docCompareTutor.test.js` (with `guideTestKit.js`) fails if it and the catalogue drift. See `docs/doc-compare.md`.
 
 ## The Code Map guide

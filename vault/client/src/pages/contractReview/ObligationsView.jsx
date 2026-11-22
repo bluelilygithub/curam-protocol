@@ -8,15 +8,15 @@ export default function ObligationsView() {
   const { getIcon, contract, obligations, obligationOwnerFilter, setObligationOwnerFilter, obligationStatusFilter, setObligationStatusFilter, obligationDueFrom, setObligationDueFrom, obligationDueTo, setObligationDueTo, addToTask, setObligationState, exportIcs, setObligationField } = useContractReview();
 
   return (
-    <div className="rounded-lg border p-4" style={CARD}>
+    <div className="rounded-lg border p-4" style={CARD} data-guide="obligations">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 className="text-base font-semibold">What you need to do</h2>
-        <SecondaryButton onClick={exportIcs} className="flex items-center gap-1">
+        <SecondaryButton data-guide="export-ics" onClick={exportIcs} className="flex items-center gap-1">
           {getIcon('calendar-check', { size: 14 })} Export .ics
         </SecondaryButton>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div data-guide="obligation-filters" className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <Tooltip text="Show only obligations owed by one party.">
           <select
             value={obligationOwnerFilter}

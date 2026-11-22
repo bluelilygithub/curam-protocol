@@ -8,7 +8,7 @@ export default function NewReviewView() {
   const { newTitle, setNewTitle, newFile, setNewFile, contract, review, createContract } = useContractReview();
 
   return (
-    <div className="rounded-lg border p-4 mb-6" style={CARD} data-tour="contract-review-upload">
+    <div className="rounded-lg border p-4 mb-6" style={CARD} data-tour="contract-review-upload" data-guide="new">
       <h2 className="text-base font-semibold mb-3">New contract review</h2>
       <Tooltip text="A short label to find this contract again later — doesn't affect the analysis.">
         <input

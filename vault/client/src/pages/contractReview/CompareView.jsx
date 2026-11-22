@@ -55,7 +55,7 @@ export default function CompareView() {
   const perspectiveParty = (contract.parties || []).find((p) => p.id === comparePartyId);
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border p-4" style={CARD}>
+      <div className="rounded-lg border p-4" style={CARD} data-guide="compare">
         <h2 className="text-base font-semibold mb-1">Compare revisions</h2>
         <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
           Pick a perspective, then any two versions — risk changes, who's affected, and what to do about it, side by side.

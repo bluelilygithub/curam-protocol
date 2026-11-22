@@ -10,7 +10,7 @@ export default function DocumentsView() {
   return (
     <div className="space-y-6">
       <section>
-        <h2 className="text-base font-semibold mb-1">Documents &amp; revisions</h2>
+        <h2 className="text-base font-semibold mb-1" data-guide="documents">Documents &amp; revisions</h2>
         <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
           Every document uploaded under this contract, and every revision of each. Upload a new revision, mark a draft as executed, or run a review as a specific party from here.
         </p>
@@ -31,7 +31,7 @@ export default function DocumentsView() {
                     <PrimaryButton onClick={() => markExecuted(d.id)}>Mark as executed</PrimaryButton>
                   )}
                   {d.parentDocumentId && (
-                    <SecondaryButton onClick={() => runCompare(d.id)}>What changed</SecondaryButton>
+                    <SecondaryButton data-guide="what-changed" onClick={() => runCompare(d.id)}>What changed</SecondaryButton>
                   )}
                 </div>
               </div>
@@ -51,7 +51,7 @@ export default function DocumentsView() {
                   </div>
                 ) : (
                   <Tooltip text="Uploads a new version of this document and runs the full analysis pipeline on it again.">
-                    <SecondaryButton onClick={() => setRevisionUploadOpenFor(d.id)} disabled={revisionBusy === d.id}>
+                    <SecondaryButton data-guide="revision-upload" onClick={() => setRevisionUploadOpenFor(d.id)} disabled={revisionBusy === d.id}>
                       {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
                     </SecondaryButton>
                   </Tooltip>

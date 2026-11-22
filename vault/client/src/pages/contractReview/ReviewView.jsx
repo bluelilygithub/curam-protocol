@@ -254,7 +254,7 @@ export default function ReviewView() {
     {!review && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No review yet.</div>}
 
     {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length > 0 && (
-      <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+      <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }} data-guide="party">
         <h2 className="text-base font-semibold mb-2">Which party are you?</h2>
         <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
           Confirming unblocks risk scoring for your side of the agreement. Fix a name or role below if the extraction got it wrong — your edit is what the review uses.
@@ -298,7 +298,7 @@ export default function ReviewView() {
     )}
 
     {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length === 0 && (
-      <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+      <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }} data-guide="party">
         <h2 className="text-base font-semibold mb-2">Which party are you?</h2>
         <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
           No parties could be automatically detected in this document. Enter your own name and role to continue — the rest of the parties can still be identified later from the clauses themselves.
@@ -349,7 +349,7 @@ export default function ReviewView() {
         {(() => {
           const reviewingAs = (contract.parties || []).find((p) => p.id === review.userPartyId);
           return (
-            <div className="rounded-lg p-4" style={{ background: 'var(--color-surface)', border: '2px solid var(--color-primary)' }}>
+            <div className="rounded-lg p-4" style={{ background: 'var(--color-surface)', border: '2px solid var(--color-primary)' }} data-guide="perspective">
               <div className="flex items-center gap-3 flex-wrap">
                 {getIcon('user', { size: 20, style: { color: 'var(--color-primary)', flexShrink: 0 } })}
                 <div className="flex-1 min-w-0">
@@ -404,7 +404,7 @@ export default function ReviewView() {
         )}
 
         {review.coverageReport?.length > 0 && (
-          <div className="rounded-lg border p-4" style={CARD}>
+          <div className="rounded-lg border p-4" style={CARD} data-guide="coverage">
             <h2 className="text-base font-semibold mb-2">Coverage report</h2>
             {review.coverageReport.map((c) => {
               const b = COVERAGE_BADGE[c.status] || COVERAGE_BADGE.could_not_assess;
@@ -419,7 +419,7 @@ export default function ReviewView() {
         )}
 
         {review.summaryPoints?.length > 0 && (
-          <div className="rounded-lg border p-4" style={CARD}>
+          <div className="rounded-lg border p-4" style={CARD} data-guide="summary">
             <h2 className="text-base font-semibold mb-2">Summary</h2>
             <ul className="space-y-2">
               {review.summaryPoints.map((p, i) => {
@@ -435,7 +435,7 @@ export default function ReviewView() {
           </div>
         )}
 
-        <div id="cr-clauses-card" className="rounded-lg border p-4 scroll-mt-4" style={CARD}>
+        <div id="cr-clauses-card" data-guide="clauses" className="rounded-lg border p-4 scroll-mt-4" style={CARD}>
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <h2 className="text-base font-semibold">Clauses</h2>
             <div className="flex items-center gap-2">
@@ -490,7 +490,7 @@ export default function ReviewView() {
         </div>
 
     {review.definitions?.length > 0 && (
-      <div className="rounded-lg border p-4" style={CARD}>
+      <div className="rounded-lg border p-4" style={CARD} data-guide="definitions">
         <h2 className="text-base font-semibold mb-2">Definitions</h2>
         {review.definitions.map((d) => {
           const b = VERIFY_BADGE[d.verificationStatus] || VERIFY_BADGE.failed;

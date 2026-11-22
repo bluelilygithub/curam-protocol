@@ -10,7 +10,7 @@ export default function OverviewView() {
 
   return (
     <div className="space-y-4">
-  <div className="rounded-lg border p-4" style={CARD}>
+  <div className="rounded-lg border p-4" style={CARD} data-guide="parties">
     <h2 className="text-base font-semibold mb-2">Parties</h2>
     {(contract.parties || []).map((p) => (
       <div key={p.id} className="flex items-center gap-2 py-1 flex-wrap">
@@ -33,7 +33,7 @@ export default function OverviewView() {
     {!contract.parties?.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No parties extracted yet.</div>}
   </div>
 
-  <div className="rounded-lg border p-4" style={CARD}>
+  <div className="rounded-lg border p-4" style={CARD} data-guide="contract-actions">
     <h2 className="text-base font-semibold mb-2">Actions</h2>
     <div className="flex flex-wrap gap-2">
       <SecondaryButton onClick={toggleHold}>

@@ -3409,6 +3409,9 @@
   "POST /api/doc-compare-tutor": {
    "class": "authed"
   },
+  "POST /api/contract-review-tutor": {
+   "class": "authed"
+  },
   "GET /api/serp-tracker/sites": {
    "class": "authed"
   },

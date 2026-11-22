@@ -11,7 +11,7 @@ export default function ReportView() {
     <div className="space-y-4">
       {!review && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>The report needs a finished review. Open Risk review first.</div>}
   {review && (
-    <div className="rounded-lg border p-4" style={CARD}>
+    <div className="rounded-lg border p-4" style={CARD} data-guide="report">
       <h2 className="text-base font-semibold mb-2">Report</h2>
       <div className="flex flex-wrap items-center gap-2">
         <Tooltip text="Banner, parties and role, every flag with its reason and redline, and obligations.">

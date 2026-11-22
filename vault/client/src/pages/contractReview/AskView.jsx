@@ -8,7 +8,7 @@ export default function AskView() {
   const { getIcon, contract, question, setQuestion, qaHistory, qaLoading, askQuestion } = useContractReview();
 
   return (
-    <div className="rounded-lg border p-4" style={CARD}>
+    <div className="rounded-lg border p-4" style={CARD} data-guide="ask">
       <h2 className="text-base font-semibold mb-2">Ask about this contract</h2>
       <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Searches every document and revision under this contract, not just the one currently open.</p>
       <div className="flex gap-2 mb-3">

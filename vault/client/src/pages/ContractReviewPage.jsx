@@ -13,7 +13,8 @@ import { startContractReviewTour, TOUR_KEY as CR_TOUR_KEY } from '../utils/tours
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { ContractReviewContext } from './contractReview/context';
 import { CARD, PrimaryButton, SecondaryButton, Badge, CONTRACT_STATUS_BADGE, contractTypeLabel, NotLegalAdviceBanner, formatEtaRemaining } from './contractReview/shared';
-import { CONTRACT_REVIEW_TOOLS, CONTRACT_TOOL_IDS, CONTRACT_REVIEW_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS } from './contractReview/contractReviewTools.mjs';
+import { CONTRACT_REVIEW_TOOLS, CONTRACT_TOOL_IDS, CONTRACT_REVIEW_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './contractReview/contractReviewTools.mjs';
+import ContractReviewTutorChat from './contractReview/ContractReviewTutorChat';
 import NewReviewView from './contractReview/NewReviewView';
 import ContractsView from './contractReview/ContractsView';
 import ReviewView from './contractReview/ReviewView';
@@ -701,6 +702,16 @@ export default function ContractReviewPage() {
     setTimeout(startTour, 400);
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the guide's Open buttons: the (i) box and the tour are ours; otherwise show the tool and scroll to the part (data-guide="<id>")
+  const openGuideTool = (id) => {
+    if (id === 'info') { info.open(); return; }
+    if (id === 'tour') { startTour(); return; }
+    const target = GUIDE_TOOLS.find((g) => g.id === id);
+    if (!target) return;
+    setTool(target.tool);
+    setTimeout(() => document.querySelector(`[data-guide="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+  };
+
   if (!enabled) {
     return (
       <div className="p-6">
@@ -862,6 +873,7 @@ export default function ContractReviewPage() {
             </main>
           </div>
         </ContractReviewContext.Provider>
+        <ContractReviewTutorChat currentTool={tool === 'start' ? 'new' : tool} onOpenTool={openGuideTool} />
       </VoiceInputProvider>
 
       {info.show && (

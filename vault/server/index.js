@@ -236,6 +236,7 @@ app.use('/api/cellar-tutor', requireFeature('cellarPlanner'), aiLimiter, require
 app.use('/api/geocode', requireAnyFeature('gardenPlanner', 'routeTracer'), require('./routes/geocode'));
 app.use('/api/route-tracks', requireFeature('routeTracer'), require('./routes/routeTracks'));
 app.use('/api/route-tutor', requireFeature('routeTracer'), aiLimiter, require('./routes/routeTutor')); // the Route Tracer guide chat
+app.use('/api/contract-review-tutor', requireFeature('contractReview'), aiLimiter, require('./routes/contractReviewTutor')); // the Contract Review guide chat (sees no contract or review)
 app.use('/api/doc-compare-tutor', requireFeature('docCompare'), aiLimiter, require('./routes/docCompareTutor')); // the DocCompare guide chat (the app itself runs in the browser and calls no API)
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));

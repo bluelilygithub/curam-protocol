@@ -114,3 +114,33 @@ export const HOW_IT_WORKS = [
   ['Verification badges', 'Verified means the text was matched back to the document exactly; Verified (approx.) means it matched once spaces and punctuation were ignored; Unverified means it could not be found in the document, so treat it with more caution.'],
   ['Suggested changes are advisory', 'A suggested change (redline) is wording to copy into a negotiation or take to a lawyer. It is never applied to the document.'],
 ];
+
+// The parts the guide (the round button) can point at. `tool` says which tool its Open button shows; the page then scrolls to
+// data-guide="<id>" if that part is on screen ('info' and 'tour' open the (i) box and the tour). The guide's catalogue
+// (server/services/contractReviewTutor.js) lists exactly these ids: node server/services/contractReviewTutor.test.js fails if they drift.
+export const GUIDE_TOOLS = [
+  { id: 'new', label: 'New review', tool: 'new' },
+  { id: 'contracts', label: 'Your contracts', tool: 'contracts' },
+  { id: 'review', label: 'Risk review', tool: 'review' },
+  { id: 'party', label: 'Which party are you?', tool: 'review' },
+  { id: 'verdict', label: 'Verdict', tool: 'review' },
+  { id: 'perspective', label: 'Review as a different party', tool: 'review' },
+  { id: 'coverage', label: 'Coverage report', tool: 'review' },
+  { id: 'summary', label: 'Summary', tool: 'review' },
+  { id: 'clauses', label: 'Clauses', tool: 'review' },
+  { id: 'definitions', label: 'Definitions', tool: 'review' },
+  { id: 'obligations', label: 'Obligations', tool: 'obligations' },
+  { id: 'obligation-filters', label: 'Obligation filters', tool: 'obligations' },
+  { id: 'export-ics', label: 'Export .ics', tool: 'obligations' },
+  { id: 'ask', label: 'Ask about it', tool: 'ask' },
+  { id: 'documents', label: 'Documents & reviews', tool: 'documents' },
+  { id: 'revision-upload', label: 'Upload new revision', tool: 'documents' },
+  { id: 'what-changed', label: 'What changed', tool: 'documents' },
+  { id: 'compare', label: 'Compare revisions', tool: 'compare' },
+  { id: 'overview', label: 'Parties & actions', tool: 'overview' },
+  { id: 'parties', label: 'Parties', tool: 'overview' },
+  { id: 'contract-actions', label: 'Legal hold, status and delete', tool: 'overview' },
+  { id: 'report', label: 'PDF report', tool: 'report' },
+  { id: 'info', label: 'How Contract Review works', tool: 'new' },
+  { id: 'tour', label: 'Guided tour', tool: 'new' },
+];
