@@ -70,6 +70,7 @@ export const APP_NAV_GROUPS = [
       { id: 'restyle', label: 'Style editor', path: '/restyle', icon: 'brush', featureKey: 'restyle', aliases: 'css restyle' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics', aliases: 'image picture photo qr code qrcode' },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
+      { id: 'presentations', label: 'Presentations', path: '/presentations', icon: 'monitor', featureKey: 'presentations', aliases: 'slides slide deck pptx powerpoint presentation deck builder' },
       { id: 'drawings', label: 'Diagrams', path: '/drawings', icon: 'pen-tool', featureKey: 'drawings', aliases: 'drawing drawings sketch whiteboard flowchart flow chart excalidraw' },
       { id: 'sketchbook', label: 'Sketchbook', path: '/sketchbook', icon: 'pencil-line', featureKey: 'sketchbook', aliases: 'cartoon cartoons illustrate illustration sketch pencil scene storyboard draw picture' },
       { id: 'music', label: 'Music', path: '/music', icon: 'music', featureKey: 'music' },

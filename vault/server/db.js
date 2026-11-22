@@ -2219,6 +2219,35 @@ async function initSchema() {
         ON video_library ("userId", "createdAt" DESC)
     `);
 
+    // ── Presentations (docs/presentations.md) ──────────────────────────────────
+    // One row per saved deck. The whole slide model is the JSONB `data` column: preview and export read the same source.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS presentation_decks (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL DEFAULT 'Untitled presentation',
+        "themeId"   TEXT NOT NULL DEFAULT 'paper',
+        "sourceType" TEXT,
+        data        JSONB NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_presentation_decks_user ON presentation_decks ("userId", "updatedAt" DESC)`);
+    // Custom themes only: the six built-ins live in code. An imported .pptx/.potx keeps colours and fonts, not masters.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS presentation_templates (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        theme       JSONB NOT NULL,
+        source      TEXT NOT NULL DEFAULT 'saved',
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_presentation_templates_user ON presentation_templates ("userId", "updatedAt" DESC)`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS recipes (
         id              SERIAL PRIMARY KEY,

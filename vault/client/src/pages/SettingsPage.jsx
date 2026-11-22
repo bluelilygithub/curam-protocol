@@ -53,6 +53,7 @@ import { startRoomPlannerTour, TOUR_KEY as ROOM_PLANNER_TOUR_KEY } from '../util
 import { startGardenPlannerTour, TOUR_KEY as GARDEN_PLANNER_TOUR_KEY } from '../utils/tours/gardenPlannerTour';
 import { startRouteTracerTour, TOUR_KEY as ROUTE_TRACER_TOUR_KEY } from '../utils/tours/routeTracerTour';
 import { startCellarPlannerTour, TOUR_KEY as CELLAR_PLANNER_TOUR_KEY } from '../utils/tours/cellarPlannerTour';
+import { TOUR_KEY as PRESENTATIONS_TOUR_KEY } from '../utils/tours/presentationsTour';
 import ConfirmModal from '../components/ConfirmModal';
 import SettingsNav from '../components/SettingsNav';
 import { visibleGroups, allowedTabIds, isFeatureGatedTab } from '../utils/settingsGroups.mjs';
@@ -3072,6 +3073,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(CELLAR_PLANNER_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Presentations Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step tour — the start jobs, tool groups, help and voice, making and exporting a deck, and the guide chat
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(PRESENTATIONS_TOUR_KEY);
+                navigate('/presentations?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(PRESENTATIONS_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
         </div>

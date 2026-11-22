@@ -1747,6 +1747,75 @@
   "POST /api/graphics-tutor": {
    "class": "authed"
   },
+  "POST /api/presentations-tutor": {
+   "class": "authed"
+  },
+  "POST /api/presentations/create": {
+   "class": "authed"
+  },
+  "POST /api/presentations/import": {
+   "class": "authed"
+  },
+  "POST /api/presentations/import/url": {
+   "class": "authed"
+  },
+  "POST /api/presentations/preview": {
+   "class": "authed"
+  },
+  "GET /api/presentations/meta": {
+   "class": "authed"
+  },
+  "GET /api/presentations/jobs/:id": {
+   "class": "authed"
+  },
+  "POST /api/presentations/jobs/:id/cancel": {
+   "class": "authed"
+  },
+  "POST /api/presentations/jobs/:id/resume": {
+   "class": "authed"
+  },
+  "GET /api/presentations/jobs/:id/result": {
+   "class": "authed"
+  },
+  "GET /api/presentations/assets/:userId/:name": {
+   "class": "authed"
+  },
+  "GET /api/presentations/decks": {
+   "class": "authed"
+  },
+  "POST /api/presentations/decks": {
+   "class": "authed"
+  },
+  "GET /api/presentations/decks/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/presentations/decks/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/presentations/decks/:id": {
+   "class": "authed"
+  },
+  "POST /api/presentations/decks/:id/duplicate": {
+   "class": "authed"
+  },
+  "GET /api/presentations/templates": {
+   "class": "authed"
+  },
+  "POST /api/presentations/templates": {
+   "class": "authed"
+  },
+  "POST /api/presentations/templates/import": {
+   "class": "authed"
+  },
+  "DELETE /api/presentations/templates/:id": {
+   "class": "authed"
+  },
+  "POST /api/presentations/export": {
+   "class": "authed"
+  },
+  "GET /api/presentations/export/:id/file/:format": {
+   "class": "authed"
+  },
   "POST /api/graphics/adjust": {
    "class": "authed"
   },

@@ -17,6 +17,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   youtube: true,
   graphics: true,
   videos: true,
+  // Brief/document → editable slide decks (docs/presentations.md): off until the model and export pipeline have been run on Railway.
+  presentations: false,
   drawings: false, // new and not yet run on Railway: off until an admin switches it on (admins can always open it)
   sketchbook: false, // new and not yet tried with the live image service: off until an admin switches it on (admins can always open it)
   plans: false, // new (docs/plans.md): off until an admin switches it on (admins can always open it)
@@ -91,6 +93,7 @@ const FEATURE_LIFECYCLE = {
   plans: 'preview',           // new: plans with dates, dependencies and a Gantt; not yet used on Railway
   liveTv: 'preview',          // new: streams come and go, and most will not play in a browser; not yet run on Railway
   docCompare: 'preview',      // new: tested on generated documents only; not yet run on Railway or on real AI edits
+  presentations: 'preview',   // new: model generation + PPTX/PDF/PNG export not yet run on Railway
 };
 const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
 

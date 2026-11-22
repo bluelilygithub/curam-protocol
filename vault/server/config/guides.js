@@ -13,6 +13,7 @@
 const GUIDES = {
   pdf: { name: 'PDF guide', endpoint: '/api/pdf-tutor' },
   graphics: { name: 'Graphics guide', endpoint: '/api/graphics-tutor' },
+  presentations: { name: 'Presentations guide', endpoint: '/api/presentations-tutor' },
   video: { name: 'Video Tools tutor', endpoint: '/api/videos/tutor' },
   music: { name: 'Music tutor', endpoint: '/api/music/tutor' },
   notes: { name: 'Notes guide', endpoint: '/api/notes-tutor' },

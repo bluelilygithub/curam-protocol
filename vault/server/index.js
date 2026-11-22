@@ -242,6 +242,8 @@ app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/map
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
 app.use('/api/videos', requireFeature('videos'), aiLimiter, require('./routes/videos'));
+app.use('/api/presentations-tutor', requireFeature('presentations'), aiLimiter, require('./routes/presentationsTutor')); // guide chat: sees no decks or documents
+app.use('/api/presentations', requireFeature('presentations'), aiLimiter, require('./routes/presentations')); // docs/presentations.md
 app.use('/api/drawings-tutor', requireFeature('drawings'), aiLimiter, require('./routes/drawingsTutor')); // the Drawings guide chat (sees no drawings); before /api/drawings so the longer path is matched first
 app.use('/api/drawings', requireFeature('drawings'), require('./routes/drawings')); // saved Excalidraw drawings (docs/drawings.md)
 app.use('/api/sketchbook-tutor', requireFeature('sketchbook'), aiLimiter, require('./routes/sketchbookTutor')); // the Sketchbook guide chat (sees no sketches)

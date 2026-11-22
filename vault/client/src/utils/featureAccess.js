@@ -13,6 +13,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   youtube: true,
   graphics: true,
   videos: true,
+  presentations: false, // keep in step with server/config/featureAccess.js
   drawings: false,
   sketchbook: false,
   plans: false,
@@ -69,6 +70,7 @@ export const FEATURE_LIFECYCLE = {
   plans: 'preview',
   liveTv: 'preview',
   docCompare: 'preview',
+  presentations: 'preview',
 };
 export const LIFECYCLE_LABELS = {
   preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
@@ -108,6 +110,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'youtube', label: 'YouTube' },
       { key: 'graphics', label: 'Graphics' },
       { key: 'videos', label: 'Video Tools' },
+      { key: 'presentations', label: 'Presentations' },
       { key: 'drawings', label: 'Diagrams' },
       { key: 'sketchbook', label: 'Sketchbook' },
       { key: 'plans', label: 'Plans' },

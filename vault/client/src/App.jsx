@@ -32,6 +32,7 @@ import YoutubePage from './pages/YoutubePage';
 import GraphicsPage from './pages/GraphicsPage';
 import FontsPage from './pages/FontsPage';
 import VideosPage from './pages/VideosPage';
+import PresentationsPage from './pages/PresentationsPage';
 import SketchbookPage from './pages/SketchbookPage';
 import PlansPage from './pages/PlansPage';
 import DrawingsPage from './pages/DrawingsPage'; // the Excalidraw editor itself is loaded only when a drawing is opened (drawings/loadExcalidraw.js)
@@ -207,6 +208,8 @@ function App() {
               <Route path="/graphics" element={<GraphicsPage />} />
               <Route path="/fonts" element={<FontsPage />} />
               <Route path="/videos" element={<VideosPage />} />
+              <Route path="/presentations" element={<PresentationsPage />} />
+              <Route path="/presentations/:id" element={<PresentationsPage />} />
               <Route path="/drawings" element={<DrawingsPage />} />
               <Route path="/drawings/:id" element={<DrawingsPage />} />
               <Route path="/sketchbook" element={<SketchbookPage />} />
