@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d4dda83d",
+   "fullHash": "d4dda83d7da7aa28a728dd61fe82ccb8e20f3fb9",
+   "committedAt": "2026-11-22T15:51:57+10:00",
+   "author": "mrb",
+   "area": "Navigation, Code Map",
+   "subject": "Nav: Knowledge Graph link in the Business menu",
+   "filesChanged": 4,
+   "insertions": 7,
+   "deletions": 3,
+   "goal": "Open the Code Map Knowledge graph tab straight from the menu.",
+   "whatChanged": "A Knowledge Graph item (admin only, share icon) after Code Map in the Business group of client/src/config/appNavigation.js, opening /code-map?view=knowledge-graph; it is also found by searching 'understand anything', 'tour' or 'summaries'. server/services/navSeed.js places it once after Code Map in the admin's saved menu layout on boot, so it does not land in Unsorted; navSeed.test.js expects it. Code Map's analysis builds its tool list from the menu, so the item is in tools.js skipTools and is not counted as a second tool (a local run still shows Code Map at 91 with no Knowledge Graph tool).",
+   "filesImpacted": [
+    "client/src/config/appNavigation.js",
+    "server/services/codeMap/tools.js",
+    "server/services/navSeed.js",
+    "server/services/navSeed.test.js"
+   ],
+   "benefit": "One click to the knowledge graph instead of opening Code Map and finding the tab.",
+   "concerns": "The header trail ignores menu items with a query string, so the page's trail still reads Code Map, and the Code Map item may also show as current on that tab. Not checked in a browser or on Railway. Tested: navSeed.test.js, navCatalog.test.mjs, codeMap.test.js (28), codeMap.accuracy.test.js and buildBriefing.test.js pass, and the client builds."
+  },
+  {
    "commit": "d041d9d9",
    "fullHash": "d041d9d9f0795442510b74f0ca52fb3bf4b73fad",
    "committedAt": "2026-11-22T15:46:36+10:00",
