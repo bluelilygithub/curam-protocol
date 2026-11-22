@@ -87,7 +87,11 @@ async function serve(jobs) {
     async check(userId, base) { serve.liveBase = base; return { id: 2, userId, base, checks: [], counts: {} }; },
     async latest() { return { id: 2, checks: [] }; },
   };
-  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks }));
+  const knowledgeGraph = () => {
+    if (serve.kg === 'broken') throw Object.assign(new Error('.ua/knowledge-graph.json is not valid JSON. Run /understand again.'), { status: 422 });
+    return serve.kg || null;
+  };
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -138,6 +142,17 @@ async function serve(jobs) {
       assert.strictEqual(serve.startedKind, 'security');
       await s.call('POST', '/api/code-map/ai-reviews');
       assert.strictEqual(serve.startedKind, undefined);
+    });
+
+    await t('Knowledge graph: null before one is committed, the graph after, 422 with its message when the file is broken', async () => {
+      assert.deepStrictEqual((await s.call('GET', '/api/code-map/knowledge-graph')).body, { graph: null });
+      serve.kg = { file: '.ua/knowledge-graph.json', nodes: [{ id: 'a' }], edges: [] };
+      assert.strictEqual((await s.call('GET', '/api/code-map/knowledge-graph')).body.graph.nodes[0].id, 'a');
+      serve.kg = 'broken';
+      const r = await s.call('GET', '/api/code-map/knowledge-graph');
+      assert.strictEqual(r.status, 422);
+      assert.match(r.body.error, /not valid JSON/);
+      serve.kg = null;
     });
 
     await t('POST /runs starts a run for the signed-in admin', async () => {

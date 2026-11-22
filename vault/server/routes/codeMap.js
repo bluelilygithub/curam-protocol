@@ -4,14 +4,14 @@
 // on the mount because the analysis makes no model calls; the one route that does (POST /findings/explain) has aiLimiter itself.
 // Runs are background jobs (server/services/codeMap/jobs.js). Named routes before /:id. The Context tab's briefing routes
 // (/briefings, /briefing/*) use server/services/codeMap/briefing/ and make no model call either.
-// Injectable (jobs, explain, limiter, briefing) so the route test needs no database or model.
+// Injectable (jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph) so the route test needs no database or model.
 
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const { compareRuns } = require('../services/codeMap/compare');
 const { getAppUrl } = require('../utils/appUrl');
 
-function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks } = {}) {
+function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph } = {}) {
   const router = express.Router();
   const J = () => jobs || require('../services/codeMap/jobs');
   const R = () => aiReview || require('../services/codeMap/aiReview');
@@ -177,6 +177,15 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
     try {
       res.json(await B().docsCopy(req.user.id, paths));
     } catch (err) { fail(res, err, 'docs copy'); }
+  });
+
+  // ── Knowledge graph tab: the graph Understand-Anything wrote to .ua/ (server/services/codeMap/knowledgeGraph.js). No model calls.
+  // { graph: null } until one is committed; 422 when the file is there but unreadable.
+  router.get('/knowledge-graph', async (req, res) => {
+    try {
+      const load = knowledgeGraph || require('../services/codeMap/knowledgeGraph').loadKnowledgeGraph;
+      res.json({ graph: await load() });
+    } catch (err) { fail(res, err, 'knowledge graph'); }
   });
 
   router.get('/runs/:id', async (req, res) => {

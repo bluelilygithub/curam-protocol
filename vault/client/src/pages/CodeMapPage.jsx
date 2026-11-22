@@ -28,6 +28,7 @@ import { runMd, datedName } from './codeMap/exportRun.mjs';
 // API: server/routes/codeMap.js (admin only). Docs: docs/code-map.md. The selected tab is in the URL (?view=) so links work.
 
 const DependencyMap = lazy(() => import('./codeMap/DependencyMap')); // the graph library loads only when the map tab opens
+const KnowledgeGraphView = lazy(() => import('./codeMap/KnowledgeGraphView'));
 
 // the tabs are the page's "tools" in codeMapTools.mjs, shared with the guide
 const VIEWS = CODE_MAP_TOOLS.map((t) => ({ id: t.id, label: t.label, tip: TOOL_TIPS[t.id] }));
@@ -259,6 +260,11 @@ export default function CodeMapPage() {
         ) : view === 'context' ? (
           // works before the first run too: CLAUDE.md and notes do not need one; the briefing card says to run an analysis first
           <ContextView hasRun={!!data} onRunAnalysis={startRun} busy={busy} />
+        ) : view === 'knowledge-graph' ? (
+          // reads the committed .ua/knowledge-graph.json, not a run, so it works before the first analysis
+          <Suspense fallback={<Skeleton className="h-[70vh]" label="Loading the knowledge graph" />}>
+            <KnowledgeGraphView />
+          </Suspense>
         ) : view === 'ai-review' ? (
           // reads the code itself, so it works before the first analysis run (tools then show as "no single tool")
           <AiReviewView byId={byId} onOpenTool={setDetailId} />
