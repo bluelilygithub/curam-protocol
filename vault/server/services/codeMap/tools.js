@@ -15,7 +15,7 @@ const TOOL_CONFIG = {
     { at: 1, id: 'tasks', label: 'Tasks', path: '/tasks', featureKey: null, group: 'Everyday', adminOnly: false },
     { at: 2, id: 'chat', label: 'Chat & Projects', path: '/chat', featureKey: null, group: 'Everyday', adminOnly: false },
   ],
-  skipTools: ['guide'],
+  skipTools: ['guide', 'knowledgeGraph'], // knowledgeGraph: a menu shortcut to Code Map's own tab
   wrapperComponents: ['FeatureRoute', 'Navigate', 'AdminOnly', 'AdminRoute'],
   specialRoutes: { '/student/quiz': 'StudentQuizLayout', '/admin': 'AdminPage', '/chat': 'ChatPage' },
   extraEntries: {

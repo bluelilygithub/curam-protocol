@@ -8,6 +8,7 @@
 // id: the nav item id (client/src/config/appNavigation.js); after: the item it goes next to (falls back to the end of the first group).
 const NEW_NAV_ITEMS = [
   { id: 'docCompare', after: 'contractReview' },
+  { id: 'knowledgeGraph', after: 'codeMap' },
 ];
 
 /** Pure: returns { layout, placed } with each not-yet-seeded, not-yet-placed item put after its neighbour. Does not mutate the input. */

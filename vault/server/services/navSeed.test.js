@@ -38,9 +38,10 @@ assert.deepStrictEqual(placeNewItems(layout(), [{ id: 'docCompare', after: 'cont
     if (/^SELECT/.test(sql)) return { rows: Object.entries(store).map(([key, value]) => ({ key, value })) };
     const key = /VALUES \('([a-z_]+)'/.exec(sql)[1]; store[key] = params[0]; return { rows: [] };
   } };
-  assert.deepStrictEqual(await seedNavItems(pool), ['docCompare']);
+  assert.deepStrictEqual(await seedNavItems(pool), ['docCompare', 'knowledgeGraph']);
   assert.ok(JSON.parse(store.nav_layout).sets[0].groups[1].itemIds.includes('docCompare'));
-  assert.deepStrictEqual(JSON.parse(store.nav_layout_seeded), ['docCompare']);
+  assert.ok(JSON.parse(store.nav_layout).sets[0].groups[0].itemIds.includes('knowledgeGraph'), 'neighbour missing: end of the first group');
+  assert.deepStrictEqual(JSON.parse(store.nav_layout_seeded), ['docCompare', 'knowledgeGraph']);
   // the admin moves it to the pool; a restart must not put it back
   const l = JSON.parse(store.nav_layout); l.sets[0].groups[1].itemIds = l.sets[0].groups[1].itemIds.filter((x) => x !== 'docCompare'); store.nav_layout = JSON.stringify(l);
   assert.deepStrictEqual(await seedNavItems(pool), []);
