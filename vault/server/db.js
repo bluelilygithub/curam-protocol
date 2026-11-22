@@ -2234,6 +2234,33 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_presentation_decks_user ON presentation_decks ("userId", "updatedAt" DESC)`);
+    // Every save keeps the previous canonical JSON, so My decks can roll back without a separate document store.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS presentation_versions (
+        id          SERIAL PRIMARY KEY,
+        "deckId"    INTEGER NOT NULL REFERENCES presentation_decks(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label       TEXT NOT NULL DEFAULT 'Saved version',
+        data        JSONB NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_presentation_versions_deck ON presentation_versions ("deckId", "createdAt" DESC)`);
+    // Downloads are kept with the deck so an export link still works after the in-memory job has expired or the server restarted.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS presentation_exports (
+        id          SERIAL PRIMARY KEY,
+        "deckId"    INTEGER REFERENCES presentation_decks(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        format      TEXT NOT NULL,
+        "fileName"  TEXT NOT NULL,
+        "mimeType"  TEXT NOT NULL,
+        "filePath"  TEXT NOT NULL,
+        bytes       BIGINT NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_presentation_exports_user ON presentation_exports ("userId", "createdAt" DESC)`);
     // Custom themes only: the six built-ins live in code. An imported .pptx/.potx keeps colours and fonts, not masters.
     await client.query(`
       CREATE TABLE IF NOT EXISTS presentation_templates (

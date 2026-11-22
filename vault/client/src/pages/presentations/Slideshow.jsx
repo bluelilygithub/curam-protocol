@@ -9,6 +9,7 @@ import { fitScale, keyStep, slidePages } from './slideshowKeys.mjs';
 // Full-screen slideshow of the current deck. Slides come from the same server renderer as the preview and the PDF
 // (POST /api/presentations/preview), split into one frame per slide so the show can animate between them.
 // Keys (slideshow.mjs): → Space PageDown next, ← Backspace PageUp back, Home End, a number then Enter jumps, Escape leaves.
+// V opens the presenter panel with notes, next-slide preview and a timer.
 
 const SIZES = { '16:9': [1280, 720], '4:3': [960, 720], '1:1': [900, 900] };
 const ANIM_MS = 550;
@@ -62,6 +63,9 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
   const [box, setBox] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [controls, setControls] = useState(true);
   const [isFull, setIsFull] = useState(false);
+  const [presenter, setPresenter] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
   const idleTimer = useRef(null);
   const leavingByButton = useRef(false);
   const transition = deck.transition || 'fade';
@@ -118,6 +122,18 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
     return () => clearTimeout(t);
   }, [prev]);
 
+  // Presenter timer. It starts when the view is first opened and can be paused or reset from the panel.
+  useEffect(() => {
+    if (!timerRunning) return undefined;
+    const t = setInterval(() => setElapsed((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [timerRunning]);
+
+  const togglePresenter = useCallback(() => {
+    if (!presenter) setTimerRunning(true);
+    setPresenter((on) => !on);
+  }, [presenter]);
+
   const wake = useCallback(() => {
     setControls(true);
     clearTimeout(idleTimer.current);
@@ -131,6 +147,11 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
       if (e.key === 'Escape' || e.defaultPrevented) return;
       const tag = e.target?.tagName;
       if (tag === 'SELECT' || ((e.key === ' ' || e.key === 'Enter') && tag === 'BUTTON')) return;
+      if (e.key.toLowerCase() === 'v' && !digits) {
+        e.preventDefault();
+        togglePresenter();
+        return;
+      }
       const step = keyStep(e.key, { index, count, digits });
       if (step.index === index && step.digits === digits) return;
       e.preventDefault();
@@ -139,13 +160,15 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [index, count, digits, goTo]);
+  }, [index, count, digits, goTo, togglePresenter]);
 
   const toggleFull = () => {
     if (document.fullscreenElement) { leavingByButton.current = true; document.exitFullscreen().catch(() => {}); } else panelRef.current?.requestFullscreen?.().catch(() => {});
   };
 
-  const scale = fitScale(w, h, box.w, box.h - (controls ? 64 : 0));
+  const scale = fitScale(w, h, box.w - (presenter ? 360 : 0), box.h - (controls ? 64 : 0));
+  const nextScale = fitScale(w, h, 280, 158);
+  const clock = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
   const btn = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-opacity duration-200 hover:opacity-70 disabled:opacity-30';
   const btnStyle = { color: '#fff', background: 'rgba(255,255,255,0.12)' };
   const selStyle = { color: '#fff', background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.25)' };
@@ -163,7 +186,7 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
       onMouseMove={wake}
     >
       <style>{CSS}</style>
-      <div className="absolute inset-x-0 top-0" style={{ bottom: controls ? 64 : 0 }} onClick={() => goTo(index + 1)} role="presentation">
+      <div className="absolute left-0 top-0" style={{ right: presenter ? 360 : 0, bottom: controls ? 64 : 0 }} onClick={() => goTo(index + 1)} role="presentation">
         {error && <p className="absolute inset-0 flex items-center justify-center text-sm" style={{ color: '#fca5a5' }}>{error}</p>}
         {!pages && !error && <p className="absolute inset-0 flex items-center justify-center text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>Building the slideshow…</p>}
         {pages && prev && pages[prev.index] && (
@@ -182,6 +205,63 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
           </span>
         )}
       </div>
+
+      {presenter && (
+        <aside
+          className="absolute right-0 top-0 w-[360px] p-4 space-y-4 overflow-y-auto border-l"
+          style={{
+            bottom: controls ? 64 : 0,
+            background: 'rgba(8,10,14,0.96)',
+            borderColor: 'rgba(255,255,255,0.18)',
+            color: '#fff',
+          }}
+          aria-label="Presenter view"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.55)' }}>Presenter view</p>
+              <p className="text-base font-semibold">Slide {index + 1} of {count}</p>
+            </div>
+            <Tooltip text="Close the presenter panel (V). The slideshow keeps running.">
+              <button type="button" onClick={togglePresenter} className={btn} style={btnStyle} aria-label="Close presenter view">{getIcon('x', { size: 16 })}</button>
+            </Tooltip>
+          </div>
+
+          <div className="rounded-xl p-3 border" style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }}>
+            <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'rgba(255,255,255,0.55)' }}>Speaker notes</p>
+            <p className="text-sm whitespace-pre-wrap" style={{ lineHeight: 1.6 }}>
+              {deck.slides[index]?.notes || 'No notes for this slide.'}
+            </p>
+          </div>
+
+          <div className="rounded-xl p-3 border" style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }}>
+            <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'rgba(255,255,255,0.55)' }}>Next slide</p>
+            {index + 1 < count && pages?.[index + 1] ? (
+              <div className="mx-auto" style={{ width: w * nextScale, height: h * nextScale, overflow: 'hidden' }}>
+                <SlideFrame page={pages[index + 1]} w={w} h={h} scale={nextScale} />
+              </div>
+            ) : (
+              <p className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>This is the last slide.</p>
+            )}
+            <p className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.7)' }}>{deck.slides[index + 1]?.title || ''}</p>
+          </div>
+
+          <div className="rounded-xl p-3 border" style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }}>
+            <p className="text-xs uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.55)' }}>Elapsed time</p>
+            <p className="text-3xl font-mono tabular-nums my-2" aria-live="off">{clock}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setTimerRunning((v) => !v)} className={btn} style={btnStyle}>
+                {timerRunning ? 'Pause' : (elapsed ? 'Resume' : 'Start')}
+              </button>
+              <button type="button" onClick={() => { setElapsed(0); setTimerRunning(false); }} className={btn} style={btnStyle}>Reset</button>
+            </div>
+          </div>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            Notes are stored on each slide and are included in PDF, PNG, HTML and PPTX exports.
+          </p>
+        </aside>
+      )}
 
       <div
         className="absolute inset-x-0 bottom-0 h-16 px-4 flex flex-wrap items-center justify-center gap-2 transition-opacity duration-200"
@@ -211,6 +291,11 @@ export default function Slideshow({ deck, applyBrand, start = 0, onClose, onTran
           <select value={transition} onChange={(e) => onTransition(e.target.value)} aria-label="Transition" className="px-3 py-1.5 rounded-lg border text-sm" style={selStyle}>
             {TRANSITIONS.map((t) => <option key={t.id} value={t.id} style={{ color: '#000' }}>{t.label}</option>)}
           </select>
+        </Tooltip>
+        <Tooltip text="Show notes, the next slide and a timer beside the slide (V).">
+          <button type="button" onClick={togglePresenter} aria-pressed={presenter} className={btn} style={btnStyle}>
+            {getIcon('monitor', { size: 16 })} Presenter {presenter ? 'on' : 'off'}
+          </button>
         </Tooltip>
         <Tooltip text={isFull ? 'Leave full screen but keep the slideshow open.' : 'Fill the whole screen.'}>
           <button type="button" onClick={toggleFull} aria-label={isFull ? 'Leave full screen' : 'Full screen'} className={btn} style={btnStyle}>

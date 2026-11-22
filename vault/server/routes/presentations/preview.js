@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { pool } = require('../../db');
-const { getBrand, resolveThemeForUser } = require('../../services/presentations/store');
+const { getBrand, getBrandFont, resolveThemeForUser } = require('../../services/presentations/store');
 const { renderDeckHtml } = require('../../services/presentations/render');
 const { sendError } = require('./shared');
 
@@ -16,7 +16,8 @@ router.post('/preview', async (req, res) => {
     const brand = await getBrand(pool, req.user.id);
     if (applyBrand && !brand.available) throw Object.assign(new Error('There is no Graphics Brand Kit to apply yet.'), { status: 400 });
     const theme = await resolveThemeForUser(pool, req.user.id, body.theme || body.deck.themeId, brand, { applyBrand });
-    res.json({ html: renderDeckHtml(body.deck, theme) });
+    const font = applyBrand ? await getBrandFont(pool, req.user.id, brand) : null;
+    res.json({ html: renderDeckHtml(body.deck, theme, { font }) });
   } catch (err) { sendError(res, err, 'The preview could not be made.'); }
 });
 

@@ -27,6 +27,46 @@ const SMALL = 22;
 const clean = (v) => String(v == null ? '' : v).trim();
 const list = (v, n) => (Array.isArray(v) ? v.map(clean).filter(Boolean).slice(0, n) : []);
 
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
+function decodeInline(s) {
+  return String(s || '').replace(/&(amp|lt|gt|quot|#39|nbsp);/gi, (_, name) => ENTITIES[name.toLowerCase()] || _);
+}
+
+/** Tiny rich-text parser shared by HTML and PPTX. Only b/strong, i/em, u and br are meaningful. */
+function richRuns(raw) {
+  const source = clean(raw);
+  if (!source) return [];
+  const runs = [];
+  let buf = '';
+  const flags = { bold: false, italic: false, underline: false };
+  const flush = () => {
+    if (buf) runs.push({ text: decodeInline(buf), ...flags });
+    buf = '';
+  };
+  const re = /<\s*(\/)?\s*(strong|b|i|em|u|br)\b[^>]*>/gi;
+  let last = 0;
+  let m = re.exec(source);
+  while (m) {
+    buf += source.slice(last, m.index);
+    flush();
+    const tag = m[2].toLowerCase();
+    if (tag === 'br' && !m[1]) runs.push({ text: '\n', ...flags });
+    else {
+      const key = tag === 'strong' || tag === 'b' ? 'bold' : tag === 'i' || tag === 'em' ? 'italic' : 'underline';
+      flags[key] = !m[1];
+    }
+    last = m.index + m[0].length;
+    m = re.exec(source);
+  }
+  buf += source.slice(last);
+  flush();
+  return runs.filter((r) => r.text);
+}
+
+function richText(raw) {
+  return richRuns(raw).map((r) => r.text).join('').replace(/\s+/g, ' ').trim();
+}
+
 /** Columns for comparison / three-column / stats, falling back to the bullets when the slide has no columns. */
 function columnsFor(slide, count) {
   const cols = Array.isArray(slide.columns) ? slide.columns.filter((c) => c && (clean(c.heading) || list(c.bullets, 6).length)) : [];
@@ -106,9 +146,42 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
   const boxes = [];
   const images = [];
   const tSize = Math.max(24, Math.min(72, Number(titleSize) || 44));
-  const title = clean(slide.title);
-  const body = clean(slide.body);
-  const bullets = list(slide.bullets, 6);
+  const rich = slide.rich || {};
+  const title = richText(rich.title) || clean(slide.title);
+  const body = richText(rich.body) || clean(slide.body);
+  const bullets = Array.isArray(rich.bullets) && rich.bullets.length
+    ? rich.bullets.slice(0, 6).map(richText).filter(Boolean)
+    : list(slide.bullets, 6);
+
+  /** Attach rich runs to the plain boxes the layout produced, so one geometry drives HTML and PPTX alike. */
+  const attachRich = () => {
+    if (!rich.title && !rich.body && !rich.bullets?.length) return;
+    const titleHtml = clean(rich.title);
+    const bodyHtml = clean(rich.body);
+    const tBox = boxes.find((b) => b.text === title && titleHtml);
+    if (tBox) { tBox.html = titleHtml; tBox.runs = richRuns(titleHtml); }
+    const bBox = boxes.find((b) => b.text === body && bodyHtml);
+    if (bBox) { bBox.html = bodyHtml; bBox.runs = richRuns(bodyHtml); }
+    const htmls = Array.isArray(rich.bullets) ? rich.bullets.slice(0, 6).map(clean) : [];
+    const bulletBox = boxes.find((b) => Array.isArray(b.bullets) && htmls.length
+      && b.bullets.every((line, i) => richText(htmls[i]) === line));
+    if (bulletBox) {
+      bulletBox.htmls = htmls;
+      bulletBox.runs = htmls.map((h) => [...richRuns(h), { text: '\n', bold: false, italic: false, underline: false }]).flat().slice(0, -1);
+    }
+  };
+
+  /** Extra media on top of the layout: more pictures, user shapes, a chart and a table. */
+  const addExtras = (result) => {
+    attachRich();
+    for (const im of (Array.isArray(slide.images) ? slide.images : [])) {
+      images.push({ x: im.x, y: im.y, w: im.w, h: im.h, ref: im.ref, fit: im.fit || 'contain' });
+    }
+    for (const sh of (Array.isArray(slide.shapes) ? slide.shapes : [])) {
+      shapes.push({ ...sh });
+    }
+    return { ...result, charts: slide.chart ? [{ ...slide.chart }] : [], tables: slide.table ? [{ ...slide.table }] : [] };
+  };
 
   // ---- hero slides: title, section, closing ----
   if (hero) {
@@ -130,7 +203,7 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
       }
       if (body) boxes.push({ x: a.x, y: a.y + a.h * 0.66, w: a.w, h: a.h * 0.3, text: body, size: 30, color: f.heroMode === 'fill' ? 'bg' : 'muted', align: left ? 'left' : 'center', valign: 'top' });
     }
-    return { layout, design, shapes, boxes, images, number: false };
+    return addExtras({ layout, design, shapes, boxes, images, number: false });
   }
 
   // ---- full-bleed picture with the title on a strip ----
@@ -140,7 +213,7 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
     shapes.push({ kind: 'rect', x: 0, y: 70, w: 100, h: 30, fill: 'text', alpha: 0.6 });
     boxes.push({ x: 6, y: 72, w: 88, h: body ? 13 : 24, text: title, size: tSize, bold: true, color: 'bg', align: 'left', valign: body ? 'bottom' : 'middle' });
     if (body) boxes.push({ x: 6, y: 86, w: 88, h: 11, text: body, size: SMALL + 2, color: 'bg', align: 'left', valign: 'top' });
-    return { layout, design, shapes, boxes, images, number: false };
+    return addExtras({ layout, design, shapes, boxes, images, number: false });
   }
 
   // ---- quote: no title bar, the body is the quote and the title is who said it ----
@@ -149,7 +222,7 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
     boxes.push({ x: a.x, y: a.y, w: 14, h: 22, text: '“', size: 140, bold: true, color: 'primary', align: 'left', valign: 'top' });
     boxes.push({ x: a.x + 6, y: a.y + 16, w: a.w - 12, h: a.h * 0.56, text: body || title, size: 38, italic: true, color: 'text', align: 'left', valign: 'middle' });
     if (body && title) boxes.push({ x: a.x + 6, y: a.y + 16 + a.h * 0.6, w: a.w - 12, h: 10, text: `— ${title}`, size: SMALL + 4, color: 'muted', align: 'right', valign: 'top' });
-    return { layout, design, shapes, boxes, images, number: true };
+    return addExtras({ layout, design, shapes, boxes, images, number: true });
   }
 
   // ---- every other layout: a title, then the content area ----
@@ -241,7 +314,7 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
       if (body) boxes.push({ x: c.x, y: bullets.length ? c.y + c.h * 0.74 : c.y, w: c.w, h: bullets.length ? c.h * 0.26 : c.h, text: body, size: bullets.length ? SMALL + 2 : BODY + 2, color: 'muted', align: 'left', valign: 'top' });
     }
   }
-  return { layout, design, shapes, boxes, images, number: true };
+  return addExtras({ layout, design, shapes, boxes, images, number: true });
 }
 
-module.exports = { DESIGNS, DESIGN_IDS, LAYOUTS, HERO, ASPECT_RATIO, plan, columnsFor };
+module.exports = { DESIGNS, DESIGN_IDS, LAYOUTS, HERO, ASPECT_RATIO, plan, columnsFor, richRuns, richText };

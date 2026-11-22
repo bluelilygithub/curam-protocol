@@ -23,7 +23,7 @@ const s = require('./schema');
       { layout: 'magic', title: 'A', bullets: ['one', '', 'two', 'three', 'four', 'five', 'six', 'seven'], body: 'x'.repeat(900) },
     ],
   });
-  assert.equal(deck.schemaVersion, 1);
+  assert.equal(deck.schemaVersion, 2);
   assert.equal(deck.title, 'Hello');
   assert.equal(deck.aspect, '16:9');
   assert.equal(deck.themeId, 'paper');
@@ -63,6 +63,42 @@ assert.throws(() => s.normalizeDeck({ slides: Array.from({ length: 21 }, () => (
   assert.equal(odd.designId, 'clean');
   assert.equal(odd.transition, 'fade');
   assert.ok(TRANSITIONS.includes('none') && TRANSITIONS.includes('fade'));
+}
+
+{
+  // v2 keeps the richer editing model and the planning controls through every round trip.
+  const deck = s.normalizeDeck({
+    title: 'Plan', audience: 'Board', tone: 'calm', duration: 18, nSlides: 8,
+    outline: [{ title: 'One', bullets: ['a'] }],
+    slides: [{
+      layout: 'picture', title: 'A', notes: 'Say this', background: '#123456', imagePrompt: 'a calm map',
+      images: [{ ref: '/api/presentations/assets/1/a.png', x: 10, y: 20, w: 30, h: 40 }],
+      shapes: [{ kind: 'triangle', fill: 'primary', alpha: 0.4 }],
+      chart: { type: 'bar', labels: ['A', 'B'], series: [{ name: 'Score', values: [3, 7] }] },
+      table: { rows: [['Head', 'Value'], ['A', '3']] },
+      rich: { title: 'A <b>bold</b> title', body: 'Line<br>two', bullets: ['<i>first</i>'] },
+    }],
+  });
+  assert.equal(deck.audience, 'Board');
+  assert.equal(deck.tone, 'calm');
+  assert.equal(deck.duration, 18);
+  assert.equal(deck.nSlides, 8);
+  assert.equal(deck.outline.length, 1);
+  assert.equal(deck.slides[0].background, '#123456');
+  assert.equal(deck.slides[0].images.length, 1);
+  assert.equal(deck.slides[0].shapes[0].kind, 'triangle');
+  assert.equal(deck.slides[0].chart.type, 'bar');
+  assert.equal(deck.slides[0].table.rows.length, 2);
+  assert.match(deck.slides[0].rich.title, /<b>/);
+  assert.equal(deck.slides[0].notes, 'Say this');
+  const again = s.normalizeDeck(JSON.parse(JSON.stringify(deck)));
+  assert.deepEqual(again, deck, 'normalising twice is stable');
+
+  const cleaned = s.normalizeDeck({
+    slides: [{ title: 'x', rich: { title: '<script>alert(1)</script><b>Kept</b>' }, chart: { series: [{ values: ['bad', 4] }] } }],
+  });
+  assert.ok(!/script/.test(cleaned.slides[0].rich.title));
+  assert.deepEqual(cleaned.slides[0].chart.series[0].values, [0, 4]);
 }
 
 console.log('presentations schema tests passed');

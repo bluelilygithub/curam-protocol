@@ -1753,6 +1753,15 @@
   "POST /api/presentations/create": {
    "class": "authed"
   },
+  "POST /api/presentations/outline": {
+   "class": "authed"
+  },
+  "POST /api/presentations/rewrite-slide": {
+   "class": "authed"
+  },
+  "POST /api/presentations/placeholders": {
+   "class": "authed"
+  },
   "POST /api/presentations/import": {
    "class": "authed"
   },
@@ -1796,6 +1805,18 @@
    "class": "authed"
   },
   "POST /api/presentations/decks/:id/duplicate": {
+   "class": "authed"
+  },
+  "GET /api/presentations/decks/:id/versions": {
+   "class": "authed"
+  },
+  "POST /api/presentations/decks/:id/restore": {
+   "class": "authed"
+  },
+  "GET /api/presentations/decks/:id/exports": {
+   "class": "authed"
+  },
+  "GET /api/presentations/exports/:id/file": {
    "class": "authed"
   },
   "GET /api/presentations/templates": {

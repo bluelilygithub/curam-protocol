@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../../utils/apiClient';
 import EmptyState from '../../../components/EmptyState';
 import Tooltip from '../../../components/Tooltip';
 import { takeToolHandoff } from '../../../utils/toolHandoff.mjs';
 import {
   BTN_PRIMARY, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, PRIMARY_STYLE, SECONDARY_STYLE,
-  Notice, ToolHeader, readDeckFile, usePresentations,
+  Notice, ToolHeader, readDeckFile, readJson, usePresentations,
 } from '../shared';
 
 const FORMATS = [
-  { id: 'pptx', label: 'PowerPoint (PPTX)', desc: 'Text stays editable as text boxes.', ext: 'pptx' },
-  { id: 'pdf', label: 'PDF', desc: 'Fixed layout for sharing and printing.', ext: 'pdf' },
-  { id: 'html', label: 'HTML preview', desc: 'One self-contained file you can open in a browser.', ext: 'html' },
-  { id: 'png', label: 'PNGs (one per slide)', desc: 'A zip of slide images for slideshows and social posts.', ext: 'zip' },
+  { id: 'pptx', label: 'PowerPoint (PPTX)', desc: 'Text stays editable as text boxes, with speaker notes.', ext: 'pptx' },
+  { id: 'pdf', label: 'PDF', desc: 'Fixed layout for sharing and printing, with notes pages.', ext: 'pdf' },
+  { id: 'html', label: 'HTML preview', desc: 'One self-contained file with slides and notes pages.', ext: 'html' },
+  { id: 'png', label: 'PNGs (one per slide)', desc: 'A zip of slide images plus notes.txt.', ext: 'zip' },
 ];
+
+const when = (value) => {
+  const d = value ? new Date(value) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+};
 
 export default function ExportDeck() {
   const {
@@ -21,6 +26,18 @@ export default function ExportDeck() {
   } = usePresentations();
   const [format, setFormat] = useState('pptx');
   const [busy, setBusy] = useState(false);
+  const [downloads, setDownloads] = useState([]);
+
+  const loadDownloads = useCallback(async () => {
+    if (!savedDeckId) { setDownloads([]); return; }
+    const res = await api.get(`/api/presentations/decks/${encodeURIComponent(savedDeckId)}/exports`);
+    const data = await readJson(res, 'Could not load previous exports.');
+    setDownloads(Array.isArray(data.exports) ? data.exports : []);
+  }, [savedDeckId]);
+
+  useEffect(() => {
+    loadDownloads().catch(() => {});
+  }, [loadDownloads, exportFile]);
 
   useEffect(() => {
     const file = takeToolHandoff('export');
@@ -52,7 +69,11 @@ export default function ExportDeck() {
     if (!exportFile?.jobId) return;
     const ext = FORMATS.find((f) => f.id === (exportFile.format || format))?.ext || 'pptx';
     try {
-      await api.download(`/api/presentations/export/${encodeURIComponent(exportFile.jobId)}/file/${encodeURIComponent(exportFile.format || format)}`, `${deck.title || 'presentation'}.${ext}`);
+      // New exports have a durable DB-backed URL; older jobs still use the in-memory job link.
+      await api.download(
+        exportFile.url || `/api/presentations/export/${encodeURIComponent(exportFile.jobId)}/file/${encodeURIComponent(exportFile.format || format)}`,
+        exportFile.fileName || `${deck.title || 'presentation'}.${ext}`,
+      );
     } catch (err) {
       toast(err.message || 'Could not download the export.', 'error');
     }
@@ -133,6 +154,33 @@ export default function ExportDeck() {
             <Tooltip text="Go back and change the slides before exporting.">
               <button type="button" onClick={() => openTool('slides')} className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit slides</button>
             </Tooltip>
+          </div>
+
+          <div className="border-t pt-4 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Previous exports for this deck</p>
+              <button type="button" onClick={() => loadDownloads().catch(() => {})} className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Refresh list</button>
+            </div>
+            {!savedDeckId ? (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Save the deck in the slide editor to keep a re-downloadable list here.</p>
+            ) : downloads.length === 0 ? (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No exports yet. Finished files remain available here after the job expires.</p>
+            ) : (
+              <ul className="space-y-1">
+                {downloads.map((file) => (
+                  <li key={file.id} className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs" style={FIELD_STYLE}>
+                    <span className="flex-1 min-w-[9rem]" style={{ color: 'var(--color-text)' }}>
+                      {file.format.toUpperCase()} · {Math.max(1, Math.round(file.bytes / 1024))} KB · {when(file.createdAt)}
+                    </span>
+                    <Tooltip text="Download this saved export again.">
+                      <button type="button" onClick={() => api.download(`/api/presentations/exports/${encodeURIComponent(file.id)}/file`, file.fileName).catch((err) => toast(err.message || 'Could not download that export.', 'error'))} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
+                        {file.fileName}
+                      </button>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}

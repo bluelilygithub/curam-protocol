@@ -5,10 +5,12 @@
 
 const { pool } = require('../../db');
 const { normalizeDeck, sanitizeCustomTheme, resolveTheme, PresentationError } = require('./schema');
-const { loadKit } = require('../graphicsBrandKit');
+const { loadKit, getFontFile } = require('../graphicsBrandKit');
 
 const MAX_DECKS_PER_USER = 200;
 const MAX_THEMES_PER_USER = 50;
+const MAX_VERSIONS_PER_DECK = 30;
+const MAX_EXPORT_ROWS_PER_USER = 60;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 const rowToDeck = (r) => ({
@@ -30,6 +32,25 @@ const rowToTheme = (r) => ({
   updatedAt: r['updatedAt'],
 });
 
+const rowToVersion = (r) => ({
+  id: r.id,
+  deckId: r['deckId'],
+  label: r.label,
+  slides: Array.isArray(r.data?.slides) ? r.data.slides.length : 0,
+  data: r.data,
+  createdAt: r['createdAt'],
+});
+
+const rowToExport = (r) => ({
+  id: r.id,
+  deckId: r['deckId'],
+  format: r.format,
+  fileName: r['fileName'],
+  mimeType: r['mimeType'],
+  bytes: Number(r.bytes || 0),
+  createdAt: r['createdAt'],
+});
+
 async function listDecks(db = pool, userId) {
   const { rows } = await db.query(
     `SELECT id, title, "themeId", "sourceType", data, "createdAt", "updatedAt" FROM presentation_decks
@@ -44,6 +65,19 @@ async function getDeck(db = pool, userId, id) {
       WHERE id = $1 AND "userId" = $2`,
     [Number(id) || 0, userId]);
   return rows[0] ? rowToDeck(rows[0]) : null;
+}
+
+/** Keep the last 30 canonical snapshots for one deck. The browser never sends a version row. */
+async function snapshotVersion(db, userId, deckId, label, data) {
+  const cleanLabel = String(label || 'Saved version').trim().slice(0, 80) || 'Saved version';
+  await db.query(
+    `INSERT INTO presentation_versions ("deckId", "userId", label, data) VALUES ($1, $2, $3, $4::jsonb)`,
+    [deckId, userId, cleanLabel, JSON.stringify(data)]);
+  await db.query(
+    `DELETE FROM presentation_versions WHERE "deckId" = $1 AND id NOT IN (
+       SELECT id FROM presentation_versions WHERE "deckId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT $2
+     )`,
+    [deckId, MAX_VERSIONS_PER_DECK]);
 }
 
 /** Create or update a saved deck. A valid id in `input` updates only a deck owned by this person. */
@@ -67,7 +101,73 @@ async function saveDeck(db = pool, userId, input = {}) {
     ? [title, data.themeId, sourceType, JSON.stringify(data), existing.id, userId]
     : [userId, title, data.themeId, sourceType, JSON.stringify(data)];
   const { rows } = await db.query(sql, params);
-  return rowToDeck(rows[0]);
+  const saved = rowToDeck(rows[0]);
+  if (existing && JSON.stringify(existing.data) !== JSON.stringify(saved.data)) {
+    await snapshotVersion(db, userId, saved.id, input.versionLabel || 'Previous version', existing.data);
+  } else if (!existing) {
+    await snapshotVersion(db, userId, saved.id, 'First version', saved.data);
+  }
+  return saved;
+}
+
+async function listVersions(db = pool, userId, deckId) {
+  const deck = await getDeck(db, userId, deckId);
+  if (!deck) throw new PresentationError('That deck was not found.', 404);
+  const { rows } = await db.query(
+    `SELECT id, "deckId", label, data, "createdAt" FROM presentation_versions
+      WHERE "deckId" = $1 AND "userId" = $2 ORDER BY "createdAt" DESC, id DESC LIMIT $3`,
+    [deck.id, userId, MAX_VERSIONS_PER_DECK]);
+  return rows.map(rowToVersion);
+}
+
+/** Restore by saving the current state as a version first, then writing the chosen snapshot into the deck. */
+async function restoreVersion(db = pool, userId, deckId, versionId) {
+  const deck = await getDeck(db, userId, deckId);
+  if (!deck) throw new PresentationError('That deck was not found.', 404);
+  const { rows } = await db.query(
+    `SELECT data FROM presentation_versions WHERE id = $1 AND "deckId" = $2 AND "userId" = $3`,
+    [Number(versionId) || 0, deck.id, userId]);
+  if (!rows[0]) throw new PresentationError('That version was not found.', 404);
+  return saveDeck(db, userId, {
+    id: deck.id,
+    title: deck.title,
+    sourceType: deck.sourceType,
+    deck: rows[0].data,
+    versionLabel: 'Before restore',
+  });
+}
+
+async function saveExport(db = pool, userId, { deckId = null, format, fileName, mimeType, filePath, bytes = 0 } = {}) {
+  const { rows } = await db.query(
+    `INSERT INTO presentation_exports ("deckId", "userId", format, "fileName", "mimeType", "filePath", bytes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, "deckId", format, "fileName", "mimeType", bytes, "createdAt"`,
+    [deckId || null, userId, String(format).slice(0, 12), String(fileName).slice(0, 240), String(mimeType).slice(0, 160),
+      String(filePath).slice(0, 1000), Math.max(0, Number(bytes) || 0)]);
+  const { rows: old } = await db.query(
+    `SELECT id FROM presentation_exports WHERE "userId" = $1 ORDER BY "createdAt" DESC, id DESC OFFSET $2`,
+    [userId, MAX_EXPORT_ROWS_PER_USER]);
+  if (old.length) {
+    await db.query(`DELETE FROM presentation_exports WHERE id = ANY($1::int[])`, [old.map((r) => r.id)]);
+  }
+  return rowToExport(rows[0]);
+}
+
+async function listExports(db = pool, userId, deckId = null) {
+  const sql = deckId
+    ? `SELECT id, "deckId", format, "fileName", "mimeType", bytes, "createdAt" FROM presentation_exports
+        WHERE "userId" = $1 AND "deckId" = $2 ORDER BY "createdAt" DESC, id DESC LIMIT $3`
+    : `SELECT id, "deckId", format, "fileName", "mimeType", bytes, "createdAt" FROM presentation_exports
+        WHERE "userId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT $3`;
+  const { rows } = await db.query(sql, deckId ? [userId, Number(deckId) || 0, MAX_EXPORT_ROWS_PER_USER] : [userId, MAX_EXPORT_ROWS_PER_USER]);
+  return rows.map(rowToExport);
+}
+
+async function getExportFile(db = pool, userId, id) {
+  const { rows } = await db.query(
+    `SELECT id, "filePath", "fileName", "mimeType" FROM presentation_exports WHERE id = $1 AND "userId" = $2`,
+    [Number(id) || 0, userId]);
+  return rows[0] || null;
 }
 
 async function duplicateDeck(db = pool, userId, id) {
@@ -193,9 +293,24 @@ function themeWithBrand(themeOrId, brand, { applyBrand = false } = {}) {
   return theme;
 }
 
+/** Small embedded font for HTML/PDF/PNG output. PPTX can only carry the resolved family name, not embedded bytes. */
+async function getBrandFont(db = pool, userId, brand) {
+  if (!brand?.available || !brand.font) return null;
+  const row = await getFontFile(db, userId, 'heading') || await getFontFile(db, userId, 'body');
+  if (!row || !row.data) return null;
+  const ext = String(row.ext || '').toLowerCase();
+  if (!['ttf', 'otf'].includes(ext)) return null;
+  return {
+    family: String(row.family || row.renderFamily || brand.font).replace(/['";<>]/g, '').slice(0, 80),
+    dataUrl: `data:font/${ext === 'otf' ? 'otf' : 'ttf'};base64,${Buffer.from(row.data).toString('base64')}`,
+    format: ext === 'otf' ? 'opentype' : 'truetype',
+  };
+}
+
 module.exports = {
-  MAX_DECKS_PER_USER, MAX_THEMES_PER_USER,
+  MAX_DECKS_PER_USER, MAX_THEMES_PER_USER, MAX_VERSIONS_PER_DECK,
   listDecks, getDeck, saveDeck, duplicateDeck, deleteDeck,
+  listVersions, restoreVersion, saveExport, listExports, getExportFile,
   listThemes, saveTheme, deleteTheme,
-  getBrand, themeWithBrand, resolveThemeForUser, rowToDeck, rowToTheme,
+  getBrand, getBrandFont, themeWithBrand, resolveThemeForUser, rowToDeck, rowToTheme,
 };

@@ -4,6 +4,25 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (presentations-presenter-placeholders)
+
+### Presentations — presenter view, outline review and notes in every export
+Full-screen Present now has an optional presenter panel (`V`): speaker notes, a next-slide preview and a pauseable/resettable timer. Notes travel with every export — notes pages in HTML/PDF/PNG, speaker notes in PPTX — but stay out of the live preview and slideshow.
+
+### Presentations — plan, edit and recover a deck
+Create deck now takes audience, tone, talk length and slide count (6–20), can plan an editable outline first, and can rewrite one slide in place from the slide editor. Saved decks autosave after edits and keep 30 versions for rollback in My decks. The slide editor adds undo/redo, duplicate slide, extra images and shapes, charts, tables, backgrounds and inline bold/italic/underline; finished exports are re-downloadable from My decks and Export.
+
+### Presentations — real PowerPoint round-trip and safer downloads
+`.pptx`/`.potx` files are parsed into an editable canonical v2 deck with slides, notes, tables and pictures, then opened straight in the editor. Brand Kit fonts are embedded in HTML/PDF/PNG and the family name is used in PPTX. All export downloads go through the authenticated `api.download()` helper, so Bearer auth is attached instead of a plain link returning 401. Zip XML/image uncompressed-size caps stop a small upload expanding into an oversized part.
+
+### Presentations — low-cost placeholder pictures
+Small AI placeholder pictures are now on by default when a deck is created and when a slide is added. They use the existing Graphics image router with a dedicated `presentations_placeholder` usage, a fixed 768×512 size and owned asset refs. The count is configurable (`PRESENTATIONS_PLACEHOLDERS_PER_DECK`); a missing image provider only adds a warning and never blocks the deck. No seventh sidebar tool was added.
+
+### Chat helpers, docs and tests
+The Presentations guide catalogue, tool tips, per-tool help and "How it works" copy now describe the six real tools and the new behaviour. The feature documentation, route manifest and test coverage (including PPTX import and placeholder fallback) were updated to match.
+
+---
+
 ## 2026-10-31 (hardening-lifecycle-search)
 
 ### Feature Access — each tool now shows how finished it is

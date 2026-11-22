@@ -75,6 +75,12 @@ export default function PresentationsPage() {
   const [exportFile, setExportFile] = useState(null);
   const [historyOn, setHistoryOnState] = useState(historyEnabled);
   const [handoff, setHandoff] = useState(null);
+  const [autosaveState, setAutosaveState] = useState('idle');
+  const undoRef = useRef([]);
+  const redoRef = useRef([]);
+  const deckRef = useRef(deck);
+  const autosaveRef = useRef({ timer: null, skip: true, last: '' });
+  const [historyTick, setHistoryTick] = useState(0);
 
   useEffect(() => { if (openOnLast && tool !== 'start') writeLocal(LAST_TOOL_KEY, tool); }, [tool, openOnLast]);
   useEffect(() => { setVisited((v) => (v.has(tool) ? v : new Set(v).add(tool))); }, [tool]);
@@ -125,28 +131,63 @@ export default function PresentationsPage() {
       .catch(() => toast('Could not add this deck to local history.', 'error'));
   }, [historyOn, sourceType, toast]);
 
-  const setDeck = useCallback((value) => {
-    setDeckRaw((prev) => normalizeDeck(typeof value === 'function' ? value(prev) : value, metaRef.current?.maxSlides || 20));
+  const setDeck = useCallback((value, { history = true } = {}) => {
+    const prev = deckRef.current;
+    const next = normalizeDeck(typeof value === 'function' ? value(prev) : value, metaRef.current?.maxSlides || 20);
+    if (history && JSON.stringify(prev) !== JSON.stringify(next)) {
+      undoRef.current = [...undoRef.current.slice(-49), prev];
+      redoRef.current = [];
+      setHistoryTick((n) => n + 1);
+    }
+    deckRef.current = next;
+    setDeckRaw(next);
   }, []);
+
+  const undo = useCallback(() => {
+    if (!undoRef.current.length) return;
+    const prev = undoRef.current.pop();
+    redoRef.current = [...redoRef.current, deckRef.current].slice(-50);
+    deckRef.current = prev;
+    setDeckRaw(prev);
+    setHistoryTick((n) => n + 1);
+  }, []);
+  const redo = useCallback(() => {
+    if (!redoRef.current.length) return;
+    const next = redoRef.current.pop();
+    undoRef.current = [...undoRef.current, deckRef.current].slice(-50);
+    deckRef.current = next;
+    setDeckRaw(next);
+    setHistoryTick((n) => n + 1);
+  }, []);
+  const replaceDeck = useCallback((next) => {
+    undoRef.current = [];
+    redoRef.current = [];
+    deckRef.current = next;
+    setDeckRaw(next);
+    autosaveRef.current = { timer: null, skip: true, last: JSON.stringify(next) };
+    setHistoryTick((n) => n + 1);
+  }, []);
+  const canUndo = undoRef.current.length > 0;
+  const canRedo = redoRef.current.length > 0;
 
   const handleJobResult = useCallback((kind, payload, id) => {
     if (payload?.error) return;
     if (kind === 'create') {
       const next = normalizeDeck(payload?.deck, metaRef.current?.maxSlides || 20);
-      setDeckRaw(next);
+      replaceDeck(next);
       setThemeId(next.themeId);
       recordHistory(next);
-      toast('Deck ready — check it in the slide editor.', 'success');
+      toast(payload?.warning || 'Deck ready — check it in the slide editor.', payload?.warning ? 'warn' : 'success');
     } else if (kind === 'export') {
       setExportFile({ ...payload, jobId: id });
       toast('Export ready to download.', 'success');
     }
-  }, [recordHistory, toast]);
+  }, [recordHistory, replaceDeck, toast]);
 
   const { job, startJob, cancelJob, resumeJob, dismissJob } = usePresentationJob(handleJobResult);
 
-  const saveDeck = useCallback(async ({ asNew = false, title, type } = {}) => {
-    const clean = normalizeDeck(deck, metaRef.current?.maxSlides || 20);
+  const saveDeck = useCallback(async ({ asNew = false, title, type, versionLabel, silent = false } = {}) => {
+    const clean = normalizeDeck(deckRef.current, metaRef.current?.maxSlides || 20);
     const isNew = asNew || !savedDeckId;
     const res = isNew
       ? await api.post('/api/presentations/decks', {
@@ -154,12 +195,13 @@ export default function PresentationsPage() {
         ...(title ? { title } : {}),
         ...(type || sourceType ? { sourceType: type || sourceType } : {}),
       })
-      : await api.patch(`/api/presentations/decks/${savedDeckId}`, { deck: clean });
+      : await api.patch(`/api/presentations/decks/${savedDeckId}`, { deck: clean, ...(versionLabel ? { versionLabel } : {}) });
     const data = await readJson(res, 'Could not save the deck.');
     if (data?.deck?.id) setSavedDeckId(String(data.deck.id));
-    toast(isNew ? 'Deck saved to My decks.' : 'Deck updated.', 'success');
+    autosaveRef.current.last = JSON.stringify(clean);
+    if (!silent) toast(isNew ? 'Deck saved to My decks.' : 'Deck updated.', 'success');
     return data?.deck || clean;
-  }, [deck, savedDeckId, sourceType, toast]);
+  }, [savedDeckId, sourceType, toast]);
 
   const loadDeck = useCallback(async (id) => {
     const res = await api.get(`/api/presentations/decks/${encodeURIComponent(id)}`);
@@ -167,13 +209,13 @@ export default function PresentationsPage() {
     // GET /decks/:id answers { deck: row }; the slides are in row.data (server/services/presentations/store.js rowToDeck).
     const row = data?.deck || data || {};
     const next = normalizeDeck(row.data && typeof row.data === 'object' ? row.data : row, metaRef.current?.maxSlides || 20);
-    setDeckRaw(next);
+    replaceDeck(next);
     setThemeId(next.themeId);
     setSavedDeckId(String(id));
     setSourceType(row.sourceType || 'brief');
     recordHistory(next, row.sourceType || 'brief');
     return next;
-  }, [recordHistory]);
+  }, [recordHistory, replaceDeck]);
 
   useEffect(() => {
     // A ?tour=1 visit stays on the start screen rather than opening a linked deck under the tour.
@@ -183,6 +225,41 @@ export default function PresentationsPage() {
       .catch((err) => toast(err.message || 'Could not open that deck.', 'error'));
     // Load once per route id; loadDeck deliberately left out to avoid reloading after every edit.
   }, [canUse, routeDeckId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Saved decks autosave 1.6s after typing stops; the server keeps the previous JSON as a version.
+  useEffect(() => {
+    if (!canUse || !savedDeckId || !deck.slides.length) return undefined;
+    const current = JSON.stringify(deck);
+    if (autosaveRef.current.skip || current === autosaveRef.current.last) {
+      autosaveRef.current.skip = false;
+      autosaveRef.current.last = current;
+      return undefined;
+    }
+    clearTimeout(autosaveRef.current.timer);
+    autosaveRef.current.timer = setTimeout(async () => {
+      setAutosaveState('saving');
+      try {
+        await saveDeck({ versionLabel: 'Autosave', silent: true });
+        setAutosaveState('saved');
+      } catch {
+        setAutosaveState('error');
+      }
+    }, 1600);
+    return () => clearTimeout(autosaveRef.current.timer);
+  }, [canUse, deck, savedDeckId, saveDeck]);
+
+  // Undo/redo only outside text fields, so Ctrl+Z keeps working normally inside an input or textarea.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   const openToolById = useCallback((id) => {
     if (!ALL_TOOLS.some((t) => t.id === id)) return;
@@ -213,14 +290,15 @@ export default function PresentationsPage() {
     themeId, chooseTheme, chooseDesign, chooseTransition, present, applyBrand, setApplyBrand, sourceType, setSourceType,
     savedDeckId, setSavedDeckId, exportFile, setExportFile,
     historyOn, setHistoryOn,
+    undo, redo, canUndo, canRedo, autosaveState,
     job, startJob, cancelJob, resumeJob, dismissJob,
     saveDeck, loadDeck, takeIncomingFile, toast,
     defaultModel,
   }), [
     tool, openToolById, deck, setDeck, meta, sourceText, imageRefs, themeId, chooseTheme, chooseDesign, chooseTransition, present, applyBrand,
-    sourceType, savedDeckId, exportFile, historyOn, setHistoryOn, job, startJob, cancelJob, resumeJob,
-    dismissJob, saveDeck, loadDeck, takeIncomingFile, toast,
-    defaultModel,
+    sourceType, savedDeckId, exportFile, historyOn, setHistoryOn, undo, redo, canUndo, canRedo, autosaveState,
+    job, startJob, cancelJob, resumeJob, dismissJob, saveDeck, loadDeck, takeIncomingFile, toast,
+    defaultModel, historyTick,
   ]);
 
   // ToolSidebar groups (components/ToolSidebar.jsx): the list, tips and icons come from presentationsTools.mjs, shared with the guide.
@@ -296,7 +374,22 @@ export default function PresentationsPage() {
                 <div className="space-y-3">
                   <BackToJobs onBack={backToStart} toolLabel={labelFor(tool)} goal={stepIndex(goal, tool) >= 0 ? goal : null} />
                   <JobBar goal={goal} mode={tool} onStep={openToolById} labelFor={labelFor} carry="the deck stays with you" />
-                  <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
+                    <div className="flex items-center gap-2">
+                      {savedDeckId && autosaveState !== 'idle' && (
+                        <span className="text-xs" aria-live="polite" style={{ color: 'var(--color-muted)' }}>
+                          {autosaveState === 'saving' ? 'Autosaving…' : autosaveState === 'saved' ? 'Autosaved' : 'Autosave failed'}
+                        </span>
+                      )}
+                      <Tooltip text={canUndo ? 'Undo the last slide edit (Ctrl+Z outside a text field).' : 'Nothing to undo yet.'}>
+                        <button type="button" onClick={undo} disabled={!canUndo} className="text-xs underline transition-opacity duration-200 hover:opacity-60 disabled:no-underline disabled:opacity-40" style={{ color: 'var(--color-primary)' }}>Undo</button>
+                      </Tooltip>
+                      <Tooltip text={canRedo ? 'Redo the last slide edit (Ctrl+Shift+Z outside a text field).' : 'Nothing to redo yet.'}>
+                        <button type="button" onClick={redo} disabled={!canRedo} className="text-xs underline transition-opacity duration-200 hover:opacity-60 disabled:no-underline disabled:opacity-40" style={{ color: 'var(--color-primary)' }}>Redo</button>
+                      </Tooltip>
+                    </div>
+                  </div>
                 </div>
               )}
 

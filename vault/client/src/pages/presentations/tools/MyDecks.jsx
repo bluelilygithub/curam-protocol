@@ -27,6 +27,9 @@ export default function MyDecks() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [versions, setVersions] = useState({});
+  const [downloads, setDownloads] = useState({});
+  const [historyBusy, setHistoryBusy] = useState(null);
 
   const refresh = async () => {
     const res = await api.get('/api/presentations/decks');
@@ -64,6 +67,48 @@ export default function MyDecks() {
       setBusy(false);
     }
   };
+
+  const loadHistory = async (id) => {
+    setHistoryBusy(id);
+    try {
+      const [vRes, eRes] = await Promise.all([
+        api.get(`/api/presentations/decks/${encodeURIComponent(id)}/versions`),
+        api.get(`/api/presentations/decks/${encodeURIComponent(id)}/exports`),
+      ]);
+      const [vData, eData] = await Promise.all([
+        readJson(vRes, 'Could not load versions.'),
+        readJson(eRes, 'Could not load downloads.'),
+      ]);
+      setVersions((prev) => ({ ...prev, [id]: Array.isArray(vData.versions) ? vData.versions : [] }));
+      setDownloads((prev) => ({ ...prev, [id]: Array.isArray(eData.exports) ? eData.exports : [] }));
+    } catch (err) {
+      toast(err.message || 'Could not load that deck history.', 'error');
+    } finally {
+      setHistoryBusy(null);
+    }
+  };
+
+  const restore = async (id, versionId) => {
+    setHistoryBusy(id);
+    try {
+      await readJson(
+        await api.post(`/api/presentations/decks/${encodeURIComponent(id)}/restore`, { versionId }),
+        'Could not restore that version.',
+      );
+      await loadDeck(id);
+      await loadHistory(id);
+      toast('Version restored. The previous state is kept as a version too.', 'success');
+      openTool('slides');
+    } catch (err) {
+      toast(err.message || 'Could not restore that version.', 'error');
+    } finally {
+      setHistoryBusy(null);
+    }
+  };
+
+  // Auth is a Bearer header, so a plain <a href> would 401. api.download attaches the token and saves the file.
+  const downloadExport = (file) => api.download(`/api/presentations/exports/${encodeURIComponent(file.id)}/file`, file.fileName)
+    .catch((err) => toast(err.message || 'Could not download that export.', 'error'));
 
   const remove = async (id) => {
     setBusy(true);
@@ -170,6 +215,55 @@ export default function MyDecks() {
                       disabled={busy}
                     />
                   </div>
+
+                  <details className="mt-3 border-t pt-3" style={{ borderColor: 'var(--color-border)' }} onToggle={(e) => { if (e.target.open) loadHistory(id); }}>
+                    <summary className="cursor-pointer text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
+                      Version history &amp; downloads ({(versions[id] || []).length} versions, {(downloads[id] || []).length} files)
+                    </summary>
+                    {historyBusy === id && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+                    <div className="grid gap-3 mt-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Saved versions (newest first)</p>
+                        {(versions[id] || []).length === 0 ? (
+                          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No versions yet. Edits and autosaves appear here.</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {(versions[id] || []).map((version) => (
+                              <li key={version.id} className={`${ROW} flex flex-wrap items-center gap-2`} style={FIELD_STYLE}>
+                                <span className="flex-1 min-w-[8rem] text-xs" style={{ color: 'var(--color-text)' }}>
+                                  {version.label} · {version.slides} slides · {when(version.createdAt)}
+                                </span>
+                                <Tooltip text="Replace this deck with this saved state. The current state is saved first.">
+                                  <button type="button" onClick={() => restore(id, version.id)} disabled={historyBusy === id} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>Restore</button>
+                                </Tooltip>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Re-downloadable exports</p>
+                        {(downloads[id] || []).length === 0 ? (
+                          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No exports for this deck yet.</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {(downloads[id] || []).map((file) => (
+                              <li key={file.id} className={`${ROW} flex flex-wrap items-center gap-2`} style={FIELD_STYLE}>
+                                <span className="flex-1 min-w-[8rem] text-xs" style={{ color: 'var(--color-text)' }}>
+                                  {file.format.toUpperCase()} · {Math.max(1, Math.round(file.bytes / 1024))} KB · {when(file.createdAt)}
+                                </span>
+                                <Tooltip text="Download this export again from the server.">
+                                  <button type="button" onClick={() => downloadExport(file)} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
+                                    {file.fileName}
+                                  </button>
+                                </Tooltip>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </details>
                 </li>
               );
             })}

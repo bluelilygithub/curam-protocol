@@ -11,7 +11,7 @@ const ACCEPT = '.pdf,.doc,.docx,.txt,.md,.markdown,.pptx,.potx,image/*';
 
 export default function ImportSource() {
   const {
-    sourceText, setSourceText, imageRefs, setImageRefs, takeIncomingFile, openTool, toast,
+    sourceText, setSourceText, imageRefs, setImageRefs, setDeck, setSavedDeckId, takeIncomingFile, openTool, toast,
   } = usePresentations();
   const [files, setFiles] = useState([]);
   const [url, setUrl] = useState('');
@@ -32,6 +32,15 @@ export default function ImportSource() {
     setSourceText(data?.sourceText || '');
     setImageRefs(Array.isArray(data?.imageRefs) ? data.imageRefs : []);
     setWarnings(Array.isArray(data?.warnings) ? data.warnings : []);
+    const imported = data?.deck && Array.isArray(data.deck.slides) && data.deck.slides.length ? data.deck : null;
+    if (imported) {
+      // .pptx/.potx imports carry a real canonical deck. Open it directly in the editor; the extracted text stays available too.
+      setDeck(imported);
+      setSavedDeckId(null);
+      toast(data?.warnings?.length ? 'PowerPoint imported as an editable deck, with warnings.' : 'PowerPoint imported as an editable deck.', data?.warnings?.length ? 'warn' : 'success');
+      openTool('slides');
+      return;
+    }
     if (data?.warnings?.length) toast('Imported, with warnings — check the notes below.', 'error');
     else toast('Source imported.', 'success');
   };

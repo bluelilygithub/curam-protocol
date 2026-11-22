@@ -18,6 +18,9 @@ export const TRANSITIONS = [
 ];
 export const ASPECTS = ['16:9', '4:3', '1:1'];
 export const BUILTIN_THEMES = ['paper', 'ink', 'warm', 'ocean', 'forest', 'mono'];
+export const SHAPE_KINDS = ['rect', 'ellipse', 'triangle', 'line'];
+export const SHAPE_COLOURS = ['bg', 'text', 'primary', 'muted'];
+export const CHART_TYPES = ['bar', 'line', 'pie'];
 
 export const FIELD_STYLE = {
   background: 'var(--color-bg)',
@@ -80,42 +83,144 @@ export function themeOptions(list) {
 
 const text = (v) => (typeof v === 'string' ? v : (v == null ? '' : String(v)));
 const capped = (v, n) => text(v).slice(0, n);
+const num = (v, fallback, min, max) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+};
+const hex = (v) => (/^#[0-9a-fA-F]{3,8}$/.test(text(v)) ? text(v) : '');
+const rich = (v, n = 1200) => text(v).replace(/<\s*\/?\s*(?!b\b|strong\b|i\b|em\b|u\b|br\b)[^>]*>/gi, '').slice(0, n);
+
+/** Plain text from the small inline-format subset, for previews and labels that must not show tags. */
+export function stripRich(value) {
+  return text(value)
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'");
+}
+
+export function newSlide(index = 0) {
+  return {
+    id: `s${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    layout: index === 0 ? 'title' : 'bullets',
+    title: '', bullets: [], body: '', columns: [], imageRef: '', notes: '',
+    background: '', imagePrompt: '', images: [], shapes: [], chart: null, table: null, rich: null,
+  };
+}
 
 export function emptyDeck() {
-  return { schemaVersion: 1, title: '', subtitle: '', themeId: 'paper', designId: 'clean', transition: 'fade', aspect: '16:9', slides: [] };
+  return {
+    schemaVersion: 2, title: '', subtitle: '', themeId: 'paper', designId: 'clean', transition: 'fade', aspect: '16:9',
+    audience: '', tone: '', duration: 12, nSlides: 10, outline: [], slides: [],
+  };
+}
+
+function normalizeOutlineSlide(item, i) {
+  const s = item && typeof item === 'object' ? item : {};
+  return {
+    layout: LAYOUTS.includes(s.layout) ? s.layout : (i === 0 ? 'title' : 'bullets'),
+    title: capped(s.title, 160) || `Slide ${i + 1}`,
+    bullets: Array.isArray(s.bullets) ? s.bullets.map((b) => capped(b, 300)).filter(Boolean).slice(0, 6) : [],
+    body: capped(s.body, 1200),
+    columns: Array.isArray(s.columns)
+      ? s.columns.slice(0, 4).map((c) => ({ heading: capped(c?.heading, 80), bullets: Array.isArray(c?.bullets) ? c.bullets.map((b) => capped(b, 200)).filter(Boolean).slice(0, 5) : [] }))
+      : [],
+    imageRef: capped(s.imageRef, 2000),
+    imagePrompt: capped(s.imagePrompt, 300),
+    notes: capped(s.notes, 1200),
+  };
+}
+
+function normalizeMediaSlide(s, i) {
+  const base = {
+    id: capped(s.id, 80) || `s${i + 1}`,
+    layout: LAYOUTS.includes(s.layout) ? s.layout : 'bullets',
+    title: capped(s.title, 160),
+    bullets: Array.isArray(s.bullets) ? s.bullets.map((b) => capped(b, 300)).filter(Boolean).slice(0, 8) : [],
+    body: capped(s.body, 1200),
+    columns: Array.isArray(s.columns)
+      ? s.columns.slice(0, 4).map((c) => ({
+        heading: capped(c?.heading, 80),
+        bullets: Array.isArray(c?.bullets) ? c.bullets.map((b) => capped(b, 200)).filter(Boolean).slice(0, 5) : [],
+      }))
+      : [],
+    imageRef: capped(s.imageRef, 2000),
+    notes: capped(s.notes, 1200),
+    background: hex(s.background),
+    imagePrompt: capped(s.imagePrompt, 300),
+    images: Array.isArray(s.images) ? s.images.slice(0, 12).map((im, j) => ({
+      id: capped(im?.id, 80) || `img${j + 1}`, ref: capped(im?.ref, 2000),
+      x: num(im?.x, 55, 0, 100), y: num(im?.y, 20, 0, 100),
+      w: num(im?.w, 36, 1, 100), h: num(im?.h, 36, 1, 100),
+      fit: ['contain', 'cover'].includes(im?.fit) ? im.fit : 'contain',
+    })).filter((im) => im.ref) : [],
+    shapes: Array.isArray(s.shapes) ? s.shapes.slice(0, 16).map((sh, j) => ({
+      id: capped(sh?.id, 80) || `shape${j + 1}`,
+      kind: SHAPE_KINDS.includes(sh?.kind) ? sh.kind : 'rect',
+      x: num(sh?.x, 10, 0, 100), y: num(sh?.y, 10, 0, 100),
+      w: num(sh?.w, 20, 1, 100), h: num(sh?.h, 12, 1, 100),
+      fill: SHAPE_COLOURS.includes(sh?.fill) ? sh.fill : 'primary',
+      stroke: SHAPE_COLOURS.includes(sh?.stroke) ? sh.stroke : '',
+      strokeWidth: num(sh?.strokeWidth, 1, 0, 8),
+      alpha: num(sh?.alpha, 0.15, 0, 1),
+      rotation: num(sh?.rotation, 0, -180, 180),
+    })) : [],
+    chart: null,
+    table: null,
+    rich: null,
+  };
+  if (s.chart && typeof s.chart === 'object' && Array.isArray(s.chart.series) && s.chart.series.length) {
+    base.chart = {
+      type: CHART_TYPES.includes(s.chart.type) ? s.chart.type : 'bar',
+      title: capped(s.chart.title, 160),
+      labels: Array.isArray(s.chart.labels) ? s.chart.labels.slice(0, 12).map((l) => capped(l, 80)) : [],
+      series: s.chart.series.slice(0, 6).map((se, j) => ({
+        name: capped(se?.name, 80) || `Series ${j + 1}`,
+        values: Array.isArray(se?.values) ? se.values.slice(0, 12).map((v) => num(v, 0, -1000000, 1000000)) : [],
+      })).filter((se) => se.values.length),
+      x: num(s.chart.x, 8, 0, 100), y: num(s.chart.y, 25, 0, 100),
+      w: num(s.chart.w, 84, 10, 100), h: num(s.chart.h, 55, 10, 100),
+    };
+    if (!base.chart.series.length) base.chart = null;
+  }
+  if (s.table && typeof s.table === 'object' && Array.isArray(s.table.rows)) {
+    base.table = {
+      rows: s.table.rows.slice(0, 12).map((row) => (Array.isArray(row) ? row : []).slice(0, 8).map((cell) => capped(cell, 200))),
+      header: s.table.header !== false,
+      x: num(s.table.x, 8, 0, 100), y: num(s.table.y, 25, 0, 100),
+      w: num(s.table.w, 84, 10, 100), h: num(s.table.h, 55, 10, 100),
+    };
+  }
+  const r = s.rich && typeof s.rich === 'object' ? s.rich : null;
+  if (r) {
+    const clean = {
+      title: rich(r.title, 500), body: rich(r.body, 1200),
+      bullets: Array.isArray(r.bullets) ? r.bullets.slice(0, 6).map((b) => rich(b, 500)).filter(Boolean) : [],
+    };
+    if (clean.title || clean.body || clean.bullets.length) base.rich = clean;
+  }
+  return base;
 }
 
 /** Defensive client-side normalisation of anything that comes back from the API or from a handoff file. */
 export function normalizeDeck(raw, maxSlides = 20) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const slides = Array.isArray(src.slides)
-    ? src.slides.slice(0, Math.max(1, maxSlides)).map((item, i) => {
-      const s = item && typeof item === 'object' ? item : {};
-      return {
-        id: capped(s.id, 80) || `s${i + 1}`,
-        layout: LAYOUTS.includes(s.layout) ? s.layout : 'bullets',
-        title: capped(s.title, 160),
-        bullets: Array.isArray(s.bullets) ? s.bullets.map((b) => capped(b, 300)).filter(Boolean).slice(0, 8) : [],
-        body: capped(s.body, 1200),
-        columns: Array.isArray(s.columns)
-          ? s.columns.slice(0, 4).map((c) => ({
-            heading: capped(c?.heading, 80),
-            bullets: Array.isArray(c?.bullets) ? c.bullets.map((b) => capped(b, 160)).filter(Boolean).slice(0, 5) : [],
-          }))
-          : [],
-        imageRef: capped(s.imageRef, 2000),
-        notes: capped(s.notes, 1000),
-      };
-    })
+    ? src.slides.slice(0, Math.max(1, maxSlides)).map(normalizeMediaSlide)
     : [];
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     title: capped(src.title, 160),
     subtitle: capped(src.subtitle, 240),
     themeId: capped(src.themeId, 80) || 'paper',
     designId: capped(src.designId, 40) || 'clean',
-    transition: ['none', 'fade', 'push', 'wipe', 'zoom'].includes(src.transition) ? src.transition : 'fade',
+    transition: TRANSITIONS.map((t) => t.id).includes(src.transition) ? src.transition : 'fade',
     aspect: ASPECTS.includes(src.aspect) ? src.aspect : '16:9',
+    audience: capped(src.audience, 160),
+    tone: capped(src.tone, 80),
+    duration: num(src.duration ?? 12, 12, 1, 180),
+    nSlides: num(src.nSlides ?? slides.length, slides.length, 1, 20),
+    outline: Array.isArray(src.outline) ? src.outline.slice(0, 20).map(normalizeOutlineSlide) : [],
     slides,
   };
 }

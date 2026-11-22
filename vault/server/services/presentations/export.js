@@ -1,7 +1,8 @@
 'use strict';
 
 // Export one canonical deck to PPTX, PDF, per-slide PNGs (a zip) or a standalone HTML file.
-// PPTX keeps every text box editable. PDF/PNG are rendered from the same HTML the live preview uses.
+// PPTX keeps every text box, chart and table editable. PDF/PNG are rendered from the same HTML the live preview uses.
+// Speaker notes are included in every format: PPTX notes, and notes pages in HTML/PDF/PNG.
 
 const fs = require('fs/promises');
 const path = require('path');
@@ -9,7 +10,7 @@ const crypto = require('crypto');
 const archiver = require('archiver');
 const { normalizeDeck } = require('./schema');
 const { renderDeckHtml, SIZES } = require('./render');
-const { plan } = require('./layouts');
+const { plan, richRuns } = require('./layouts');
 const { assetDir, assetPath, safeAssetName } = require('./sources');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../../uploads');
@@ -28,7 +29,7 @@ const slug = (s) => String(s || 'presentation').toLowerCase().replace(/[^a-z0-9]
 function imageForPptx(ref, userId) {
   const value = String(ref || '').trim();
   if (!value) return null;
-  const data = value.match(/^data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=\s]+)$/i);
+  const data = value.match(/^data:image\/(png|jpe?g|webp|gif|avif);base64,([A-Za-z0-9+/=\s]+)$/i);
   if (data) return { data: data[2].replace(/\s/g, ''), ext: data[1].toLowerCase() === 'jpeg' ? 'jpg' : data[1].toLowerCase() };
   const asset = value.match(/^\/api\/presentations\/assets\/\d+\/([A-Za-z0-9._-]+)$/);
   if (asset) {
@@ -48,13 +49,15 @@ function pptxColor(hex, fallback = '1F2937') {
   return /^[0-9a-fA-F]{6}/.test(h) ? h.slice(0, 6).toUpperCase() : fallback;
 }
 
-async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('pptxgenjs') }) {
+async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('pptxgenjs'), font = null } = {}) {
   const pptx = new PptxGenJS();
   pptx.author = 'Curam Vault';
   pptx.company = 'Curam Vault';
   pptx.title = deck.title;
   pptx.subject = deck.subtitle || '';
   pptx.lang = 'en-AU';
+  const fontName = font?.family ? String(font.family).replace(/['"]/g, '').slice(0, 80) : String(theme.font || 'Arial').split(',')[0].trim().replace(/['"]/g, '') || 'Arial';
+  pptx.theme = { headFontFace: fontName, bodyFontFace: fontName };
   if (deck.aspect === '4:3') pptx.layout = 'LAYOUT_4x3';
   else if (deck.aspect === '1:1') {
     pptx.defineLayout({ name: 'PRES_SQUARE', width: 9, height: 9 });
@@ -62,27 +65,29 @@ async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('p
   } else pptx.layout = 'LAYOUT_16x9';
 
   const size = PPTX_SIZES[deck.aspect] || PPTX_SIZES['16:9'];
-  const pt = (px) => Math.max(8, Math.round((px * size.h * 72) / 720)); // px on a 720px-tall slide -> points on this slide
+  const pt = (px) => Math.max(8, Math.round((px * size.h * 72) / 720));
   const geo = (b) => ({ x: (b.x / 100) * size.w, y: (b.y / 100) * size.h, w: (b.w / 100) * size.w, h: (b.h / 100) * size.h });
   const colours = {
     bg: pptxColor(theme.bg, 'FFFFFF'), text: pptxColor(theme.text), primary: pptxColor(theme.primary, '9B5B46'), muted: pptxColor(theme.muted, '6B7280'),
   };
   const fill = (name, alpha) => ({ color: colours[name] || colours.primary, ...(alpha != null && alpha < 1 ? { transparency: Math.round((1 - alpha) * 100) } : {}) });
-  const fontFace = String(theme.font || 'Arial').split(',')[0].trim().replace(/['"]/g, '') || 'Arial';
-  const SHAPE = { rect: pptx.ShapeType.rect, ellipse: pptx.ShapeType.ellipse, tri: pptx.ShapeType.rtTriangle };
+  const fontFace = fontName;
+  const SHAPE = { rect: pptx.ShapeType.rect, ellipse: pptx.ShapeType.ellipse, tri: pptx.ShapeType.rtTriangle, triangle: pptx.ShapeType.rtTriangle, line: pptx.ShapeType.rect };
 
   deck.slides.forEach((slide, index) => {
     const s = pptx.addSlide();
-    s.background = { color: colours.bg };
+    s.background = { color: pptxColor(slide.background, colours.bg) };
     const p = plan(slide, { designId: deck.designId, aspect: deck.aspect, titleSize: theme.titleSize });
 
     for (const sh of p.shapes) {
       const opts = {
         ...geo(sh),
-        fill: sh.fill ? fill(sh.fill, sh.alpha) : { color: colours.bg, transparency: 100 },
+        fill: sh.fill ? fill(sh.fill, sh.kind === 'line' ? 1 : sh.alpha) : { color: colours.bg, transparency: 100 },
         line: sh.stroke ? { color: colours[sh.stroke], width: sh.strokeWidth || 1 } : { color: colours.bg, transparency: 100, width: 0 },
-        ...(sh.kind === 'tri' ? { flipH: true } : {}),
+        ...(sh.kind === 'tri' || sh.kind === 'triangle' ? { flipH: true } : {}),
+        ...(sh.rotation ? { rotate: sh.rotation } : {}),
       };
+      if (sh.kind === 'line') { opts.h = Math.max(0.015, sh.h / 100 * size.h); opts.fill = fill(sh.fill || 'primary', 1); }
       if (sh.label) {
         s.addText(sh.label, {
           ...opts, shape: SHAPE[sh.kind] || SHAPE.rect, fontFace, fontSize: pt(sh.labelSize || 16), bold: true,
@@ -102,9 +107,34 @@ async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('p
         ...geo(b), fontFace, fontSize: pt(b.size), bold: Boolean(b.bold), italic: Boolean(b.italic),
         color: colours[b.color] || colours.text, align: b.align || 'left', valign: b.valign || 'top', margin: 0, fit: 'shrink',
       };
-      if (b.bullets) {
+      if (Array.isArray(b.runs) && b.runs.length) {
+        s.addText(b.runs.map((r) => ({ text: r.text === '\n' ? '' : r.text, options: { bold: Boolean(r.bold), italic: Boolean(r.italic), underline: Boolean(r.underline), breakLine: r.text === '\n' } })), opts);
+      } else if (b.bullets) {
         s.addText(b.bullets.map((t) => ({ text: t, options: { bullet: true, breakLine: true, paraSpaceAfter: pt(b.size) * 0.4 } })), opts);
       } else s.addText(b.text || '', opts);
+    }
+
+    for (const chart of (p.charts || [])) {
+      const chartType = { bar: pptx.ChartType.bar, line: pptx.ChartType.line, pie: pptx.ChartType.pie }[chart.type] || pptx.ChartType.bar;
+      const data = {
+        labels: chart.labels.length ? chart.labels : chart.series[0].values.map((_, i) => String(i + 1)),
+        series: chart.series.map((s) => ({ name: s.name, values: s.values })),
+      };
+      s.addChart(chartType, data, {
+        ...geo(chart), title: chart.title || undefined, showTitle: Boolean(chart.title),
+        showLegend: chart.series.length > 1, chartColors: [colours.primary, colours.text, colours.muted],
+        catAxisLabelColor: colours.text, valAxisLabelColor: colours.text, dataLabelColor: colours.text,
+        catAxisLabelFontFace: fontFace, valAxisLabelFontFace: fontFace, legendFontFace: fontFace, titleFontFace: fontFace,
+        fontSize: pt(14),
+      });
+    }
+
+    for (const table of (p.tables || [])) {
+      const rows = table.rows.map((row, ri) => row.map((cell) => ({
+        text: cell,
+        options: { bold: ri === 0 && table.header, color: ri === 0 && table.header ? colours.primary : colours.text, fill: { color: colours.bg }, fontFace, fontSize: pt(16), valign: 'mid' },
+      })));
+      s.addTable(rows, { ...geo(table), fontFace, fontSize: pt(16), border: { type: 'solid', color: colours.muted, pt: 1 }, fill: { color: colours.bg }, valign: 'mid' });
     }
 
     if (theme.showLogo && theme.logoDataUrl) {
@@ -140,7 +170,7 @@ async function inlineAssets(html, userId, deps = {}) {
   return out;
 }
 
-async function zipFiles(files, outPath, deps = {}) {
+async function zipFiles(files, outPath, deps = {}, extraEntries = []) {
   const makeArchive = deps.archiver || archiver;
   const createWriteStream = deps.createWriteStream || ((p) => require('fs').createWriteStream(p));
   const archive = makeArchive('zip', { zlib: { level: 6 } });
@@ -152,11 +182,16 @@ async function zipFiles(files, outPath, deps = {}) {
   });
   archive.pipe(output);
   for (const file of files) archive.file(file, { name: path.basename(file) });
+  for (const entry of extraEntries) archive.append(entry.bytes, { name: entry.name });
   await archive.finalize();
   await done;
 }
 
-async function buildBrowserFiles({ html, deck, outDir, baseName, format, deps = {}, onProgress = () => {} }) {
+function notesAsText(deck) {
+  return deck.slides.map((slide, i) => `Slide ${i + 1}${slide.title ? ` — ${slide.title}` : ''}\n${slide.notes || '(no speaker notes)'}\n`).join('\n');
+}
+
+async function buildBrowserFiles({ html, deck, outDir, baseName, format, deps = {}, onProgress = () => {}, includeNotes = false }) {
   const chromium = deps.chromium || require('playwright').chromium;
   const size = SIZES[deck.aspect] || SIZES['16:9'];
   const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--block-new-web-contents'] });
@@ -170,18 +205,20 @@ async function buildBrowserFiles({ html, deck, outDir, baseName, format, deps = 
       await page.pdf({ path: filePath, printBackground: true, preferCSSPageSize: true });
       return filePath;
     }
-    const locators = await page.locator('.slide').all();
+    const locators = await page.locator(includeNotes ? '.slide, .notes-page' : '.slide').all();
     const files = [];
     for (let i = 0; i < locators.length; i += 1) {
-      const filePath = path.join(outDir, `${baseName}-slide-${String(i + 1).padStart(2, '0')}.png`);
+      const isNote = i >= deck.slides.length;
+      const filePath = path.join(outDir, `${baseName}-${isNote ? 'notes' : 'slide'}-${String(isNote ? i - deck.slides.length + 1 : i + 1).padStart(2, '0')}.png`);
       // eslint-disable-next-line no-await-in-loop
       await locators[i].screenshot({ path: filePath });
       files.push(filePath);
     }
     if (!files.length) throw new Error('The deck produced no slides to export.');
-    onProgress(85, 'Packing the slide images');
+    onProgress(85, 'Packing the slide images and notes');
     const zipPath = path.join(outDir, `${baseName}-slides.zip`);
-    await zipFiles(files, zipPath, deps);
+    const extras = includeNotes ? [{ name: `${baseName}-notes.txt`, bytes: Buffer.from(notesAsText(deck), 'utf8') }] : [];
+    await zipFiles(files, zipPath, deps, extras);
     return zipPath;
   } finally { await browser.close(); }
 }
@@ -190,7 +227,7 @@ async function buildBrowserFiles({ html, deck, outDir, baseName, format, deps = 
  * Export a deck. Returns { filePath, fileName, mimeType } for the download route.
  * `deps` exists for direct node tests and has no effect on the API's behaviour.
  */
-async function exportDeck({ userId, deck: input, format, applyBrand = false, brand = null, theme = null, onProgress = () => {}, outDir: givenOutDir = null, deps = {} }) {
+async function exportDeck({ userId, deck: input, format, applyBrand = false, brand = null, theme = null, font = null, onProgress = () => {}, outDir: givenOutDir = null, deps = {} }) {
   if (!FORMATS.includes(format)) throw Object.assign(new Error('Choose PPTX, PDF, PNG or HTML.'), { status: 400 });
   const deck = normalizeDeck(input);
   const resolved = {
@@ -198,30 +235,31 @@ async function exportDeck({ userId, deck: input, format, applyBrand = false, bra
     ...(applyBrand && brand?.available ? Object.fromEntries(['bg', 'text', 'primary', 'muted', 'font'].filter((k) => brand[k]).map((k) => [k, brand[k]])) : {}),
     ...(applyBrand && brand?.logoDataUrl ? { showLogo: true, logoDataUrl: brand.logoDataUrl } : {}),
   };
+  const brandFont = applyBrand && brand?.fontDataUrl ? { family: brand.fontFamily || resolved.font, dataUrl: brand.fontDataUrl, format: brand.fontFormat || 'ttf' } : font;
   const mkdir = deps.mkdir || fs.mkdir;
   const writeFile = deps.writeFile || fs.writeFile;
   const outDir = givenOutDir || deps.outDir || path.join(EXPORT_ROOT, String(userId), 'exports');
   await mkdir(outDir, { recursive: true });
   const baseName = `${Date.now().toString(36)}-${slug(deck.title)}`;
   onProgress(15, 'Preparing the slides');
-  const html = renderDeckHtml(deck, resolved);
+  const html = renderDeckHtml(deck, resolved, { includeNotes: true, font: brandFont });
 
   let filePath;
   if (format === 'pptx') {
     onProgress(40, 'Building the editable PPTX');
     filePath = path.join(outDir, `${baseName}.pptx`);
-    await buildPptx(deck, resolved, { userId, filePath, PptxGenJS: deps.PptxGenJS });
+    await buildPptx(deck, resolved, { userId, filePath, PptxGenJS: deps.PptxGenJS, font: brandFont });
   } else if (format === 'html') {
     filePath = path.join(outDir, `${baseName}.html`);
     await writeFile(filePath, await inlineAssets(html, userId, deps), 'utf8');
   } else {
     onProgress(40, 'Rendering the slides');
     const standalone = await inlineAssets(html, userId, deps);
-    filePath = await buildBrowserFiles({ html: standalone, deck, outDir, baseName, format, deps, onProgress });
+    filePath = await buildBrowserFiles({ html: standalone, deck, outDir, baseName, format, deps, onProgress, includeNotes: true });
   }
   return { filePath, fileName: path.basename(filePath), mimeType: MIME[format], format };
 }
 
 module.exports = {
-  FORMATS, MIME, EXPORT_ROOT, PPTX_SIZES, slug, pptxColor, imageForPptx, inlineAssets, zipFiles, buildPptx, buildBrowserFiles, exportDeck,
+  FORMATS, MIME, EXPORT_ROOT, PPTX_SIZES, slug, pptxColor, imageForPptx, inlineAssets, zipFiles, buildPptx, buildBrowserFiles, notesAsText, exportDeck,
 };
