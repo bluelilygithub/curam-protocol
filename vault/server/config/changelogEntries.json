@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2511fc7c",
+   "fullHash": "2511fc7c59370ba0b10f60bd7ff3e7a9747fcf8e",
+   "committedAt": "2026-11-22T12:52:41+10:00",
+   "author": "mrb",
+   "area": "Contract Review",
+   "subject": "Contract Review: the verdict comes first on Risk review",
+   "filesChanged": 4,
+   "insertions": 121,
+   "deletions": 46,
+   "goal": "Answer the first question (what should I worry about before signing?) at the top of the review, as DocCompare does with its verdict.",
+   "whatChanged": "Risk review now opens with a verdict card for the reviewed party: \"Read before you sign\" (red) when any clause is risky, \"Worth a closer look\" (amber) when one is unclear, or \"No risky clauses flagged\", each with one plain sentence (for example \"2 clauses are risky for Acme, and 1 is unclear. Start with the risky ones.\"). Links show the risky or unclear clauses (filters and scrolls the clause list) or open Obligations. Notes appear for overdue obligations, usual clauses the coverage report did not find, and risky or unclear flags that could not be matched to the document's text. The risky / unclear / standard / overdue-upcoming counts and the effective date and term follow. The verdict is worked out in the browser from the review already loaded (client/src/pages/contractReview/verdict.mjs), with no model call, and never says a contract is safe. It replaces the \"At a glance\" box. The (i) box text explains the verdict.",
+   "filesImpacted": [
+    "client/src/pages/contractReview/ReviewView.jsx",
+    "client/src/pages/contractReview/contractReviewTools.mjs",
+    "client/src/pages/contractReview/verdict.mjs",
+    "client/src/pages/contractReview/verdict.test.mjs"
+   ],
+   "benefit": "The most important answer is the first thing on the screen, in plain words, with the way to act on it.",
+   "concerns": "Test: node client/src/pages/contractReview/verdict.test.mjs (no npm script, package.json unchanged)."
+  },
+  {
    "commit": "25a94de5",
    "fullHash": "25a94de58d2e65458b2194634d08c348a51a8b36",
    "committedAt": "2026-11-22T12:50:45+10:00",
