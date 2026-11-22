@@ -12,3 +12,5 @@ uploads/
 # Understand-Anything scratch; the rest of .ua/ (knowledge-graph.json) is committed for the Code Map Knowledge graph tab
 .ua/intermediate/
 .ua/diff-overlay.json
+.ua/tmp/
+.ua/.trash-*/
