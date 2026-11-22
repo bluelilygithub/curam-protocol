@@ -71,7 +71,7 @@ const DOC_SUMMARIES = {
   'ROADMAP.md': 'The agreed plan and decisions for the Shares app, with its status.',
   // Docs whose first sentence is a status line, a date or a fragment (named by the owner's review, 2026-11-19, and found alongside them)
   'docs/crm-deals-schema.md': 'CRM phase 3 schema: deals, contact roles, activity and tasks on top of the clients tables, with what is built and the scoping decisions.',
-  'docs/ponytail-report.md': 'The admin Claude Code costs page (Ponytail report): what the Ponytail plugin sends per task, what Vault stores, the hashed key, the CSV backfill and the day-matching caveat.',
+  'docs/ponytail-report.md': 'The admin Ponytail costs page (Ponytail report): what the Ponytail plugin sends per task, what Vault stores, the hashed key, the CSV backfill and the day-matching caveat.',
   'docs/gmail-routing-removed.md': 'A Gmail shop/deliveries routing feature that was added and removed on 2026-10-31, and why; nothing in Vault uses it.',
   'docs/brand-from-url.md': 'Reads a website\'s brand (colours, fonts, logo) from its address so the Graphics text tools, Batch, Pipeline and saved recipes can use it.',
   'docs/vault-shelf.md': 'Vault Shelf, a Windows clipboard companion that sends chosen clips into Vault (notes, Invoice Review, CRM, redaction checks): the Vault side and the app milestones.',

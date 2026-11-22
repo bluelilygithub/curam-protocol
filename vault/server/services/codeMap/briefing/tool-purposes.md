@@ -60,4 +60,4 @@
 - `goals` — Goal setting built on the 7 Habits: a personal mission statement, roles and goals.
 - `student` — Quizzes and study help for a student.
 - `usage` — AI usage and cost by model and tool.
-- `ponytail` — Claude Code costs (fed by the Ponytail plugin): what each Claude Code task cost and reused, next to the code written each day.
+- `ponytail` — Ponytail costs (fed by the Ponytail plugin): what each Claude Code task cost and reused, next to the code written each day.

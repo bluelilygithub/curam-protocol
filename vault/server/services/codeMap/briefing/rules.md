@@ -1,4 +1,4 @@
-<!-- sources: CLAUDE.md sha256=8939df12d90a83d06e909c3fe6da3fd1c81d07f4e31aea1c610cfad017ff38e6; docs/core-conventions.md sha256=ba7476a9e791ed4a3879370c8e367ee680f991041d37315a5503d8e11cf4757d -->
+<!-- sources: CLAUDE.md sha256=91c3eddc9f31ed625f78435010eb39761475e5f5ec0972412115269c59009d0d; docs/core-conventions.md sha256=ba7476a9e791ed4a3879370c8e367ee680f991041d37315a5503d8e11cf4757d -->
 1. **Access.** Every API route is behind `requireAuth` except auth, health and shared links (registered before it). Admin-only routes use `requireAdmin`; a member tool's routes use `requireFeature('<flag>')`. Every query filters by `"userId"`; ids from the request are checked against the owner.
 2. **Feature flags.** A new member tool gets a flag in both `server/config/featureAccess.js` and `client/src/utils/featureAccess.js`, with the same default. Workspace switches come first, then per-member narrowing (a member can be switched off, never on). Admins are never narrowed.
 3. **Lifecycle.** A flag that ships off or is not yet proven gets a `FEATURE_LIFECYCLE` entry (`preview` or `parked`) on both sides; everything else is `ga`.
