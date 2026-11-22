@@ -43,6 +43,35 @@ async function run() {
 
   const noModels = { ...deps, getModelsForUser: async () => ({ light: null, standard: null }) };
   await assert.rejects(() => generateOutline({ userId: 7, brief: 'x', deps: noModels }), /No AI model/);
+
+  // An explicit, already-validated selection wins over the standard tier. The route does the validation.
+  const selectedCalls = [];
+  const selectedDeps = {
+    ...deps,
+    callModel: async (modelId, prompt, opts) => {
+      selectedCalls.push({ modelId, prompt, opts });
+      return { text: 'not json', model: modelId, inputTokens: 3, outputTokens: 4 };
+    },
+  };
+  const picked = await generateDeck({ userId: 7, outline, theme: { id: 'paper' }, model: 'picked-model', deps: selectedDeps });
+  assert.equal(selectedCalls.length, 1);
+  assert.equal(selectedCalls[0].modelId, 'picked-model');
+  assert.equal(picked.themeId, 'paper', 'a schema slip still falls back to the outline');
+
+  // Provider auth failures must not reach the browser as raw SDK JSON — and must not silently
+  // turn into a fallback deck.
+  const badKey = new Error('401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_1"}');
+  const badDeps = { ...deps, callModel: async () => { throw badKey; } };
+  const checkFriendly = (err) => {
+    assert.equal(err.status, 502);
+    assert.equal(err.code, 'model_call');
+    assert.match(err.message, /rejected Vault's key/);
+    assert.match(err.message, /invalid x-api-key/);
+    assert.doesNotMatch(err.message, /request_id/);
+    return true;
+  };
+  await assert.rejects(() => generateOutline({ userId: 7, brief: 'x', deps: badDeps }), checkFriendly);
+  await assert.rejects(() => generateDeck({ userId: 7, outline, theme: { id: 'paper' }, deps: badDeps }), checkFriendly);
 }
 
 run().then(() => console.log('presentations generation tests passed')).catch((err) => { console.error(err); process.exitCode = 1; });

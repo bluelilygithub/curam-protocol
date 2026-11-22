@@ -90,12 +90,22 @@ The HTML preview, PDF and PNGs render from this model. The PPTX is built from th
 ## Generation pipeline
 
 1. **Source normalisation** — `import` (`server/services/presentations/sources.js`) extracts text from PDF (`pdf-parse`), DOCX (`mammoth`), TXT/MD, or a safe-fetched URL; images are kept as asset references under the user's upload folder. The brief tool accepts typed text directly.
-2. **Outline** — `generation.js` asks the workspace `light` model (falling back to `standard`) for a short JSON outline: deck title, subtitle, 6–12 slides, each with a layout hint, heading and 2–4 bullets. Output is parsed strictly and clamped.
-3. **Slides** — the same `generation.js` asks the workspace `standard` model (falling back to `light`) to expand the outline into the canonical deck JSON. Unknown layouts fall back to `bullets`; text is length-capped.
+2. **Outline** — `generation.js` asks the workspace `light` model (falling back to `standard`) for a short JSON outline: deck title, subtitle, 6–12 slides, each with a layout hint, heading and 2–4 bullets. Output is parsed strictly and clamped. The outline deliberately keeps using the light tier even when a person picks a model.
+3. **Slides** — the same `generation.js` asks the workspace `standard` model (falling back to `light`) to expand the outline into the canonical deck JSON. A model explicitly chosen on the page replaces the `standard` slot after it has been validated server-side. Unknown layouts fall back to `bullets`; text is length-capped.
 4. **Preview** — `PresentationPreview.jsx` renders the canonical JSON as HTML using the selected theme; the server-side renderer in `server/services/presentations/render.js` produces the same HTML for export.
 5. **Export** — `server/services/presentations/export.js` writes PPTX with `pptxgenjs`, PDF with Playwright's `page.pdf()`, per-slide PNGs zipped with `archiver`, and a self-contained HTML file with assets inlined as data URLs. Finished files are kept per user under `{UPLOAD_DIR}/presentations/{userId}/exports/` until they are replaced.
 
 All model calls use `getModelsForUser(userId)` and `callModel()`; usage is logged through `logUsage()`. No model id is hard-coded.
+
+### Model selection
+
+Presentations follows the same rule as Chat. The page loader calls `useModels()` (Settings → AI & Chat: `vault_models` and `default_model`) and reads `memberModelSelection` from Feature Access. Admins may always choose; members may choose only when that flag is on. The effective choice is the picked model, otherwise `defaultModel`, otherwise the first configured text model. The sidebar picker lists text models only, and the selected id is sent with `POST /api/presentations/create`.
+
+`server/utils/userModelSelection.js` repeats the permission check at the HTTP boundary. It accepts an explicit id only when that person is allowed to choose and the id is a text model in the user's resolved `vault_models` catalog (admin fallback included). A member with selection off has the id ignored; an allowed caller who sends an unknown or non-text id gets a 400 and no provider call. Generation still falls back to the resolver's `standard`/`light` tiers when no valid selection is present.
+
+The guide chat sends the same effective id as `model` on `POST /api/presentations-tutor`. `makeGuideRouter()` validates it with the same helper, and `guideCore.ask()` uses it for that reply; guides that do not send a model keep their configured tier. `TutorChat` takes optional `model`, `modelOptions`, `canSelectModel` and `onModelChange` props, so other guides are unchanged when they are absent.
+
+If a provider rejects the key or the call fails, `server/utils/modelCallError.js` turns the raw SDK JSON into one readable message (for example, “The AI provider rejected Vault's key … An admin needs to check the provider API key.”) with HTTP 502 and `code: 'model_call'`. Raw provider JSON is never shown, and a provider failure is never silently replaced by a fallback deck.
 
 ---
 
@@ -127,7 +137,7 @@ app.use('/api/presentations', requireFeature('presentations'), require('./routes
 | Route | Purpose |
 |---|---|
 | `GET /api/presentations/meta` | Slide limit and Brand Kit availability for the current user |
-| `POST /api/presentations/create` | Start a generation job from a brief or outline |
+| `POST /api/presentations/create` | Start a generation job from a brief or outline; optional `model` uses the validated page selection |
 | `POST /api/presentations/import` | Multipart document/image import; `POST /api/presentations/import/url` for a URL |
 | `GET /api/presentations/assets/:userId/:name` | Serve an uploaded image to the preview and editor |
 | `POST /api/presentations/preview` | Render canonical deck HTML without starting a job |
@@ -140,7 +150,7 @@ app.use('/api/presentations', requireFeature('presentations'), require('./routes
 | `POST /api/presentations/templates/import` | Multipart `.pptx/.potx` theme import |
 | `POST /api/presentations/export` | Start an export job (`pptx`, `pdf`, `png`, or `html`) |
 | `GET /api/presentations/export/:id/file/:format` | Download a finished export |
-| `POST /api/presentations-tutor` | Guide chat; only tool advice, never deck data (separate mount) |
+| `POST /api/presentations-tutor` | Guide chat; only tool advice, never deck data (separate mount); optional validated `model` |
 
 Long work returns `202 { jobId }`, follows the Video Tools background-job pattern (one active job per person, Cancel, Resume, 30-minute result cache), and is never left blocking a web request.
 
@@ -170,7 +180,9 @@ Long work returns `202 { jobId }`, follows the Video Tools background-job patter
 ## Tests
 
 - `node server/services/presentations/schema.test.js` — canonical deck validation and clamping.
-- `node server/services/presentations/generation.test.js` — outline/slide prompt plumbing with stubbed models; no network.
+- `node server/services/presentations/generation.test.js` — outline/slide prompt plumbing, explicit model override and friendly provider errors with stubbed models; no network.
+- `node server/utils/userModelSelection.test.js` — admin/member permission and configured text-id validation; no database.
+- `node server/services/guideCore.test.js` — guide tier fallback, explicit model and friendly provider errors; no database.
 - `node server/services/presentations/export.test.js` — PPTX/PDF/PNG generation from a fixture deck.
 - `node server/services/presentations/jobs.test.js` — job lifecycle, cancel/resume and the 30-minute result cache.
 - `node server/routes/presentations/templates.test.js` — theme sanitising and import rules.

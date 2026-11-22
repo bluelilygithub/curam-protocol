@@ -23,7 +23,7 @@ const CATALOG = [
 const RULES = [
   'Work usually flows left to right: Import source (if there is a document), Create deck, Slide editor, Export. A job from the start screen opens those tools in order with a step bar at the top.',
   'A deck is versioned JSON with 6 to 20 slides. The HTML preview, PDF, PNGs and PPTX are all made from that one model, so edits are reflected everywhere.',
-  'The model that writes the outline and the model that writes the slides come from this workspace\'s Settings. No model id is chosen by the guide.',
+  'The outline uses the workspace light model. Slides and this guide use the workspace default, or the model the person picked when the admin has enabled Model Selection (Members). No model id is hard-coded or chosen by the guide.',
   'Saved decks and custom themes live in Vault, and deletions go to the shared recycle bin. Recent decks are also kept in the browser only, as a convenience, not a backup.',
   'Images come from uploads, the Graphics Brand Kit or a handoff from Graphics. Presentations does not invent pictures.',
   'A long generation or export runs in the background: the page polls for progress, and Cancel or Resume is available. A server restart forgets jobs that were still running.',

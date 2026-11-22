@@ -6,8 +6,10 @@
 //   - buildPrompt(...)       the model prompt: the catalogue, the rules, the gaps, where the person is, the conversation
 //   - cleanMessages(...)     the last ten turns, trimmed, only user/assistant roles
 //   - normalizeReply(...)    the model's answer made safe to show: known tool ids only, bounded text, a valid verdict, never throws
-//   - ask(userId, input)     the whole call: resolve the workspace model, call it, log the usage, normalise
+//   - ask(userId, input)     the whole call: use a route-validated model or the workspace tier, call it, log the usage, normalise
 // The model's output is always treated as untrusted. See docs/guide-chat.md.
+
+const { modelCallError } = require('../utils/modelCallError');
 
 const VERDICTS = ['doable', 'partly', 'missing', 'beyond', 'question'];
 
@@ -93,20 +95,26 @@ Reply with the JSON object now.`;
     };
   }
 
-  /** @param {{ messages: any[], currentTool?: string, context?: string }} input */
-  async function ask(userId, { messages, currentTool, context } = {}, deps = {}) {
+  /** @param {{ messages: any[], currentTool?: string, context?: string, model?: string }} input */
+  async function ask(userId, { messages, currentTool, context, model } = {}, deps = {}) {
     const convo = cleanMessages(messages);
     if (!convo.length || convo[convo.length - 1].role !== 'user') {
       throw Object.assign(new Error('Type what you want to do first.'), { status: 400 });
     }
     const resolve = deps.getModels || require('./modelResolver').getModelsForUser;
     const call = deps.callModel || require('./callModel').callModel;
-    const tiers = await resolve(userId);
-    const modelId = def.tier === 'light' ? (tiers.light || tiers.standard) : tiers.standard;
+    const tiers = model ? {} : await resolve(userId);
+    // `model` is already validated at the HTTP boundary. Guides that do not send one keep the tier.
+    const modelId = model || (def.tier === 'light' ? (tiers.light || tiers.standard) : tiers.standard);
     if (!modelId) throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
-    const result = await call(modelId, buildPrompt({ messages: convo, currentTool, context }), {
-      system, maxTokens: def.maxTokens || 900, returnUsage: true, timeoutMs: 45000,
-    });
+    let result;
+    try {
+      result = await call(modelId, buildPrompt({ messages: convo, currentTool, context }), {
+        system, maxTokens: def.maxTokens || 900, returnUsage: true, timeoutMs: 45000,
+      });
+    } catch (err) {
+      throw modelCallError(err, modelId);
+    }
     (deps.logUsage || require('../utils/logUsage').logUsage)({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature });
     return normalizeReply(String(result.text || ''));
   }

@@ -35,10 +35,18 @@ const CONFIG = {
   wideKey: 'vault:presentations-guide:wide',
 };
 
-export default function PresentationsGuide({ currentTool, onOpenTool }) {
+export default function PresentationsGuide({ currentTool, onOpenTool, model, models, canSelectModel, onModelChange }) {
   return (
     <VoiceInputProvider lang="en-AU">
-      <TutorChat config={CONFIG} current={currentTool} onOpen={onOpenTool} />
+      <TutorChat
+        config={CONFIG}
+        current={currentTool}
+        onOpen={onOpenTool}
+        model={model}
+        modelOptions={models}
+        canSelectModel={canSelectModel}
+        onModelChange={onModelChange}
+      />
     </VoiceInputProvider>
   );
 }

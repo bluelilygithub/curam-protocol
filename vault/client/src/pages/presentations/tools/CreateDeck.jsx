@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../utils/apiClient';
+import { getModelShortName } from '../../../utils/models';
 import Tooltip from '../../../components/Tooltip';
 import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
 import {
@@ -11,7 +12,7 @@ const nameOf = (t) => (typeof t === 'string' ? t : (t?.id || t?.themeId || t?.na
 export default function CreateDeck() {
   const {
     deck, setDeck, sourceText, setSourceText, imageRefs, themeId, chooseTheme, applyBrand, setApplyBrand,
-    meta, startJob, openTool, toast,
+    meta, startJob, openTool, toast, model,
   } = usePresentations();
   const [brief, setBrief] = useState('');
   const [themes, setThemes] = useState(BUILTIN_THEMES);
@@ -43,6 +44,7 @@ export default function CreateDeck() {
         themeId,
         aspect: deck.aspect || '16:9',
         applyBrand,
+        model,
       });
       openTool('slides');
     } catch (err) {
@@ -115,6 +117,12 @@ export default function CreateDeck() {
 
         {applyBrand && !meta?.brandKit?.available && (
           <Notice tone="warn">There is no saved Brand Kit yet, so this job cannot apply one. Add one in Graphics first, or untick the box.</Notice>
+        )}
+
+        {model && (
+          <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+            Slides will be written with {getModelShortName(model)}. The outline still uses the workspace light model.
+          </p>
         )}
 
         <div className="flex flex-wrap items-center gap-3">

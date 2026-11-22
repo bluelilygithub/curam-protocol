@@ -7,17 +7,25 @@
 const express = require('express');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { getLogger } = require('../middleware/requestContext');
+const { resolveRequestedModel } = require('../utils/userModelSelection');
 
 /**
  * @param {{ ask: Function, source: string, productName: string, logTag: string, context?: string, suggestionUserId?: (req) => number }} opts
  */
-function makeGuideRouter({ ask, source, productName, logTag, suggestionUserId }) {
+function makeGuideRouter({ ask, source, productName, logTag, suggestionUserId, resolveModel = resolveRequestedModel }) {
   const router = express.Router();
   router.post('/', async (req, res) => {
     try {
-      const { messages, currentTool, context } = req.body || {};
+      const { messages, currentTool, context, model: requestedModel } = req.body || {};
       const userId = req.user.id;
-      const reply = await ask(userId, { messages, currentTool: typeof currentTool === 'string' ? currentTool : '', context: typeof context === 'string' ? context : '' });
+      // Optional explicit model from the page. The shared helper enforces the same flag/id rules as
+      // Create deck; without one the guide keeps the resolver's standard/light tier.
+      const model = await resolveModel({
+        user: req.user,
+        userId,
+        requestedModel: typeof requestedModel === 'string' ? requestedModel.trim().slice(0, 200) : '',
+      });
+      const reply = await ask(userId, { messages, currentTool: typeof currentTool === 'string' ? currentTool : '', context: typeof context === 'string' ? context : '', model });
       if ((reply.verdict === 'missing' || reply.verdict === 'partly') && reply.missing) {
         const asked = [...(Array.isArray(messages) ? messages : [])].reverse().find((m) => m?.role === 'user')?.content || '';
         const key = reply.missing.toLowerCase().replace(/[^a-z0-9 ]+/g, '').split(' ').filter(Boolean).slice(0, 12).join(' ');

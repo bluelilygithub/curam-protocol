@@ -11,6 +11,8 @@ import { startPresentationsTour, TOUR_KEY as PRESENTATIONS_TOUR_KEY } from '../u
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
 import { takeToolHandoff } from '../utils/toolHandoff.mjs';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { useModels } from '../hooks/useModels';
+import { getModelShortName } from '../utils/models';
 import { TOOL_COMPONENTS } from './presentations/toolRegistry';
 import { PRESENTATION_GOALS } from './presentations/presentationGoals.mjs';
 import PresentationsGuide from './presentations/PresentationsGuide';
@@ -144,6 +146,16 @@ function initialTool() {
   return ALL_TOOLS.some((t) => t.id === last) ? last : 'start';
 }
 
+// vault_models can hold image/search providers. Presentations only offers text models; keep this in step with
+// server/services/modelResolver.js isNonTextModel so the picker never offers an id the API will reject.
+const NON_TEXT_PROVIDERS = new Set(['fal', 'seedance', 'replicate', 'serper', 'serpapi']);
+const isTextModel = (m) => {
+  const id = String(m?.id || '').trim();
+  if (!id || NON_TEXT_PROVIDERS.has(String(m.provider || '').toLowerCase())) return false;
+  const lower = id.toLowerCase();
+  return !lower.startsWith('fal-ai/') && !lower.startsWith('fal/') && !/minimax\/|hailuo|video-01|image-to-video|\/flux/.test(lower);
+};
+
 export default function PresentationsPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -157,6 +169,16 @@ export default function PresentationsPage() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   // This flag defaults OFF (docs/presentations.md), so unlike the always-on tools, members need an explicit true.
   const canUse = Boolean(user?.isAdmin) || featureAccess.presentations === true;
+
+  // Vault's documented model-selection rule: useModels + the memberModelSelection flag, admins always.
+  const { models: configuredModels, defaultModel } = useModels();
+  const [chatModel, setChatModel] = useState(null);
+  const canSelectModel = Boolean(user?.isAdmin) || featureAccess.memberModelSelection !== false;
+  const chatModels = useMemo(() => (Array.isArray(configuredModels) ? configuredModels.filter(isTextModel) : []), [configuredModels]);
+  const effectiveModel = (canSelectModel ? chatModel : null) || defaultModel || chatModels[0]?.id || '';
+  useEffect(() => {
+    if (chatModel && chatModels.length && !chatModels.some((m) => m.id === chatModel)) setChatModel(null);
+  }, [chatModel, chatModels]);
 
   const [tool, setTool] = useState(initialTool);
   const [openGroup, setOpenGroup] = useState(() => groupFor(initialTool()));
@@ -307,10 +329,12 @@ export default function PresentationsPage() {
     historyOn, setHistoryOn,
     job, startJob, cancelJob, resumeJob, dismissJob,
     saveDeck, loadDeck, takeIncomingFile, toast,
+    model: effectiveModel, models: chatModels, canSelectModel, setChatModel,
   }), [
     tool, openToolById, deck, setDeck, meta, sourceText, imageRefs, themeId, chooseTheme, applyBrand,
     sourceType, savedDeckId, exportFile, historyOn, setHistoryOn, job, startJob, cancelJob, resumeJob,
     dismissJob, saveDeck, loadDeck, takeIncomingFile, toast,
+    effectiveModel, chatModels, canSelectModel,
   ]);
 
   const query = search.trim().toLowerCase();
@@ -371,6 +395,29 @@ export default function PresentationsPage() {
                 </button>
               </Tooltip>
             </div>
+
+            {canSelectModel && chatModels.length > 0 && (
+              <label className="block space-y-1" data-tour="presentations-model">
+                <span className="text-[11px] font-medium" style={{ color: 'var(--color-muted)' }}>AI model</span>
+                <Tooltip text="Choose the model used to write slides and answer the guide. Your admin's Settings choice is used until you pick one here.">
+                  <select
+                    value={effectiveModel}
+                    onChange={(e) => setChatModel(e.target.value)}
+                    aria-label="AI model for Presentations"
+                    className="w-full px-2 py-1.5 rounded-lg border text-xs"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {chatModels.map((m) => <option key={m.id} value={m.id}>{getModelShortName(m.id)}</option>)}
+                  </select>
+                </Tooltip>
+              </label>
+            )}
+            {!canSelectModel && effectiveModel && (
+              <p className="text-[10px] truncate" style={{ color: 'var(--color-muted)' }}>
+                Using {getModelShortName(effectiveModel)}
+              </p>
+            )}
+
             {appInfo.show && (
               <ToolInfoModal title="How Presentations Works" onClose={appInfo.close}>
                 <p className="text-sm" style={{ color: 'var(--color-text)' }}>
@@ -504,7 +551,14 @@ export default function PresentationsPage() {
           </ToolInfoModal>
         )}
 
-        <PresentationsGuide currentTool={tool} onOpenTool={openToolById} />
+        <PresentationsGuide
+          currentTool={tool}
+          onOpenTool={openToolById}
+          model={effectiveModel}
+          models={chatModels}
+          canSelectModel={canSelectModel}
+          onModelChange={setChatModel}
+        />
       </VoiceInputProvider>
     </PresentationContext.Provider>
   );

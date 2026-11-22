@@ -5,6 +5,7 @@ import { VoiceInput } from '../voiceInput/VoiceInput';
 import useDraggable from '../../hooks/useDraggable';
 import Tooltip from '../Tooltip';
 import useAuthStore from '../../store/authStore';
+import { getModelShortName } from '../../utils/models';
 
 /**
  * The shared "guide" chat used by Video Tools and Finance (and any page that gets one later): a round button fixed at the bottom
@@ -27,6 +28,10 @@ import useAuthStore from '../../store/authStore';
  *   guideId,                         // 'pdf' | 'graphics' | 'video' | 'finance': which guide an emailed conversation came from
  *   positionKey,                     // optional: localStorage key stem for where the button and chat were dragged to
  * }
+ *
+ * Optional props for pages that use Vault's model-selection rules (Presentations): model, modelOptions,
+ * canSelectModel, onModelChange. When supplied, the same id is sent as `model` on every guide POST and
+ * can be changed from the chat title bar. Guides without these props behave exactly as before.
  *
  * After at least one answer, "Email this conversation" lets the person send the log to themselves and/or the workspace admin
  * (POST /api/tutor-email, server/routes/tutorEmail.js). Nothing is sent unless they press Send.
@@ -87,7 +92,7 @@ function Reply({ reply, onOpen, config }) {
   );
 }
 
-function TutorInner({ config, current, onOpen }) {
+function TutorInner({ config, current, onOpen, model, modelOptions, canSelectModel, onModelChange }) {
   const getIcon = useIcon();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -135,7 +140,9 @@ function TutorInner({ config, current, onOpen }) {
       const messages = next
         .filter((t) => t.role === 'user' || t.role === 'assistant')
         .map((t) => ({ role: t.role, content: t.role === 'user' ? t.text : historyText(t.reply) }));
-      const res = await api.post(config.endpoint, { messages, [config.payloadKey]: current });
+      const payload = { messages, [config.payloadKey]: current };
+      if (model) payload.model = model;
+      const res = await api.post(config.endpoint, payload);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || config.errorText);
       setTurns([...next, { role: 'assistant', reply: data }]);
@@ -217,7 +224,29 @@ function TutorInner({ config, current, onOpen }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>{config.name}</p>
           <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{config.subtitle}</p>
+          {model && (
+            <p className="text-[10px] truncate" style={{ color: 'var(--color-muted)' }}>
+              Using {getModelShortName(model)}
+            </p>
+          )}
         </div>
+        {Array.isArray(modelOptions) && modelOptions.length > 0 && (
+          <Tooltip text={canSelectModel ? 'Choose the model this guide uses. The same choice is used for deck generation.' : 'Your admin chose this model in Settings.'}>
+            {canSelectModel ? (
+              <select
+                aria-label="Guide model"
+                value={model || ''}
+                onChange={(e) => onModelChange?.(e.target.value)}
+                className="max-w-[110px] text-[10px] px-1.5 py-1 rounded-lg border hover:opacity-70 transition-opacity"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {modelOptions.map((m) => <option key={m.id} value={m.id}>{getModelShortName(m.id)}</option>)}
+              </select>
+            ) : (
+              <span className="text-[10px] whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>🔒 {getModelShortName(model)}</span>
+            )}
+          </Tooltip>
+        )}
         <Tooltip text={wide ? `Make the ${config.shortName} narrower again.` : `Make the ${config.shortName} wider, so there is more room to read and to speak into.`}>
           <button
             type="button"

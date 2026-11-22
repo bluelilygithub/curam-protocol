@@ -1,9 +1,11 @@
 'use strict';
 
 // Prompt plumbing for Presentations. Only two model calls are needed: a light model makes the outline,
-// the standard model expands it into the canonical deck. Both ids come from Settings via getModelsForUser().
+// the standard model (or a route-validated selection) expands it into the canonical deck. Tier ids come
+// from Settings via getModelsForUser(); no model id is hard-coded here.
 
 const { normalizeDeck, normalizeOutline, deckFromOutline, text, SOURCE_MAX } = require('./schema');
+const { modelCallError } = require('../../utils/modelCallError');
 
 // The model and usage modules open a database connection when loaded, so they are only loaded when a real call is made. Direct
 // tests inject all three through `deps` and never touch Postgres.
@@ -14,8 +16,14 @@ function parseJson(answer) {
   const cleaned = String(raw || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   const first = cleaned.indexOf('{');
   const last = cleaned.lastIndexOf('}');
-  if (first < 0 || last <= first) throw new Error('No JSON object in model answer');
-  return JSON.parse(cleaned.slice(first, last + 1));
+  if (first < 0 || last <= first) {
+    throw Object.assign(new Error('No JSON object in model answer'), { code: 'presentations_parse' });
+  }
+  try {
+    return JSON.parse(cleaned.slice(first, last + 1));
+  } catch (err) {
+    throw Object.assign(new Error('Model answer was not valid JSON'), { code: 'presentations_parse', cause: err });
+  }
 }
 
 function outlinePrompt({ brief, sourceText, imageRefs }) {
@@ -61,12 +69,17 @@ function slidesPrompt({ outline, theme }) {
 async function callJson(modelId, prompt, { maxTokens = 2400, feature, userId, deps }) {
   const invoke = deps.callModel || require('../callModel').callModel;
   const record = deps.logUsage || require('../../utils/logUsage').logUsage;
-  const out = await invoke(modelId, prompt.user, {
-    system: prompt.system,
-    maxTokens,
-    returnUsage: true,
-    signal: deps.signal || null,
-  });
+  let out;
+  try {
+    out = await invoke(modelId, prompt.user, {
+      system: prompt.system,
+      maxTokens,
+      returnUsage: true,
+      signal: deps.signal || null,
+    });
+  } catch (err) {
+    throw modelCallError(err, modelId);
+  }
   const answer = typeof out === 'string' ? out : out.text;
   await record({
     userId,
@@ -95,11 +108,11 @@ async function generateOutline({ userId, brief, sourceText = '', imageRefs = [],
   return normalizeOutline(raw);
 }
 
-/** Expand an outline into the canonical deck. Falls back to a deterministic deck if the model answer is unusable. */
-async function generateDeck({ userId, outline, theme, deps = {} }) {
+/** Expand an outline into the canonical deck. The route may pass a validated selection; tiers remain the fallback. */
+async function generateDeck({ userId, outline, theme, model, deps = {} }) {
   const getModels = getResolver(deps);
-  const models = await getModels(userId);
-  const modelId = models.standard || models.light;
+  const models = model ? {} : await getModels(userId);
+  const modelId = model || models.standard || models.light;
   if (!modelId) {
     throw Object.assign(new Error('No AI model is set up for this workspace. Add a model in Settings.'), { status: 503 });
   }
@@ -114,6 +127,8 @@ async function generateDeck({ userId, outline, theme, deps = {} }) {
     return normalizeDeck({ ...raw, themeId: theme.id, aspect: raw.aspect || outline.aspect });
   } catch (err) {
     // A schema slip in a model answer must not lose the whole job. The outline is still good.
+    // A provider/key failure is different: show it plainly instead of silently writing a fallback deck.
+    if (err?.code === 'model_call') throw err;
     return deckFromOutline(outline, theme.id);
   }
 }
