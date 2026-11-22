@@ -4,6 +4,7 @@ import EmptyState from '../../../components/EmptyState';
 import Tooltip from '../../../components/Tooltip';
 import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
 import PresentationPreview from '../PresentationPreview';
+import DesignGallery from '../DesignGallery';
 import {
   BUILTIN_THEMES, BTN_PRIMARY, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, PRIMARY_STYLE, SECONDARY_STYLE,
   InlineDelete, Notice, ToolHeader, readJson, themeOptions, usePresentations,
@@ -22,7 +23,7 @@ function Swatch({ theme }) {
 
 export default function Themes() {
   const {
-    deck, themeId, chooseTheme, applyBrand, setApplyBrand, meta, toast,
+    deck, themeId, chooseTheme, chooseDesign, applyBrand, setApplyBrand, meta, toast,
   } = usePresentations();
   const [catalog, setCatalog] = useState({ builtins: themeOptions(BUILTIN_THEMES), themes: [], max: null });
   const [name, setName] = useState('');
@@ -106,13 +107,29 @@ export default function Themes() {
     }
   };
 
+  // The gallery draws its samples in the colours of the theme in use, so design and colours can be judged together.
+  const current = [...catalog.builtins, ...catalog.themes].find((t) => t.id === themeId) || catalog.builtins[0] || {};
+  const colours = {
+    bg: current.bg || '#ffffff', text: current.text || '#1f2937', primary: current.primary || '#9B5B46', muted: current.muted || '#6b7280',
+  };
+
   return (
     <section className="space-y-4">
       <ToolHeader id="templates" title="Themes" />
       <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-4">
         <div className="space-y-4">
           <div className={CARD} style={CARD_STYLE}>
-            <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Built-in themes</h3>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Design</h3>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>How every slide is laid out and decorated: bands, panels, frames and accents. Works with any colour theme below.</p>
+            </div>
+            {meta?.designs?.length
+              ? <DesignGallery designs={meta.designs} designId={deck.designId || 'clean'} colours={colours} onPick={chooseDesign} />
+              : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>The designs could not be loaded. Refresh the page to try again.</p>}
+          </div>
+
+          <div className={CARD} style={CARD_STYLE}>
+            <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Colour themes</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {catalog.builtins.map((t) => (
                 <Tooltip key={t.id} text={`Use the ${t.label} theme for the current deck.`}>

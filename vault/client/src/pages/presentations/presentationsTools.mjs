@@ -25,8 +25,8 @@ export const GROUP_TIPS = {
 export const TOOL_TIPS = {
   create: 'Write a short brief and make a slide deck from it, using the theme you chose. Runs in the background; you can edit the result afterwards.',
   import: 'Pull the text and pictures out of a PDF, Word document, text file, web page or images, ready to make into slides.',
-  templates: 'Pick a built-in theme, save your own, import colours and fonts from a PowerPoint theme, or apply your Brand Kit on top.',
-  slides: 'Change the words, pictures and order of the slides. Everything is kept in one deck so the preview and exports stay in step.',
+  templates: 'Pick a design (how slides are laid out and decorated) and a colour theme. Save your own colours, import them from PowerPoint, or apply your Brand Kit on top.',
+  slides: 'Change the words, pictures, layout and order of the slides: thirteen layouts from agenda and comparison to big numbers, quote and timeline.',
   export: 'Download the deck as an editable PPTX, a PDF, an HTML preview or one PNG per slide.',
   decks: 'Open decks you saved, duplicate or delete them, and see decks you opened recently on this device.',
 };
@@ -35,7 +35,7 @@ export const TOOL_TIPS = {
 export const TOOL_BLURBS = {
   create: 'A brief in plain words is enough. Add imported text or pictures if you have them.',
   import: 'Up to 10 files at once, or one web page. The extracted text is editable before you use it.',
-  templates: 'The theme sets colours, font and title size. Your Brand Kit can be laid over the top.',
+  templates: 'A design lays out and decorates every slide; a colour theme sets colours, font and title size. Your Brand Kit can be laid over the top.',
   slides: 'Edit the words, pictures and order of the slides. The preview and every export use this one deck.',
   export: 'PPTX keeps the words editable; PDF, HTML and PNGs render from the same preview.',
   decks: 'Saved decks live on the server. Recent decks are an opt-in list kept only in this browser.',
@@ -64,9 +64,10 @@ export const TOOL_HELP = {
     ],
   },
   templates: {
-    what: 'Choose the look of the deck before you generate it, or save your own theme.',
+    what: 'Choose the look of the deck: a design for the layout and decoration, and a colour theme.',
     features: [
-      'Six built-in themes: Paper, Ink, Warm, Ocean, Forest and Mono',
+      'Eight designs: Clean, Underline, Banded, Sidebar, Split, Framed, Bold and Corner, each shown on sample slides',
+      'Six built-in colour themes: Paper, Ink, Warm, Ocean, Forest and Mono; any design works with any colours',
       'Save a theme with your own colours, font and title size',
       'Importing a .pptx/.potx takes its colours and fonts, not its PowerPoint masters',
       'Brand Kit is an override on top of the chosen theme',
@@ -77,7 +78,8 @@ export const TOOL_HELP = {
     what: 'Make the deck say what you want, then save it.',
     features: [
       'Edit the deck title, subtitle and each slide’s title, body, bullets, image and notes',
-      'Use one of five layouts: Title, Bullets, Two column, Picture or Closing',
+      'Thirteen layouts: Title, Section header, Bullets, Agenda, Two column, Comparison, Three columns, Big numbers, Quote, Timeline, Picture, Full picture and Closing',
+      'Comparison, Three columns and Big numbers have their own column boxes',
       'Add, delete and reorder slides, up to the server’s slide limit',
       'The live preview uses the same renderer as PDF and PNG export',
       'Save to My decks, or hand the deck to another tool with Use in…',
@@ -107,7 +109,7 @@ export const TOOL_HELP = {
 // The (i) "How Presentations works" box.
 export const HOW_IT_WORKS = [
   ['Make', 'Create deck writes a short outline and turns it into slides from a brief. Import source pulls text and pictures from documents, web pages and images.'],
-  ['Design', 'Themes picks a look (or brings one from PowerPoint, or from your Brand Kit). Slide editor changes the words, pictures and slide order.'],
+  ['Design', 'Themes picks a design (bands, panels, frames, accents) and a colour theme, or brings colours from PowerPoint or your Brand Kit. Slide editor changes the words, pictures, layout and order of each slide.'],
   ['Finish', 'Export makes an editable PPTX, a PDF, an HTML preview or per-slide PNGs.'],
   ['Library', 'My decks reopens, duplicates and deletes saved decks; opt-in recent decks are kept in this browser only.'],
   ['One deck', 'There is one deck model behind the preview and every export, so they do not drift apart. Long jobs run in the background with progress, Cancel and Resume.'],

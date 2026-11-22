@@ -4,7 +4,24 @@
 // the outline and the deck. The route-validated selection (or default_model) wins; tier ids are fallbacks
 // from Settings via getModelsForUser(). No model id is hard-coded here.
 
-const { normalizeDeck, normalizeOutline, deckFromOutline, text, SOURCE_MAX } = require('./schema');
+const { normalizeDeck, normalizeOutline, deckFromOutline, text, SOURCE_MAX, LAYOUTS } = require('./schema');
+
+// What each layout is for, so the model picks a fitting one per slide (geometry: layouts.js).
+const LAYOUT_GUIDE = [
+  'title: the first slide (title + body as the subtitle).',
+  'section: a divider between parts of the talk (title + optional body).',
+  'bullets: a heading and up to 5 points.',
+  'agenda: a numbered list of what the talk covers (bullets).',
+  'two-column: a paragraph (body) beside points (bullets).',
+  'comparison: two options side by side: columns = [{ heading, bullets }, { heading, bullets }].',
+  'three-column: three ideas, steps or features: columns = three { heading, bullets }.',
+  'stats: two to four key numbers: columns = [{ heading: "42%", bullets: ["what it measures"] }, ...]. Only numbers found in the material.',
+  'quote: a quotation in body, and who said it in title.',
+  'timeline: dated milestones in order: bullets like "2024 — Launched in Brisbane".',
+  'picture: an image (imageRef) beside points or a paragraph.',
+  'full-picture: one image filling the slide, with a short title on it.',
+  'closing: the last slide (thanks, next steps or questions).',
+];
 const { modelCallError } = require('../../utils/modelCallError');
 
 // The model and usage modules open a database connection when loaded, so they are only loaded when a real call is made. Direct
@@ -38,9 +55,11 @@ function outlinePrompt({ brief, sourceText, imageRefs }) {
       availableImages: images.length ? images : null,
       rules: [
         'Return 6 to 12 slides.',
-        'Each slide: { layout, title, bullets, body, imageRef }.',
-        'layout must be one of: title, bullets, two-column, picture, closing.',
-        'bullets is an array of at most 5 short strings. Use [] for title and picture slides.',
+        'Each slide: { layout, title, bullets, body, columns, imageRef }.',
+        `layout must be one of: ${LAYOUTS.join(', ')}. Pick the one that fits the content, and vary them; do not make every slide bullets.`,
+        ...LAYOUT_GUIDE,
+        'bullets is an array of at most 5 short strings. Use [] when a layout does not use them. columns is [] unless the layout uses it.',
+        'Use picture or full-picture only when an imageRef from availableImages fits; never invent images or numbers.',
         'imageRef must be one of availableImages, or an empty string.',
         'The first slide should be layout "title" and the last "closing".',
         'Also return { title, subtitle, nSlides, aspect } at the top level.',
@@ -58,7 +77,8 @@ function slidesPrompt({ outline, theme }) {
       rules: [
         'Return { title, subtitle, themeId, aspect, slides }.',
         'Use the same number of slides and the same ids as the outline (s1, s2, ...).',
-        'Each slide: { id, layout, title, bullets, body, imageRef, notes }.',
+        'Each slide: { id, layout, title, bullets, body, columns, imageRef, notes }. Keep each slide\'s layout from the outline.',
+        'columns is an array of { heading, bullets } (headings at most 60 characters, at most 4 bullets each), used by comparison, three-column and stats; [] otherwise.',
         'At most 6 bullets of at most 200 characters each; body at most 600 characters; notes at most 400 characters.',
         'Keep imageRef exactly as supplied in the outline, or empty.',
       ],
@@ -109,7 +129,7 @@ async function generateOutline({ userId, brief, sourceText = '', imageRefs = [],
 }
 
 /** Expand an outline into the canonical deck. The route may pass a validated selection; tiers remain the fallback. */
-async function generateDeck({ userId, outline, theme, model, deps = {} }) {
+async function generateDeck({ userId, outline, theme, designId = 'clean', model, deps = {} }) {
   const getModels = getResolver(deps);
   const models = model ? {} : await getModels(userId);
   const modelId = model || models.standard || models.light;
@@ -124,12 +144,12 @@ async function generateDeck({ userId, outline, theme, model, deps = {} }) {
       userId,
       deps,
     });
-    return normalizeDeck({ ...raw, themeId: theme.id, aspect: raw.aspect || outline.aspect });
+    return normalizeDeck({ ...raw, themeId: theme.id, designId, aspect: raw.aspect || outline.aspect });
   } catch (err) {
     // A schema slip in a model answer must not lose the whole job. The outline is still good.
     // A provider/key failure is different: show it plainly instead of silently writing a fallback deck.
     if (err?.code === 'model_call') throw err;
-    return deckFromOutline(outline, theme.id);
+    return deckFromOutline(outline, theme.id, designId);
   }
 }
 

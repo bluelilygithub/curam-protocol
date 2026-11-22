@@ -14,7 +14,6 @@ import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart'
 import { takeToolHandoff } from '../utils/toolHandoff.mjs';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { useModels } from '../hooks/useModels';
-import { getModelShortName } from '../utils/models';
 import { TOOL_COMPONENTS } from './presentations/toolRegistry';
 import { PRESENTATION_GOALS } from './presentations/presentationGoals.mjs';
 import {
@@ -38,16 +37,6 @@ function initialTool() {
   return ALL_TOOLS.some((t) => t.id === last) ? last : 'start';
 }
 
-// vault_models can hold image/search providers. Presentations only offers text models; keep this in step with
-// server/services/modelResolver.js isNonTextModel so the picker never offers an id the API will reject.
-const NON_TEXT_PROVIDERS = new Set(['fal', 'seedance', 'replicate', 'serper', 'serpapi']);
-const isTextModel = (m) => {
-  const id = String(m?.id || '').trim();
-  if (!id || NON_TEXT_PROVIDERS.has(String(m.provider || '').toLowerCase())) return false;
-  const lower = id.toLowerCase();
-  return !lower.startsWith('fal-ai/') && !lower.startsWith('fal/') && !/minimax\/|hailuo|video-01|image-to-video|\/flux/.test(lower);
-};
-
 export default function PresentationsPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -62,15 +51,9 @@ export default function PresentationsPage() {
   // This flag defaults OFF (docs/presentations.md), so unlike the always-on tools, members need an explicit true.
   const canUse = Boolean(user?.isAdmin) || featureAccess.presentations === true;
 
-  // Vault's documented model-selection rule: useModels + the memberModelSelection flag, admins always.
-  const { models: configuredModels, defaultModel } = useModels();
-  const [chatModel, setChatModel] = useState(null);
-  const canSelectModel = Boolean(user?.isAdmin) || featureAccess.memberModelSelection !== false;
-  const chatModels = useMemo(() => (Array.isArray(configuredModels) ? configuredModels.filter(isTextModel) : []), [configuredModels]);
-  const effectiveModel = (canSelectModel ? chatModel : null) || defaultModel || chatModels[0]?.id || '';
-  useEffect(() => {
-    if (chatModel && chatModels.length && !chatModels.some((m) => m.id === chatModel)) setChatModel(null);
-  }, [chatModel, chatModels]);
+  // No model picker: the deck is written with the workspace default model set by an admin (Settings → AI & Chat). The page sends
+  // no model id, so the server uses that default; defaultModel is only read here to name it next to Make deck.
+  const { defaultModel } = useModels();
 
   const [tool, setTool] = useState(initialTool);
   const [goal, setGoal] = useState(null);
@@ -78,7 +61,7 @@ export default function PresentationsPage() {
   const [helpTool, setHelpTool] = useState(null);
   const [visited, setVisited] = useState(() => new Set());
 
-  const [meta, setMeta] = useState({ maxSlides: 20, brandKit: { available: false, label: '' } });
+  const [meta, setMeta] = useState({ maxSlides: 20, brandKit: { available: false, label: '' }, designs: [] });
   const metaRef = useRef(meta);
   useEffect(() => { metaRef.current = meta; }, [meta]);
   const [deck, setDeckRaw] = useState(emptyDeck);
@@ -106,7 +89,11 @@ export default function PresentationsPage() {
     if (!canUse) return;
     api.get('/api/presentations/meta')
       .then((r) => readJson(r, 'Could not load Presentations settings.'))
-      .then((d) => setMeta({ maxSlides: d.maxSlides || 20, brandKit: d.brandKit || { available: false, label: '' } }))
+      .then((d) => setMeta({
+        maxSlides: d.maxSlides || 20,
+        brandKit: d.brandKit || { available: false, label: '' },
+        designs: Array.isArray(d.designs) ? d.designs : [],
+      }))
       .catch(() => {});
     // A file left for Presentations by another tool opens Import source.
     const incoming = takeToolHandoff('presentations') || takeToolHandoff('import');
@@ -176,12 +163,14 @@ export default function PresentationsPage() {
   const loadDeck = useCallback(async (id) => {
     const res = await api.get(`/api/presentations/decks/${encodeURIComponent(id)}`);
     const data = await readJson(res, 'Could not open that deck.');
-    const next = normalizeDeck(data?.deck || data, metaRef.current?.maxSlides || 20);
+    // GET /decks/:id answers { deck: row }; the slides are in row.data (server/services/presentations/store.js rowToDeck).
+    const row = data?.deck || data || {};
+    const next = normalizeDeck(row.data && typeof row.data === 'object' ? row.data : row, metaRef.current?.maxSlides || 20);
     setDeckRaw(next);
     setThemeId(next.themeId);
     setSavedDeckId(String(id));
-    setSourceType(data?.deck?.sourceType || data?.sourceType || 'brief');
-    recordHistory(next, data?.deck?.sourceType || 'brief');
+    setSourceType(row.sourceType || 'brief');
+    recordHistory(next, row.sourceType || 'brief');
     return next;
   }, [recordHistory]);
 
@@ -200,6 +189,8 @@ export default function PresentationsPage() {
   }, []);
   const startGoal = (g) => { setGoal(g); openToolById(g.steps[0].tool); };
   const backToStart = () => { setGoal(null); setTool('start'); };
+  // The design style (layout decoration) lives on the deck, so the preview, saves and every export carry it.
+  const chooseDesign = useCallback((id) => setDeck((prev) => ({ ...prev, designId: id })), [setDeck]);
   const chooseTheme = useCallback((id) => {
     setThemeId(id);
     setDeck((prev) => ({ ...prev, themeId: id }));
@@ -213,17 +204,17 @@ export default function PresentationsPage() {
   const ctx = useMemo(() => ({
     tool, setTool: openToolById, openTool: openToolById, setHelpTool,
     deck, setDeck, meta, sourceText, setSourceText, imageRefs, setImageRefs,
-    themeId, chooseTheme, applyBrand, setApplyBrand, sourceType, setSourceType,
+    themeId, chooseTheme, chooseDesign, applyBrand, setApplyBrand, sourceType, setSourceType,
     savedDeckId, setSavedDeckId, exportFile, setExportFile,
     historyOn, setHistoryOn,
     job, startJob, cancelJob, resumeJob, dismissJob,
     saveDeck, loadDeck, takeIncomingFile, toast,
-    model: effectiveModel, models: chatModels, canSelectModel, setChatModel,
+    defaultModel,
   }), [
-    tool, openToolById, deck, setDeck, meta, sourceText, imageRefs, themeId, chooseTheme, applyBrand,
+    tool, openToolById, deck, setDeck, meta, sourceText, imageRefs, themeId, chooseTheme, chooseDesign, applyBrand,
     sourceType, savedDeckId, exportFile, historyOn, setHistoryOn, job, startJob, cancelJob, resumeJob,
     dismissJob, saveDeck, loadDeck, takeIncomingFile, toast,
-    effectiveModel, chatModels, canSelectModel,
+    defaultModel,
   ]);
 
   // ToolSidebar groups (components/ToolSidebar.jsx): the list, tips and icons come from presentationsTools.mjs, shared with the guide.
@@ -279,28 +270,6 @@ export default function PresentationsPage() {
                 What do you want to do?
               </button>
             </Tooltip>
-
-            {canSelectModel && chatModels.length > 0 && (
-              <label className="block space-y-1" data-tour="presentations-model">
-                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>AI model</span>
-                <Tooltip text="Choose the model used to write slides and answer the guide. Your admin's Settings choice is used until you pick one here.">
-                  <select
-                    value={effectiveModel}
-                    onChange={(e) => setChatModel(e.target.value)}
-                    aria-label="AI model for Presentations"
-                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    {chatModels.map((m) => <option key={m.id} value={m.id}>{getModelShortName(m.id)}</option>)}
-                  </select>
-                </Tooltip>
-              </label>
-            )}
-            {!canSelectModel && effectiveModel && (
-              <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
-                Using {getModelShortName(effectiveModel)}
-              </p>
-            )}
           </ToolSidebar>
 
           <div className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="presentations-main">
@@ -359,14 +328,7 @@ export default function PresentationsPage() {
           </ToolInfoModal>
         )}
 
-        <PresentationsGuide
-          currentTool={tool}
-          onOpenTool={openToolById}
-          model={effectiveModel}
-          models={chatModels}
-          canSelectModel={canSelectModel}
-          onModelChange={setChatModel}
-        />
+        <PresentationsGuide currentTool={tool} onOpenTool={openToolById} />
       </VoiceInputProvider>
     </PresentationContext.Provider>
   );

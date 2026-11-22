@@ -22,6 +22,8 @@ It is deliberately **not** a clone of Presenton. It keeps the useful feature set
 | Guided tour | `client/src/utils/tours/presentationsTour.js` (Settings → Tours, the compass button, or `/presentations?tour=1`) |
 | Guide chat | `client/src/pages/presentations/PresentationsGuide.jsx` → `/api/presentations-tutor` (`server/routes/presentationsTutor.js`, `server/services/presentationsTutor.js`) |
 | API | `server/routes/presentations.js` + `server/routes/presentations/*.js`, mounted at `/api/presentations` |
+| Slide geometry | `server/services/presentations/layouts.js`: the 8 design styles and 13 slide layouts, as percent boxes (`plan()`); used by the HTML renderer, the PPTX exporter and the Themes gallery thumbnails |
+| Design gallery | `client/src/pages/presentations/DesignGallery.jsx` (draws the `designs[].samples` from `GET /api/presentations/meta`) |
 | Generation and export | `server/services/presentations/*.js` |
 | Tables | `presentation_decks`, `presentation_templates` in `server/db.js` |
 | Recycle bin | `server/services/recycleBin/adapters/presentations.js` |
@@ -70,14 +72,17 @@ Everything is generated from and exported to one versioned JSON shape:
   title: '...',
   subtitle: '...',
   themeId: 'paper',
+  designId: 'clean' | 'underline' | 'banded' | 'sidebar' | 'split' | 'framed' | 'bold' | 'corner',
   aspect: '16:9',
   slides: [
     {
       id: 's1',
-      layout: 'title' | 'bullets' | 'two-column' | 'picture' | 'closing',
+      layout: 'title' | 'section' | 'bullets' | 'agenda' | 'two-column' | 'comparison' | 'three-column'
+            | 'stats' | 'quote' | 'timeline' | 'picture' | 'full-picture' | 'closing',
       title: '...',
       bullets: ['...', '...'],
       body: '...',
+      columns: [{ heading: '42%', bullets: ['...'] }],   // comparison (2), three-column (3), stats (up to 4); [] otherwise
       imageRef: 'asset-id-or-data-url-or-remote-url',
       notes: '...'
     }
@@ -87,12 +92,14 @@ Everything is generated from and exported to one versioned JSON shape:
 
 The HTML preview, PDF and PNGs render from this model. The PPTX is built from the same model with `pptxgenjs`, keeping text as editable text boxes. One model means no drift between preview and export.
 
+Where things go on a slide comes from one place, `layouts.js` `plan(slide, { designId, aspect, titleSize })`: the design's decoration shapes (bands, panels, frames, accents, all in theme colour names) and the layout's text boxes, pictures and shapes, in percent of the slide with text sizes in px for a 720px-tall slide. `render.js` turns a plan into absolutely positioned HTML; `export.js` turns the same plan into PPTX shapes, text boxes and pictures on the real slide size (10 × 5.625 in for 16:9, 10 × 7.5 for 4:3, 9 × 9 for 1:1). Stats and columns fall back to the bullets when a slide has no columns (`"42% | Growth"` becomes a number and its label). Unknown layouts fall back to `bullets`, unknown designs to `clean`. Before 2026-11-23 the PPTX used fixed positions for a 7.5 in tall slide, so 16:9 exports lost their body text off the bottom; that is fixed by the shared geometry.
+
 ---
 
 ## Generation pipeline
 
 1. **Source normalisation** — `import` (`server/services/presentations/sources.js`) extracts text from PDF (`pdf-parse`), DOCX (`mammoth`), TXT/MD, or a safe-fetched URL; images are kept as asset references under the user's upload folder. The brief tool accepts typed text directly.
-2. **Outline** — `generation.js` asks the same text model as the slides (the validated page selection, otherwise `default_model`, with `standard`/`light` tiers only as fallbacks) for a short JSON outline: deck title, subtitle, 6–12 slides, each with a layout hint, heading and 2–4 bullets. Output is parsed strictly and clamped.
+2. **Outline** — `generation.js` asks the workspace default model (`default_model`, with `standard`/`light` tiers only as fallbacks) for a short JSON outline: deck title, subtitle, 6–12 slides, each with one of the 13 layouts (the prompt says what each is for and asks for variety, and never to invent numbers or images), a heading, bullets and, for comparison, three-column and stats slides, columns. Output is parsed strictly and clamped.
 3. **Slides** — the same `generation.js` asks that same resolved model to expand the outline into the canonical deck JSON. Unknown layouts fall back to `bullets`; text is length-capped.
 4. **Preview** — `PresentationPreview.jsx` renders the canonical JSON as HTML using the selected theme; the server-side renderer in `server/services/presentations/render.js` produces the same HTML for export.
 5. **Export** — `server/services/presentations/export.js` writes PPTX with `pptxgenjs`, PDF with Playwright's `page.pdf()`, per-slide PNGs zipped with `archiver`, and a self-contained HTML file with assets inlined as data URLs. Finished files are kept per user under `{UPLOAD_DIR}/presentations/{userId}/exports/` until they are replaced.
@@ -101,19 +108,19 @@ All model calls use `getModelsForUser(userId)` and `callModel()`; usage is logge
 
 ### Model selection
 
-Presentations follows the same rule as Chat. The page loader calls `useModels()` (Settings → AI & Chat: `vault_models` and `default_model`) and reads `memberModelSelection` from Feature Access. Admins may always choose; members may choose only when that flag is on. The effective choice is the picked model, otherwise `defaultModel`, otherwise the first configured text model. That one id drives both generation calls and the guide. The sidebar picker lists text models only, and the selected id is sent with `POST /api/presentations/create`.
+There is no model picker on the page (removed 2026-11-23). The page sends no model id, so `POST /api/presentations/create` writes the outline and the slides with the workspace default model an admin sets in Settings → AI & Chat (`default_model`), falling back to the resolver's `standard`/`light` tiers. Create deck names that model under the brief (`useModels().defaultModel`, display only). The guide chat sends no model either, so it uses its configured tier like the other Vault guides.
 
-`server/utils/userModelSelection.js` repeats the permission check at the HTTP boundary. It accepts an explicit id only when that person is allowed to choose and the id is a text model in the user's resolved `vault_models` catalog (admin fallback included). A member with selection off has the id ignored; an allowed caller who sends an unknown or non-text id gets a 400 and no provider call. Generation still falls back to the resolver's `standard`/`light` tiers when no valid selection is present.
-
-The guide chat sends the same effective id as `model` on `POST /api/presentations-tutor`. `makeGuideRouter()` validates it with the same helper, and `guideCore.ask()` uses it for that reply; guides that do not send a model keep their configured tier. `TutorChat` takes optional `model`, `modelOptions`, `canSelectModel` and `onModelChange` props, so other guides are unchanged when they are absent.
+`server/utils/userModelSelection.js` still guards the endpoints: an explicit id is accepted only from someone allowed to choose and only if it is a text model in their `vault_models` catalogue, so a hand-made request cannot pick an arbitrary model.
 
 If a provider rejects the key or the call fails, `server/utils/modelCallError.js` turns the raw SDK JSON into one readable message (for example, “The AI provider rejected Vault's key … An admin needs to check the provider API key.”) with HTTP 502 and `code: 'model_call'`. Raw provider JSON is never shown, and a provider failure is never silently replaced by a fallback deck.
 
 ---
 
-## Themes
+## Designs and themes
 
-Built-in themes are code, not database rows: `paper`, `ink`, `warm`, `ocean`, `forest`, `mono`. Each is a small JSON object: colours, font family, title size and whether to use the Brand Kit logo. A saved theme is a row in `presentation_templates`; importing a `.pptx/.potx` reads colours, fonts and layout hints only — it does not reproduce PowerPoint masters. Brand Kit is applied as an override on top of whatever theme is selected.
+A **design** (`deck.designId`) lays out and decorates every slide: Clean, Underline (accent bar under titles), Banded (titles in a coloured band; title slides get a band across the middle), Sidebar (accent strip down the left), Split (tinted right panel; title slides split into a colour block and text), Framed (inset accent frame), Bold (title, section and closing slides fill with the accent colour) and Corner (accent triangle and dot). Designs are code (`layouts.js` `DESIGNS`) and work with any colour theme. Themes shows them as a gallery of two sample slides each, drawn from the server's own `plan()` in the deck's current colours; Create deck has a Design picker too.
+
+A **colour theme** sets colours, font and title size. Built-in themes are code, not database rows: `paper`, `ink`, `warm`, `ocean`, `forest`, `mono`. Each is a small JSON object: colours, font family, title size and whether to use the Brand Kit logo. A saved theme is a row in `presentation_templates`; importing a `.pptx/.potx` reads colours, fonts and layout hints only — it does not reproduce PowerPoint masters. Brand Kit is applied as an override on top of whatever theme is selected.
 
 ---
 
@@ -185,7 +192,8 @@ Long work returns `202 { jobId }`, follows the Video Tools background-job patter
 - `node server/services/presentations/generation.test.js` — outline/slide prompt plumbing, the same validated model for both calls, default-model precedence and friendly provider errors with stubbed models; no network.
 - `node server/utils/userModelSelection.test.js` — admin/member permission and configured text-id validation; no database.
 - `node server/services/guideCore.test.js` — guide tier fallback, explicit model and friendly provider errors; no database.
-- `node server/services/presentations/export.test.js` — PPTX/PDF/PNG generation from a fixture deck.
+- `node server/services/presentations/export.test.js` — PPTX/PDF/PNG generation from a fixture deck, then every layout in every design and aspect: the HTML carries the words and the PPTX builds.
+- `node server/services/presentations/layouts.test.js` — the geometry: every shape and box stays on the slide in every design, aspect and layout, circles stay round, column and stats fallbacks; no files.
 - `node server/services/presentations/jobs.test.js` — job lifecycle, cancel/resume and the 30-minute result cache.
 - `node server/routes/presentations/templates.test.js` — theme sanitising and import rules.
 - `node client/src/pages/presentations/presentationGoals.test.mjs` — every job step names a real tool.

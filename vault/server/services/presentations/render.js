@@ -2,8 +2,10 @@
 
 // One HTML renderer for the live preview and the PDF/PNG exporter, so what a person sees is what they download.
 // The output is static (no scripts) and every value from a deck is escaped before it reaches the page.
+// Where things go comes from layouts.js plan(), the same geometry the PPTX exporter uses.
 
 const { normalizeDeck, resolveTheme } = require('./schema');
+const { plan } = require('./layouts');
 
 const SIZES = {
   '16:9': { w: 1280, h: 720 },
@@ -25,24 +27,47 @@ function safeImage(ref) {
   return '';
 }
 
-function slideBody(slide, theme) {
-  const bullets = Array.isArray(slide.bullets) ? slide.bullets.filter(Boolean).slice(0, 6) : [];
-  const list = bullets.length ? `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : '';
-  const body = slide.body ? `<p class="body">${escapeHtml(slide.body)}</p>` : '';
-  const title = `<h1>${escapeHtml(slide.title)}</h1>`;
-  const image = safeImage(slide.imageRef) ? `<img src="${escapeHtml(slide.imageRef)}" alt="">` : '';
-  switch (slide.layout) {
-    case 'title':
-      return `<div class="center">${title}${slide.body ? `<p class="subtitle">${escapeHtml(slide.body)}</p>` : ''}</div>`;
-    case 'closing':
-      return `<div class="center">${title}${body}</div>`;
-    case 'picture':
-      return `<div class="split">${image ? `<figure>${image}</figure>` : ''}<div>${title}${body}</div></div>`;
-    case 'two-column':
-      return `<div class="split"><div>${title}${body}</div><div>${list}</div></div>`;
-    default:
-      return `${title}${list}${body}`;
-  }
+/** "#rrggbb" at an opacity, as rgba(); other forms are returned unchanged. */
+function withAlpha(hex, alpha) {
+  if (alpha == null || alpha >= 1) return hex;
+  let h = String(hex).replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length < 6) return hex;
+  const n = parseInt(h.slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+const pos = (b) => `left:${b.x.toFixed(2)}%;top:${b.y.toFixed(2)}%;width:${b.w.toFixed(2)}%;height:${b.h.toFixed(2)}%`;
+const JUSTIFY = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
+
+function renderSlide(slide, index, colours, opts) {
+  const p = plan(slide, opts);
+  const scale = opts.scale;
+  const shapes = p.shapes.map((s) => {
+    const style = [pos(s)];
+    if (s.fill) style.push(`background:${withAlpha(colours[s.fill], s.alpha)}`);
+    if (s.stroke) style.push(`border:${Math.max(1, Math.round((s.strokeWidth || 1) * scale))}px solid ${colours[s.stroke]}`);
+    if (s.kind === 'ellipse') style.push('border-radius:50%');
+    if (s.kind === 'tri') style.push('clip-path:polygon(100% 0,100% 100%,0 100%)');
+    const label = s.label ? `<span style="color:${colours[s.labelColor || 'bg']};font-size:${Math.round((s.labelSize || 16) * scale)}px">${escapeHtml(s.label)}</span>` : '';
+    return `<div class="shape" style="${style.join(';')}">${label}</div>`;
+  }).join('');
+  const images = p.images.map((im) => {
+    const src = safeImage(im.ref);
+    return src ? `<img class="pic" style="${pos(im)};object-fit:${im.fit === 'cover' ? 'cover' : 'contain'}" src="${escapeHtml(src)}" alt="">` : '';
+  }).join('');
+  const boxes = p.boxes.map((b) => {
+    const style = [pos(b), `font-size:${Math.round(b.size * scale)}px`, `color:${colours[b.color] || colours.text}`,
+      `text-align:${b.align || 'left'}`, `justify-content:${JUSTIFY[b.valign] || 'flex-start'}`];
+    if (b.bold) style.push('font-weight:700');
+    if (b.italic) style.push('font-style:italic');
+    const inner = b.bullets
+      ? `<ul>${b.bullets.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`
+      : `<div class="txt">${escapeHtml(b.text)}</div>`;
+    return `<div class="box" style="${style.join(';')}">${inner}</div>`;
+  }).join('');
+  const num = p.number ? `<span class="num">${index + 1}</span>` : '';
+  return `<section class="slide layout-${p.layout} design-${p.design}" data-slide="${index + 1}">${shapes}${images}${boxes}${opts.logo}${num}</section>`;
 }
 
 /** Build a complete static HTML document from a canonical deck. */
@@ -54,42 +79,41 @@ function renderDeckHtml(input, themeInput, { applyBrand = false, brand = null } 
     if (brand.logoDataUrl) { base.showLogo = true; base.logoDataUrl = brand.logoDataUrl; }
   }
   const size = SIZES[deck.aspect] || SIZES['16:9'];
-  const bg = safeColor(base.bg, '#ffffff');
-  const fg = safeColor(base.text, '#1f2937');
-  const accent = safeColor(base.primary, '#9B5B46');
-  const muted = safeColor(base.muted, '#6b7280');
+  const scale = size.h / 720;
+  const colours = {
+    bg: safeColor(base.bg, '#ffffff'),
+    text: safeColor(base.text, '#1f2937'),
+    primary: safeColor(base.primary, '#9B5B46'),
+    muted: safeColor(base.muted, '#6b7280'),
+  };
   const font = safeFont(base.font);
-  const logo = base.showLogo && base.logoDataUrl ? `<img class="logo" src="${escapeHtml(safeImage(base.logoDataUrl) || '')}" alt="">` : '';
-  const slides = deck.slides.map((s, i) => (
-    `<section class="slide" data-slide="${i + 1}">${logo}<div class="content">${slideBody(s, base)}</div><span class="num">${i + 1}</span></section>`
-  )).join('\n');
+  const logoSrc = base.showLogo && base.logoDataUrl ? safeImage(base.logoDataUrl) : '';
+  const logo = logoSrc ? `<img class="logo" src="${escapeHtml(logoSrc)}" alt="">` : '';
+  const opts = { designId: deck.designId, aspect: deck.aspect, titleSize: base.titleSize, scale, logo };
+  const slides = deck.slides.map((s, i) => renderSlide(s, i, colours, opts)).join('\n');
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>${escapeHtml(deck.title)}</title>
 <style>
   @page { size: ${size.w}px ${size.h}px; margin: 0; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: ${bg}; }
-  body { color: ${fg}; font-family: ${font}; }
-  .slide { position: relative; width: ${size.w}px; height: ${size.h}px; padding: 72px 84px; background: ${bg};
-           overflow: hidden; break-after: page; page-break-after: always; display: flex; align-items: center; }
+  html, body { margin: 0; padding: 0; background: ${colours.bg}; }
+  body { color: ${colours.text}; font-family: ${font}; }
+  .slide { position: relative; width: ${size.w}px; height: ${size.h}px; background: ${colours.bg};
+           overflow: hidden; break-after: page; page-break-after: always; }
   .slide:last-child { break-after: auto; page-break-after: auto; }
-  .content { width: 100%; max-height: 100%; }
-  h1 { font-size: ${Math.max(24, Math.min(72, Number(base.titleSize) || 44))}px; line-height: 1.1; margin: 0 0 28px; color: ${fg}; }
-  ul { margin: 0; padding-left: 1.3em; }
-  li { font-size: 30px; line-height: 1.45; margin-bottom: 18px; }
-  .body, .subtitle { font-size: 30px; line-height: 1.45; color: ${muted}; white-space: pre-wrap; margin: 0; }
-  .subtitle { font-size: 36px; }
-  .center { text-align: center; }
-  .center h1 { font-size: ${Math.max(32, (Math.min(72, Number(base.titleSize) || 44)) + 12)}px; margin-bottom: 36px; }
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
-  .split figure { margin: 0; }
-  .split img { width: 100%; max-height: ${size.h - 180}px; object-fit: contain; border-radius: 12px; border: 2px solid ${accent}; }
-  .logo { position: absolute; top: 32px; right: 44px; max-width: 150px; max-height: 60px; object-fit: contain; }
-  .num { position: absolute; bottom: 28px; right: 44px; color: ${muted}; font-size: 18px; }
+  .shape { position: absolute; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .pic { position: absolute; }
+  .box { position: absolute; display: flex; flex-direction: column; overflow: hidden; line-height: 1.25; }
+  .txt { white-space: pre-wrap; }
+  .box ul { margin: 0; padding-left: 1.2em; }
+  .box li { line-height: 1.35; margin-bottom: 0.45em; }
+  .box li::marker { color: ${colours.primary}; }
+  .logo { position: absolute; top: ${Math.round(32 * scale)}px; right: ${Math.round(44 * scale)}px; max-width: ${Math.round(150 * scale)}px; max-height: ${Math.round(60 * scale)}px; object-fit: contain; }
+  .num { position: absolute; bottom: ${Math.round(24 * scale)}px; right: ${Math.round(40 * scale)}px; color: ${colours.muted}; font-size: ${Math.round(16 * scale)}px; }
 </style></head><body>
 ${slides}
 </body></html>`;
 }
 
-module.exports = { renderDeckHtml, safeImage, SIZES };
+module.exports = { renderDeckHtml, safeImage, withAlpha, SIZES };

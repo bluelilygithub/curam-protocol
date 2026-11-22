@@ -35,17 +35,14 @@ const CONFIG = {
   wideKey: 'vault:presentations-guide:wide',
 };
 
-export default function PresentationsGuide({ currentTool, onOpenTool, model, models, canSelectModel, onModelChange }) {
+// No model picker: the guide uses the workspace model like the other Vault guides.
+export default function PresentationsGuide({ currentTool, onOpenTool }) {
   return (
     <VoiceInputProvider lang="en-AU">
       <TutorChat
         config={CONFIG}
         current={currentTool}
         onOpen={onOpenTool}
-        model={model}
-        modelOptions={models}
-        canSelectModel={canSelectModel}
-        onModelChange={onModelChange}
       />
     </VoiceInputProvider>
   );

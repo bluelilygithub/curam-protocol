@@ -10,8 +10,8 @@ import {
 
 export default function CreateDeck() {
   const {
-    deck, setDeck, sourceText, setSourceText, imageRefs, setImageRefs, themeId, chooseTheme, applyBrand, setApplyBrand,
-    meta, startJob, openTool, toast, model,
+    deck, setDeck, sourceText, setSourceText, imageRefs, setImageRefs, themeId, chooseTheme, chooseDesign, applyBrand, setApplyBrand,
+    meta, startJob, openTool, toast, defaultModel,
   } = usePresentations();
   const [brief, setBrief] = useState('');
   const [themes, setThemes] = useState(() => themeOptions(BUILTIN_THEMES));
@@ -38,9 +38,9 @@ export default function CreateDeck() {
         sourceText,
         imageRefs,
         themeId,
+        designId: deck.designId || 'clean',
         aspect: deck.aspect || '16:9',
         applyBrand,
-        model,
       });
       openTool('slides');
     } catch (err) {
@@ -81,9 +81,17 @@ export default function CreateDeck() {
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label className="block space-y-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Theme</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Design</span>
+            <Tooltip text="How the slides are laid out and decorated (bands, panels, frames). See them all, with samples, in Themes.">
+              <select value={deck.designId || 'clean'} onChange={(e) => chooseDesign(e.target.value)} className={SELECT} style={FIELD_STYLE}>
+                {(meta?.designs?.length ? meta.designs : [{ id: 'clean', label: 'Clean' }]).map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+              </select>
+            </Tooltip>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Colour theme</span>
             <Tooltip text="The selected theme sets the colours, font and title size. You can change it later in Themes.">
               <select value={themeId} onChange={(e) => chooseTheme(e.target.value)} className={SELECT} style={FIELD_STYLE}>
                 {themes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -112,9 +120,9 @@ export default function CreateDeck() {
           <Notice tone="warn">There is no saved Brand Kit yet, so this job cannot apply one. Add one in Graphics first, or untick the box.</Notice>
         )}
 
-        {model && (
+        {defaultModel && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            The outline and slides will both be written with {getModelShortName(model)}.
+            The outline and slides are written with the workspace default model, {getModelShortName(defaultModel)} (set by an admin in Settings).
           </p>
         )}
 

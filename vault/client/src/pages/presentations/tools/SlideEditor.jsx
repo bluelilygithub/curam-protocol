@@ -6,7 +6,7 @@ import { useIcon } from '../../../providers/IconProvider';
 import { takeToolHandoff } from '../../../utils/toolHandoff.mjs';
 import PresentationPreview from '../PresentationPreview';
 import {
-  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, LAYOUTS, LAYOUT_LABELS, PRIMARY_STYLE, SECONDARY_STYLE,
+  BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, COLUMN_LAYOUTS, FIELD_STYLE, LAYOUTS, LAYOUT_HELP, LAYOUT_LABELS, PRIMARY_STYLE, ROW, SECONDARY_STYLE,
   DeckHandoff, InlineDelete, ToolHeader, readDeckFile, usePresentations,
 } from '../shared';
 
@@ -33,6 +33,18 @@ export default function SlideEditor() {
     slides: prev.slides.map((slide, i) => (i === index ? { ...slide, ...patch } : slide)),
   }));
 
+  // Columns for comparison (2), three-column (3) and stats (up to 4). Missing columns are created as they are typed into.
+  const updateColumn = (index, col, patch) => setDeck((prev) => ({
+    ...prev,
+    slides: prev.slides.map((slide, i) => {
+      if (i !== index) return slide;
+      const columns = [...(slide.columns || [])];
+      while (columns.length <= col) columns.push({ heading: '', bullets: [] });
+      columns[col] = { ...columns[col], ...patch };
+      return { ...slide, columns };
+    }),
+  }));
+
   const move = (index, delta) => setDeck((prev) => {
     const target = index + delta;
     if (target < 0 || target >= prev.slides.length) return prev;
@@ -43,7 +55,7 @@ export default function SlideEditor() {
 
   const addSlide = () => setDeck((prev) => ({
     ...prev,
-    slides: [...prev.slides, { id: `s${Date.now()}`, layout: 'bullets', title: '', bullets: [], body: '', imageRef: '', notes: '' }],
+    slides: [...prev.slides, { id: `s${Date.now()}`, layout: 'bullets', title: '', bullets: [], body: '', columns: [], imageRef: '', notes: '' }],
   }));
 
   const deleteSlide = (index) => {
@@ -94,7 +106,7 @@ export default function SlideEditor() {
               <div key={slide.id} className={CARD} style={CARD_STYLE}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Slide {i + 1}</span>
-                  <Tooltip text="How this slide is arranged: Title, Bullets, Two column, Picture or Closing.">
+                  <Tooltip text="How this slide is arranged. Thirteen layouts: title, section header, bullets, agenda, two column, comparison, three columns, big numbers, quote, timeline, picture, full picture and closing.">
                     <select
                       value={slide.layout}
                       onChange={(e) => updateSlide(i, { layout: e.target.value })}
@@ -124,9 +136,37 @@ export default function SlideEditor() {
                     what={`slide ${i + 1} from the deck (save the deck to keep the change)`}
                   />
                 </div>
-                <Tooltip text="The heading on this slide.">
-                  <VoiceInput value={slide.title} onChange={(title) => updateSlide(i, { title })} label={`Title for slide ${i + 1}`} placeholder="Slide title" />
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{LAYOUT_HELP[slide.layout]}</p>
+                <Tooltip text={slide.layout === 'quote' ? 'Who said the quote.' : 'The heading on this slide.'}>
+                  <VoiceInput value={slide.title} onChange={(title) => updateSlide(i, { title })} label={`Title for slide ${i + 1}`} placeholder={slide.layout === 'quote' ? 'Who said it' : 'Slide title'} />
                 </Tooltip>
+                {COLUMN_LAYOUTS[slide.layout] && (
+                  <div className={`grid gap-3 ${COLUMN_LAYOUTS[slide.layout] === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-2 2xl:grid-cols-4'}`}>
+                    {Array.from({ length: COLUMN_LAYOUTS[slide.layout] }, (_, ci) => {
+                      const col = (slide.columns || [])[ci] || { heading: '', bullets: [] };
+                      const stats = slide.layout === 'stats';
+                      return (
+                        <div key={ci} className={`${ROW} space-y-2`} style={FIELD_STYLE}>
+                          <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{stats ? `Number ${ci + 1}${ci > 1 ? ' (optional)' : ''}` : `Column ${ci + 1}`}</span>
+                          <Tooltip text={stats ? 'The big number, like 42% or $1.2m. Leave it empty to show fewer numbers.' : 'The heading of this column.'}>
+                            <VoiceInput value={col.heading} onChange={(heading) => updateColumn(i, ci, { heading })} label={`${stats ? 'Number' : 'Heading'} ${ci + 1} for slide ${i + 1}`} placeholder={stats ? 'e.g. 42%' : 'Heading'} />
+                          </Tooltip>
+                          <Tooltip text={stats ? 'What the number measures, in a few words.' : 'One point per line.'}>
+                            <VoiceInput
+                              type="textarea"
+                              rows={stats ? 2 : 3}
+                              value={(col.bullets || []).join('\n')}
+                              onChange={(v) => updateColumn(i, ci, { bullets: v.split(/\r?\n/).map((b) => b.trim()).filter(Boolean) })}
+                              label={`${stats ? 'Label' : 'Points'} ${ci + 1} for slide ${i + 1}`}
+                              append
+                              placeholder={stats ? 'e.g. Customer growth' : 'First point\nSecond point'}
+                            />
+                          </Tooltip>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Tooltip text="One bullet per line. On a title or picture slide this is used as supporting text.">
                     <VoiceInput type="textarea" rows={4} value={slide.bullets.join('\n')} onChange={(v) => updateSlide(i, { bullets: v.split(/\r?\n/).map((b) => b.trim()).filter(Boolean) })} label={`Bullets for slide ${i + 1}`} append placeholder={'First point\nSecond point'} />

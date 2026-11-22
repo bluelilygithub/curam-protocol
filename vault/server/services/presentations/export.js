@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const archiver = require('archiver');
 const { normalizeDeck } = require('./schema');
 const { renderDeckHtml, SIZES } = require('./render');
+const { plan } = require('./layouts');
 const { assetDir, assetPath, safeAssetName } = require('./sources');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../../uploads');
@@ -37,6 +38,16 @@ function imageForPptx(ref, userId) {
   return null;
 }
 
+// Slide sizes in inches. Positions come from layouts.js plan() in percent, so 16:9, 4:3 and 1:1 all land on the slide.
+const PPTX_SIZES = { '16:9': { w: 10, h: 5.625 }, '4:3': { w: 10, h: 7.5 }, '1:1': { w: 9, h: 9 } };
+
+/** pptxgenjs wants six-digit hex without '#'. */
+function pptxColor(hex, fallback = '1F2937') {
+  let h = String(hex || '').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  return /^[0-9a-fA-F]{6}/.test(h) ? h.slice(0, 6).toUpperCase() : fallback;
+}
+
 async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('pptxgenjs') }) {
   const pptx = new PptxGenJS();
   pptx.author = 'Curam Vault';
@@ -50,46 +61,65 @@ async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('p
     pptx.layout = 'PRES_SQUARE';
   } else pptx.layout = 'LAYOUT_16x9';
 
-  const fg = theme.text || '#1f2937';
-  const accent = theme.primary || '#9B5B46';
-  const muted = theme.muted || '#6b7280';
+  const size = PPTX_SIZES[deck.aspect] || PPTX_SIZES['16:9'];
+  const pt = (px) => Math.max(8, Math.round((px * size.h * 72) / 720)); // px on a 720px-tall slide -> points on this slide
+  const geo = (b) => ({ x: (b.x / 100) * size.w, y: (b.y / 100) * size.h, w: (b.w / 100) * size.w, h: (b.h / 100) * size.h });
+  const colours = {
+    bg: pptxColor(theme.bg, 'FFFFFF'), text: pptxColor(theme.text), primary: pptxColor(theme.primary, '9B5B46'), muted: pptxColor(theme.muted, '6B7280'),
+  };
+  const fill = (name, alpha) => ({ color: colours[name] || colours.primary, ...(alpha != null && alpha < 1 ? { transparency: Math.round((1 - alpha) * 100) } : {}) });
   const fontFace = String(theme.font || 'Arial').split(',')[0].trim().replace(/['"]/g, '') || 'Arial';
-  const titleSize = Math.max(24, Math.min(60, Number(theme.titleSize) || 40));
+  const SHAPE = { rect: pptx.ShapeType.rect, ellipse: pptx.ShapeType.ellipse, tri: pptx.ShapeType.rtTriangle };
 
-  for (const slide of deck.slides) {
+  deck.slides.forEach((slide, index) => {
     const s = pptx.addSlide();
-    s.background = { color: theme.bg || '#ffffff' };
+    s.background = { color: colours.bg };
+    const p = plan(slide, { designId: deck.designId, aspect: deck.aspect, titleSize: theme.titleSize });
+
+    for (const sh of p.shapes) {
+      const opts = {
+        ...geo(sh),
+        fill: sh.fill ? fill(sh.fill, sh.alpha) : { color: colours.bg, transparency: 100 },
+        line: sh.stroke ? { color: colours[sh.stroke], width: sh.strokeWidth || 1 } : { color: colours.bg, transparency: 100, width: 0 },
+        ...(sh.kind === 'tri' ? { flipH: true } : {}),
+      };
+      if (sh.label) {
+        s.addText(sh.label, {
+          ...opts, shape: SHAPE[sh.kind] || SHAPE.rect, fontFace, fontSize: pt(sh.labelSize || 16), bold: true,
+          color: colours[sh.labelColor || 'bg'], align: 'center', valign: 'middle', margin: 0,
+        });
+      } else s.addShape(SHAPE[sh.kind] || SHAPE.rect, opts);
+    }
+
+    for (const im of p.images) {
+      const image = imageForPptx(im.ref, userId);
+      const g = geo(im);
+      if (image) s.addImage({ ...image, ...g, sizing: { type: im.fit === 'cover' ? 'cover' : 'contain', w: g.w, h: g.h } });
+    }
+
+    for (const b of p.boxes) {
+      const opts = {
+        ...geo(b), fontFace, fontSize: pt(b.size), bold: Boolean(b.bold), italic: Boolean(b.italic),
+        color: colours[b.color] || colours.text, align: b.align || 'left', valign: b.valign || 'top', margin: 0, fit: 'shrink',
+      };
+      if (b.bullets) {
+        s.addText(b.bullets.map((t) => ({ text: t, options: { bullet: true, breakLine: true, paraSpaceAfter: pt(b.size) * 0.4 } })), opts);
+      } else s.addText(b.text || '', opts);
+    }
+
     if (theme.showLogo && theme.logoDataUrl) {
       const logo = imageForPptx(theme.logoDataUrl, userId);
-      if (logo) s.addImage({ ...logo, x: 7.6, y: 0.3, w: 1.7, h: 0.7, sizing: { type: 'contain', w: 1.7, h: 0.7 } });
+      const lw = size.w * 0.15; const lh = size.h * 0.09;
+      if (logo) s.addImage({ ...logo, x: size.w - lw - size.w * 0.035, y: size.h * 0.045, w: lw, h: lh, sizing: { type: 'contain', w: lw, h: lh } });
     }
-    const centered = slide.layout === 'title' || slide.layout === 'closing';
-    s.addText(slide.title || '', {
-      x: centered ? 0.8 : 0.7, y: centered ? 2.1 : 0.55, w: centered ? 8.4 : 8.6, h: centered ? 1.5 : 1.1,
-      fontSize: centered ? titleSize + 8 : titleSize, bold: true, color: fg, fontFace,
-      align: centered ? 'center' : 'left', valign: 'mid',
-    });
-    if (centered && slide.body) {
-      s.addText(slide.body, { x: 1.2, y: 3.7, w: 7.6, h: 1.4, fontSize: 24, color: muted, fontFace, align: 'center', valign: 'mid' });
-    } else {
-      const bullets = Array.isArray(slide.bullets) ? slide.bullets.filter(Boolean).slice(0, 6) : [];
-      if (bullets.length) {
-        const hasImage = Boolean(slide.imageRef) && slide.layout === 'picture';
-        s.addText(bullets.map((b) => `•  ${b}`).join('\n'), {
-          x: hasImage ? 0.7 : 0.85, y: 1.9, w: hasImage ? 4.2 : 8.2, h: 4.5,
-          fontSize: 22, color: fg, fontFace, valign: 'top', breakLine: false,
-        });
-      }
-      if (slide.body) {
-        s.addText(slide.body, { x: 0.85, y: 5.2, w: 8.2, h: 1.2, fontSize: 18, color: muted, fontFace, valign: 'top' });
-      }
-      const image = slide.layout === 'picture' ? imageForPptx(slide.imageRef, userId) : null;
-      if (image) s.addImage({ ...image, x: 5.1, y: 1.8, w: 4.1, h: 4.2, sizing: { type: 'contain', w: 4.1, h: 4.2 } });
+    if (p.number) {
+      s.addText(String(index + 1), {
+        x: size.w * 0.88, y: size.h * 0.9, w: size.w * 0.09, h: size.h * 0.07, fontFace, fontSize: pt(16), color: colours.muted, align: 'right', valign: 'middle', margin: 0,
+      });
     }
-    // Speaker notes are kept as editable text in the notes master-less slide: a plain text box below the slide is not visible in show mode.
+    // Speaker notes go into the slide's notes, so they are editable and not shown in the slide show.
     if (slide.notes) s.addNotes(slide.notes);
-    s.addShape(pptx.ShapeType.rect, { x: 9.05, y: 7.0, w: 0.25, h: 0.05, fill: { color: accent }, line: { color: accent, width: 0 } });
-  }
+  });
   await pptx.writeFile({ fileName: filePath });
 }
 
@@ -193,5 +223,5 @@ async function exportDeck({ userId, deck: input, format, applyBrand = false, bra
 }
 
 module.exports = {
-  FORMATS, MIME, EXPORT_ROOT, slug, imageForPptx, inlineAssets, zipFiles, buildPptx, buildBrowserFiles, exportDeck,
+  FORMATS, MIME, EXPORT_ROOT, PPTX_SIZES, slug, pptxColor, imageForPptx, inlineAssets, zipFiles, buildPptx, buildBrowserFiles, exportDeck,
 };

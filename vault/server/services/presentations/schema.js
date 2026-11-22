@@ -3,7 +3,8 @@
 // Canonical Presentations data shapes. Every generator, editor and exporter goes through here.
 // See docs/presentations.md.
 
-const LAYOUTS = ['title', 'bullets', 'two-column', 'picture', 'closing'];
+// The slide layouts and design styles live with their geometry (layouts.js), shared by the preview and every export.
+const { LAYOUTS, DESIGN_IDS, DESIGNS } = require('./layouts');
 const MIN_SLIDES = 6;
 const MAX_SLIDES = 20;
 const DEFAULT_SLIDES = 10;
@@ -69,6 +70,15 @@ function sanitizeCustomTheme(input) {
   };
 }
 
+/** Up to four columns (comparison uses 2, three-column 3, stats up to 4): a heading and a few short bullets each. */
+function normalizeColumns(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 4).map((c) => ({
+    heading: text(c?.heading, 80),
+    bullets: Array.isArray(c?.bullets) ? c.bullets.map((b) => text(b, 160)).filter(Boolean).slice(0, 5) : [],
+  })).filter((c) => c.heading || c.bullets.length);
+}
+
 function normalizeSlide(raw, index) {
   const layout = LAYOUTS.includes(raw?.layout) ? raw.layout : 'bullets';
   const bullets = Array.isArray(raw?.bullets)
@@ -80,6 +90,7 @@ function normalizeSlide(raw, index) {
     title: text(raw?.title, 120),
     bullets,
     body: text(raw?.body, 700),
+    columns: normalizeColumns(raw?.columns),
     imageRef: text(raw?.imageRef, 4 * 1024 * 1024),
     notes: text(raw?.notes, 600),
   };
@@ -101,19 +112,21 @@ function normalizeDeck(input, { allowSlides = MIN_SLIDES } = {}) {
     title: text(input.title, 160) || 'Untitled presentation',
     subtitle: text(input.subtitle, 240),
     themeId: text(input.themeId, 80) || 'paper',
+    designId: DESIGN_IDS.includes(input.designId) ? input.designId : 'clean',
     aspect,
     slides,
   };
 }
 
 /** Build a simple deck deterministically from an outline. Used as a fallback if a model returns unusable JSON. */
-function deckFromOutline(outline, themeId = 'paper') {
+function deckFromOutline(outline, themeId = 'paper', designId = 'clean') {
   const slides = (outline?.slides || []).slice(0, MAX_SLIDES).map((s, i) => ({
     id: `s${i + 1}`,
     layout: i === 0 ? 'title' : (s.layout || (s.imageRef ? 'picture' : 'bullets')),
     title: text(s.title, 120),
     bullets: (s.bullets || []).map((b) => text(b, 220)).filter(Boolean).slice(0, 6),
     body: text(s.body, 700),
+    columns: s.columns,
     imageRef: text(s.imageRef, 4 * 1024 * 1024),
     notes: '',
   }));
@@ -123,6 +136,7 @@ function deckFromOutline(outline, themeId = 'paper') {
     title: outline?.title,
     subtitle: outline?.subtitle,
     themeId,
+    designId,
     aspect: outline?.aspect || '16:9',
     slides,
   });
@@ -138,6 +152,7 @@ function normalizeOutline(raw) {
       title: text(s?.title, 120) || `Slide ${i + 1}`,
       bullets: Array.isArray(s?.bullets) ? s.bullets.map((b) => text(b, 220)).filter(Boolean).slice(0, 5) : [],
       body: text(s?.body, 700),
+      columns: normalizeColumns(s?.columns),
       imageRef: text(s?.imageRef, 4 * 1024 * 1024),
     };
   });
@@ -155,7 +170,7 @@ function normalizeOutline(raw) {
 
 module.exports = {
   SOURCE_MAX,
-  LAYOUTS, MIN_SLIDES, MAX_SLIDES, DEFAULT_SLIDES, BUILTIN_THEMES, PresentationError,
-  text, clampInt, resolveTheme, sanitizeCustomTheme, normalizeDeck, normalizeSlide,
+  LAYOUTS, DESIGNS, DESIGN_IDS, MIN_SLIDES, MAX_SLIDES, DEFAULT_SLIDES, BUILTIN_THEMES, PresentationError,
+  text, clampInt, resolveTheme, sanitizeCustomTheme, normalizeDeck, normalizeSlide, normalizeColumns,
   deckFromOutline, normalizeOutline,
 };

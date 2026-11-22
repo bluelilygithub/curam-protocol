@@ -5,7 +5,9 @@ import Tooltip from '../../components/Tooltip';
 import { setToolHandoff } from '../../utils/toolHandoff.mjs';
 
 // Shared deck model, context and small UI pieces for the six Presentations tools. All colours come from DESIGN.md tokens.
-export const LAYOUTS = ['title', 'bullets', 'two-column', 'picture', 'closing'];
+// Same ids and order as server/services/presentations/layouts.js (the geometry for the preview and every export).
+export const LAYOUTS = ['title', 'section', 'bullets', 'agenda', 'two-column', 'comparison', 'three-column', 'stats', 'quote', 'timeline', 'picture', 'full-picture', 'closing'];
+export const COLUMN_LAYOUTS = { comparison: 2, 'three-column': 3, stats: 4 };
 export const ASPECTS = ['16:9', '4:3', '1:1'];
 export const BUILTIN_THEMES = ['paper', 'ink', 'warm', 'ocean', 'forest', 'mono'];
 
@@ -27,7 +29,26 @@ export const BTN_SECONDARY = 'inline-flex items-center gap-1.5 px-3 py-1.5 round
 export const BTN_QUIET = 'inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-opacity duration-200 hover:opacity-70 disabled:opacity-40';
 export const PRIMARY_STYLE = { background: 'var(--color-primary)', color: 'var(--color-on-primary)' };
 export const SECONDARY_STYLE = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
-export const LAYOUT_LABELS = { title: 'Title', bullets: 'Bullets', 'two-column': 'Two column', picture: 'Picture', closing: 'Closing' };
+export const LAYOUT_LABELS = {
+  title: 'Title', section: 'Section header', bullets: 'Bullets', agenda: 'Agenda', 'two-column': 'Two column', comparison: 'Comparison',
+  'three-column': 'Three columns', stats: 'Big numbers', quote: 'Quote', timeline: 'Timeline', picture: 'Picture', 'full-picture': 'Full picture', closing: 'Closing',
+};
+// What each layout uses, shown under the layout picker in the slide editor.
+export const LAYOUT_HELP = {
+  title: 'The opening slide: the title, with the body as a subtitle.',
+  section: 'A divider between parts of the talk: the title, with an optional line of body text.',
+  bullets: 'A heading and up to six points, with optional body text underneath.',
+  agenda: 'A numbered list of what the talk covers: one item per bullet.',
+  'two-column': 'A paragraph (body) on the left and points (bullets) on the right.',
+  comparison: 'Two options side by side: fill in the two columns below.',
+  'three-column': 'Three ideas, steps or features: fill in the three columns below.',
+  stats: 'Two to four key numbers: put the number as the column heading and what it measures as its first bullet.',
+  quote: 'A quotation: the body is the quote and the title is who said it.',
+  timeline: 'Milestones in order, one per bullet, like “2024 — Opened in Brisbane”.',
+  picture: 'An image on the left with points or a paragraph on the right.',
+  'full-picture': 'One image filling the slide, with the title and a short line on a strip.',
+  closing: 'The last slide: thanks, next steps or questions.',
+};
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 /**
@@ -43,7 +64,7 @@ export function themeOptions(list) {
     return {
       id,
       label: t?.name || theme?.label || cap(id),
-      bg: theme?.bg, text: theme?.text, primary: theme?.primary,
+      bg: theme?.bg, text: theme?.text, primary: theme?.primary, muted: theme?.muted,
       rowId: t?.theme ? t.id : undefined,
     };
   });
@@ -53,7 +74,7 @@ const text = (v) => (typeof v === 'string' ? v : (v == null ? '' : String(v)));
 const capped = (v, n) => text(v).slice(0, n);
 
 export function emptyDeck() {
-  return { schemaVersion: 1, title: '', subtitle: '', themeId: 'paper', aspect: '16:9', slides: [] };
+  return { schemaVersion: 1, title: '', subtitle: '', themeId: 'paper', designId: 'clean', aspect: '16:9', slides: [] };
 }
 
 /** Defensive client-side normalisation of anything that comes back from the API or from a handoff file. */
@@ -68,6 +89,12 @@ export function normalizeDeck(raw, maxSlides = 20) {
         title: capped(s.title, 160),
         bullets: Array.isArray(s.bullets) ? s.bullets.map((b) => capped(b, 300)).filter(Boolean).slice(0, 8) : [],
         body: capped(s.body, 1200),
+        columns: Array.isArray(s.columns)
+          ? s.columns.slice(0, 4).map((c) => ({
+            heading: capped(c?.heading, 80),
+            bullets: Array.isArray(c?.bullets) ? c.bullets.map((b) => capped(b, 160)).filter(Boolean).slice(0, 5) : [],
+          }))
+          : [],
         imageRef: capped(s.imageRef, 2000),
         notes: capped(s.notes, 1000),
       };
@@ -78,6 +105,7 @@ export function normalizeDeck(raw, maxSlides = 20) {
     title: capped(src.title, 160),
     subtitle: capped(src.subtitle, 240),
     themeId: capped(src.themeId, 80) || 'paper',
+    designId: capped(src.designId, 40) || 'clean',
     aspect: ASPECTS.includes(src.aspect) ? src.aspect : '16:9',
     slides,
   };
