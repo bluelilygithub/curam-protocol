@@ -774,7 +774,7 @@ export default function ContractReviewPage() {
                     </button>
                     <Tooltip text="Close this contract and go back to Your contracts.">
                       <button type="button" onClick={closeContract} aria-label="Close this contract" className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
-                        {getIcon('close', { size: 12 })}
+                        {getIcon('x', { size: 12 })}
                       </button>
                     </Tooltip>
                   </div>
@@ -782,7 +782,7 @@ export default function ContractReviewPage() {
               )}
             </ToolSidebar>
 
-            <main className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="contract-review-main">
+            <div className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="contract-review-main">
               <div className="max-w-5xl space-y-4">
                 {tool === 'start' && (
                   <div className="space-y-6">
@@ -870,7 +870,7 @@ export default function ContractReviewPage() {
                   </>
                 )}
               </div>
-            </main>
+            </div>
           </div>
         </ContractReviewContext.Provider>
         <ContractReviewTutorChat currentTool={tool === 'start' ? 'new' : tool} onOpenTool={openGuideTool} />
