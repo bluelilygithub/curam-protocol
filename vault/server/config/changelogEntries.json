@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d6ccf6ea",
+   "fullHash": "d6ccf6ea89ba757269e66eb097358ed7dd855f93",
+   "committedAt": "2026-11-22T19:40:12+10:00",
+   "author": "mrb",
+   "area": "Presentations, Model Selection, Guides",
+   "subject": "Presentations: use Vault model selection for slides and guide",
+   "filesChanged": 16,
+   "insertions": 413,
+   "deletions": 39,
+   "goal": "Make Presentations generation and its guide chat use Vault's documented model-selection rules, and stop raw provider auth JSON reaching the browser.",
+   "whatChanged": "The page now calls useModels() and the memberModelSelection feature flag, matching Chat: admins always pick, members pick only when allowed, and the effective id is the pick, default_model, then the first configured text model. A sidebar picker (text providers only) sends the id with POST /api/presentations/create; CreateDeck displays the active model. server/utils/userModelSelection.js repeats the permission and configured-text-id check at the HTTP boundary, ignoring the id for members without the flag and returning 400 for unknown or non-text ids. generateDeck() uses the validated id for slide writing while the outline keeps the workspace light tier, with standard/light fallback when no pick is present. The shared TutorChat gains optional model/modelOptions/canSelectModel/onModelChange props; PresentationsGuide passes them, so guide replies use the same validated model and other guides are untouched. makeGuideRouter() and guideCore.ask() accept the optional id, and server/utils/modelCallError.js converts provider SDK JSON (the 401 invalid x-api-key case) into a readable 502 with code model_call. Raw provider JSON is no longer shown and provider failures are no longer silently replaced by a fallback deck. Docs and direct tests cover the rules; no new npm dependency was added.",
+   "filesImpacted": [
+    "client/src/pages/PresentationsPage.jsx",
+    "client/src/components/tutor/TutorChat.jsx",
+    "client/src/pages/presentations/PresentationsGuide.jsx",
+    "client/src/pages/presentations/tools/CreateDeck.jsx",
+    "server/routes/presentations/create.js",
+    "server/routes/guideRouter.js",
+    "server/services/guideCore.js",
+    "server/services/presentations/generation.js",
+    "server/utils/userModelSelection.js",
+    "server/utils/modelCallError.js",
+    "docs/presentations.md",
+    "docs/features.md"
+   ],
+   "benefit": "Slides and the guide follow the same admin-configured models and member permission rule as Chat; a bad provider key produces one clear admin-actionable message instead of a wall of JSON or a misleading fallback deck.",
+   "concerns": "memberModelSelection defaults off, so members keep the workspace default until an admin enables it; the outline intentionally stays on the light tier. Tests passed: generation, userModelSelection, guideCore, guides, featureAccess, presentation schema/jobs/export/templates/goals, test:nav and the client build. npm run test:tutor-email still fails on its stale hard-coded 8-guide expectation (config now has 39); that test and server/config/guides.js are unchanged by this commit. Not checked in a browser or on Railway. No new npm dependencies."
+  },
+  {
    "commit": "0242ec72",
    "fullHash": "0242ec721f3bbb261e55b7122d15b1e60d70f545",
    "committedAt": "2026-11-22T19:10:14+10:00",
