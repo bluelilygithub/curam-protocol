@@ -13,12 +13,20 @@ const BASES = ['server', 'client/src'];
 // Tools whose real code is a separate app shown in an iframe: its src/ and tests/ (TypeScript too) count as that tool's client code.
 const EMBEDDED_APPS = { docCompare: 'doc-compare', cellarPlanner: 'cellar-planner', roomPlanner: 'room-planner', gardenPlanner: 'garden-planner', routeTracer: 'route-tracer' };
 const APP_EXTS = [...EXTS, '.ts', '.tsx'];
+// Import aliases (the apps' and Vault's Vite configs): planner-core is code the planners, DocCompare and Vault's client share.
+// It belongs to no single tool: a file goes to whichever tools import it (shared at 3 or more, like any file).
+const ALIASES = { '@planner-core/': 'planner-core/src/' };
 
 const TEST_RE = /\.(test|spec)\.(m?js|jsx|cjs|tsx?)$/;
 
 // The tool id whose embedded app holds this file, or null for Vault's own code.
 function appOf(f) {
   return Object.keys(EMBEDDED_APPS).find((id) => f.startsWith(`${EMBEDDED_APPS[id]}/`)) || null;
+}
+
+// Code outside Vault's own conventions: an embedded app or an aliased library such as planner-core.
+function isAppCode(f) {
+  return !!appOf(f) || Object.values(ALIASES).some((p) => f.startsWith(p));
 }
 
 function isTest(f) {
@@ -69,12 +77,11 @@ function collectFiles(root) {
       if (hasExt(name, EXTS)) files[toRel(root, p)] = readText(p);
     });
   }
-  for (const dir of Object.values(EMBEDDED_APPS)) {
-    for (const sub of ['src', 'tests']) {
-      walk(path.join(root, dir, sub), (p, name) => {
-        if (hasExt(name, APP_EXTS) && !name.endsWith('.d.ts')) files[toRel(root, p)] = readText(p);
-      });
-    }
+  const appDirs = [...Object.values(EMBEDDED_APPS).flatMap((d) => [`${d}/src`, `${d}/tests`]), ...Object.values(ALIASES)];
+  for (const dir of appDirs) {
+    walk(path.join(root, dir), (p, name) => {
+      if (hasExt(name, APP_EXTS) && !name.endsWith('.d.ts')) files[toRel(root, p)] = readText(p);
+    });
   }
   return files;
 }
@@ -99,4 +106,4 @@ function splitLines(src) {
   return lines;
 }
 
-module.exports = { EXTS, APP_EXTS, EMBEDDED_APPS, appOf, SKIP_DIRS, isTest, readText, walk, toRel, collectFiles, locOf, buildLoc, splitLines, hasExt };
+module.exports = { EXTS, APP_EXTS, EMBEDDED_APPS, ALIASES, appOf, isAppCode, SKIP_DIRS, isTest, readText, walk, toRel, collectFiles, locOf, buildLoc, splitLines, hasExt };

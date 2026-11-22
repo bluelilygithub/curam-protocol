@@ -5,7 +5,7 @@
 // Ported from the "convention checks" block of specs/code-map/reference/analyze.py. To add a convention, add one entry.
 
 const path = require('path');
-const { splitLines, appOf } = require('./files');
+const { splitLines, isAppCode } = require('./files');
 const { kebab } = require('./ownership');
 
 const MODEL_RX = /['"`](claude-(?:opus|sonnet|haiku|3|instant)[\w.-]*|gemini-\d[\w.-]*|gpt-[34o][\w.-]*|deepseek-[\w.-]+)['"`]/;
@@ -322,8 +322,8 @@ function pyRound(x) {
 // Runs every rule on a tool and adds checks, score, fails, warns, lifecycle, defaultOn.
 function applyRules(t, ctx, rules = RULES) {
   const c = {};
-  // vaultOnly rules check Vault's own client code, not an embedded app (it has no apiClient, Dialog or getIcon).
-  const vaultView = { ...t, ownedClient: (t.ownedClient || []).filter((f) => !appOf(f)) };
+  // vaultOnly rules check Vault's own client code, not an embedded app or planner-core (no apiClient, Dialog or getIcon there).
+  const vaultView = { ...t, ownedClient: (t.ownedClient || []).filter((f) => !isAppCode(f)) };
   for (const r of rules) c[r.id] = r.test(r.vaultOnly ? vaultView : t, ctx);
   const vals = Object.values(c);
   const pass = vals.filter((v) => v.status === 'pass').length;

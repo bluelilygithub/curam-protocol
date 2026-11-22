@@ -346,6 +346,17 @@ test('embedded app: its TypeScript is owned by the tool, type-only imports ignor
     assert.ok(t.tests.includes('recipe-app/tests/shell.test.ts'));
     assert.strictEqual(t.checks.apiClient.status, T.recipes.checks.apiClient.status, 'raw fetch in the app is not an apiClient gap');
     assert.strictEqual(t.checks.modals.status, T.recipes.checks.modals.status, 'its own overlay is not a Dialog gap');
+
+    // @planner-core/... resolves to planner-core/src/...; a file only this tool reaches is owned by it, and Vault-only rules skip it
+    const withCore = { ...app,
+      'recipe-app/src/main.tsx': `${app['recipe-app/src/main.tsx']}import { mic } from '@planner-core/speech/mic';\n`,
+      'planner-core/src/speech/mic.ts': "export const mic = () => fetch('/api/x').then(() => '<div class=\"fixed inset-0\">');\n" };
+    assert.ok(buildGraph(withCore).deps.get('recipe-app/src/main.tsx').has('planner-core/src/speech/mic.ts'), 'alias resolves');
+    const r2 = analyze({ root: ROOT, files: { ...files, ...withCore }, log: null });
+    const t2 = r2.tools.find((x) => x.id === 'recipes');
+    assert.ok(t2.ownedClient.includes('planner-core/src/speech/mic.ts'));
+    assert.strictEqual(t2.checks.apiClient.status, T.recipes.checks.apiClient.status, 'planner-core is not checked for apiClient');
+    assert.strictEqual(t2.checks.modals.status, T.recipes.checks.modals.status, 'planner-core is not checked for Dialog');
   } finally {
     delete EMBEDDED_APPS.recipes;
   }

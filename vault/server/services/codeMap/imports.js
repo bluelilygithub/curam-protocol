@@ -4,15 +4,19 @@
 // Port of the "import graph" block of specs/code-map/reference/analyze.py.
 
 const path = require('path');
-const { APP_EXTS } = require('./files');
+const { APP_EXTS, ALIASES } = require('./files');
 
-const IMP_RE = /(?:require\(\s*|import\s*\(\s*|from\s+|import\s+)(['"])(\.{1,2}\/[^'"]+)\1/g;
+const ALIAS_KEYS = Object.keys(ALIASES);
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+// Relative specifiers, plus the aliased ones (@planner-core/...).
+const IMP_RE = new RegExp(`(?:require\\(\\s*|import\\s*\\(\\s*|from\\s+|import\\s+)(['"])((?:\\.{1,2}/|${ALIAS_KEYS.map(esc).join('|')})[^'"]+)\\1`, 'g');
 // TypeScript `import type` / `export type ... from` lines are erased at build time, so they are not runtime links (or cycles).
 const TYPE_IMP_RE = /^\s*(?:import|export)\s+type\s[^;]*?from\s+['"][^'"]+['"];?/gms;
 
-// Resolve a relative specifier against the importing file: as written, + each extension, then /index.<ext>.
+// Resolve a relative (or aliased) specifier against the importing file: as written, + each extension, then /index.<ext>.
 function resolve(files, src, spec) {
-  const base = path.posix.normalize(path.posix.join(path.posix.dirname(src), spec));
+  const alias = ALIAS_KEYS.find((k) => spec.startsWith(k));
+  const base = alias ? path.posix.normalize(ALIASES[alias] + spec.slice(alias.length)) : path.posix.normalize(path.posix.join(path.posix.dirname(src), spec));
   const cands = [base, ...APP_EXTS.map((e) => base + e), ...APP_EXTS.map((e) => `${base}/index${e}`)];
   for (const c of cands) if (Object.prototype.hasOwnProperty.call(files, c)) return c;
   return null;

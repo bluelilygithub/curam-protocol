@@ -78,7 +78,10 @@ function computeOwnership({ files, loc, deps, tools, mounts, config = OWNER_CONF
   for (const t of tools) clientReach[t.id] = t.clientEntries.length ? bfs(t.clientEntries, deps) : new Set();
   for (const t of tools) {
     const dir = EMBEDDED_APPS[t.id];
-    if (dir) for (const f of Object.keys(files)) if (f.startsWith(`${dir}/`)) clientReach[t.id].add(f);
+    if (!dir) continue;
+    const appFiles = Object.keys(files).filter((f) => f.startsWith(`${dir}/`));
+    // The whole app is the tool's; following its (non-test) imports also reaches the planner-core files it uses.
+    clientReach[t.id] = new Set([...bfs([...clientReach[t.id], ...appFiles.filter((f) => !isTest(f))], deps), ...appFiles]);
   }
   const clientCount = countReach(clientReach);
   const cc = (f) => clientCount.get(f) || 0;
