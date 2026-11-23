@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "870bfe51",
+   "fullHash": "870bfe51791e66dcc976fdbf3c32620f76096205",
+   "committedAt": "2026-11-24T07:44:49+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: give the explanation every scan limitation, not the first four",
+   "filesChanged": 2,
+   "insertions": 10,
+   "deletions": 1,
+   "goal": "Stop the explanation understating how incomplete a scan was.",
+   "whatChanged": "The real claude-trading-skills explanation (on deepseek-v4-flash) said four analysers were degraded when the scan listed ten, because buildSummaryPrompt in services/skillScan/summary.js passed each skill's limitations through slice(0, 4). It now passes all of them (the runner already caps them at 10) plus limitationCount. A regression test builds a report with ten limitations and checks the prompt carries the count and the tenth.",
+   "filesImpacted": [
+    "server/services/skillScan/summary.js",
+    "server/services/skillScan/skillScan.test.js"
+   ],
+   "benefit": "Explanations now state the true number of degraded analysers, so a partial scan is not described as less partial than it was.",
+   "concerns": "Existing explanations keep the old wording until Regenerate. The rest of that explanation was checked against its report and was accurate."
+  },
+  {
    "commit": "75037a18",
    "fullHash": "75037a1801a35e76da8918c99d45f030b713e540",
    "committedAt": "2026-11-24T07:35:33+10:00",
