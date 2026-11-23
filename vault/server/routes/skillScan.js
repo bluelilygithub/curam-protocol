@@ -36,6 +36,16 @@ function createSkillScanRouter({ service, limiter } = {}) {
     try { res.json(await S().config(req.user.id)); } catch (err) { fail(res, err, 'config'); }
   });
 
+  // Which connected model writes the explanation and runs a Deep scan ('' = the workspace default). Settings -> AI & Chat.
+  router.get('/model-config', async (req, res) => {
+    try { res.json(await S().getModelConfig(req.user.id)); } catch (err) { fail(res, err, 'model config'); }
+  });
+  router.post('/model-config', async (req, res) => {
+    const id = req.body?.modelId;
+    if (id !== undefined && id !== null && typeof id !== 'string') return res.status(400).json({ error: 'The model must be text.' });
+    try { res.json(await S().saveModel(req.user.id, id)); } catch (err) { fail(res, err, 'model save'); }
+  });
+
   router.get('/scans', async (req, res) => {
     try { res.json({ scans: await S().list(req.user.id) }); } catch (err) { fail(res, err, 'list'); }
   });

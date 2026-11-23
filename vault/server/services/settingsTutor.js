@@ -29,7 +29,7 @@ const CATALOG = [
     does: 'Settings, Tours: replay the guided tour of each part of Vault. Admin only.', notes: 'Admin only.' },
   // ---- AI and tools (admin) ----
   { id: 'AI & Chat', label: 'AI & Chat', group: 'AI and tools',
-    does: 'Settings, AI & Chat: which AI models are available (the model list) and which one is the default for chat, plus other model slots such as branch suggestions, graphics and embeddings, and the standing custom instructions. Admin only.',
+    does: 'Settings, AI & Chat: which AI models are available (the model list) and which one is the default for chat, plus other model slots such as branch suggestions, graphics and embeddings, the standing custom instructions, and at the bottom the Skill Scanner model (the model Skill Scanner uses to explain findings and run a Deep scan; an Anthropic Claude model is recommended and a Deep scan needs one). Admin only.',
     notes: 'Admin only. The default model is the one used for substantive work; cheaper background tasks use a lighter one from the same list.' },
   { id: 'Translation', label: 'Translation', group: 'AI and tools',
     does: 'Settings, Translation: languages and translation choices. Admin only.', notes: 'Admin only.' },

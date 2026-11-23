@@ -329,3 +329,76 @@ test('runScan(): each skill separately gives SkillSpector the unpacked local fol
   await runner.runScan({ url: 'https://github.com/o/repo' }, { run: g.run });
   assert.equal(g.calls[0].args[1], 'https://github.com/o/repo');
 });
+
+// ── modelResolver.js: the Skill Scanner model chosen in Settings -> AI & Chat ───────────
+const { createModelResolver, isAnthropicModel } = require('./modelResolver');
+
+function fakeModelDeps({ own = null, admin = null, models, standard }) {
+  const saved = [];
+  return {
+    saved,
+    pool: { query: async (sql, params) => {
+      if (/INSERT INTO settings/.test(sql)) { saved.push(['set', ...params]); return { rows: [] }; }
+      if (/DELETE FROM settings/.test(sql)) { saved.push(['del', ...params]); return { rows: [] }; }
+      if (/u."isAdmin"/.test(sql)) return { rows: admin ? [{ value: admin }] : [] };
+      return { rows: own ? [{ value: own }] : [] };
+    } },
+    getVaultModelsConfigForUser: async () => ({ models }),
+    getModelsForUser: async () => ({ standard }),
+    pickTextModel: (tiers, slot) => tiers[slot] || null,
+  };
+}
+const MODELS = [{ id: 'deepseek-chat', provider: 'deepseek' }, { id: 'claude-sonnet-5-5', provider: 'anthropic' }, { id: 'claude-x' }, { id: 'gemini-pro', provider: 'gemini' }];
+
+test('isAnthropicModel(): by provider, else by a claude- id', () => {
+  assert.equal(isAnthropicModel(MODELS, 'claude-sonnet-5-5'), true);
+  assert.equal(isAnthropicModel(MODELS, 'claude-x'), true, 'no provider stored: the id decides');
+  assert.equal(isAnthropicModel(MODELS, 'deepseek-chat'), false);
+  assert.equal(isAnthropicModel(MODELS, null), false);
+});
+
+test('model resolver: default model (DeepSeek) until a Claude model is chosen; a stale choice falls back; admins’ choice inherited', async () => {
+  let r = createModelResolver(fakeModelDeps({ models: MODELS, standard: 'deepseek-chat' }));
+  assert.deepEqual(await r.resolveModel(1), { modelId: 'deepseek-chat', anthropic: false });
+  let c = await r.getModelConfig(1);
+  assert.equal(c.effectiveIsAnthropic, false);
+  assert.deepEqual(c.anthropicChoices, ['claude-sonnet-5-5', 'claude-x'], 'the card can recommend these');
+
+  r = createModelResolver(fakeModelDeps({ own: 'claude-sonnet-5-5', models: MODELS, standard: 'deepseek-chat' }));
+  assert.deepEqual(await r.resolveModel(1), { modelId: 'claude-sonnet-5-5', anthropic: true });
+
+  r = createModelResolver(fakeModelDeps({ own: 'claude-old', models: MODELS, standard: 'deepseek-chat' }));
+  c = await r.getModelConfig(1);
+  assert.equal(c.assignmentValid, false);
+  assert.equal(c.effectiveModel, 'deepseek-chat', 'a model no longer connected falls back');
+
+  r = createModelResolver(fakeModelDeps({ admin: 'claude-x', models: MODELS, standard: 'deepseek-chat' }));
+  c = await r.getModelConfig(2);
+  assert.equal(c.fromAdmin, true);
+  assert.equal(c.effectiveModel, 'claude-x');
+});
+
+test('model resolver: saves only a connected model; empty clears the choice', async () => {
+  const deps = fakeModelDeps({ models: MODELS, standard: 'deepseek-chat' });
+  const r = createModelResolver(deps);
+  await r.saveModel(1, 'claude-sonnet-5-5');
+  await r.saveModel(1, '');
+  assert.deepEqual(deps.saved, [['set', '1', 'skill_scan_model', 'claude-sonnet-5-5'], ['del', '1', 'skill_scan_model']]);
+  await assert.rejects(r.saveModel(1, 'gpt-made-up'), (e) => e.status === 400);
+});
+
+test('service config: Deep scan needs a Claude Skill Scanner model, and says where to choose one', async () => {
+  const { createSkillScanService } = require('./index');
+  const saved = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+  try {
+    const mk = (resolved) => createSkillScanService({ pool: {}, deps: { runnerDeps: { run: async () => ({ code: 0 }) }, models: { resolveModel: async () => resolved } } });
+    let c = await mk({ modelId: 'deepseek-chat', anthropic: false }).config(1);
+    assert.equal(c.deepAvailable, false);
+    assert.match(c.deepReason, /needs an Anthropic \(Claude\) model; Skill Scanner is set to deepseek-chat.*Settings -> AI & Chat -> Skill Scanner model/);
+    assert.equal(c.model, 'deepseek-chat');
+    c = await mk({ modelId: 'claude-sonnet-5-5', anthropic: true }).config(1);
+    assert.equal(c.deepAvailable, true);
+    assert.equal(c.modelIsAnthropic, true);
+  } finally { if (saved === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = saved; }
+});

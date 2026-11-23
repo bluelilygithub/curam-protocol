@@ -305,7 +305,7 @@ export default function SkillScanPage() {
         </Tooltip>
       </div>
       {deep && <p className="text-xs" style={{ color: '#f59e0b' }}>A deep scan sends the skill’s files to Anthropic and costs a little. It can take up to about 20 minutes.</p>}
-      <p className="text-xs" style={muted}>After the scan, AI explains the findings in context; that sends the findings (with short code examples) to Anthropic.</p>
+      <p className="text-xs" style={config?.model && !config.modelIsAnthropic ? { color: '#f59e0b' } : muted}>After the scan, {config?.model || 'AI'} explains the findings in context; that sends the findings (with short code examples) to its provider.{config?.model && !config.modelIsAnthropic ? ' An Anthropic (Claude) model is recommended for this job: choose one under Settings → AI & Chat → Skill Scanner model.' : ''}</p>
       <Tooltip text="Start the scan. It runs in the background; the report opens when it finishes.">
         <button type="button" className={button} disabled={!canScan} onClick={scanNow} style={{ background: 'var(--color-primary)', color: '#fff' }}>
           {getIcon('shield', { size: 14 })} {busy || jobId ? 'Scanning…' : 'Scan'}
@@ -356,7 +356,7 @@ export default function SkillScanPage() {
         <section className="rounded-2xl border p-5 space-y-3" style={panel}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>{getIcon('file-text', { size: 15 })} What the findings mean</h3>
-            <Tooltip text="Write the explanation again from this scan's findings. One AI call; the findings are sent to Anthropic.">
+            <Tooltip text={`Write the explanation again from this scan's findings. One AI call with ${config?.model || 'the model chosen in Settings'}; the findings are sent to its provider.`}>
               <button type="button" className={button} disabled={explaining} onClick={explain} style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
                 {getIcon('refresh-cw', { size: 13 })} {explaining ? 'Writing…' : summary ? 'Regenerate' : 'Explain the findings'}
               </button>

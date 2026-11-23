@@ -18,16 +18,21 @@ const parse = (v, fallback = null) => {
 };
 
 function createSkillScanService({ pool = require('../../db').pool, deps = {} } = {}) {
-  const getModels = deps.getModels || ((userId) => require('../modelResolver').getModelsForUser(userId));
+  // The model chosen for Skill Scanner in Settings -> AI & Chat (else the workspace default): services/skillScan/modelResolver.js
+  const models = deps.models || require('./modelResolver').createModelResolver();
 
   async function config(userId) {
     const installed = await runner.isInstalled(deps.runnerDeps);
-    const model = (await getModels(userId).catch(() => ({})))?.standard || null;
+    const { modelId, anthropic } = await models.resolveModel(userId).catch(() => ({ modelId: null, anthropic: false }));
     const hasKey = !!process.env.ANTHROPIC_API_KEY;
-    const deepReason = !hasKey ? 'ANTHROPIC_API_KEY is not set on this server.'
-      : !/^claude/i.test(String(model || '')) ? 'A deep scan uses Anthropic: choose a Claude model as the standard model in Settings.' : null;
-    return { installed, deepAvailable: !deepReason, deepReason, model: deepReason ? null : model, maxZipMb: 20 };
+    const deepReason = !modelId ? 'No AI model is set up yet. Add one under Settings -> AI & Chat.'
+      : !anthropic ? `A Deep scan needs an Anthropic (Claude) model; Skill Scanner is set to ${modelId}. Choose a Claude model under Settings -> AI & Chat -> Skill Scanner model.`
+        : !hasKey ? 'ANTHROPIC_API_KEY is not set on this server.' : null;
+    return { installed, deepAvailable: !deepReason, deepReason, model: modelId, modelIsAnthropic: anthropic, maxZipMb: 20 };
   }
+
+  // the explanation uses the same chosen model
+  const summaryDeps = (userId) => deps.summaryDeps || { getModels: async () => ({ standard: (await models.resolveModel(userId)).modelId }) };
 
   async function list(userId) {
     const { rows } = await pool.query(
@@ -48,7 +53,7 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
   async function summarise(userId, id) {
     const scan = await get(userId, id);
     if (!scan) return null;
-    const summary = await (deps.explainScan || explainScan)(userId, scan, deps.summaryDeps);
+    const summary = await (deps.explainScan || explainScan)(userId, scan, summaryDeps(userId));
     await pool.query('UPDATE skill_scans SET summary = $3::jsonb WHERE id = $1 AND "userId" = $2', [scan.id, userId, JSON.stringify(summary)]);
     return summary;
   }
@@ -122,7 +127,11 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
     } finally { client.release(); }
   }
 
-  return { config, list, get, start, remove, summarise, getJob: jobs.getJob };
+  return {
+    config, list, get, start, remove, summarise, getJob: jobs.getJob,
+    getModelConfig: (userId) => models.getModelConfig(userId),
+    saveModel: (userId, modelId) => models.saveModel(userId, modelId),
+  };
 }
 
 module.exports = { createSkillScanService, MAX_RUNNING };

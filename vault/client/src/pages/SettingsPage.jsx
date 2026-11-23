@@ -40,6 +40,7 @@ import { TOUR_KEY as PASSWORD_VAULT_TOUR_KEY } from '../utils/tours/passwordVaul
 import { TOUR_KEY as TOPIC_RESEARCH_TOUR_KEY } from '../utils/tours/topicResearchTour';
 import TopicResearchModelCard from './topicResearch/TopicResearchModelCard';
 import EmailFollowUpModelCard from './emailFollowUp/EmailFollowUpModelCard';
+import SkillScanModelCard from './skillScan/SkillScanModelCard';
 import PdfHtmlModelCard from './pdf/PdfHtmlModelCard';
 import { TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import { TOUR_KEY as MEMORY_TOUR_KEY } from '../utils/tours/memoryTour';
@@ -1788,6 +1789,8 @@ function SettingsPage() {
           )}
         </div>
       </section>
+      {/* Skill Scanner is admin-only, so its model choice is too */}
+      {user?.isAdmin && <SkillScanModelCard choices={textModelChoices} defaultModel={defaultModel} />}
       </>)}
 
       {/* Change Password — Profile tab */}
