@@ -340,6 +340,18 @@ function normSkill(r) {
   };
 }
 
+/**
+ * Tokens SkillSpector's own model calls used (deep scans): prompt_tokens / completion_tokens of every record in metadata.inference_usage,
+ * at the top and in each skill of a --recursive report (inference_usage.py at the pinned commit). { input, output }; zeros when none. Pure.
+ */
+function tokenUsage(raw) {
+  const out = { input: 0, output: 0 };
+  const add = (list) => { for (const u of Array.isArray(list) ? list : []) { out.input += Number(u?.prompt_tokens) || 0; out.output += Number(u?.completion_tokens) || 0; } };
+  add(raw?.metadata?.inference_usage);
+  for (const s of Array.isArray(raw?.skills) ? raw.skills : []) add(s?.metadata?.inference_usage);
+  return out;
+}
+
 /** SkillSpector JSON (single skill, or `multi_skill` from --recursive) -> the page's report. */
 function normalizeReport(raw) {
   if (raw && raw.multi_skill) {
@@ -375,7 +387,7 @@ const lastLines = (s, n = 3) => String(s || '').trim().split(/\r?\n/).filter((l)
  * onProgress({ phase: 'download'|'unpack'|'scan', current, total, module, etaSec, estimateSec, files }) reports each stage; `current`
  * is the skill being scanned (1-based) once SkillSpector names it. `secondsPerSkill` (from earlier scans) gives the estimate.
  */
-async function runScan({ url = null, zipBuffer = null, deep = false, model = null, secondsPerSkill = null }, deps = {}, onProgress = () => {}) {
+async function runScan({ url = null, zipBuffer = null, deep = false, model = null, secondsPerSkill = null, costPerSkill = null }, deps = {}, onProgress = () => {}) {
   const target0 = url ? parseGithubUrl(url) : null;
   if (url && !target0) throw Object.assign(new Error('Paste a public github.com link, e.g. https://github.com/owner/repo or a /tree/main/folder link.'), { status: 400 });
   if (!url && !zipBuffer) throw Object.assign(new Error('Paste a GitHub link or upload a zip.'), { status: 400 });
@@ -393,10 +405,12 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
     fs.mkdirSync(home);
     const timeoutMs = timeoutFor({ deep, skills: skillsGuess });
     const estimateSec = secondsPerSkill ? Math.round(secondsPerSkill * skillsGuess) : null;
+    // USD, from the tokens per skill of earlier scans priced at today's model (index.js); bytes lets a first deep scan show a floor
+    const estimateCost = costPerSkill != null ? Math.round(costPerSkill * skillsGuess * 10000) / 10000 : null;
     // live progress from SkillSpector's "[i/N] Scanning name" lines; time left from the average of the skills finished so far
     const scanStart = Date.now();
     const state = { total: found.subSkills || 1, current: 0, startedFirst: null };
-    report({ phase: 'scan', current: 0, total: state.total, module: null, estimateSec, files: found.files, timeoutMin: Math.round(timeoutMs / 60000) });
+    report({ phase: 'scan', current: 0, total: state.total, module: null, estimateSec, estimateCost, files: found.files, bytes: found.bytes, timeoutMin: Math.round(timeoutMs / 60000) });
     const onLine = (line) => {
       const p = parseProgressLine(line);
       if (!p) return;
@@ -409,7 +423,7 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
         const perSkill = doneCount > 0 && state.startedFirst ? (Date.now() - state.startedFirst) / 1000 / doneCount : secondsPerSkill;
         // != null, not truthiness: skills that finish within a second give a rate of 0, which is a real (tiny) time left
         const etaSec = perSkill != null ? Math.round(perSkill * (state.total - doneCount)) : null;
-        report({ phase: 'scan', current: p.current, total: state.total, module: p.name, etaSec, estimateSec, files: found.files, timeoutMin: Math.round(timeoutMs / 60000) });
+        report({ phase: 'scan', current: p.current, total: state.total, module: p.name, etaSec, estimateSec, estimateCost, files: found.files, bytes: found.bytes, timeoutMin: Math.round(timeoutMs / 60000) });
       }
     };
     const run = (subSkills) => (deps.run || runProcess)(BIN, buildArgs({ target, outFile, deep, subSkills }),
@@ -430,6 +444,7 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
       durationMs: Date.now() - scanStart,
       skillCount: normalized.multi ? normalized.skills.length : 1,
       fileCount: found.files,
+      tokens: tokenUsage(raw),
     };
     return { exitCode: res.code, report: normalized, raw, stats };
   } finally {
@@ -439,6 +454,6 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
 
 module.exports = {
   BIN, LIMITS, MAX_SKILLS, DEFAULT_SKILL_LIMIT, GITHUB_URL_RE, timeoutFor, countFolder, flattenSkills, parseProgressLine,
-  parseGithubUrl, scanEnv, buildArgs, runProcess, isInstalled, normIssue, normSkill, normalizeReport, runScan,
+  parseGithubUrl, scanEnv, buildArgs, runProcess, isInstalled, normIssue, normSkill, normalizeReport, tokenUsage, runScan,
   githubArchive, extractZip, prepareFolder,
 };

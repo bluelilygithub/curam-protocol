@@ -410,6 +410,16 @@ test('flattenSkills(): deeper skills are moved up so SkillSpector sees each one;
   fs.rmSync(d, { recursive: true, force: true });
 });
 
+test('tokenUsage(): sums SkillSpector\'s inference_usage records, top level and per skill', () => {
+  assert.deepEqual(runner.tokenUsage({}), { input: 0, output: 0 });
+  assert.deepEqual(runner.tokenUsage({ metadata: { inference_usage: [{ prompt_tokens: 100, completion_tokens: 20 }, { prompt_tokens: 5 }] } }), { input: 105, output: 20 });
+  assert.deepEqual(runner.tokenUsage({ multi_skill: true, skills: [
+    { metadata: { inference_usage: [{ prompt_tokens: 1000, completion_tokens: 200 }] } },
+    { metadata: { inference_usage: [{ prompt_tokens: 'x', completion_tokens: 50 }] } },
+    { error: 'failed' },
+  ] }), { input: 1000, output: 250 });
+});
+
 test('parseProgressLine(): the "N skills found" and "[i/N] Scanning name" lines', () => {
   assert.deepEqual(runner.parseProgressLine('Multi-skill directory detected: 68 skills found'), { type: 'total', total: 68 });
   assert.deepEqual(runner.parseProgressLine('  [12/68] Scanning helius-api'), { type: 'skill', current: 12, total: 68, name: 'helius-api' });

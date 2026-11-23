@@ -137,7 +137,7 @@ async function explainScan(userId, scan, deps = {}) {
   (deps.logUsage || require('../../utils/logUsage').logUsage)({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'skill_scan_summary' });
   const clean = cleanSummary(parseJson(result.text), groups);
   if (!clean) throw new Error('The model did not return a usable explanation. Try Regenerate.');
-  return { ...clean, model: result.model || model, generatedAt: new Date().toISOString() };
+  return { ...clean, model: result.model || model, generatedAt: new Date().toISOString(), usage: { input: Number(result.inputTokens) || 0, output: Number(result.outputTokens) || 0 } };
 }
 
 module.exports = { SYSTEM, ASSESSMENTS, READINGS, groupFindings, buildSummaryPrompt, parseJson, cleanSummary, explainScan, skillOf };

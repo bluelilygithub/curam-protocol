@@ -5,6 +5,7 @@
 
 const runner = require('./runner');
 const { explainScan, groupFindings } = require('./summary');
+const { calculateCost } = require('../costCalculator');
 // The in-memory job registry BIP uses (generic: id, progress, result; lost on restart, the saved row is not).
 const jobs = require('../bip/jobs');
 
@@ -36,7 +37,7 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
 
   async function list(userId) {
     const { rows } = await pool.query(
-      `SELECT id, source, "sourceType", "fileName", mode, recursive, status, score, severity, recommendation, "issueCount", error, "durationMs", "skillCount", "createdAt", "finishedAt"
+      `SELECT id, source, "sourceType", "fileName", mode, recursive, status, score, severity, recommendation, "issueCount", error, "durationMs", "skillCount", "costUsd", "createdAt", "finishedAt"
          FROM skill_scans WHERE "userId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT 200`, [userId]);
     return rows;
   }
@@ -54,7 +55,12 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
     const scan = await get(userId, id);
     if (!scan) return null;
     const summary = await (deps.explainScan || explainScan)(userId, scan, summaryDeps(userId));
-    await pool.query('UPDATE skill_scans SET summary = $3::jsonb WHERE id = $1 AND "userId" = $2', [scan.id, userId, JSON.stringify(summary)]);
+    const u = summary.usage || { input: 0, output: 0 };
+    // every explanation (Regenerate too) is real spend, so it adds to the scan's tokens and cost
+    await pool.query(
+      `UPDATE skill_scans SET summary = $3::jsonb, "tokensIn" = COALESCE("tokensIn", 0) + $4, "tokensOut" = COALESCE("tokensOut", 0) + $5,
+              "costUsd" = COALESCE("costUsd", 0) + $6 WHERE id = $1 AND "userId" = $2`,
+      [scan.id, userId, JSON.stringify(summary), u.input, u.output, priced(summary.model, u)]);
     return summary;
   }
 
@@ -69,6 +75,23 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
         ORDER BY "finishedAt" DESC LIMIT 10`, [userId, mode]);
     const rates = rows.map((r) => r.durationMs / 1000 / r.skillCount).sort((a, b) => a - b);
     return rates.length ? Math.round(rates[Math.floor(rates.length / 2)] * 10) / 10 : null;
+  }
+
+  const priced = (modelId, u) => (modelId && (u.input || u.output) ? calculateCost(modelId, u.input, u.output) : 0);
+
+  /**
+   * Estimated USD per skill for the next scan: the median tokens per skill of this person's last 10 finished scans of the same kind
+   * (explanation included), priced at the model chosen now. null until there is history.
+   */
+  async function costPerSkill(userId, mode, modelId) {
+    if (!modelId) return null;
+    const { rows } = await pool.query(
+      `SELECT "tokensIn", "tokensOut", "skillCount" FROM skill_scans
+        WHERE "userId" = $1 AND mode = $2 AND status = 'done' AND "tokensIn" IS NOT NULL AND "skillCount" > 0
+        ORDER BY "finishedAt" DESC LIMIT 10`, [userId, mode]);
+    if (!rows.length) return null;
+    const mid = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    return priced(modelId, { input: mid(rows.map((r) => Number(r.tokensIn) / r.skillCount)), output: mid(rows.map((r) => Number(r.tokensOut) / r.skillCount)) });
   }
 
   /** Start a scan (always skill by skill); resolves { jobId, scanId } at once. input: { url } or { zipBuffer, fileName }, plus deep. */
@@ -90,19 +113,26 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
     const scanId = rows[0].id;
     running += 1;
     const rate = await secondsPerSkill(userId, deep ? 'deep' : 'static').catch(() => null);
+    const priceModel = model || (await models.resolveModel(userId).catch(() => ({}))).modelId || null;
+    const perSkillCost = await costPerSkill(userId, deep ? 'deep' : 'static', priceModel).catch(() => null);
     const label = `${deep ? 'Deep' : 'Static'} scan of ${source || fileName || 'the upload'}`;
-    const jobId = jobs.startJob(userId, label, async (onProgress) => {
+    const jobId = jobs.startJob(userId, label, async (onProgress0) => {
+      // a first deep scan has no history: give a floor, every file read once by the model (about 4 bytes a token), output not counted
+      const onProgress = (p) => onProgress0(deep && perSkillCost == null && p.phase === 'scan' && p.bytes
+        ? { ...p, costFloor: Math.round(calculateCost(model, p.bytes / 4, 0) * 100) / 100 } : p);
       onProgress({ phase: url ? 'download' : 'unpack', current: 0, total: null, module: null });
       try {
-        const { exitCode, report, raw, stats = {} } = await (deps.runScan || runner.runScan)({ url: source, zipBuffer, deep, model, secondsPerSkill: rate }, undefined, onProgress);
+        const { exitCode, report, stats = {} } = await (deps.runScan || runner.runScan)({ url: source, zipBuffer, deep, model, secondsPerSkill: rate, costPerSkill: perSkillCost }, undefined, onProgress);
+        const tok = stats.tokens || { input: 0, output: 0 };
         await pool.query(
           `UPDATE skill_scans SET status = 'done', score = $3, severity = $4, recommendation = $5, "issueCount" = $6, report = $7::jsonb,
-                  "exitCode" = $8, "durationMs" = $9, "skillCount" = $10, "fileCount" = $11, "finishedAt" = NOW() WHERE id = $1 AND "userId" = $2`,
+                  "exitCode" = $8, "durationMs" = $9, "skillCount" = $10, "fileCount" = $11, "tokensIn" = $12, "tokensOut" = $13, "costUsd" = $14,
+                  "finishedAt" = NOW() WHERE id = $1 AND "userId" = $2`,
           [scanId, userId, report.score, report.severity, report.recommendation, report.issueCount, JSON.stringify(report), exitCode,
-            stats.durationMs ?? null, stats.skillCount ?? null, stats.fileCount ?? null]);
-        const usage = raw?.metadata?.inference_usage;
-        if (deep && usage && (Number(usage.input_tokens) || Number(usage.output_tokens))) {
-          (deps.logUsage || require('../../utils/logUsage').logUsage)({ userId, model, inputTokens: Number(usage.input_tokens) || 0, outputTokens: Number(usage.output_tokens) || 0, feature: 'skill_scan_deep' });
+            stats.durationMs ?? null, stats.skillCount ?? null, stats.fileCount ?? null, tok.input, tok.output, priced(model, tok)]);
+        // SkillSpector's own calls (deep only) in the usage log; inference_usage is a list of records per skill, summed by runner.tokenUsage
+        if (deep && (tok.input || tok.output)) {
+          (deps.logUsage || require('../../utils/logUsage').logUsage)({ userId, model, inputTokens: tok.input, outputTokens: tok.output, feature: 'skill_scan_deep' });
         }
         // the explanation in context (summary.js); a failure leaves the scan done, and Regenerate can try again
         onProgress({ phase: 'summary', current: report.skillCount, total: report.skillCount, module: null });

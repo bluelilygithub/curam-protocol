@@ -5902,6 +5902,10 @@ async function initSchema() {
   await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "durationMs" INTEGER`);
   await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "skillCount" INTEGER`);
   await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "fileCount" INTEGER`);
+  // tokens and estimated USD for the scan (deep: SkillSpector's own calls) plus every explanation written for it
+  await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "tokensIn" BIGINT`);
+  await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "tokensOut" BIGINT`);
+  await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "costUsd" REAL`);
   // a scan cut off by a restart can never finish: show it as failed rather than running for ever
   await pool.query(`UPDATE skill_scans SET status = 'failed', error = 'The server restarted while this scan was running. Run it again.', "finishedAt" = NOW() WHERE status = 'running'`);
   await pool.query(`

@@ -89,6 +89,7 @@ function Issue({ issue }) {
 
 const PHASE_LABEL = { queued: 'Starting', download: 'Downloading from GitHub', unpack: 'Unpacking', scan: 'Scanning', summary: 'Writing the explanation' };
 const minutes = (sec) => (sec == null ? null : sec < 60 ? 'under a minute' : `about ${Math.round(sec / 60)} min`);
+const dollars = (usd) => (usd == null ? null : usd < 0.01 ? 'under US$0.01' : `about US$${usd < 10 ? usd.toFixed(2) : Math.round(usd)}`);
 
 /**
  * Where a running scan is. The scanning stage is a true count ("Skill 12 of 68") from SkillSpector's own "[i/N] Scanning" lines, with time
@@ -112,6 +113,7 @@ function ScanProgress({ job }) {
     : p.etaSec != null ? `${minutes(p.etaSec)} left`
       : p.estimateSec ? `estimated ${minutes(p.estimateSec)} (from your earlier scans)`
         : p.phase === 'scan' ? 'no estimate yet (it learns from each scan)' : '';
+  const cost = p.estimateCost != null ? `tokens ${dollars(p.estimateCost)} (estimate)` : p.costFloor != null ? `tokens at least ${dollars(p.costFloor)} (first deep scan)` : '';
   return (
     <div className="space-y-1.5" role="status" aria-live="polite">
       <div className="flex flex-wrap justify-between gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
@@ -122,7 +124,7 @@ function ScanProgress({ job }) {
         <div className="h-full transition-all duration-500" style={{ width: `${Math.round(pct)}%`, background: 'var(--color-primary)' }} />
       </div>
       {p.phase === 'scan' && (p.files || p.timeoutMin) && (
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{p.files ? `${p.files} files` : ''}{p.files && p.timeoutMin ? ' · ' : ''}{p.timeoutMin ? `stops after ${p.timeoutMin} min if not finished` : ''}</p>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{[p.files ? `${p.files} files` : '', cost, p.timeoutMin ? `stops after ${p.timeoutMin} min if not finished` : ''].filter(Boolean).join(' · ')}</p>
       )}
     </div>
   );
@@ -307,7 +309,7 @@ export default function SkillScanPage() {
     <div key={s.id} className="rounded-xl border p-3 flex flex-wrap items-center justify-between gap-3" style={{ ...panel, borderColor: scan?.id === s.id ? 'var(--color-primary)' : 'var(--color-border)' }}>
       <div className="min-w-0">
         <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>{s.fileName || s.source}</p>
-        <p className="text-xs" style={muted}>{dateOf(s.createdAt)} · {s.mode}{s.skillCount ? ` · ${s.skillCount} skill${s.skillCount === 1 ? '' : 's'}` : ''}{s.durationMs ? ` · took ${minutes(s.durationMs / 1000)}` : ''}{s.score != null ? ` · score ${s.score}` : ''}{s.issueCount != null ? ` · ${s.issueCount} findings` : ''}</p>
+        <p className="text-xs" style={muted}>{dateOf(s.createdAt)} · {s.mode}{s.skillCount ? ` · ${s.skillCount} skill${s.skillCount === 1 ? '' : 's'}` : ''}{s.durationMs ? ` · took ${minutes(s.durationMs / 1000)}` : ''}{s.costUsd != null ? ` · tokens ${dollars(s.costUsd)}` : ''}{s.score != null ? ` · score ${s.score}` : ''}{s.issueCount != null ? ` · ${s.issueCount} findings` : ''}</p>
       </div>
       <div className="flex items-center gap-2">
         <VerdictPill recommendation={s.recommendation} status={s.status} small />
@@ -381,7 +383,7 @@ export default function SkillScanPage() {
           )}
         </div>
         <p className="text-sm break-all" style={{ color: 'var(--color-text)' }}>{scan.fileName || scan.source}{scan.sourceType === 'github' && <> · <a href={scan.source} target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--color-primary)' }}>open on GitHub</a></>}</p>
-        <p className="text-xs" style={muted}>{scan.mode === 'deep' ? `Deep scan (${scan.model || 'AI'})` : 'Static scan'}{scan.recursive ? ', skill by skill' : ', one bundle (an older scan)'}{scan.skillCount ? ` · ${scan.skillCount} skills` : ''}{scan.durationMs ? ` · took ${minutes(scan.durationMs / 1000)}` : ''} · {dateOf(scan.finishedAt || scan.createdAt)}{report?.version ? ` · SkillSpector ${report.version}` : ''}</p>
+        <p className="text-xs" style={muted}>{scan.mode === 'deep' ? `Deep scan (${scan.model || 'AI'})` : 'Static scan'}{scan.recursive ? ', skill by skill' : ', one bundle (an older scan)'}{scan.skillCount ? ` · ${scan.skillCount} skills` : ''}{scan.durationMs ? ` · took ${minutes(scan.durationMs / 1000)}` : ''}{scan.costUsd != null ? ` · tokens ${dollars(scan.costUsd)}` : ''} · {dateOf(scan.finishedAt || scan.createdAt)}{report?.version ? ` · SkillSpector ${report.version}` : ''}</p>
         {scan.status === 'failed' && <p className="text-sm" style={{ color: '#ef4444' }}>{scan.error}</p>}
         {report && (
           <div className="flex flex-wrap gap-2">
