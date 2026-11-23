@@ -42,7 +42,8 @@ export function profileNoteBody(profile) {
   add('Phone', x.phone);
   add('Reputation', x.rating);
   if (x.people.length) add('People', x.people.join('; '));
-  if (x.description) lines.push('', x.description);
+  if (profile?.summary?.text) lines.push('', '**Summary** (written by AI from the profile)', '', profile.summary.text.trim());
+  else if (x.description) lines.push('', x.description);
   const when = dateOf(profile.scannedAt || profile.createdAt);
   lines.push('', `_Public-source profile${when ? ` checked ${when}` : ''}. Open the profile for every source and any conflicts._`);
   return `${lines.join('\n')}\n`;

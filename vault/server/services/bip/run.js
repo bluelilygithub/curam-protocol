@@ -36,6 +36,11 @@ async function runProfile({ profileId, userId, domain, modules = null, decisions
       if (!current) throw new Error('That profile no longer exists.');
       seed = current.seed;
       results = { ...(current.modules || {}) };
+      // seed modules are stored in enrichmentData as status only (saveSeed); their data lives in seedData. Without this, refreshing
+      // any one source rebuilt the cards with no website, registration or DNS data (description, phone, address all dropped out).
+      for (const name of SEED) {
+        if (seed?.[name] && !results[name]?.data) results[name] = { ...(results[name] || { status: 'success' }), data: seed[name] };
+      }
       onProgress({ phase: 'refresh', current: 0, total: refresh.length, module: null });
       let done = 0;
       const seedNames = refresh.filter((name) => SEED.includes(name));
@@ -79,6 +84,10 @@ async function runProfile({ profileId, userId, domain, modules = null, decisions
     const cards = buildCards(seed, results, reconciliation);
     const name = businessName({ ...seed, abr: results.abr?.data || null });
     await store.finishProfile(profileId, userId, { businessName: name, reconciliation: { ...reconciliation, decisions }, cards });
+    // the written summary is a courtesy: if the model fails, the profile is still finished and Regenerate can try again
+    onProgress({ phase: 'summary', current: 1, total: 1, module: null });
+    await (deps.generateSummary || require('./summary').generateSummary)(userId, profileId)
+      .catch((err) => console.warn(`[bip] summary for profile ${profileId} not written:`, err.message));
     onProgress({ phase: 'done', current: 1, total: 1, module: null });
     return { profileId, domain, status: 'done', businessName: name, conflicts: reconciliation.conflicts };
   } catch (err) {

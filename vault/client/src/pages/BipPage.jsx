@@ -140,7 +140,7 @@ function ProgressPanel({ job, onCancel }) {
         <div className="h-full transition-all" style={{ width: `${job.status === 'done' ? 100 : pct}%`, background: 'var(--color-primary)' }} />
       </div>
       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-        {job.status === 'error' ? job.error : p.module ? `Finishing ${MODULE_LABELS[p.module] || p.module}…` : p.phase === 'seed' ? 'Reading registration, DNS and the website…' : p.phase || 'Starting…'}
+        {job.status === 'error' ? job.error : p.module ? `Finishing ${MODULE_LABELS[p.module] || p.module}…` : p.phase === 'seed' ? 'Reading registration, DNS and the website…' : p.phase === 'summary' ? 'Writing the summary…' : p.phase || 'Starting…'}
       </p>
       {job.status === 'error' && onCancel && (
         <button type="button" onClick={onCancel} className="text-xs underline" style={{ color: 'var(--color-primary)' }}>Dismiss</button>
@@ -193,6 +193,7 @@ export default function BipPage() {
   const [jobId, setJobId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(null);
+  const [summarising, setSummarising] = useState(false);
   const [error, setError] = useState('');
   const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
   // 'start' is the job-tile screen (not a tool); every other value is a tool id from BIP_TOOLS
@@ -311,6 +312,16 @@ export default function BipPage() {
     } catch (err) { setError(err.message); setRefreshing(null); }
   };
 
+  const regenerateSummary = async () => {
+    if (!profile) return;
+    setSummarising(true);
+    try {
+      const data = await json(await api.post(`/api/bip/profiles/${profile.id}/summary`));
+      setProfile((p) => ({ ...p, summary: data.summary }));
+    } catch (err) { addToast(err.message, 'error'); }
+    finally { setSummarising(false); }
+  };
+
   const decide = async (fieldKey, value) => {
     if (!profile) return;
     const decisions = { ...(profile.decisions || {}), [fieldKey]: value };
@@ -415,8 +426,31 @@ export default function BipPage() {
     </section>
   );
 
+  const summary = profile?.summary;
   const profileTool = profile && (
     <div className="grid lg:grid-cols-2 gap-5" data-tour="bip-cards">
+      <section className="lg:col-span-2 rounded-2xl border p-5 space-y-3" style={panel}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>{getIcon('file-text', { size: 15 })} Summary</h3>
+          <Tooltip text="Write the summary again from this profile's saved data. It uses only what BIP found; nothing new is looked up.">
+            <button type="button" className={button} disabled={summarising || profile.status !== 'done'} onClick={regenerateSummary} style={outline}>
+              {getIcon('refresh-cw', { size: 13 })} {summarising ? 'Writing…' : summary ? 'Regenerate' : 'Write summary'}
+            </button>
+          </Tooltip>
+        </div>
+        {summary?.text ? (
+          <>
+            {summary.text.split(/\n\s*\n/).map((para, i) => <p key={i} className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{para}</p>)}
+            {summary.unverifiedFigures?.length > 0 && (
+              <p className="text-xs" style={{ color: '#f59e0b' }}>Not found in the profile data, so check before relying on it: {summary.unverifiedFigures.join(', ')}.</p>
+            )}
+            <p className="text-xs" style={muted}>Written by AI ({summary.model}) on {dateOf(summary.generatedAt)} from this profile's public-source data only. The cards below show every source.</p>
+          </>
+        ) : (
+          <p className="text-sm" style={muted}>{profile.status === 'done' ? 'No summary yet. Press Write summary to have AI describe the business in a few paragraphs from this profile.' : 'The summary is written when the profile finishes.'}</p>
+        )}
+      </section>
+
       <Card title="Entity Overview" icon="building" refreshModule={['abr', 'registration']} onRefresh={rescan} refreshing={!!refreshing}>
         <Field label="Business name" value={c.entity?.businessName} />
         <Field label="ABN" value={c.entity?.abn} />

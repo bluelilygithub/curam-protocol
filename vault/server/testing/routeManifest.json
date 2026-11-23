@@ -175,6 +175,9 @@
   "GET /api/bip/profiles/:id": {
    "class": "authed"
   },
+  "POST /api/bip/profiles/:id/summary": {
+   "class": "authed"
+  },
   "GET /api/bip/profiles/:id/notes": {
    "class": "authed"
   },

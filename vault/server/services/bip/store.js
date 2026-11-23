@@ -81,6 +81,7 @@ async function getProfile(userId, id) {
     reconciliation: parse(row.reconciliation),
     cards: parse(row.cards),
     decisions: parse(row.decisions),
+    summary: parse(row.summary, null),
     clientId: linkedClient?.id || null,
     clientName: linkedClient?.name || null,
     sources: sources.rows.map((s) => ({
@@ -168,6 +169,11 @@ async function linkedNotes(userId, id) {
   return rows;
 }
 
+/** The written summary (services/bip/summary.js): { text, model, generatedAt, unverifiedFigures }. */
+async function saveSummary(profileId, userId, summary) {
+  await pool.query('UPDATE bip_profiles SET summary = $3::jsonb, "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2', [profileId, userId, JSON.stringify(summary)]);
+}
+
 /** File the profile under one of the person's clients (or none). Returns false when the client is not theirs. */
 async function setClient(profileId, userId, clientId) {
   if (clientId != null) {
@@ -201,5 +207,5 @@ async function deleteProfile(userId, id) {
 module.exports = {
   CACHE_DAYS, createProfile, cachedProfile, listProfiles, getProfile, getRow,
   saveModule, saveSeed, saveSeedData, finishProfile, failProfile, saveDecisions, deleteProfile, parse,
-  linkedNotes, setClient, profilesForClient,
+  linkedNotes, setClient, profilesForClient, saveSummary,
 };

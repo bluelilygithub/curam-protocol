@@ -23,7 +23,7 @@ export const GROUP_TIPS = {
 export const TOOL_TIPS = {
   search: 'Type a domain and press Profile. BIP reads public registration, DNS, the website and the sources you have configured.',
   profiles: 'Every saved profile, newest first. Open one to see the full report.',
-  profile: 'Seven cards: entity, people, locations, products, digital footprint, reputation and financial indicators.',
+  profile: 'An AI summary, then seven cards: entity, people, locations, products, digital footprint, reputation and financial indicators.',
   conflicts: 'Every value is kept, with its source. ✅ means 2+ sources agree, ⚠️ one source, ❌ sources disagree.',
   refresh: 'Re-scan everything, refresh just one source, and see what each source returned or why it was skipped.',
   export: 'Download the saved profile as a PDF.',
@@ -45,6 +45,7 @@ export const HOW_IT_WORKS = [
   ['What it does', 'BIP gathers public information about a domain into one saved profile: registration, DNS, the website, business registers, map listings, review sites and the visible tech stack.'],
   ['Two stages', 'First it reads the domain registration, DNS and the public pages of the website. Then it uses that seed to look up the business in ABN Lookup, ASIC, Google Places, Google search, review sites and social links.'],
   ['Confidence, not guesses', 'The same fact from several sources is shown with all of its values and where each came from. Two or more agreeing sources are marked ✅. One source is ⚠️. Disagreements are ❌ and BIP never picks a winner for you.'],
+  ['Summary', 'When a profile finishes, AI writes three paragraphs about the business from the profile’s data only: what it does, where it is and how long it appears to have operated, and its online presence and gaps. Any year or number it could not find in the data is flagged to check. Regenerate writes it again; it is also in the PDF and Save to Note.'],
   ['Caching', 'A profile is kept for 30 days. Opening it again shows the saved report; use Re-scan to fetch fresh data, or the refresh icon on a single card to update just that source.'],
   ['What it cannot do', 'ASIC does not provide a free public register feed, so BIP says when a manual check is needed. Revenue and funding are not published by these sources, so the financial card is labelled estimates from public sources and leaves unknown figures blank.'],
   ['Saved and recoverable', 'Profiles stay until you delete them. A deleted profile goes to Vault’s recycle bin for 30 days, so it can be put back.'],

@@ -5856,6 +5856,8 @@ async function initSchema() {
   // The CRM client this profile is filed under (made from it, or picked); shown on that client's page. Notes link back by their text.
   await pool.query(`ALTER TABLE bip_profiles ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
   await pool.query(`CREATE INDEX IF NOT EXISTS bip_profiles_client_idx ON bip_profiles ("userId", "clientId")`);
+  // The written summary (services/bip/summary.js): { text, model, generatedAt, unverifiedFigures }; null until written.
+  await pool.query(`ALTER TABLE bip_profiles ADD COLUMN IF NOT EXISTS summary JSONB`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bip_sources (
       id                      SERIAL PRIMARY KEY,

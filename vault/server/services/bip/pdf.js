@@ -53,6 +53,11 @@ function buildDocument(deps, profile) {
     React.createElement(Text, { style: s.title }, safe(entity.businessName || profile.domain || 'Business profile')),
     React.createElement(Text, { style: s.sub }, safe(`${profile.domain || ''}  ·  profiled ${profile.scannedAt ? new Date(profile.scannedAt).toLocaleDateString('en-AU') : '—'}  ·  Vault Business Profiler`)),
     React.createElement(Text, { style: s.badge }, safe('Public-source profile. Each value is marked [Confirmed by 2+ sources], [One source only] or [Sources disagree]; BIP never resolves a disagreement.')),
+    ...(profile.summary?.text ? [section('Summary', [
+      ...profile.summary.text.split(/\n\s*\n/).map((para, i) => React.createElement(Text, { key: `sum-${i}`, style: { marginBottom: 6 } }, safe(para))),
+      ...(profile.summary.unverifiedFigures?.length ? [React.createElement(Text, { key: 'sum-check', style: s.muted }, safe(`Not found in the profile data, so check: ${profile.summary.unverifiedFigures.join(', ')}.`))] : []),
+      React.createElement(Text, { key: 'sum-by', style: s.muted }, safe(`Written by AI (${profile.summary.model || 'model'}) from this profile's public-source data only.`)),
+    ])] : []),
     section('Entity overview', rows(entity, [
       ['Business name', 'businessName'], ['Legal name on website', 'legalNameOnWebsite'], ['ABN', 'abn'], ['Entity type', 'entityType'], ['GST status', 'gstStatus'],
       ['Trading names', 'tradingNames'], ['Domain', 'domain'], ['Domain age (years)', 'domainAgeYears'],

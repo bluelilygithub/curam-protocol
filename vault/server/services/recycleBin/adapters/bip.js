@@ -24,6 +24,7 @@ register('bip-profile', {
         reconciliation: JSON.stringify(profile.reconciliation || {}),
         cards: JSON.stringify(profile.cards || {}),
         decisions: JSON.stringify(profile.decisions || {}),
+        summary: profile.summary ? JSON.stringify(profile.summary) : null,
       },
     });
     for (const source of payload?.sources || []) {

@@ -29,6 +29,10 @@ assert.ok(body.includes('- **People:** Jane Smith — Director; Nobody'));
 assert.ok(body.includes('4.6/5 from 31 Google reviews'));
 assert.ok(body.includes('Automotive SaaS.'));
 
+const withSummary = profileNoteBody({ ...profile, summary: { text: 'First paragraph.\n\nSecond paragraph.' } });
+assert.ok(withSummary.includes('**Summary** (written by AI from the profile)\n\nFirst paragraph.\n\nSecond paragraph.'), 'the summary goes into the note');
+assert.ok(!withSummary.includes('Automotive SaaS.'), 'the summary replaces the one-line description');
+
 const sparse = profileNoteBody({ id: 3, domain: 'x.com', cards: { entity: { abn: 'Not found' } } });
 assert.ok(!sparse.includes('ABN'), '"Not found" is left out, not written into the note');
 assert.ok(sparse.startsWith('From Business Profiler: [x.com](/bip/3)'), 'the domain names the link when there is no business name');

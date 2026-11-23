@@ -70,6 +70,12 @@ The Financial card is labelled *estimates from public sources*, but BIP does not
 - **Stage 3** — the name and ABN are ✅ (ABR plus the Domain tool), while the Victorian address, ~2004, ~13 employees and automotive SaaS are ⚠️ because each came from one source. If Google Places returned a different trading name, that field would be ❌ with both values shown until the person chooses.
 - **Stage 4** — the Entity card shows `SalesLogs Pty Limited` · `69 161 409 132`; the Products & Services card shows `automotive SaaS`; the Financial card shows `~13 employees`, `~2004` and no revenue or funding figure.
 
+## Summary (AI)
+
+`server/services/bip/summary.js`. When a run finishes (`run.js`, after `finishProfile`, progress phase `summary`), the workspace's **standard** model (`getModelsForUser`) writes three plain paragraphs: what the business is and sells, where it is and how long it appears to have operated (with the basis), and its online presence, technology, reputation and gaps. The input is only the saved profile: reconciled fields with their sources and confidence, the cards, the sources that were skipped and why, and up to 3,500 characters each of the homepage, About and Contact text from the saved scrape (fenced as information, never instructions). No web search, no general knowledge. After writing, `checkFigures` lists any year, phone or count in the summary that does not appear in that input (`unverifiedFigures`), shown in amber under the summary and in the PDF. A failed summary never fails the run. Stored in `bip_profiles.summary` (JSONB `{ text, model, generatedAt, unverifiedFigures }`); `POST /profiles/:id/summary` (behind `aiLimiter`) writes it again. It is shown above the cards, at the top of the PDF, and in the Save to Note body. Usage is logged as `bip_summary`. The figure check is digits only: a made-up name or claim without a number is not caught.
+
+A re-scan of one source now rebuilds the cards with the saved website, registration and DNS data (they are stored in `seedData`, while `enrichmentData` holds only their status); before, refreshing any one source emptied the website-based fields.
+
 ## Cache, refresh and storage
 
 - **30-day cache.** A profile is saved with the day it was checked. Opening `/bip/:id` shows the saved cards and the source rows, not a fresh set of calls. **Re-scan** re-runs every module and replaces the run; the refresh icon on a card re-runs just that module, then rebuilds reconciliation and cards from the current set of rows. Each refresh records its own checked-at time.

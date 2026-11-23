@@ -11,6 +11,8 @@ const { runProfile, configured, ENRICHMENT, ALL_MODULES } = require('../services
 const { MODULES } = require('../services/bip/sources');
 const jobs = require('../services/bip/jobs');
 const { buildBipPdfBuffer } = require('../services/bip/pdf');
+const { generateSummary } = require('../services/bip/summary');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 const { moveToBin } = require('../services/recycleBin');
 require('../services/recycleBin/adapters/bip');
 
@@ -71,6 +73,15 @@ router.get('/profiles/:id', async (req, res) => {
     const profile = await store.getProfile(req.user.id, req.params.id);
     if (!profile) return res.status(404).json({ error: 'Profile not found.' });
     res.json({ profile });
+  } catch (err) { fail(res, err); }
+});
+
+// Write the summary again (it is also written when a run finishes). Behind the AI rate limit; answers with the new summary.
+router.post('/profiles/:id/summary', aiLimiter, async (req, res) => {
+  try {
+    const row = await store.getRow(req.user.id, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Profile not found.' });
+    res.json({ summary: await generateSummary(req.user.id, row.id) });
   } catch (err) { fail(res, err); }
 });
 

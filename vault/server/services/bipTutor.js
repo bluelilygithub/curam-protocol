@@ -14,7 +14,7 @@ const CATALOG = [
     does: 'Saved profiles in the tool list. It shows every profile you have saved, newest first, with the business name, domain, date profiled and a link to the full report.',
     notes: 'Profiles stay until you delete them. Deleting one puts it in the recycle bin for 30 days.' },
   { id: 'profile', label: 'Profile cards', group: 'Report',
-    does: 'The full report at /bip/:id. It has seven cards: Entity Overview, People, Locations, Products & Services, Digital Footprint, Online Presence & Reputation, and Financial Indicators.',
+    does: 'The full report at /bip/:id. At the top is a Summary: a few paragraphs written by AI from the profile’s own data only (nothing new is looked up), with any figure it could not find in that data flagged to check, and a Regenerate button. Below it are seven cards: Entity Overview, People, Locations, Products & Services, Digital Footprint, Online Presence & Reputation, and Financial Indicators.',
     notes: 'Financial Indicators are estimates from public sources. Figures BIP cannot find are left blank rather than invented.' },
   { id: 'conflicts', label: 'Confidence & conflicts', group: 'Report',
     does: 'Shows every value found for a field with the source it came from. ✅ means two or more sources agree, ⚠️ means one source, and ❌ means sources disagree. You can record your own decision on a conflict; BIP never chooses a winner for you.',

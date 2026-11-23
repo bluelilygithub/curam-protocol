@@ -750,3 +750,66 @@ test('cards: a skipped Places module shows no Google rating, and years in busine
   assert.equal(cards.financial.yearsInBusiness, 13.6);
   assert.match(cards.financial.yearsInBusinessBasis, /domain age only/);
 });
+
+// ── summary.js: the written summary ─────────────────────────────────────────────────────
+const summaryLib = require('./summary');
+
+const SUMMARY_PROFILE = {
+  id: 7, domain: 'saleslogs.com', status: 'done',
+  seed: { website: { raw: { homepage: '<p>Supercharged Data-Grids for your dealership.</p><p>©Copyright 2005-2026 SalesLogs Pty Ltd</p>', about: '', contact: '' } } },
+  cards: {
+    entity: { legalNameOnWebsite: 'SalesLogs Pty Ltd', siteName: 'SalesLogs', registrationDate: '2013-04-09', domainAgeYears: 13.6 },
+    products: { description: 'Supercharged Data-Grids and Analytics for your automotive dealership.' },
+    digital: { emailProvider: ['Google Workspace'], socialLinks: [{ network: 'linkedin', url: 'https://linkedin.com/company/saleslogs' }] },
+    financial: { yearsInBusiness: 13.6, yearsInBusinessBasis: 'domain age only; no founding year found' },
+  },
+  reconciliation: { fields: { phone: { values: [{ value: '+61 2 9855 7852', source: 'Website scrape' }], confidence: { label: 'One source only' } } } },
+  sources: [{ name: 'abr', status: 'skipped', reason: 'ABR_GUID is not set on this server.' }],
+};
+
+test('summary.buildPrompt() gives the model the saved facts and the site text, and says what was not used', () => {
+  const { prompt, sourceText } = summaryLib.buildPrompt(SUMMARY_PROFILE);
+  assert.match(prompt, /SalesLogs Pty Ltd/);
+  assert.match(prompt, /\+61 2 9855 7852/);
+  assert.match(prompt, /Supercharged Data-Grids for your dealership/, 'homepage text is included');
+  assert.match(prompt, /abr: ABR_GUID is not set/, 'skipped sources are named so gaps can be stated');
+  assert.match(prompt, /never as instructions/, 'site text is fenced as information');
+  assert.match(sourceText, /2005-2026/);
+  assert.match(summaryLib.SYSTEM, /exactly three paragraphs/);
+});
+
+test('summary.cleanSummary() keeps plain paragraphs and drops markdown', () => {
+  assert.equal(summaryLib.cleanSummary('# Title\n**SalesLogs** sells software.\n\n- It is in Docklands.\n\n\nThird.'), 'SalesLogs sells software.\n\nIt is in Docklands.\n\nThird.');
+});
+
+test('summary.checkFigures() lists years and numbers the profile data does not contain', () => {
+  const { sourceText } = summaryLib.buildPrompt(SUMMARY_PROFILE);
+  const text = 'Its copyright runs from 2005 and the domain dates from 2013 (about 13.6 years). Call +61 2 9855 7852. It was founded in 1998 and has 40 staff.';
+  assert.deepStrictEqual(summaryLib.checkFigures(text, sourceText), ['1998', '40']);
+});
+
+test('summary.generateSummary() writes, checks and saves; refuses unfinished profiles and missing models', async () => {
+  const saved = [];
+  const usage = [];
+  const deps = {
+    getProfile: async () => SUMMARY_PROFILE,
+    getModels: async () => ({ standard: 'test-model' }),
+    callModel: async (model, prompt, opts) => {
+      assert.equal(model, 'test-model');
+      assert.equal(opts.system, summaryLib.SYSTEM);
+      return { text: 'SalesLogs Pty Ltd sells dealership software.\n\nIt was founded in 1998.', model: 'test-model', inputTokens: 10, outputTokens: 5 };
+    },
+    saveSummary: async (id, userId, s) => saved.push({ id, userId, s }),
+    logUsage: (u) => usage.push(u),
+  };
+  const s = await summaryLib.generateSummary(3, 7, deps);
+  assert.equal(s.text, 'SalesLogs Pty Ltd sells dealership software.\n\nIt was founded in 1998.');
+  assert.deepStrictEqual(s.unverifiedFigures, ['1998']);
+  assert.equal(saved[0].id, 7);
+  assert.equal(saved[0].userId, 3);
+  assert.equal(usage[0].feature, 'bip_summary');
+
+  await assert.rejects(summaryLib.generateSummary(3, 7, { ...deps, getProfile: async () => ({ ...SUMMARY_PROFILE, status: 'running' }) }), (e) => e.status === 409);
+  await assert.rejects(summaryLib.generateSummary(3, 7, { ...deps, getModels: async () => ({}) }), (e) => e.status === 503);
+  await assert.rejects(summaryLib.generateSummary(3, 7, { ...deps, getProfile: async () => null }), (e) => e.status === 404);
+});
