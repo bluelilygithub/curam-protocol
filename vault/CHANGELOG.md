@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-explain)
+
+### Skill Scanner — findings explained in context, copy/download, Graphics-style layout
+The first real scan (`agiprolabs/claude-trading-skills`) came back "Do not install, 100/100". SkillSpector's score adds points per finding and stops at 100, and most of the 40 critical findings were API keys read from the environment and sent to their own APIs. After every scan, AI now groups the findings by rule and marks each group expected / worth checking / concerning, with the evidence. It also explains the score and any incomplete coverage, and gives its own reading next to SkillSpector's verdict, which stays unchanged. The skill's quoted text is fenced so it cannot instruct the explainer. Reports can be copied or downloaded (Markdown or JSON), and the page now has a sidebar, job tiles, the latest scans and saved scans like Graphics. "Scan each skill separately" is on by default: the one-bundle scan covered only 20%.
+
+---
+
 ## 2026-11-24 (skill-scanner)
 
 ### Skill Scanner — new admin tool
