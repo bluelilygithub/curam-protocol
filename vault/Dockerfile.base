@@ -31,6 +31,17 @@ COPY requirements.txt ./
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt \
     && yt-dlp -U || true
 
+# SkillSpector (docs/skill-scan.md): NVIDIA's security scanner for AI agent skills, run by the admin Skill Scanner. It needs Python 3.12+
+# and Debian's is 3.11, so uv installs its own Python 3.13 under /opt and the tool into it, pinned to a commit (bump SKILLSPECTOR_REF to
+# update). `git` is for the GitHub links it clones. Its own layer after the big apt layer, so adding or bumping it keeps LibreOffice cached.
+ARG SKILLSPECTOR_REF=f9bb13dd1667eb4e7ac97b8ebace3160041ed571
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages uv \
+    && uv tool install --python 3.13 "skillspector @ git+https://github.com/NVIDIA/skillspector.git@${SKILLSPECTOR_REF}" \
+    && skillspector --help > /dev/null \
+    && uv cache clean
+
 WORKDIR /app
 
 # Playwright Chromium for the Browser Agent (server/services/browserAgent/) — --with-deps pulls the OS libs Chromium needs on top of node:20-slim.

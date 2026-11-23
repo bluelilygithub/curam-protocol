@@ -45,6 +45,7 @@ export const APP_NAV_GROUPS = [
       { id: 'changelog', label: 'Changelog', path: '/changelog', icon: 'history', featureKey: null, adminOnly: true },
       { id: 'ponytail', label: 'Ponytail costs', path: '/ponytail', icon: 'gauge', featureKey: null, adminOnly: true, aliases: 'ponytail claude code cost tokens reuse webhook report' },
       { id: 'codeMap', label: 'Code Map', path: '/code-map', icon: 'code-map', featureKey: null, adminOnly: true, aliases: 'code map source analysis conventions rules dependencies cycles tools audit' },
+      { id: 'skillScan', label: 'Skill Scanner', path: '/skill-scan', icon: 'shield-check', featureKey: null, adminOnly: true, aliases: 'skillspector nvidia agent skill plugin security scan claude code mcp prompt injection malware' },
       // a shortcut to one Code Map tab; Code Map's analysis skips it (tools.js skipTools) so it is not a second tool
       { id: 'knowledgeGraph', label: 'Knowledge Graph', path: '/code-map?view=knowledge-graph', icon: 'share-2', featureKey: null, adminOnly: true, aliases: 'knowledge graph understand anything codebase tour summaries layers' },
     ],

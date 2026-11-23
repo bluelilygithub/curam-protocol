@@ -271,6 +271,8 @@ app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, re
 app.use('/api/changelog', requireAdmin, aiLimiter, require('./routes/changelog')); // admin changelog: what each commit did; POST /ask calls the standard model
 app.use('/api/ponytail', requireAdmin, require('./routes/ponytailRoutes').adminRouter); // Ponytail report: keys, tasks, summary, CSV backfill (no model calls, so no aiLimiter)
 app.use('/api/code-map-tutor', requireAdmin, aiLimiter, require('./routes/codeMapTutor')); // the Code Map guide chat (sees no code, run or finding)
+app.use('/api/skill-scan-tutor', requireAdmin, aiLimiter, require('./routes/skillScanTutor')); // the Skill Scanner guide chat (sees no link, zip or scan)
+app.use('/api/skill-scan', requireAdmin, require('./routes/skillScan')); // Skill Scanner: NVIDIA SkillSpector scans of agent skills (docs/skill-scan.md); deep scans hit aiLimiter in the route file
 app.use('/api/code-map', requireAdmin, require('./routes/codeMap')); // Code Map: analysis of Vault's own source (admin only; the analysis makes no model calls, so no aiLimiter on the mount; POST /findings/explain has it in the route file)
 app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Health agent (admin only, read-only report on the admin's own PC)
 app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)

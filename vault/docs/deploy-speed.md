@@ -43,6 +43,8 @@ So:
 - **2026-10-17:** CI "Wait for CI" was switched off on both Railway services because it added 10-30 minutes per deploy. Do not add it back. It must stay off now too, or every deploy would wait for the base workflow.
 - **2026-11-21:** the base build failed at `npm install --include=dev` (the first fresh install since 2026-11-15; earlier builds reused the cached layer). Cause: `onnxruntime-node` (from `@imgly/background-removal-node`) downloads CUDA binaries on install and the 1.17.3 GitHub release asset now returns 404. Fixed with `ENV npm_config_onnxruntime_node_install_cuda=skip` in `Dockerfile.base` (CPU binaries ship in the package; reproduced and verified on Linux Node 20). If a fresh install fails again, reproduce it in WSL or `node:20-slim` with only `package*.json` before changing anything else.
 
+- **2026-11-24:** SkillSpector (Skill Scanner, `docs/skill-scan.md`) added in its own `Dockerfile.base` layer after the apt layer: `git`, `pip install uv`, uv's own Python 3.13 and `skillspector` pinned by `ARG SKILLSPECTOR_REF`. One base rebuild; bumping the commit rebuilds only that layer and the ones after it.
+
 ## What is still open (nobody has done it; ask the owner first)
 
 - The final image is still about 2.3 GB: single-stage, with dev dependencies, the four planner `node_modules` trees and the build cache. A multi-stage build would cut it by well over a gigabyte.

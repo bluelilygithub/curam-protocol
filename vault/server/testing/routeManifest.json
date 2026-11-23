@@ -211,6 +211,27 @@
   "GET /api/bip/jobs/:jobId": {
    "class": "authed"
   },
+  "GET /api/skill-scan/config": {
+   "class": "admin"
+  },
+  "GET /api/skill-scan/scans": {
+   "class": "admin"
+  },
+  "POST /api/skill-scan/scans": {
+   "class": "admin"
+  },
+  "GET /api/skill-scan/scans/:id": {
+   "class": "admin"
+  },
+  "DELETE /api/skill-scan/scans/:id": {
+   "class": "admin"
+  },
+  "GET /api/skill-scan/jobs/:jobId": {
+   "class": "admin"
+  },
+  "POST /api/skill-scan-tutor": {
+   "class": "admin"
+  },
   "POST /api/bip-tutor": {
    "class": "authed"
   },

@@ -5872,6 +5872,32 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS bip_qa_profile_idx ON bip_qa ("userId", "profileId", "createdAt" DESC)`);
+  // Skill Scanner (admin): saved SkillSpector scans of agent skills/plugins; `report` is the normalised result (docs/skill-scan.md).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS skill_scans (
+      id               SERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source           TEXT NOT NULL,
+      "sourceType"     VARCHAR(10) NOT NULL CHECK ("sourceType" IN ('github', 'zip')),
+      "fileName"       TEXT,
+      mode             VARCHAR(10) NOT NULL DEFAULT 'static' CHECK (mode IN ('static', 'deep')),
+      recursive        BOOLEAN NOT NULL DEFAULT FALSE,
+      model            TEXT,
+      status           VARCHAR(10) NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'done', 'failed')),
+      score            INTEGER,
+      severity         TEXT,
+      recommendation   TEXT,
+      "issueCount"     INTEGER,
+      "exitCode"       INTEGER,
+      report           JSONB,
+      error            TEXT,
+      "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finishedAt"     TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS skill_scans_user_idx ON skill_scans ("userId", "createdAt" DESC)`);
+  // a scan cut off by a restart can never finish: show it as failed rather than running for ever
+  await pool.query(`UPDATE skill_scans SET status = 'failed', error = 'The server restarted while this scan was running. Run it again.', "finishedAt" = NOW() WHERE status = 'running'`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bip_sources (
       id                      SERIAL PRIMARY KEY,
