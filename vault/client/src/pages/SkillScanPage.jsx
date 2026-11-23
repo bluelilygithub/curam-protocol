@@ -386,6 +386,7 @@ export default function SkillScanPage() {
             {report.multi && <span className="text-xs px-2 py-1" style={muted}>{report.skillCount} skills{report.skillsOmitted ? ` (${report.skillsOmitted} not shown)` : ''}</span>}
           </div>
         )}
+        {report?.leftOutFiles > 0 && <p className="text-xs" style={muted}>{report.leftOutFiles} files outside the skill folders (such as the README and tests) were not scanned, because each skill is scanned on its own.</p>}
         {report?.complete === false && <p className="text-xs" style={{ color: '#f59e0b' }}>The scan could not read everything{!scan.recursive ? '; scanning each skill separately usually reads more' : ''}. A Safe result is shown as Caution.</p>}
       </section>
 

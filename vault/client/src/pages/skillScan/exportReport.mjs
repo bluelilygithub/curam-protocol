@@ -29,6 +29,7 @@ export function reportMarkdown(scan) {
   out.push(`- **SkillSpector verdict:** ${VERDICT_LABEL[r.recommendation] || r.recommendation || 'n/a'} (score ${r.score ?? 'n/a'}/100)`);
   if (s) out.push(`- **AI reading in context:** ${READING_LABEL[s.reading] || s.reading}${s.readingReason ? ` — ${s.readingReason}` : ''}`);
   out.push(`- **Findings:** ${['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((k) => `${k.toLowerCase()} ${r.counts?.[k] || 0}`).join(', ')}${r.complete === false ? ' · **scan incomplete**' : ''}`);
+  if (r.leftOutFiles > 0) out.push(`- **Not scanned:** ${r.leftOutFiles} files outside the skill folders (such as the README and tests) were not scanned, because each skill is scanned on its own`);
   out.push('');
   if (s) {
     out.push('## What the findings mean', '', s.overview, '');

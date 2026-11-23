@@ -386,6 +386,30 @@ test('countFolder(): sub-skills, a skill at the top, files and bytes', () => {
   fs.rmSync(d, { recursive: true, force: true });
 });
 
+test('flattenSkills(): deeper skills are moved up so SkillSpector sees each one; flat folders are left alone', () => {
+  const d = tmp();
+  const repo = path.join(d, 'repo');
+  const put = (f, s = 'x') => { fs.mkdirSync(path.dirname(path.join(repo, f)), { recursive: true }); fs.writeFileSync(path.join(repo, f), s); };
+  put('skills/a/SKILL.md'); put('skills/a/scripts/run.py'); put('skills/a/inner/SKILL.md');
+  put('skills/b/skill.md'); put('plugins/p/skills/a/SKILL.md');
+  put('README.md'); put('tests/t.py'); put('node_modules/z/SKILL.md');
+  const r = runner.flattenSkills(repo, d);
+  assert.equal(r.target, path.join(d, 'flat'));
+  assert.equal(r.moved, 3, 'a nested skill travels with its parent; node_modules is skipped');
+  assert.deepEqual(fs.readdirSync(r.target).sort(), ['a', 'b', 'plugins__p__skills__a']);
+  assert.ok(fs.existsSync(path.join(r.target, 'a/scripts/run.py')), 'the whole skill folder moves');
+  assert.equal(r.leftOut, 3, 'README, the test and the skipped node_modules file stay behind');
+  // already flat, a single skill, or a skill at the top: nothing moves
+  const flatRepo = path.join(d, 'f');
+  for (const f of ['x/SKILL.md', 'y/SKILL.md', 'z/deep/SKILL.md']) { fs.mkdirSync(path.dirname(path.join(flatRepo, f)), { recursive: true }); fs.writeFileSync(path.join(flatRepo, f), 'x'); }
+  assert.deepEqual(runner.flattenSkills(flatRepo, d), { target: flatRepo, moved: 0, leftOut: 0 });
+  const one = path.join(d, 'one'); fs.mkdirSync(path.join(one, 'skills/s'), { recursive: true }); fs.writeFileSync(path.join(one, 'skills/s/SKILL.md'), 'x');
+  assert.equal(runner.flattenSkills(one, d).target, one);
+  fs.writeFileSync(path.join(repo, 'SKILL.md'), 'x');
+  assert.equal(runner.flattenSkills(repo, d).target, repo);
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
 test('parseProgressLine(): the "N skills found" and "[i/N] Scanning name" lines', () => {
   assert.deepEqual(runner.parseProgressLine('Multi-skill directory detected: 68 skills found'), { type: 'total', total: 68 });
   assert.deepEqual(runner.parseProgressLine('  [12/68] Scanning helius-api'), { type: 'skill', current: 12, total: 68, name: 'helius-api' });
@@ -399,7 +423,7 @@ test('runScan(): downloads, unpacks and scans the folder with --recursive; exit 
   const archive = await archiveOf();
   const f = fakeRun(SINGLE);
   let sawFolder = null;
-  const run = async (bin, args, opts) => { sawFolder = fs.existsSync(path.join(args[1], 'skills/b/SKILL.md')); return f.run(bin, args, opts); };
+  const run = async (bin, args, opts) => { sawFolder = fs.existsSync(path.join(args[1], 'b/SKILL.md')); return f.run(bin, args, opts); };
   const out = await runner.runScan({ url: 'https://github.com/o/repo' }, { run, fetchFile: async () => ({ buffer: archive }) });
   assert.equal(out.exitCode, 1);
   assert.equal(out.report.score, 62);
@@ -407,7 +431,8 @@ test('runScan(): downloads, unpacks and scans the folder with --recursive; exit 
   assert.ok(!/^https:/.test(args[1]) && sawFolder, 'a local folder holding the repository');
   assert.ok(args.includes('--recursive') && args.includes('--no-llm') && !args.includes('--max-skills'));
   assert.equal(out.stats.skillCount, 1);
-  assert.equal(out.stats.fileCount, 3);
+  assert.equal(out.stats.fileCount, 2, 'the two skill folders, moved up');
+  assert.equal(out.report.leftOutFiles, 1, 'the README outside them');
   assert.ok(out.stats.durationMs >= 0);
   assert.ok(!fs.existsSync(opts.cwd), 'temp folder deleted');
 });
@@ -415,7 +440,7 @@ test('runScan(): downloads, unpacks and scans the folder with --recursive; exit 
 test('runScan(): a zip is unpacked and scanned as a folder too', async () => {
   const f = fakeRun(SINGLE);
   let seen = null;
-  const run = async (bin, args, opts) => { seen = fs.existsSync(path.join(args[1], 'skills/a/SKILL.md')); return f.run(bin, args, opts); };
+  const run = async (bin, args, opts) => { seen = fs.existsSync(path.join(args[1], 'a/SKILL.md')); return f.run(bin, args, opts); };
   await runner.runScan({ zipBuffer: await archiveOf() }, { run });
   assert.equal(seen, true);
 });

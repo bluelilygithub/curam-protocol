@@ -101,6 +101,51 @@ function countFolder(root) {
   return { subSkills, rootSkill, files, bytes };
 }
 
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.venv', 'venv', '__pycache__']);
+const hasManifest = (d) => ['SKILL.md', 'skill.md'].some((n) => { try { return fs.lstatSync(path.join(d, n)).isFile(); } catch { return false; } });
+
+/**
+ * SkillSpector only sees several skills when they sit DIRECTLY in the folder it is given (multi_skill.py detect_skills at the pinned
+ * commit); repositories usually keep them deeper (skills/<name>/SKILL.md), so claude-trading-skills was scanned as one bundle. When the
+ * top has no SKILL.md and under 2 skills directly in it but 2+ deeper, move each skill folder (with anything nested in it) into a new
+ * flat folder `<dir>/flat`. Returns { target, moved, leftOut }: leftOut = files outside every skill folder (README, tests), not scanned.
+ */
+function flattenSkills(root, dir) {
+  const same = { target: root, moved: 0, leftOut: 0 };
+  if (hasManifest(root)) return same;
+  let kids;
+  try { kids = fs.readdirSync(root, { withFileTypes: true }); } catch { return same; }
+  if (kids.filter((e) => e.isDirectory() && !e.isSymbolicLink() && hasManifest(path.join(root, e.name))).length >= 2) return same;
+  const skills = [];
+  let seen = 0;
+  const walk = (d, depth) => {
+    if (depth > 10 || seen > 20000) return;
+    if (depth > 0 && hasManifest(d)) { skills.push(d); return; }
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      seen += 1;
+      if (e.isDirectory() && !e.isSymbolicLink() && !SKIP_DIRS.has(e.name)) walk(path.join(d, e.name), depth + 1);
+    }
+  };
+  walk(root, 0);
+  if (skills.length < 2) return same;
+  const flat = path.join(dir, 'flat');
+  fs.mkdirSync(flat);
+  const used = new Set();
+  // shallower skills first, then by path, so the short names do not depend on the order the disk lists folders in
+  const depth = (s) => path.relative(root, s).split(path.sep).length;
+  skills.sort((a, b) => depth(a) - depth(b) || (a < b ? -1 : 1));
+  for (const s of skills) {
+    // the folder name, or its whole path when two skills share a name (plugins/a/skills/x and plugins/b/skills/x)
+    let name = path.basename(s);
+    if (used.has(name.toLowerCase())) name = path.relative(root, s).split(path.sep).join('__');
+    used.add(name.toLowerCase());
+    fs.renameSync(s, path.join(flat, name));
+  }
+  return { target: flat, moved: skills.length, leftOut: countFolder(root).files };
+}
+
 /**
  * One line of SkillSpector's output -> progress. With -o and JSON it prints, for a multi-skill folder:
  *   "Multi-skill directory detected: 68 skills found"   then for each skill   "  [12/68] Scanning helius-api"
@@ -338,7 +383,9 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
   const report = (p) => { try { onProgress(p); } catch { /* best effort */ } };
   try {
     report({ phase: zipBuffer ? 'unpack' : 'download', current: 0, total: null, module: null });
-    const target = await prepareFolder({ zipBuffer, url: target0, dir }, { ...deps, onUnpack: () => report({ phase: 'unpack', current: 0, total: null, module: null }) });
+    const unpacked = await prepareFolder({ zipBuffer, url: target0, dir }, { ...deps, onUnpack: () => report({ phase: 'unpack', current: 0, total: null, module: null }) });
+    const flat = flattenSkills(unpacked, dir);
+    const target = flat.target;
     const found = countFolder(target);
     const skillsGuess = Math.max(1, found.subSkills);
     const outFile = path.join(dir, 'report.json');
@@ -378,6 +425,7 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
       throw new Error(`SkillSpector could not scan that: ${lastLines(res.stderr) || lastLines(res.stdout) || `exit code ${res.code}`}`);
     }
     const normalized = normalizeReport(raw);
+    if (flat.leftOut) normalized.leftOutFiles = flat.leftOut;
     const stats = {
       durationMs: Date.now() - scanStart,
       skillCount: normalized.multi ? normalized.skills.length : 1,
@@ -390,7 +438,7 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
 }
 
 module.exports = {
-  BIN, LIMITS, MAX_SKILLS, DEFAULT_SKILL_LIMIT, GITHUB_URL_RE, timeoutFor, countFolder, parseProgressLine,
+  BIN, LIMITS, MAX_SKILLS, DEFAULT_SKILL_LIMIT, GITHUB_URL_RE, timeoutFor, countFolder, flattenSkills, parseProgressLine,
   parseGithubUrl, scanEnv, buildArgs, runProcess, isInstalled, normIssue, normSkill, normalizeReport, runScan,
   githubArchive, extractZip, prepareFolder,
 };
