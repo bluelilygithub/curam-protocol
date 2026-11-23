@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (bip-extraction-layout)
+
+### Business Profiler — profiles missing the name, address and phone; junk keywords and phones
+From the live saleslogs.com profile. `sitemap.xml` was joined to the page text, so its URLs became keywords (`hubfs`, `thumbnail`, hashes) and its `<lastmod>` dates and image ids became 13 "phones". It is now only read for `sitemapUrls`. Phones must look like phones (`looksLikePhone`). Addresses are read across `<br>` line breaks, so "Level 10, 637 Flinders Street / Docklands VIC 3008" is found. The business name now comes from the site's `© … Pty Ltd` line and page titles, and names are compared without company suffixes. An ABN printed on the site is read. A skipped Google Places no longer prints "url: ; source:", years in business says when it is only the domain's age, and the PDF prints confidence labels as words instead of "??". Existing profiles need a Re-scan.
+
+### Business Profiler — Video Tools layout
+Tool sidebar (Profile, Report, Keep & share), a "What do you want to do?" start screen with job tiles and recent-profile tiles, an open-profile bar, and Re-scan & sources with a Refresh per source. The tour and the guide switch tools. The Products card's refresh no longer sends `[['website']]`.
+
+---
+
 ## 2026-11-23 (bip-notes-clients)
 
 ### Business Profiler — every profile run failed at the last step

@@ -2,6 +2,54 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "c2917dfa",
+   "fullHash": "c2917dfa6ba8f23b123c81726e73c2b36799203d",
+   "committedAt": "2026-11-23T18:52:24+10:00",
+   "author": "mrb",
+   "area": "Business Profiler",
+   "subject": "Business Profiler: Video Tools layout with tool sidebar, job tiles and recent profiles",
+   "filesChanged": 7,
+   "insertions": 507,
+   "deletions": 273,
+   "goal": "Give Business Profiler the same layout as Video Tools: a tool list on the left and a tiled 'What do you want to do?' dashboard, instead of one long page.",
+   "whatChanged": "BipPage.jsx rebuilt on the shared ToolSidebar, JobStart, JobBar and BackToJobs components. Sidebar groups: Profile (Profile a domain, Saved profiles), Report (Profile cards, Confidence & conflicts, Re-scan & sources) and Keep & share (Download PDF, Save to Note & Client); tools that need a profile show the hint 'Open a profile first' and an in-page prompt. Start screen: five job tiles from new bip/bipGoals.mjs (check out a business, prepare for a meeting or sales call, add a business to the CRM, bring a saved profile up to date, share a profile) plus tiles for the six most recent profiles; a job moves to its next step when a profile is made or opened. 'Next time, open on the tool I used last' is kept in localStorage (vault:bip:openOnLast, vault:bip:lastTool). /bip/:id opens the profile on Profile cards; an open-profile bar (name, domain, status, client, Delete) sits above Report and Keep & share tools. Re-scan & sources shows each source's status, reason and checked date with its own Refresh. A cached hit now opens the profile with a toast. The tour takes goTool and switches tools per step; the guide's Open buttons switch tools. bipTools.mjs regrouped (refresh renamed 'Re-scan & sources', GUIDE_TOOLS derived from BIP_TOOLS) and the guide catalogue in bipTutor.js regrouped to match, with a rule describing the job tiles. Fixes the Products & Services card refresh, which sent [['website']] instead of ['website'].",
+   "filesImpacted": [
+    "client/src/pages/BipPage.jsx",
+    "client/src/pages/bip/bipGoals.mjs",
+    "client/src/pages/bip/bipGoals.test.mjs",
+    "client/src/pages/bip/bipTools.mjs",
+    "client/src/utils/tours/bipTour.js",
+    "server/services/bipTutor.js",
+    "docs/bip.md"
+   ],
+   "benefit": "Business Profiler works like the other tool pages: pick a job or a tool, see recent profiles at a glance, and keep the report, conflicts, sources, PDF and Notes & client each in their own place.",
+   "concerns": "Not clicked through in a browser: verified by a full client build (vite build to a scratch folder), JSX parsing, the guide, nav, job-tile and BIP tests. The tour's cards and conflicts steps need a profile open; with none open they attach to nothing and show as a plain message. Opening a profile from a job tile depends on route changes and the job state lining up, which no test covers."
+  },
+  {
+   "commit": "0441e948",
+   "fullHash": "0441e948ec7797c51c100aca5556f36e4aba5550",
+   "committedAt": "2026-11-23T18:52:17+10:00",
+   "author": "mrb",
+   "area": "Business Profiler",
+   "subject": "Business Profiler: missing name, address and phone; junk keywords and phones",
+   "filesChanged": 7,
+   "insertions": 160,
+   "deletions": 20,
+   "goal": "Fix the gaps in the saleslogs.com sample report: no business name, no address, 13 'phones' that were mostly dates, nonsense keywords, an empty Google Places line and '??' where the confidence marks should be.",
+   "whatChanged": "website.js: sitemap.xml is no longer joined to the HTML pages' text (its URLs had become keywords such as hubfs and thumbnail, its <lastmod> dates and image ids had become phones); it is only read for sitemapUrls. New looksLikePhone accepts + and 8-15 digits or Australian 0X/1300/1800 numbers and refuses dates, year ranges and ids. New extractAddresses reads a street line together with a state/postcode/Australia line up to two lines later, so addresses split by <br> are found. New extractNames takes the legal name from a '(c) ... Pty Ltd' line (only with a company suffix) and the site name from og:site_name or the part of page titles after | or -. ABNs printed on the site are read. reconcile.js adds the legal and site names (as one Website scrape source) and site ABNs, and compares business names without company suffixes (nameKey). sources.js uses the site's ABN and legal name for the ABR lookup and the profile title. cards.js: Google Places is null when skipped (== null instead of === null); entity gains legalNameOnWebsite and siteName; financial gains yearsInBusinessBasis. pdf.js prints confidence labels as words, adds Legal name on website, the years-in-business basis and a heading for the sitemap list. Six new tests in bip.test.js built from the real saleslogs.com footer; docs/bip.md section.",
+   "filesImpacted": [
+    "server/services/bip/website.js",
+    "server/services/bip/reconcile.js",
+    "server/services/bip/sources.js",
+    "server/services/bip/cards.js",
+    "server/services/bip/pdf.js",
+    "server/services/bip/bip.test.js",
+    "docs/bip.md"
+   ],
+   "benefit": "On the real saleslogs.com pages the extraction now finds SalesLogs Pty Ltd, Level 10, 637 Flinders Street, Docklands VIC 3008 and +61 2 9855 7852, with real keywords, and the PDF reads cleanly.",
+   "concerns": "Checked against saleslogs.com pages downloaded locally and a rendered sample PDF, not a full live run on the server. Existing profiles keep the old data until re-scanned. The address and legal-name patterns are heuristics: an address with no street word, or a copyright line without a company suffix, is still missed. Missing ABR_GUID and Google keys still leave the ABN, entity type, GST and ratings empty."
+  },
+  {
    "commit": "43c42ed0",
    "fullHash": "43c42ed03cd02ae970bd784d61eadae0cbcfd6ef",
    "committedAt": "2026-11-23T17:12:14+10:00",
