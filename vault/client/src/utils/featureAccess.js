@@ -47,6 +47,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  bip: false, // keep in step with server/config/featureAccess.js; enable in Settings → Feature Access
   liveTv: false, // keep in step with server/config/featureAccess.js
   emailFollowUp: false, // keep in step with server/config/featureAccess.js
   passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
@@ -57,6 +58,7 @@ export const DEFAULT_FEATURE_ACCESS = {
 
 // How finished each surface is (keep in step with server/config/featureAccess.js; a test fails if they differ). Missing = ga.
 export const FEATURE_LIFECYCLE = {
+  bip: 'preview',
   cellarPlanner: 'preview',
   topicResearch: 'preview',
   serpTracker: 'preview',
@@ -87,6 +89,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'serpTracker', label: 'SERP Tracker' },
       { key: 'googleAds', label: 'Google Ads' },
       { key: 'domains', label: 'Domain' },
+      { key: 'bip', label: 'Business Profiler' },
       { key: 'html', label: 'Page speed' },
       { key: 'aiVisibility', label: 'AI Visibility' },
       { key: 'webExtractor', label: 'Web Extractor' },

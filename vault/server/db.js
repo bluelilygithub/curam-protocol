@@ -5813,6 +5813,46 @@ async function initSchema() {
     console.error('[db] garden picture migration failed (will retry next boot):', err.message);
   }
 
+  // ── Business Profiler (BIP) ─────────────────────────────────────────────────
+  // One profile per person/domain. The assembled profile and each module's raw response are JSONB; a source row is written on every
+  // module run so a re-scan keeps its own timestamp and status. No expiry: profiles stay until the person deletes them.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bip_profiles (
+      id                      SERIAL PRIMARY KEY,
+      "userId"                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      domain                  TEXT NOT NULL,
+      "businessName"          TEXT,
+      status                  VARCHAR(20) NOT NULL DEFAULT 'running'
+                                CHECK (status IN ('running', 'done', 'failed')),
+      "seedData"              JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "enrichmentData"        JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "reconciliation"        JSONB NOT NULL DEFAULT '{}'::jsonb,
+      cards                   JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "decisions"             JSONB NOT NULL DEFAULT '{}'::jsonb,
+      error                   TEXT,
+      "createdAt"             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "scannedAt"             TIMESTAMPTZ,
+      "updatedAt"             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS bip_profiles_user_idx ON bip_profiles ("userId", "scannedAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS bip_profiles_domain_idx ON bip_profiles ("userId", lower(domain))`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bip_sources (
+      id                      SERIAL PRIMARY KEY,
+      "profileId"             INTEGER NOT NULL REFERENCES bip_profiles(id) ON DELETE CASCADE,
+      "userId"                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name                    TEXT NOT NULL,
+      status                  VARCHAR(20) NOT NULL,
+      reason                  TEXT,
+      error                   TEXT,
+      data                    JSONB,
+      "rawResponse"           JSONB,
+      "checkedAt"             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS bip_sources_profile_idx ON bip_sources ("profileId", name, "checkedAt" DESC)`);
+
   console.log('[db] Schema ready');
 }
 

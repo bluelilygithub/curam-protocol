@@ -31,6 +31,7 @@ const GUIDES = {
   route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },
   'burner-mail': { name: 'Burner Mail guide', endpoint: '/api/burner-mail-tutor' },
   'dns-lookup': { name: 'DNS Lookup guide', endpoint: '/api/dns-lookup-tutor' },
+  bip: { name: 'Business Profiler guide', endpoint: '/api/bip-tutor' },
   'live-tv': { name: 'Live TV guide', endpoint: '/api/live-tv-tutor' },
   guitar: { name: 'Guitar guide', endpoint: '/api/guitar-tutor' },
   'email-follow-up': { name: 'Email Follow-Up guide', endpoint: '/api/email-follow-up-tutor' },

@@ -47,6 +47,9 @@ Moved out of CLAUDE.md.
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |
 | `PERPLEXITY_API_KEY` | AI Visibility — optional: adds Perplexity (Sonar API) as one of the real assistants each buyer question is put to. Also accepted as a Settings key. Model from setting `ai_visibility_perplexity_model` (default `sonar`). Off until set |
 | `GSC_REDIRECT_URI` | Search Console OAuth callback (default `{APP_URL}/api/gsc/callback`) |
+| `ABR_GUID` | Business Profiler — ABR ABN Lookup GUID (`abr.business.gov.au/WebServices.aspx`), for the exact entity/ABN module. Off until set; the module is recorded as skipped. `docs/bip.md` |
+| `GOOGLE_PLACES_API_KEY` | Business Profiler — Google Places (New) Text Search for a verified name, address, phone, website and rating. Off until set. |
+| `GOOGLE_SEARCH_API_KEY` / `GOOGLE_SEARCH_CX` | Business Profiler — Google Custom Search JSON API key and Programmable Search Engine id; both are needed for the de-duplicated top-10 mentions with title, snippet, URL and date. `GET /api/bip/config` reports connected booleans only, never the values. |
 | `SENTRY_DSN` | Error tracking — unset disables Sentry entirely (no-op). See **`docs/observability.md`** |
 | `SENTRY_AUTH_TOKEN` | Admin dashboard Sentry overview panel (read-only issues/stats pull). Unset = panel links out to Sentry instead of showing data. |
 | `SENTRY_ORG` / `SENTRY_PROJECT` | Org/project slugs for the Sentry API calls above. Default `curam-ai` / `python-flask`. |

@@ -160,6 +160,36 @@
   "GET /api/browser-agent/runs": {
    "class": "authed"
   },
+  "GET /api/bip/config": {
+   "class": "authed"
+  },
+  "GET /api/bip/profiles": {
+   "class": "authed"
+  },
+  "POST /api/bip/profiles": {
+   "class": "authed"
+  },
+  "GET /api/bip/profiles/:id": {
+   "class": "authed"
+  },
+  "POST /api/bip/profiles/:id/rescan": {
+   "class": "authed"
+  },
+  "PATCH /api/bip/profiles/:id": {
+   "class": "authed"
+  },
+  "GET /api/bip/profiles/:id/pdf": {
+   "class": "authed"
+  },
+  "DELETE /api/bip/profiles/:id": {
+   "class": "authed"
+  },
+  "GET /api/bip/jobs/:jobId": {
+   "class": "authed"
+  },
+  "POST /api/bip-tutor": {
+   "class": "authed"
+  },
   "POST /api/burner-mail-tutor": {
    "class": "authed"
   },

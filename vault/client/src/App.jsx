@@ -58,6 +58,7 @@ import AiVisibilityPage from './pages/AiVisibilityPage';
 import WebExtractorPage from './pages/WebExtractorPage';
 import BurnerMailPage from './pages/BurnerMailPage';
 import DnsLookupPage from './pages/DnsLookupPage';
+import BipPage from './pages/BipPage';
 import LiveTvPage from './pages/LiveTvPage';
 import EmailFollowUpPage from './pages/EmailFollowUpPage';
 import PasswordVaultPage from './pages/PasswordVaultPage';
@@ -221,6 +222,8 @@ function App() {
               <Route path="/measurements" element={<MeasurementsPage />} />
               <Route path="/burner-mail" element={<BurnerMailPage />} />
               <Route path="/dns-lookup" element={<DnsLookupPage />} />
+              <Route path="/bip" element={<BipPage />} />
+              <Route path="/bip/:id" element={<BipPage />} />
               <Route path="/live-tv" element={<LiveTvPage />} />
               <Route path="/email-follow-up" element={<EmailFollowUpPage />} />
               <Route path="/password-vault" element={<PasswordVaultPage />} />

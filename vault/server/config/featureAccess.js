@@ -63,6 +63,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  // Business Profiler: public-source company profiles. Preview — new, not yet run against every live source (docs/bip.md).
+  bip: false,
   // free TV channels listed by iptv-org, played by the browser (docs/live-tv.md): off until an admin switches it on (admins can always open it)
   liveTv: false,
   // reads attached Gmail threads into a commitments ledger and prepares cited follow-up text to copy (docs/email-follow-up.md): off until an admin switches it on
@@ -80,6 +82,7 @@ const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
 // A flag missing from this list counts as ga. The Feature Access panel shows the status; it changes no behaviour.
 const LIFECYCLE_VALUES = ['ga', 'preview', 'parked'];
 const FEATURE_LIFECYCLE = {
+  bip: 'preview',             // new: source coverage depends on optional API keys; ASIC is a manual-check stub
   cellarPlanner: 'preview',   // real-job validation and the rod fabricator's rack values are pending
   serpTracker: 'preview',     // built stage by stage; stage 1 only checks the DataForSEO balance, no rankings collected yet
   topicResearch: 'preview',   // built milestone by milestone; drafts, source check and suggestions not yet run against a real model

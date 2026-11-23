@@ -89,6 +89,7 @@ export const APP_NAV_GROUPS = [
       { id: 'serpTracker', label: 'SERP Tracker', path: '/serp-tracker', icon: 'line-chart', featureKey: 'serpTracker', aliases: 'rankings rank tracker google positions dataforseo' },
       { id: 'googleAds', label: 'Google Ads', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true, aliases: 'adwords keywords rsa' },
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
+      { id: 'bip', label: 'Business Profiler', path: '/bip', icon: 'briefcase', featureKey: 'bip', matchPrefix: true, aliases: 'company business profile whois abn registry enrichment' },
       { id: 'devicePreview', label: 'Device preview', path: '/device-preview', icon: 'smartphone', featureKey: 'restyle', aliases: 'responsive mobile phone tablet screen size ipad iphone' },
       { id: 'html', label: 'Page speed', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true, aliases: 'lighthouse pagespeed audit' },
       { id: 'aiVisibility', label: 'AI Visibility', path: '/ai-visibility', icon: 'radar', featureKey: 'aiVisibility', matchPrefix: true, aliases: 'llm chatgpt gemini ai search aeo geo answer engine citation robots' },

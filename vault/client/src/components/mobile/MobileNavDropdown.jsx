@@ -71,6 +71,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         fitness: 'fitness',
         burnerMail: 'burnerMail',
         dnsLookup: 'dnsLookup',
+        bip: 'bip',
         liveTv: 'liveTv',
         passwordVault: 'passwordVault',
         topicResearch: 'topicResearch',

@@ -278,6 +278,8 @@ app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burn
 app.use('/api/burner-mail-tutor', requireFeature('burnerMail'), aiLimiter, require('./routes/burnerMailTutor')); // the Burner Mail guide chat (sees no addresses or emails)
 app.use('/api/password-vault', requireFeature('passwordVault'), require('./routes/passwordVault')); // zero-knowledge password manager: stores ciphertext only
 app.use('/api/password-vault-tutor', requireFeature('passwordVault'), aiLimiter, require('./routes/passwordVaultTutor')); // the Password Vault guide chat (sees no passwords or names)
+app.use('/api/bip-tutor', requireFeature('bip'), aiLimiter, require('./routes/bipTutor')); // the Business Profiler guide chat (sees no domain, profile or result); before /api/bip
+app.use('/api/bip', requireFeature('bip'), require('./routes/bip')); // saved public-source company profiles (docs/bip.md); heavy lookups run as background jobs
 app.use('/api/dns-lookup', requireFeature('dnsLookup'), require('./routes/dnsLookup'));
 app.use('/api/email-follow-up-tutor', requireFeature('emailFollowUp'), aiLimiter, require('./routes/emailFollowUpTutor')); // the Email Follow-Up guide chat (sees no cases, emails or drafts)
 app.use('/api/email-follow-up', requireFeature('emailFollowUp'), require('./routes/emailFollowUp')); // commitments ledger over attached Gmail threads; read-only Gmail, nothing is sent

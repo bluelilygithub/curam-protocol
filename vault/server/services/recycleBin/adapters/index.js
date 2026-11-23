@@ -6,6 +6,7 @@ require('./tasks'); // tasks and goals
 require('./chats');
 require('./routeTracks');
 require('./domainSets');
+require('./bip'); // Business Profiler profiles (with their per-module source history)
 require('./graphicsRecipes');
 require('./topicResearch');
 require('./passwordVault');
