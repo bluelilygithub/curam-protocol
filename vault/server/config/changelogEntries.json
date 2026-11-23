@@ -2,6 +2,56 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "43c42ed0",
+   "fullHash": "43c42ed03cd02ae970bd784d61eadae0cbcfd6ef",
+   "committedAt": "2026-11-23T17:12:14+10:00",
+   "author": "mrb",
+   "area": "Business Profiler, CRM, Notes",
+   "subject": "Business Profiler: Save to Note and link to a client, with links both ways",
+   "filesChanged": 14,
+   "insertions": 439,
+   "deletions": 1,
+   "goal": "Let a Business Profiler profile be kept with the rest of the person's work: saved as a note (optionally under a project) that links back to the profile, and filed under a new or existing CRM client, with each side opening the other.",
+   "whatChanged": "New Notes & client box on a saved profile (BipLinks.jsx), reached from a Save to Note / Client button in the top bar. Save to Note creates a note through the existing POST /api/notes with a title, optional project and the profile's client when it has one; the body (bipNote.mjs) starts 'From Business Profiler: [Business name](/bip/:id)' and lists the website, ABN, entity type, address, phone, Google rating, people and description that were found, preferring a recorded conflict decision and leaving out 'Not found'. The box lists notes linking back via new GET /api/bip/profiles/:id/notes, which matches '](/bip/:id)' in note text like Drawings does. Create client from profile calls the existing POST /api/clients (name and company = business name, type company, status Prospect, notes = profile link plus facts, no email domains so no Gmail sync), then new PUT /api/bip/profiles/:id/client stores the link in new column bip_profiles.\"clientId\" (FK to clients, ON DELETE SET NULL, indexed); an existing client can be linked or unlinked the same way, and the route rejects a client that is not the person's. GET /api/bip/profiles/:id now returns clientId and clientName. The client page gets a Business profiles tab (LinkedBusinessProfiles.jsx, new GET /api/bip/linked?clientId=), hidden when bip is off for the person. Recycle-bin restore keeps clientId only if that client still exists. Guide catalogue (bipTutor.js) and tool list gain a 'save' entry; three routes added to routeManifest.json; docs/bip.md has a new Notes and clients section.",
+   "filesImpacted": [
+    "client/src/pages/bip/BipLinks.jsx",
+    "client/src/pages/bip/bipNote.mjs",
+    "client/src/pages/bip/bipNote.test.mjs",
+    "client/src/components/LinkedBusinessProfiles.jsx",
+    "client/src/pages/BipPage.jsx",
+    "client/src/pages/ClientDetailPage.jsx",
+    "client/src/pages/bip/bipTools.mjs",
+    "server/routes/bip.js",
+    "server/services/bip/store.js",
+    "server/services/bipTutor.js",
+    "server/services/recycleBin/adapters/bip.js",
+    "server/testing/routeManifest.json",
+    "server/db.js",
+    "docs/bip.md"
+   ],
+   "benefit": "A profile can be saved into Notes and the CRM without copying by hand, and from a note, a client or the profile you can get to the others in one click.",
+   "concerns": "Not clicked through in a browser and not run against a database: covered by the bipNote unit test, the BIP, guide, nav and feature-access tests, and a JSX parse of the changed files. The new routes were not run through crossUserOwnership.test.js (needs a database). The note back-link is a text match, so editing the link out of a note removes it from the profile's list. Notes made before a client is linked are not moved under that client. The client's notes field shows the profile path as plain text, not a clickable link; the clickable route back is the Business profiles tab. The commit message says it changed the SQL-cast test; that change actually went into 40eaee08."
+  },
+  {
+   "commit": "40eaee08",
+   "fullHash": "40eaee08d234d542d1c030b11551eb3bdfc0b872",
+   "committedAt": "2026-11-23T17:12:04+10:00",
+   "author": "mrb",
+   "area": "Business Profiler",
+   "subject": "Business Profiler: profile runs failed at the last step (inconsistent types for $3)",
+   "filesChanged": 2,
+   "insertions": 21,
+   "deletions": 2,
+   "goal": "Make profile runs finish and save, so BIP shows content instead of the error 'inconsistent types deduced for parameter $3'.",
+   "whatChanged": "In store.js finishProfile, $3 was used as the new status (VARCHAR column) and in CASE WHEN $3 = 'done' (text literal), so Postgres rejected the UPDATE. Every run did all its lookups and then failed saving the finished profile; failProfile calls the same query, its error was swallowed by run.js, and the profile stayed 'running'. Both uses are now $3::text. bip.test.js gains a check that any parameter reused within one store.js query (text inside each pair of backticks) carries the same explicit cast at every use; it fails on the old query and passes on the new one.",
+   "filesImpacted": [
+    "server/services/bip/store.js",
+    "server/services/bip/bip.test.js"
+   ],
+   "benefit": "Business Profiler profiles can finish and be saved; failed runs are now recorded as failed instead of hanging at running.",
+   "concerns": "Not run against a real database or a live profile; verified only by the static SQL check and the existing stubbed BIP tests. Profiles already stuck at 'running' in production stay that way until re-scanned. The static check only covers parameters that are reused; a single use with a type clash would still need a database to catch."
+  },
+  {
    "commit": "0eb4787c",
    "fullHash": "0eb4787c3f435e9ee1f7e340f796f6940168330c",
    "committedAt": "2026-11-23T16:47:53+10:00",

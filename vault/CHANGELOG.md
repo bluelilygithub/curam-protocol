@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (bip-notes-clients)
+
+### Business Profiler — every profile run failed at the last step
+`finishProfile` used `$3` both as the new `status` (VARCHAR) and in `CASE WHEN $3 = 'done'` (text), so Postgres answered "inconsistent types deduced for parameter $3". All lookups ran, then saving the finished profile failed; `failProfile` runs the same query, so its error was swallowed and the profile stayed `running`. Both uses are now `$3::text`. `bip.test.js` checks that any parameter reused within one `store.js` query carries the same explicit cast at every use. Profiles stuck at `running` need a Re-scan.
+
+### Business Profiler — Save to Note and link to a client
+A **Notes & client** box on a saved profile. Save to Note makes a note (optional project, and the profile's client when linked) starting `[Business name](/bip/:id)` with the facts found; the box lists every note linking back (`GET /api/bip/profiles/:id/notes`). Create client from profile (status Prospect) or link an existing client (`PUT /api/bip/profiles/:id/client`, new `bip_profiles."clientId"`); the client page gets a **Business profiles** tab (`GET /api/bip/linked`). New test: `node client/src/pages/bip/bipNote.test.mjs`.
+
+---
+
 ## 2026-11-23 (shares-benchmark-closes)
 
 ### Shares — benchmark index history was deleted after 45 days
