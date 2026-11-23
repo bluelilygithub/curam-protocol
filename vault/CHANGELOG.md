@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-delete-dialog)
+
+### Skill Scanner — deleting a scan asks in Vault's own dialog
+Delete on a saved scan now opens Vault's confirmation dialog instead of the browser's pop-up box. The dialog names the scan and says it can be restored from the recycle bin for 30 days.
+
+---
+
 ## 2026-11-24 (skill-scanner-nested)
 
 ### Skill Scanner — skills in a subfolder are scanned one by one

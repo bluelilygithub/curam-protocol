@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "eef567f4",
+   "fullHash": "eef567f45ce1ac2e7346a40e5341e41370b44131",
+   "committedAt": "2026-11-24T08:45:00+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: confirm deleting a scan in the app's own dialog",
+   "filesChanged": 1,
+   "insertions": 16,
+   "deletions": 2,
+   "goal": "Replace the browser's pop-up box with a clean in-app confirmation when deleting a saved scan.",
+   "whatChanged": "SkillScanPage.jsx used window.confirm before deleting a scan. Delete now opens the shared ConfirmModal (components/ConfirmModal.jsx, as Clients and Chat use) titled 'Delete this scan?', naming the scan and saying it can be restored from the recycle bin for 30 days, with a red Delete button and Cancel. The delete request, list update and undo toast are unchanged.",
+   "filesImpacted": [
+    "client/src/pages/SkillScanPage.jsx"
+   ],
+   "benefit": "Deleting a scan asks in Vault's own styled dialog instead of the browser's plain pop-up.",
+   "concerns": "None noted."
+  },
+  {
    "commit": "001f611f",
    "fullHash": "001f611fae7e61ccaac53c62efcb72c1658cd615",
    "committedAt": "2026-11-24T08:23:31+10:00",
