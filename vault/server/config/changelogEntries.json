@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "687c9e44",
+   "fullHash": "687c9e448317f09b420ef0d3a845ac1df34fd48b",
+   "committedAt": "2026-11-24T07:59:06+10:00",
+   "author": "mrb",
+   "area": "Settings, PDF Tools",
+   "subject": "Settings guide: add the PDF Tools section",
+   "filesChanged": 1,
+   "insertions": 3,
+   "deletions": 0,
+   "goal": "Make the Settings guide know every Settings section again, so its test passes.",
+   "whatChanged": "server/services/settingsTutor.test.js failed because client/src/utils/settingsGroups.mjs lists a PDF Tools section (in the admin-only AI and tools group, holding the PDF -> HTML model card) that the guide's CATALOG in server/services/settingsTutor.js did not have. Added a PDF Tools entry in that group: what it sets (the model PDF Tools' PDF -> HTML uses), that only connected models that can see pictures are offered, how 'automatic' picks one (the default chat model if it can see pictures, else the first Claude model, else the first Gemini one, per services/pdfToHtmlModel.js), that DeepSeek and local models are not offered, that a removed model falls back to automatic, and that it is admin only.",
+   "filesImpacted": [
+    "server/services/settingsTutor.js"
+   ],
+   "benefit": "The Settings guide can point people to the PDF Tools model setting, and settingsTutor.test.js passes.",
+   "concerns": "None noted."
+  },
+  {
    "commit": "b2ba69cc",
    "fullHash": "b2ba69cc83e124465b1f9a8a44b7381774642cb0",
    "committedAt": "2026-11-24T07:57:01+10:00",
