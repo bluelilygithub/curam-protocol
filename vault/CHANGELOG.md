@@ -4,6 +4,21 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (bip-deeper-search)
+
+Compared with a manual web search, the profile missed the ABN, registration history, NSW base, founders, history and customers. Three changes, one commit each:
+
+### Business Profiler — read the company's legal, people and history pages
+Up to 8 more same-site pages (terms, privacy, team, history, press, case studies, careers) are read. On saleslogs.com, /terms and /privacy give "SalesLogs Pty Ltd ABN 69 161 409 132". Phones and addresses come only from the business's own pages, not legal pages (a privacy policy lists the OAIC's 1300 number). The address pattern no longer matches sentences such as "replaces … July 2020", and a "A." list label is no longer part of the legal name.
+
+### Business Profiler — public ABN Lookup page when an ABN is found
+Without `ABR_GUID`, an ABN found on the website is looked up on `abr.business.gov.au/AbnHistory/View`: current and former names, ABN and GST dates, entity type, main business location and its history, and the ACN. The registered location is an address value, so NSW 2284 against a Docklands VIC website address shows as a conflict. Years in business uses the ABN date before the domain's age.
+
+### Business Profiler — web research
+Five searches through Vault's shared web search, up to 8 other pages that mention the business, and facts extracted by the standard model with page, exact quote and a label (Register, Independent, Company says, Estimate). Facts whose quote is not on their page, or whose numbers are not in the quote, are dropped. People go to the People card, the rest to a new History & research card and the PDF, and the summary uses them with their labels.
+
+---
+
 ## 2026-11-23 (bip-summary)
 
 ### Business Profiler — AI summary of the business
