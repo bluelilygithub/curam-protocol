@@ -64,6 +64,16 @@ function createSkillScanRouter({ service, limiter } = {}) {
     } catch (err) { fail(res, err, 'get'); }
   });
 
+  // Write the plain-English explanation again (also written after every scan). One model call, so behind the AI limit.
+  router.post('/scans/:id/summary', (req, res, next) => limit(req, res, next), async (req, res) => {
+    if (!/^\d{1,9}$/.test(req.params.id)) return res.status(404).json({ error: 'Scan not found.' });
+    try {
+      const summary = await S().summarise(req.user.id, req.params.id);
+      if (!summary) return res.status(404).json({ error: 'Scan not found.' });
+      res.json({ summary });
+    } catch (err) { fail(res, err, 'summary'); }
+  });
+
   router.delete('/scans/:id', async (req, res) => {
     if (!/^\d{1,9}$/.test(req.params.id)) return res.status(404).json({ error: 'Scan not found.' });
     try {

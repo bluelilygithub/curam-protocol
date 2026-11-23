@@ -223,6 +223,9 @@
   "GET /api/skill-scan/scans/:id": {
    "class": "admin"
   },
+  "POST /api/skill-scan/scans/:id/summary": {
+   "class": "admin"
+  },
   "DELETE /api/skill-scan/scans/:id": {
    "class": "admin"
   },

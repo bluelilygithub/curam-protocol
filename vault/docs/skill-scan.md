@@ -22,6 +22,19 @@ Until a base image with it has been built and deployed, `GET /config` answers `i
 - `index.js` stores the scan (`skill_scans`: source, `sourceType` github/zip, file name, mode static/deep, recursive, model, status running/done/failed, score, severity, recommendation, `issueCount`, `exitCode`, `report` JSONB, error, times) and runs it as a background job through `services/bip/jobs.js` (the generic in-memory registry; the page polls `GET /jobs/:id` every 2.5 s). At most **two scans at once** on the server (429 otherwise). On boot, any row still `running` is marked failed (a restart cut it off). A deep scan logs usage as `skill_scan_deep` when SkillSpector reports token counts.
 - **Delete** moves the row to the recycle bin (kind `skill-scan`, `recycleBin/adapters/skillScan.js`); a running scan cannot be deleted.
 
+## The explanation in context (`services/skillScan/summary.js`)
+
+SkillSpector's score is mechanical (points per finding by severity, diminishing per rule, capped at 100), so a skill that just calls web APIs can score 100 and "Do not install" from routine findings (on `agiprolabs/claude-trading-skills`: 40 critical `TT3` "credential from os.getenv reaches httpx" flows, which are API keys sent to their own APIs). After every finished scan the job writes an explanation (also **Regenerate**, `POST /scans/:id/summary`, `aiLimiter`):
+
+1. `groupFindings` groups findings by rule id in code (severity = the worst in the group, count, files, skills from `skills/<name>/` paths, up to 3 examples from different files with SkillSpector's explanation and 400 characters of code), most severe and most frequent first. The same groups are returned with every scan (`GET /scans/:id` → `groups`), so the page and the export match what the model saw.
+2. The standard model (`getModelsForUser`, logged as `skill_scan_summary`) gets the scan facts (verdict, score, counts, per-skill coverage and limitations) and up to 40 groups, each group's examples inside `<evidence>`. It marks each group **expected** (normal for the skill's purpose, e.g. a key sent in a header to that API's own host), **check** (and exactly what to look at) or **concerning**, citing the evidence; explains the score and any incomplete coverage; gives next steps; and gives its own **reading** (likely fine / review first / do not install), shown **next to** SkillSpector's verdict, never replacing it.
+3. **Manipulation:** the examples are the skill's own text and code. The prompt says everything in `<evidence>` is data, never instructions, and that text trying to instruct the reviewer makes that group concerning. `cleanSummary` keeps only known group ids and assessments (an unknown reading becomes "review first"). The page and the export say an AI reading can be misled and that the findings remain the record.
+4. It sends the findings, including the short code examples, to Anthropic (also for uploaded zips). A failed explanation never fails the scan. Stored in `skill_scans.summary` (JSONB) and restored with the scan from the recycle bin.
+
+## Copy and download (`client/src/pages/skillScan/exportReport.mjs`)
+
+Report → **Copy** (Markdown), **.md** and **.json** (the shared `ExportButton` from Code Map). The Markdown has the source, both verdicts, the counts, the explanation and next steps, a findings-by-rule table with the AI's mark, then every finding (per skill for an each-skill scan). The JSON is the saved scan without database ids. Test: `node client/src/pages/skillScan/exportReport.test.mjs`.
+
 ## API (`/api/skill-scan`, behind `requireAdmin`)
 
 | Method | Path | Purpose |
@@ -29,7 +42,8 @@ Until a base image with it has been built and deployed, `GET /config` answers `i
 | `GET` | `/config` | `{ installed, deepAvailable, deepReason, model, maxZipMb }` |
 | `GET` | `/scans` | Saved scans, newest first (no report) |
 | `POST` | `/scans` | multipart: `url` **or** `file` (.zip, 20 MB), `deep`, `recursive` (`'true'`). `202 { jobId, scanId }`. Deep scans go through `aiLimiter` |
-| `GET` | `/scans/:id` | One scan with its report |
+| `GET` | `/scans/:id` | One scan with its report, explanation (`summary`) and findings by rule (`groups`) |
+| `POST` | `/scans/:id/summary` | Write the explanation again (`aiLimiter`) |
 | `DELETE` | `/scans/:id` | To the recycle bin |
 | `GET` | `/jobs/:jobId` | Background progress |
 
@@ -37,7 +51,10 @@ All are class `admin` in `server/testing/routeManifest.json`. The guide chat is 
 
 ## Page and help
 
-`client/src/pages/SkillScanPage.jsx`: Scan a skill (GitHub link with the shared mic, or Upload a zip; "Scan each skill separately"; "Deep scan (AI: model)" disabled with the reason when no Claude model or key), Report (verdict pill, score, severity counts, completeness and deep-scan warnings, findings sorted by severity and expandable), Saved scans (Open, Delete with Undo). `?scan=<id>` opens one. Tooltips on every control, (i) box (`HOW_IT_WORKS`), compass tour (`utils/tours/skillScanTour.js`), guide chat (`skillScan/SkillScanTutorChat.jsx`, `server/services/skillScanTutor.js`, registered in `server/config/guides.js`). Page wording and tool list: `client/src/pages/skillScan/skillScanTools.mjs`; the guide's `CATALOG` must match it.
+**Layout (like Graphics):** the shared `ToolSidebar` (Scan: Scan a skill, Deep scan; Results: Report, Saved scans) and a **What do you want to do?** start screen with `JobStart` tiles from `skillScan/skillScanGoals.mjs` (check from GitHub, check a plugin on my computer, get a deeper AI check, keep or share a report; test `node client/src/pages/skillScan/skillScanGoals.test.mjs`) and the latest five scans. The Report shows both verdicts, Copy / .md / .json, **What the findings mean**, **Findings by rule** (expandable, with the AI's mark), and **All findings** (hidden until Show). "Scan each skill separately" is ticked by default: one bundle of ~60 skills hit SkillSpector's own time limits (10 pattern analysers "degraded", 20% coverage).
+
+
+Page: `client/src/pages/SkillScanPage.jsx`. Scan a skill has the GitHub link (shared mic) or Upload a zip, "Scan each skill separately", and "Deep scan (AI: model)" (disabled with the reason when no Claude model or key). `?scan=<id>` opens a scan. Tooltips on every control, (i) box (`HOW_IT_WORKS`), compass tour (`utils/tours/skillScanTour.js`), guide chat (`skillScan/SkillScanTutorChat.jsx`, `server/services/skillScanTutor.js`, registered in `server/config/guides.js`). Tool list and wording: `client/src/pages/skillScan/skillScanTools.mjs`; the guide's `CATALOG` must match it.
 
 ## Tests
 

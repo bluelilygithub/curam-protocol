@@ -4,6 +4,7 @@
 // requireAdmin). A scan answers at once with a job id; the page polls GET /jobs/:id. See docs/skill-scan.md.
 
 const runner = require('./runner');
+const { explainScan, groupFindings } = require('./summary');
 // The in-memory job registry BIP uses (generic: id, progress, result; lost on restart, the saved row is not).
 const jobs = require('../bip/jobs');
 
@@ -38,7 +39,18 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
   async function get(userId, id) {
     const { rows } = await pool.query('SELECT * FROM skill_scans WHERE id = $1 AND "userId" = $2', [Number(id) || 0, userId]);
     if (!rows[0]) return null;
-    return { ...rows[0], report: parse(rows[0].report) };
+    const report = parse(rows[0].report);
+    // the same grouping the explanation uses, so the page and the export match it
+    return { ...rows[0], report, summary: parse(rows[0].summary), groups: report ? groupFindings(report) : [] };
+  }
+
+  /** Write (or rewrite) the plain-English explanation of a finished scan and save it. */
+  async function summarise(userId, id) {
+    const scan = await get(userId, id);
+    if (!scan) return null;
+    const summary = await (deps.explainScan || explainScan)(userId, scan, deps.summaryDeps);
+    await pool.query('UPDATE skill_scans SET summary = $3::jsonb WHERE id = $1 AND "userId" = $2', [scan.id, userId, JSON.stringify(summary)]);
+    return summary;
   }
 
   /** Start a scan; resolves { jobId, scanId } at once. input: { url } or { zipBuffer, fileName }, plus deep, recursive. */
@@ -72,6 +84,9 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
         if (deep && usage && (Number(usage.input_tokens) || Number(usage.output_tokens))) {
           (deps.logUsage || require('../../utils/logUsage').logUsage)({ userId, model, inputTokens: Number(usage.input_tokens) || 0, outputTokens: Number(usage.output_tokens) || 0, feature: 'skill_scan_deep' });
         }
+        // the explanation in context (summary.js); a failure leaves the scan done, and Regenerate can try again
+        onProgress({ phase: 'summary', current: 1, total: 1, module: null });
+        await summarise(userId, scanId).catch((err) => console.warn(`[skillScan] explanation for scan ${scanId} not written:`, err.message));
         return { scanId, score: report.score, recommendation: report.recommendation };
       } catch (err) {
         await pool.query(`UPDATE skill_scans SET status = 'failed', error = $3, "finishedAt" = NOW() WHERE id = $1 AND "userId" = $2`,
@@ -107,7 +122,7 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
     } finally { client.release(); }
   }
 
-  return { config, list, get, start, remove, getJob: jobs.getJob };
+  return { config, list, get, start, remove, summarise, getJob: jobs.getJob };
 }
 
 module.exports = { createSkillScanService, MAX_RUNNING };

@@ -18,14 +18,14 @@ export const GROUP_TIPS = {
 export const TOOL_TIPS = {
   scan: 'Paste a public github.com link to a skill or plugin, or upload a zip of its folder, then press Scan. The static scan reads the files and never runs them.',
   deep: 'Also has an AI model read the files for risks the patterns miss. Slower and costs a little per scan; the files are sent to Anthropic.',
-  report: 'The verdict (Safe, Caution or Do not install), the risk score out of 100 and every finding with its file, line, explanation and fix.',
+  report: 'The verdict and score, a plain-English explanation that says which findings are normal for what the skill does, the findings grouped by rule, every finding with its file and line, and Copy / Download.',
   history: 'Every scan you ran, newest first. Open one to read its report again, or delete it (it goes to the recycle bin).',
 };
 
 export const TOOL_BLURBS = {
   scan: 'A GitHub link or a zip in, a security verdict out.',
   deep: 'An AI read of the files on top of the static checks.',
-  report: 'Verdict, score and findings.',
+  report: 'Verdict, what it means, and the findings.',
   history: 'Past scans, newest first.',
 };
 
@@ -35,6 +35,8 @@ export const HOW_IT_WORKS = [
   ['What it looks for', 'Prompt injection, data exfiltration, credential access, privilege escalation, dangerous code, supply-chain problems (including known vulnerable dependencies), tool misuse, persistence and more: 71 patterns in 17 categories.'],
   ['Static and deep', 'The static scan reads the files and matches patterns, code structure and malware signatures. It is free and nothing leaves Vault except dependency names sent to OSV.dev to check for known vulnerabilities. A deep scan also has an AI model read the files, which catches subtler problems; it sends the files to Anthropic and costs a little per scan.'],
   ['The verdict', 'A risk score from 0 to 100: 0 to 20 Safe, 21 to 50 Caution, 51 and over Do not install. If the scan could not read everything, a Safe verdict is shown as Caution.'],
+  ['Why 100 is not always as bad as it looks', 'The score adds points for every finding and stops at 100, so a skill that simply calls web APIs can reach 100 from routine findings. After each scan, AI explains the findings in context: for each rule, whether it is expected for what the skill does, worth checking (and what to check), or concerning. That reading is shown next to SkillSpector’s verdict, never instead of it. It sends the findings, including short code examples, to Anthropic. A skill can contain text written to mislead an AI, so the findings themselves stay the record.'],
+  ['Keep and share', 'Copy a report as Markdown for a note or a message, or download it as Markdown or JSON.'],
   ['Nothing is run', 'SkillSpector never runs the skill’s code or installs its packages. It works on a copy in a temporary folder that is deleted after the scan.'],
   ['What it cannot do', 'It cannot see the plugins installed on your own computer (zip the folder and upload it), cannot scan private repositories, and a Safe verdict is not a guarantee: read what a skill asks for before you trust it.'],
 ];

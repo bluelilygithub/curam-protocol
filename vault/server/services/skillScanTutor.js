@@ -8,16 +8,16 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'scan', label: 'Scan a skill', group: 'Scan',
-    does: 'The box at the top of the page. Paste a public github.com link to a skill or plugin (the whole repository, or a folder in it via a /tree/ link), or upload a zip of its folder, up to 20 MB. Tick "Scan each skill separately" for a repository or plugin that holds several skills. Press Scan; it runs in the background and the report opens when it finishes.',
+    does: 'Scan a skill in the tool list on the left (or a job tile on the start screen). Paste a public github.com link to a skill or plugin (the whole repository, or a folder in it via a /tree/ link), or upload a zip of its folder, up to 20 MB. Tick "Scan each skill separately" for a repository or plugin that holds several skills. Press Scan; it runs in the background and the report opens when it finishes.',
     notes: 'The static scan reads the files and never runs them. It is free; only dependency names are sent to OSV.dev to look up known vulnerabilities. A plugin on your own computer must be zipped and uploaded.' },
   { id: 'deep', label: 'Deep scan', group: 'Scan',
     does: 'The Deep scan tick box next to Scan. As well as the static checks, an AI model (the Claude model chosen as standard in Settings) reads the files for risks the patterns miss.',
     notes: 'Slower (up to about 20 minutes) and costs a little per scan; the skill’s files are sent to Anthropic. Unavailable when no Claude model is set up.' },
   { id: 'report', label: 'Report', group: 'Results',
-    does: 'The verdict for a scan: Safe, Caution or Do not install, a risk score from 0 to 100, how many findings of each severity (critical, high, medium, low), and each finding with its rule, file and line, an explanation, the code and a suggested fix. A repository scanned skill by skill shows one section per skill.',
-    notes: '0 to 20 is Safe, 21 to 50 Caution, 51 and over Do not install. If the scan could not read everything, it says so and a Safe verdict is shown as Caution.' },
+    does: 'The verdict for a scan: Safe, Caution or Do not install, and a risk score from 0 to 100. Under it, "What the findings mean": AI’s plain-English explanation, with its own reading (likely fine for its purpose, review first, or do not install) shown next to the verdict, and what to do next; Regenerate writes it again. Then the findings grouped by rule, each marked expected, worth checking or concerning, and every finding with its file and line, explanation, code and fix. Copy and Download (Markdown or JSON) are at the top. A repository scanned skill by skill shows one section per skill.',
+    notes: '0 to 20 is Safe, 21 to 50 Caution, 51 and over Do not install. The score adds points per finding and stops at 100, so routine findings in a skill that calls web APIs can reach 100; the explanation says which findings matter. If the scan could not read everything, it says so and a Safe verdict is shown as Caution. The explanation sends the findings (with short code examples) to Anthropic, and text inside a skill can try to mislead it.' },
   { id: 'history', label: 'Saved scans', group: 'Results',
-    does: 'Every scan you have run, newest first, with its verdict and score. Open one to read its report again; Delete moves it to the recycle bin.',
+    does: 'Saved scans in the tool list: every scan you have run, newest first, with its verdict and score (the start screen also shows the latest). Open one to read its report again; Delete moves it to the recycle bin.',
     notes: 'A deleted scan can be restored from Settings → Recycle bin for 30 days.' },
 ];
 
@@ -27,7 +27,8 @@ const RULES = [
   'Only public github.com links or uploaded zips (up to 20 MB) can be scanned. At most two scans run at once.',
   'The risk score bands are: 0 to 20 Safe, 21 to 50 Caution, 51 and over Do not install.',
   'Skill Scanner is for admins only.',
-  'The Open buttons in this chat only switch to a tool on the page (they scroll to it); they never start a scan or delete anything by themselves.',
+  'The page opens on "What do you want to do?": job tiles (check from GitHub, check a plugin on my computer, get a deeper AI check, keep or share a report) and the latest scans. The list on the left has every tool.',
+  'The Open buttons in this chat only switch to a tool on the page; they never start a scan or delete anything by themselves.',
 ];
 
 const NOT_POSSIBLE = [

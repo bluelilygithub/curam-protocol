@@ -13,7 +13,7 @@ register('skill-scan', {
     if (!scan?.source) throw new RestoreError('This deleted scan has nothing to restore.');
     const entityId = await insertRow(db, 'skill_scans', scan, {
       userId,
-      override: { report: scan.report ? JSON.stringify(scan.report) : null },
+      override: { report: scan.report ? JSON.stringify(scan.report) : null, summary: scan.summary ? JSON.stringify(scan.summary) : null },
     });
     return { entityId };
   },
