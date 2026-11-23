@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "fdb43203",
+   "fullHash": "fdb43203cf187c8be6f2ab8c7d3dc0a154ff893a",
+   "committedAt": "2026-11-24T09:26:35+10:00",
+   "author": "mrb",
+   "area": "Settings, models",
+   "subject": "Settings: split AI & Chat into a chat view and a Models view",
+   "filesChanged": 11,
+   "insertions": 770,
+   "deletions": 677,
+   "goal": "Give model management its own admin Settings section without losing the existing AI & Chat links or moving the shared model state.",
+   "whatChanged": "SettingsPage.jsx was a 3,870-line page with the chat controls and every model slot in one AI & Chat tab. The two blocks were moved verbatim into new views in client/src/pages/settings/: AiChatView.jsx (session budget, token budget alerts, upload file types) and ModelsView.jsx (model inventory add/edit/test/delete/reload/save, default model, branch evaluation, Document Redaction's two slots, Contract Review, Embedding, Graphics, the connected-model list with provider key status, and the admin-only Skill Scanner model card). SettingsPage still owns useModels() and all model state and passes it down as one modelProps object, so Chat, Document Redaction, Presentations, Student Cards and the other Settings tabs keep the same hook contract. settingsGroups.mjs gains a Models tab directly after AI & Chat in the admin-only AI and tools group with an updated tip for each; the AI & Chat id is unchanged, so saved settingsTab values and ?tab=AI & Chat deep links still work. The Settings guide CATALOG gained Models and its AI & Chat entry was corrected (it mentioned standing custom instructions and a Skill Scanner card at the bottom, neither of which is there now), with its general rule and docs/key-files.md, docs/core-conventions.md and docs/skill-scan.md updated to point at Models. The Settings guide, palette deep links, settings-nav, guides and tips tests plus a production Vite build all pass; no schema, route, env, flag or package changes.",
+   "filesImpacted": [
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/settings/AiChatView.jsx",
+    "client/src/pages/settings/ModelsView.jsx",
+    "client/src/pages/skillScan/SkillScanModelCard.jsx",
+    "client/src/utils/settingsGroups.mjs",
+    "client/src/utils/settingsGroups.test.mjs",
+    "docs/core-conventions.md",
+    "docs/key-files.md",
+    "docs/skill-scan.md",
+    "server/routes/skillScan.js",
+    "server/services/settingsTutor.js"
+   ],
+   "benefit": "Admins get one dedicated place for the model inventory and every model slot, while AI & Chat stays focused on chat budgets, alerts and uploads.",
+   "concerns": "A saved tab of AI & Chat now opens the smaller chat view; model controls are one click away under Models. Some older help strings and error messages elsewhere still say 'Settings -> AI & Chat' for a model and were left unchanged in this commit."
+  },
+  {
    "commit": "eef567f4",
    "fullHash": "eef567f45ce1ac2e7346a40e5341e41370b44131",
    "committedAt": "2026-11-24T08:45:00+10:00",
