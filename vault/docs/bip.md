@@ -95,9 +95,19 @@ Mounted at `/api/bip` behind `requireFeature('bip')`; `bip` is in **preview**, s
 | `PATCH` | `/profiles/:id` | `{ decisions }` — record the person's choices for reconciled fields; the original values are unchanged |
 | `GET` | `/profiles/:id/pdf` | PDF download of the cards |
 | `DELETE` | `/profiles/:id` | Delete into the shared recycle bin |
+| `GET` | `/profiles/:id/notes` | Notes that link to this profile (text contains `](/bip/:id)`), newest first, at most 20 |
+| `PUT` | `/profiles/:id/client` | `{ clientId }` (one of the person's clients, else 400) or `{ clientId: null }` to unlink |
+| `GET` | `/linked?clientId=` | The profiles filed under that client, for the client page's Business profiles tab |
 | `GET` | `/jobs/:jobId` | Current status, progress and result of a background run; the page polls every 2.5s |
 
-Named routes stay before `/profiles/:id` in the route file. Long runs follow Vault's background-job pattern (save a `running` row, answer at once with a `jobId`, let the page poll) rather than hold a request open past the gateway timeout, as in `docs/ai-visibility.md`. The registry is in memory, so a server restart loses the progress ticker but not the saved profile.
+Named routes stay before `/profiles/:id` in the route file.
+
+## Notes and clients (links both ways)
+
+The **Notes & client** box under the cards on a saved profile (`client/src/pages/bip/BipLinks.jsx`; the Save to Note / Client button at the top scrolls to it). The text it writes comes from `client/src/pages/bip/bipNote.mjs` (test: `node client/src/pages/bip/bipNote.test.mjs`).
+
+- **Save to Note** makes a new note through the existing `POST /api/notes`: title (default the business name), an optional project, and the profile's client when it has one. The body starts `From Business Profiler: [Name](/bip/:id)`, then the facts found (website, ABN, entity type, address, phone, Google rating, people, description); a recorded conflict decision wins over the first value and "Not found" is left out. **Back link:** the box lists the notes whose text holds that link (`GET /profiles/:id/notes`, the same text-match approach as Drawings), so a note made by hand with the link counts too, and a deleted note or a removed link stops counting.
+- **Client.** *Create client from profile* calls the existing `POST /api/clients` (name and company = business name, type company, status Prospect, notes = the profile link plus website, ABN, address and phone; no email domains, so no Gmail sync starts), then `PUT /profiles/:id/client`. Or pick an existing client and press Link. `bip_profiles."clientId"` (FK to `clients`, `ON DELETE SET NULL`) holds the link; the client's page shows a **Business profiles** tab (`client/src/components/LinkedBusinessProfiles.jsx`, hidden when the `bip` flag is off for that person). Notes saved after linking get the client's `client_id`. Unlink clears the column only. A restored profile keeps its client link only if that client still exists. Long runs follow Vault's background-job pattern (save a `running` row, answer at once with a `jobId`, let the page poll) rather than hold a request open past the gateway timeout, as in `docs/ai-visibility.md`. The registry is in memory, so a server restart loses the progress ticker but not the saved profile.
 
 ## Help and UI
 

@@ -57,11 +57,43 @@ router.post('/profiles', async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// The profiles filed under one client (the "Business profiles" tab on that client's page).
+router.get('/linked', async (req, res) => {
+  try {
+    const clientId = Number(req.query.clientId);
+    if (!Number.isInteger(clientId) || clientId <= 0) return res.status(400).json({ error: 'clientId is required.' });
+    res.json({ profiles: await store.profilesForClient(req.user.id, clientId) });
+  } catch (err) { fail(res, err); }
+});
+
 router.get('/profiles/:id', async (req, res) => {
   try {
     const profile = await store.getProfile(req.user.id, req.params.id);
     if (!profile) return res.status(404).json({ error: 'Profile not found.' });
     res.json({ profile });
+  } catch (err) { fail(res, err); }
+});
+
+// Notes that link back to this profile (made by Save to Note, or any note holding the profile's link).
+router.get('/profiles/:id/notes', async (req, res) => {
+  try {
+    const profile = await store.getRow(req.user.id, req.params.id);
+    if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+    res.json({ notes: await store.linkedNotes(req.user.id, profile.id) });
+  } catch (err) { fail(res, err); }
+});
+
+// File the profile under a client: { clientId } (one of the person's own) or { clientId: null } to unlink.
+router.put('/profiles/:id/client', async (req, res) => {
+  try {
+    const profile = await store.getRow(req.user.id, req.params.id);
+    if (!profile) return res.status(404).json({ error: 'Profile not found.' });
+    const raw = req.body?.clientId;
+    const clientId = raw === null ? null : Number(raw);
+    if (clientId !== null && (!Number.isInteger(clientId) || clientId <= 0)) return res.status(400).json({ error: 'clientId must be a client id or null.' });
+    if (!(await store.setClient(profile.id, req.user.id, clientId))) return res.status(400).json({ error: 'That client is not one of yours.' });
+    const updated = await store.getProfile(req.user.id, profile.id);
+    res.json({ clientId: updated.clientId, clientName: updated.clientName });
   } catch (err) { fail(res, err); }
 });
 

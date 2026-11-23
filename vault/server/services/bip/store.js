@@ -58,6 +58,9 @@ async function getProfile(userId, id) {
   );
   if (!rows[0]) return null;
   const row = rows[0];
+  const linkedClient = row.clientId
+    ? (await pool.query('SELECT id, name FROM clients WHERE id = $1 AND "userId" = $2', [row.clientId, userId])).rows[0] || null
+    : null;
   const sources = await pool.query(
     `SELECT DISTINCT ON (name) name, status, reason, error, data, "rawResponse", "checkedAt"
        FROM bip_sources WHERE "profileId" = $1 AND "userId" = $2
@@ -78,6 +81,8 @@ async function getProfile(userId, id) {
     reconciliation: parse(row.reconciliation),
     cards: parse(row.cards),
     decisions: parse(row.decisions),
+    clientId: linkedClient?.id || null,
+    clientName: linkedClient?.name || null,
     sources: sources.rows.map((s) => ({
       name: s.name, status: s.status, reason: s.reason, error: s.error,
       data: parse(s.data, null), raw: parse(s.rawResponse, null), checkedAt: s.checkedAt,
@@ -153,6 +158,36 @@ async function saveDecisions(profileId, userId, decisions) {
   return rows[0] || null;
 }
 
+/** Notes that link to this profile ("](/bip/12)" in the text): the notes Save to Note made, or any the person pasted the link into. */
+async function linkedNotes(userId, id) {
+  const { rows } = await pool.query(
+    `SELECT id, title, project_id AS "projectId", updated_at AS "updatedAt" FROM notes
+      WHERE user_id = $1 AND body LIKE $2 ORDER BY updated_at DESC, id DESC LIMIT 20`,
+    [userId, `%](/bip/${Number(id) || 0})%`]
+  );
+  return rows;
+}
+
+/** File the profile under one of the person's clients (or none). Returns false when the client is not theirs. */
+async function setClient(profileId, userId, clientId) {
+  if (clientId != null) {
+    const owned = await pool.query('SELECT 1 FROM clients WHERE id = $1 AND "userId" = $2', [clientId, userId]);
+    if (!owned.rows.length) return false;
+  }
+  await pool.query('UPDATE bip_profiles SET "clientId" = $3, "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2', [profileId, userId, clientId]);
+  return true;
+}
+
+/** The profiles filed under one client, for that client's page. */
+async function profilesForClient(userId, clientId) {
+  const { rows } = await pool.query(
+    `SELECT id, domain, "businessName", status, "scannedAt", "createdAt" FROM bip_profiles
+      WHERE "userId" = $1 AND "clientId" = $2 ORDER BY COALESCE("scannedAt", "createdAt") DESC, id DESC LIMIT 50`,
+    [userId, clientId]
+  );
+  return rows;
+}
+
 async function getRow(userId, id) {
   const { rows } = await pool.query('SELECT * FROM bip_profiles WHERE id = $1 AND "userId" = $2', [Number(id) || 0, userId]);
   return rows[0] || null;
@@ -166,4 +201,5 @@ async function deleteProfile(userId, id) {
 module.exports = {
   CACHE_DAYS, createProfile, cachedProfile, listProfiles, getProfile, getRow,
   saveModule, saveSeed, saveSeedData, finishProfile, failProfile, saveDecisions, deleteProfile, parse,
+  linkedNotes, setClient, profilesForClient,
 };

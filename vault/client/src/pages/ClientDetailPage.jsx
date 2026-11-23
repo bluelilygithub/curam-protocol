@@ -14,6 +14,7 @@ import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/
 import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
 import { useClientPlans, ClientPlansBody } from '../components/ClientPlans';
 import { useLinkedEmailFollowUp, EmailFollowUpList } from '../components/LinkedEmailFollowUp';
+import { useLinkedProfiles, BusinessProfileList } from '../components/LinkedBusinessProfiles';
 import CrmTutorChat from './crm/CrmTutorChat';
 import Dialog from '../components/Dialog';
 
@@ -356,6 +357,7 @@ export default function ClientDetailPage() {
   const clientPlans = useClientPlans({ clientId: Number(id) }); // available is false when Plans is off for this person: no section
   const clientResearch = useLinkedResearch({ clientId: Number(id) }); // null when Topic Research is off for this person: no section
   const clientEmailCases = useLinkedEmailFollowUp(Number(id)); // null when Email Follow-Up is off for this person: no section
+  const clientProfiles = useLinkedProfiles(Number(id)); // null when Business Profiler is off for this person: no tab
 
   const panelRef = useRef(null);
   const [flashSection, setFlashSection] = useState(null);
@@ -460,6 +462,7 @@ export default function ClientDetailPage() {
     { key: 'tasks', label: 'Tasks', count: tasks?.length },
     ...(clientResearch !== null ? [{ key: 'research', label: 'Research', count: clientResearch.length }] : []),
     ...(clientEmailCases !== null ? [{ key: 'emailFollowUp', label: 'Email follow-up', count: clientEmailCases.length }] : []),
+    ...(clientProfiles !== null ? [{ key: 'bip', label: 'Business profiles', count: clientProfiles.length }] : []),
   ];
   const tabKeys = tabs.map(t => t.key);
   const activeTab = tabKeys.includes(tab) ? tab : 'activity';
@@ -637,6 +640,7 @@ export default function ClientDetailPage() {
                 {activeTab === 'tasks' && <ClientTasksSection clientId={id} tasks={tasks || []} onRefresh={load} />}
                 {/* Research and Email follow-up are quiet (no tab) when the tool is off */}
                 {activeTab === 'research' && <ResearchList topics={clientResearch || []} noun="client" />}
+                {activeTab === 'bip' && <BusinessProfileList profiles={clientProfiles || []} />}
                 {activeTab === 'emailFollowUp' && <EmailFollowUpList cases={clientEmailCases || []} clientId={Number(id)} />}
               </div>
             )}

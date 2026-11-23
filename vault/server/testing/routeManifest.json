@@ -169,7 +169,16 @@
   "POST /api/bip/profiles": {
    "class": "authed"
   },
+  "GET /api/bip/linked": {
+   "class": "authed"
+  },
   "GET /api/bip/profiles/:id": {
+   "class": "authed"
+  },
+  "GET /api/bip/profiles/:id/notes": {
+   "class": "authed"
+  },
+  "PUT /api/bip/profiles/:id/client": {
    "class": "authed"
   },
   "POST /api/bip/profiles/:id/rescan": {

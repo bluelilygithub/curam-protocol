@@ -8,6 +8,7 @@ export const BIP_TOOLS = [
   { id: 'conflicts', label: 'Confidence & conflicts', group: 'Review', icon: 'alert-triangle' },
   { id: 'refresh', label: 'Re-scan & refresh', group: 'Review', icon: 'refresh-cw' },
   { id: 'export', label: 'Download PDF', group: 'Review', icon: 'download' },
+  { id: 'save', label: 'Save to Note & Client', group: 'Review', icon: 'sticky-note' },
 ];
 
 export const GROUPS = ['Profile', 'Review'];
@@ -24,6 +25,7 @@ export const TOOL_TIPS = {
   conflicts: 'Every value is kept, with its source. ✅ means 2+ sources agree, ⚠️ one source, ❌ sources disagree.',
   refresh: 'Re-scan everything, or refresh just one section. Results are cached for 30 days.',
   export: 'Download the saved profile as a PDF.',
+  save: 'Save the profile as a new note (optionally under a project) that links back here, and file it under a new or existing client.',
 };
 
 export const TOOL_BLURBS = {
@@ -33,6 +35,7 @@ export const TOOL_BLURBS = {
   conflicts: 'See every value and where sources disagree.',
   refresh: 'Update the whole profile or one module.',
   export: 'A PDF copy of the profile.',
+  save: 'A linked note, and a link to a client.',
 };
 
 // The longer text for the (i) "How Business Profiler works" box.
@@ -53,4 +56,5 @@ export const GUIDE_TOOLS = [
   { id: 'conflicts', label: 'Confidence & conflicts', tool: 'conflicts' },
   { id: 'refresh', label: 'Re-scan & refresh', tool: 'refresh' },
   { id: 'export', label: 'Download PDF', tool: 'export' },
+  { id: 'save', label: 'Save to Note & Client', tool: 'save' },
 ];

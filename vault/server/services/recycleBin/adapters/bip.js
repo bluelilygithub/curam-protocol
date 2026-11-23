@@ -11,9 +11,14 @@ register('bip-profile', {
   async restore(db, userId, payload) {
     const profile = payload?.profile;
     if (!profile?.domain) throw new RestoreError('This deleted profile has nothing to restore.');
+    // keep the client link only if that client still exists and is this person's (it may have been deleted meanwhile)
+    const clientId = profile.clientId
+      ? ((await db.query('SELECT id FROM clients WHERE id = $1 AND "userId" = $2', [profile.clientId, userId])).rows[0]?.id || null)
+      : null;
     const entityId = await insertRow(db, 'bip_profiles', profile, {
       userId,
       override: {
+        clientId,
         seedData: JSON.stringify(profile.seedData || {}),
         enrichmentData: JSON.stringify(profile.enrichmentData || {}),
         reconciliation: JSON.stringify(profile.reconciliation || {}),

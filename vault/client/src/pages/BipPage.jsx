@@ -10,6 +10,7 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInput } from '../components/voiceInput/VoiceInput';
 import { startBipTour, TOUR_KEY as BIP_TOUR_KEY } from '../utils/tours/bipTour';
 import BipTutorChat from './bip/BipTutorChat';
+import BipLinks from './bip/BipLinks';
 import { HOW_IT_WORKS, TOOL_TIPS, TOOL_BLURBS, GROUP_TIPS, BIP_TOOLS } from './bip/bipTools.mjs';
 
 const dateOf = (v) => (v ? new Date(v).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
@@ -357,6 +358,7 @@ export default function BipPage() {
         <Tooltip text="Back to the saved profile list."><Link to="/bip" className={button} style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>← All profiles</Link></Tooltip>
         <Tooltip text={TOOL_TIPS.refresh}><button type="button" className={button} disabled={busy || !!jobId} onClick={() => rescan(null)} style={{ border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}>{getIcon('refresh-cw', { size: 14 })} Re-scan</button></Tooltip>
         <Tooltip text={TOOL_TIPS.export}><button type="button" className={button} onClick={downloadPdf} style={{ background: 'var(--color-primary)', color: '#fff' }} data-guide="export">{getIcon('download', { size: 14 })} Download PDF</button></Tooltip>
+        <Tooltip text={TOOL_TIPS.save}><button type="button" className={button} onClick={() => openTool('save')} style={{ border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}>{getIcon('sticky-note', { size: 14 })} Save to Note / Client</button></Tooltip>
         <Tooltip text="Move this profile to the recycle bin."><button type="button" className={button} onClick={remove} style={{ border: '1px solid var(--color-border)', color: '#ef4444' }}>{getIcon('trash', { size: 14 })} Delete</button></Tooltip>
       </div>
       {(job || jobId) && <ProgressPanel job={job} onCancel={() => { setJob(null); setJobId(null); }} />}
@@ -458,6 +460,8 @@ export default function BipPage() {
           <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>{c.financial?.note}</p>
         </Card>
       </div>
+
+      <BipLinks profile={profile} onClientChanged={(clientId, clientName) => setProfile((p) => ({ ...p, clientId, clientName }))} />
 
       <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Sources & status</h3>

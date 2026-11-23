@@ -25,6 +25,9 @@ const CATALOG = [
   { id: 'export', label: 'Download PDF', group: 'Review',
     does: 'Downloads the saved profile as a PDF using Vault’s usual export button. It contains the cards, the source list and the confidence labels.',
     notes: 'The PDF is made from the saved report; it does not do any new lookups.' },
+  { id: 'save', label: 'Save to Note & Client', group: 'Review',
+    does: 'The Notes & client box on a saved profile (also the Save to Note / Client button at the top). Save as a new note makes a note in Notes with the key facts and a link back to the profile; you can file it under a project. The box lists every note that links to the profile. Create client from profile makes a CRM client (status Prospect, with the name, ABN, address, phone and website in its notes) and links the two; or pick an existing client and press Link.',
+    notes: 'A linked client\'s page lists the profile under Business profiles, and notes saved afterwards are filed under that client too. Unlink stops the link without changing the client or any note.' },
 ];
 
 const RULES = [
