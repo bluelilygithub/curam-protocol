@@ -74,7 +74,9 @@ function buildSummaryPrompt(scan, groups) {
     eachSkillSeparately: !!scan.recursive,
     skillSpectorVerdict: r.recommendation, score: r.score, severity: r.severity,
     findingCounts: r.counts, findingTotal: r.issueCount,
-    skills: (r.skills || []).slice(0, 40).map((s) => ({ name: s.name, verdict: s.recommendation, score: s.score, complete: s.complete, coverage: s.coverage, limitations: (s.limitations || []).slice(0, 4), error: s.error || undefined })),
+    // every limitation (the runner keeps up to 10), with the count: passing only the first four made the model report "four degraded
+    // analysers" when the scan listed ten
+    skills: (r.skills || []).slice(0, 40).map((s) => ({ name: s.name, verdict: s.recommendation, score: s.score, complete: s.complete, coverage: s.coverage, limitationCount: (s.limitations || []).length, limitations: s.limitations || [], error: s.error || undefined })),
     scanComplete: r.complete,
   };
   const shown = groups.slice(0, MAX_GROUPS);

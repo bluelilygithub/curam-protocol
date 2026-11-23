@@ -402,3 +402,10 @@ test('service config: Deep scan needs a Claude Skill Scanner model, and says whe
     assert.equal(c.modelIsAnthropic, true);
   } finally { if (saved === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = saved; }
 });
+
+test('buildSummaryPrompt(): every limitation reaches the model with its count (not just the first four)', () => {
+  const ten = runner.normalizeReport({ ...SINGLE, analysis_completeness: { is_complete: false, coverage_percent: 14.1, limitations: Array.from({ length: 10 }, (_, i) => `Analyzer a${i} status: degraded.`) } });
+  const p = summaryLib.buildSummaryPrompt({ source: 'x', mode: 'static', report: ten }, []);
+  assert.match(p, /"limitationCount": 10/);
+  assert.match(p, /Analyzer a9 status: degraded/);
+});
