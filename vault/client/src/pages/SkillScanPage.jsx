@@ -5,6 +5,7 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
 import Tooltip from '../components/Tooltip';
+import ConfirmModal from '../components/ConfirmModal';
 import ToolSidebar from '../components/ToolSidebar';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
@@ -172,6 +173,7 @@ export default function SkillScanPage() {
   const [scans, setScans] = useState(null);
   const [scan, setScan] = useState(null);
   const [explaining, setExplaining] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
   // 'start' is the job-tile screen (not a tool); every other value is a tool id from SKILL_SCAN_TOOLS
@@ -275,8 +277,9 @@ export default function SkillScanPage() {
     } catch (err) { addToast(err.message, 'error'); }
     finally { setExplaining(false); }
   };
-  const remove = async (s) => {
-    if (!window.confirm(`Delete the scan of ${s.fileName || s.source}? It goes to the recycle bin for 30 days.`)) return;
+  const remove = (s) => setConfirmDelete(s);
+  const reallyRemove = async (s) => {
+    setConfirmDelete(null);
     try {
       const d = await json(await api.delete(`/api/skill-scan/scans/${s.id}`));
       setScans((list) => (list || []).filter((x) => x.id !== s.id));
@@ -523,6 +526,17 @@ export default function SkillScanPage() {
           {tool !== 'start' && TOOLS[tool]}
         </main>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete this scan?"
+          message={`The scan of ${confirmDelete.fileName || confirmDelete.source} moves to the recycle bin, where you can restore it for 30 days.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => reallyRemove(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {info.show && (
         <ToolInfoModal title="How Skill Scanner works" onClose={info.close}>
