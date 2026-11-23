@@ -95,7 +95,9 @@ Distinct from `/fill` (AcroForm field values only) and `addfields`/field designe
 
 ### Save group: Save to Notes / Save to Client
 
-Two sidebar tools in the **Save** group, `client/src/pages/pdf/PdfSaveTools.jsx`. No new server code. **Save to Notes** creates a note (`POST /api/notes`, title defaults to the file name) and then attaches the PDF (`POST /api/notes/:id/attachments`). If the attach step fails, the note is kept and linked. **Save to Client** lists `GET /api/clients` and attaches to `POST /api/clients/:id/attachments`. Both upload the PDF unchanged, so a signed PDF keeps its signing stamp and still matches its record, and both appear under "Continue with…" in the result window.
+**Signed PDFs** (`signedpdfs`): every `/sign` also keeps the signed bytes as an attachment, with `entityType 'pdf_signature'` and `entityId = pdf_signatures.id`, through `saveBufferAttachment` (it counts towards the storage quota). `server/routes/attachments.js` checks ownership through `pdf_signatures."userId"`. If the copy can't be saved (for example the quota is full), signing still succeeds and returns `copyKept: false` plus `copyError`; the result window says so. `GET /api/pdf/signatures` lists the caller's records with `attachmentId`, which is null for signings from before copies were kept. Opening a row downloads it via `/api/attachments/:id/download` into the result window, where the Signing record box and "Continue with…" work as usual.
+
+In the **Save** group, `client/src/pages/pdf/PdfSaveTools.jsx`. **Save to Notes** creates a note (`POST /api/notes`, title defaults to the file name, optional `project_id` picked from `GET /api/projects`; the server checks you own the project) and then attaches the PDF (`POST /api/notes/:id/attachments`). If the attach step fails, the note is kept and linked. **Save to Client** lists `GET /api/clients` and attaches to `POST /api/clients/:id/attachments`. Both upload the PDF unchanged, so a signed PDF keeps its signing stamp and still matches its record, and both appear under "Continue with…" in the result window.
 
 ### Signing record (hidden stamp)
 

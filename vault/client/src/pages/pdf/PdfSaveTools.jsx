@@ -1,4 +1,5 @@
-// "Save" group of PDF Tools: file a PDF (often a signed result handed on with "Continue with…") as a new note, or on a CRM client.
+// "Save" group of PDF Tools: review the signed PDFs Vault keeps, and file a PDF (often a signed result handed on with
+// "Continue with…") as a new note, or on a CRM client.
 // Uses the existing attachment routes as-is: POST /api/notes + /api/notes/:id/attachments, and POST /api/clients/:id/attachments.
 // Imports from PdfPage are only used while rendering, so the circular import is safe (same as PdfExtraTools).
 import { useState, useEffect } from 'react';
@@ -46,16 +47,22 @@ function Saved({ text, href }) {
 export function SaveToNoteTool({ getIcon, onHelp }) {
   const [title, setTitle] = useState('');
   const [file, setFile, onChange] = usePdf((f) => { setTitle(stem(f.name)); setDone(null); setError(''); });
+  const [projects, setProjects] = useState(null); // null = loading
+  const [projectId, setProjectId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(null); // note id
+
+  useEffect(() => {
+    api.get('/api/projects').then(r => (r.ok ? r.json() : [])).then(d => setProjects(Array.isArray(d) ? d : [])).catch(() => setProjects([]));
+  }, []);
 
   const run = async () => {
     if (!file) return;
     setBusy(true); setError(''); setDone(null);
     let noteId = null;
     try {
-      const res = await api.post('/api/notes', { title: title.trim() || stem(file.name), body: `PDF attached: ${file.name}\n` });
+      const res = await api.post('/api/notes', { title: title.trim() || stem(file.name), body: `PDF attached: ${file.name}\n`, project_id: projectId ? Number(projectId) : null });
       const note = await res.json().catch(() => ({}));
       if (!res.ok || !note.id) throw new Error(note.error || 'The note could not be saved. Try again.');
       noteId = note.id;
@@ -82,6 +89,13 @@ export function SaveToNoteTool({ getIcon, onHelp }) {
             <label className={lbl} style={muted} htmlFor="pdf-note-title">Note title</label>
             <input id="pdf-note-title" type="text" className={inp} style={inpStyle} value={title} onChange={e => setTitle(e.target.value)} placeholder="Title for the new note" maxLength={200} />
           </div>
+          <div className="mt-3">
+            <label className={lbl} style={muted} htmlFor="pdf-note-project">Project</label>
+            <select id="pdf-note-project" className={inp} style={inpStyle} value={projectId} onChange={e => setProjectId(e.target.value)} disabled={!projects}>
+              <option value="">{projects === null ? 'Loading projects…' : 'No project'}</option>
+              {(projects || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
           <ErrMsg msg={error} />
           <RunBtn onClick={run} busy={busy} disabled={!file} label="Save as a new note" getIcon={getIcon} />
           {done && !error && <Saved text="Saved to Notes ✓" href={`/notes?note=${done}`} />}
@@ -89,6 +103,65 @@ export function SaveToNoteTool({ getIcon, onHelp }) {
         </div>
         <div><PdfPagePreview dataUrl={file?.dataUrl} /></div>
       </div>
+    </section>
+  );
+}
+
+// ═══ Signed PDFs ══════════════════════════════════════════════════════════════
+// The copies Fill & Sign keeps (GET /api/pdf/signatures). Opening one shows it in the result window, where the preview's
+// Signing record box checks it and "Continue with…" can send it on (for example to Save to Notes).
+export function SignedPdfsTool({ getIcon, onHelp, setResultModal }) {
+  const [rows, setRows] = useState(null); // null = loading
+  const [error, setError] = useState('');
+  const [opening, setOpening] = useState(null); // signingId being fetched
+
+  useEffect(() => {
+    api.get('/api/pdf/signatures')
+      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Could not load your signed PDFs.'); setRows(d.signatures || []); })
+      .catch(err => { setError(err.message); setRows([]); });
+  }, []);
+
+  const open = async (row) => {
+    setOpening(row.signingId); setError('');
+    try {
+      const res = await api.get(`/api/attachments/${row.attachmentId}/download`);
+      if (!res.ok) throw new Error('That signed PDF could not be opened.');
+      const dataUrl = await readFileAsDataUrl(await res.blob());
+      setResultModal({ dataUrl: dataUrl.replace(/^data:[^;]*;/, 'data:application/pdf;'), filename: `${stem(row.fileName)}-signed.pdf`, meta: `Signed ${new Date(row.signedAt).toLocaleString()}` });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  return (
+    <section>
+      <ToolHeader id="signedpdfs" label="Signed PDFs" onHelp={onHelp} getIcon={getIcon} />
+      <ErrMsg msg={error} />
+      {rows === null && <p className="text-sm" style={muted}>Loading…</p>}
+      {rows?.length === 0 && !error && <p className="text-sm" style={muted}>Nothing signed yet. PDFs you sign in Fill & Sign appear here.</p>}
+      {rows?.length > 0 && (
+        <ul className="divide-y rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+          {rows.map(r => (
+            <li key={r.signingId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="min-w-0">
+                <p className="truncate" style={{ color: 'var(--color-text)' }}>{r.fileName || 'Untitled PDF'}</p>
+                <p className="text-xs" style={muted}>{new Date(r.signedAt).toLocaleString()} · {r.signerEmail}</p>
+              </div>
+              {r.attachmentId ? (
+                <button type="button" onClick={() => open(r)} disabled={!!opening}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-40"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  {opening === r.signingId ? 'Opening…' : 'Open'}
+                </button>
+              ) : (
+                <span className="flex-shrink-0 text-xs" style={muted}>No copy kept</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

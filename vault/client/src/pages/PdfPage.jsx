@@ -10,7 +10,7 @@ import PdfTutorChat from './pdf/PdfTutorChat';
 import { PdfVoiceContext, VoiceCommandBar } from './pdf/PdfVoice';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool, HeaderFooterTool, NupTool } from './pdf/PdfExtraTools';
-import { SaveToNoteTool, SaveToClientTool } from './pdf/PdfSaveTools';
+import { SaveToNoteTool, SaveToClientTool, SignedPdfsTool } from './pdf/PdfSaveTools';
 import PdfToHtmlTool from './pdf/PdfToHtml';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
@@ -428,12 +428,22 @@ const TOOL_HELP = {
       'Each page is scaled to fit, keeping its proportions',
     ],
   },
+  signedpdfs: {
+    title: 'Signed PDFs',
+    what: 'Every PDF you sign in Fill & Sign is kept here automatically, newest first.',
+    features: [
+      'Open one to view it with its signing record (signer, time, IP, browser, and whether the file still matches)',
+      'Download it again, or send it on with Continue with…, for example to Save to Notes',
+      'Signings from before copies were kept show the record only',
+    ],
+  },
   savetonote: {
     title: 'Save to Notes',
     what: 'Keep a PDF in Notes as a new note with the PDF attached.',
     features: [
       'Upload a PDF, or send a result here with Continue with… (for example straight after Fill & Sign)',
       'Choose the note title; it starts as the file name',
+      'Optionally file the note under one of your Notes projects',
       'Files the PDF exactly as it is, so a signed PDF keeps its signing record',
     ],
   },
@@ -493,6 +503,7 @@ const MODES = [
   { id: 'nup',          label: 'Pages per Sheet',  icon: 'grid-2x2'    },
   { id: 'savetonote',   label: 'Save to Notes',    icon: 'sticky-note' },
   { id: 'savetoclient', label: 'Save to Client',   icon: 'briefcase'   },
+  { id: 'signedpdfs',   label: 'Signed PDFs',      icon: 'pen-tool'    },
 ];
 
 // Hover text for every item in the left-hand list: what the tool does, in plain words. The PDF guide's test
@@ -532,6 +543,7 @@ const TOOL_TIPS = {
   compare: 'Put two PDFs side by side and highlight what changed, by picture or by text.',
   savetonote: 'Keep a PDF in Notes: makes a new note with the PDF attached.',
   savetoclient: "Add a PDF to a client's files in the CRM.",
+  signedpdfs: 'Every PDF you signed in Fill & Sign, kept in Vault. Open one to see its signing record.',
 };
 
 const GROUP_TIPS = {
@@ -540,7 +552,7 @@ const GROUP_TIPS = {
   Edit: 'Change how every page looks: watermark, numbers, header and footer, crop, file size, and passwords.',
   Forms: 'Fill, sign, mark up and build forms.',
   Analyse: 'Look inside a PDF: its details, or what differs between two versions.',
-  Save: 'Keep a PDF in Vault: as a new note, or on a client in the CRM.',
+  Save: 'Review the PDFs you signed, or keep a PDF in Vault as a new note or on a client in the CRM.',
 };
 
 const MODE_GROUPS = [
@@ -549,7 +561,7 @@ const MODE_GROUPS = [
   { label: 'Edit',     ids: ['watermark', 'pagenumbers', 'headerfooter', 'crop', 'compress', 'protect', 'unprotect'] },
   { label: 'Forms',    ids: ['inspect', 'fill', 'sign', 'annotate', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo', 'compare']     },
-  { label: 'Save',     ids: ['savetonote', 'savetoclient']           },
+  { label: 'Save',     ids: ['signedpdfs', 'savetonote', 'savetoclient'] },
 ];
 
 // "Open on the tool I used last" instead of the job screen: off unless ticked on the job screen (same as Video Tools).
@@ -884,7 +896,7 @@ function PasswordField({ value, onChange, placeholder, className, style, getIcon
 
 // ── PdfResultModal — full-screen modal showing a rendered result PDF ────────────
 // Tools whose first input is a PDF, grouped like the sidebar, for the result window's "Continue with…" menu.
-const NOT_PDF_INPUT = new Set(['img2pdf', 'text2pdf', 'officetopdf', 'googletopdf']);
+const NOT_PDF_INPUT = new Set(['img2pdf', 'text2pdf', 'officetopdf', 'googletopdf', 'signedpdfs']);
 
 function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon, onContinue }) {
   if (!dataUrl) return null;
@@ -3033,7 +3045,7 @@ export default function PdfPage() {
       setResultModal({
         dataUrl: data.dataUrl,
         filename: `${signFile.name.replace('.pdf', '')}-signed.pdf`,
-        meta: `${data.placed} signature${data.placed !== 1 ? 's' : ''} applied`,
+        meta: `${data.placed} signature${data.placed !== 1 ? 's' : ''} applied · ${data.copyKept ? 'a copy is kept in Signed PDFs' : `no copy kept: ${data.copyError} Download this one.`}`,
       });
     } catch (err) {
       setSignError(err.message || 'Sign failed.');
@@ -3275,6 +3287,7 @@ export default function PdfPage() {
 
           {mode === 'pdf2img' && <PageToImageTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'extractimages' && <ExtractImagesTool getIcon={getIcon} onHelp={setHelpTool} />}
+          {mode === 'signedpdfs' && <SignedPdfsTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
           {mode === 'savetonote' && <SaveToNoteTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'savetoclient' && <SaveToClientTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'pdftohtml' && <PdfToHtmlTool getIcon={getIcon} onHelp={setHelpTool} />}

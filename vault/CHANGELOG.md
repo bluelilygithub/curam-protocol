@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (pdf-signed-copies-note-projects)
+
+### PDF Tools — Signed PDFs: every signed PDF is kept for review
+Fill & Sign now keeps a copy of each signed PDF as an attachment (`entityType 'pdf_signature'`) linked to its `pdf_signatures` record. It counts towards the storage quota. When the quota is full, signing still succeeds and the result window says no copy was kept. A new **Signed PDFs** tool in the Save group lists your signings, newest first (`GET /api/pdf/signatures`). **Open** shows a copy in the result window with its Signing record and "Continue with…". Downloads go through `/api/attachments/:id/download`, which now checks ownership of `pdf_signature` attachments. Signings from before this change show "No copy kept". `pdfSign.test.js` covers the copy, the list and access by another user.
+
+### PDF Tools — Save to Notes: choose a project
+Save to Notes has a **Project** dropdown (from `/api/projects`, default "No project"). The note is created with that `project_id`, and the notes route checks you own the project.
+
+---
+
 ## 2026-11-23 (pdf-signing-record-save-tools)
 
 ### PDF Tools — "Failed to fetch dynamically imported module" after a deploy

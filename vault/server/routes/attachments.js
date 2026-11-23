@@ -58,6 +58,15 @@ async function loadOwnedAttachment(attachmentId, userId) {
     return ok ? attachment : null;
   }
 
+  // PDF Tools → Signed PDFs: the kept copy of a signed PDF, entityId = pdf_signatures.id.
+  if (attachment.entityType === 'pdf_signature') {
+    const { rows: [ok] } = await pool.query(
+      `SELECT 1 FROM pdf_signatures WHERE id=$1 AND "userId"=$2`,
+      [attachment.entityId, userId]
+    );
+    return ok ? attachment : null;
+  }
+
   return null; // unknown entityType — fail closed
 }
 

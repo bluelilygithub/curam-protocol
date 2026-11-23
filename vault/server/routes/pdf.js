@@ -19,6 +19,7 @@ const { interpretPdfVoiceCommand } = require('../services/pdfVoiceCommand');
 const { generateTextPdf } = require('../services/textToPdf');
 const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 const pdfTools = require('../services/pdfTools');
+const { saveBufferAttachment } = require('../utils/attachments');
 const pdfToHtml = require('../services/pdfToHtml');
 const pdfToHtmlModel = require('../services/pdfToHtmlModel');
 const pdfToHtmlJobs = require('../services/pdfToHtmlJobs');
@@ -1033,16 +1034,47 @@ router.post('/sign', async (req, res) => {
     info.set(PDFName.of('VaultSignedAt'), PDFString.of(signedAt.toISOString()));
     const bytes = await doc.save();
 
-    await pool.query(
+    const fileName = String(req.body?.fileName || '').slice(0, 255) || null;
+    const { rows: [record] } = await pool.query(
       `INSERT INTO pdf_signatures ("signingId", "userId", "signerEmail", "fileName", "originalSha256", "signedSha256", "signedAt", "ipAddress", "userAgent", placements)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [signingId, req.user.id, req.user.email, String(req.body?.fileName || '').slice(0, 255) || null,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [signingId, req.user.id, req.user.email, fileName,
         sha256(buf), sha256(bytes), signedAt, req.ip || null, String(req.get('user-agent') || '').slice(0, 500) || null, placed]
     );
-    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), placed, signingId });
+    // Keep a copy of the signed file for Signed PDFs. A full storage quota must not lose the signature itself: the record is
+    // already saved and the PDF is still returned, with a note saying the copy was not kept.
+    let copyError = null;
+    try {
+      await saveBufferAttachment({
+        userId: req.user.id, entityType: 'pdf_signature', entityId: record.id, folder: `pdf-signatures-${req.user.id}`,
+        buffer: Buffer.from(bytes), mime: 'application/pdf', filename: `${(fileName || 'document').replace(/\.pdf$/i, '')}-signed.pdf`,
+      });
+    } catch (err) {
+      copyError = err.statusCode === 413 ? err.message : 'The signed copy could not be kept in Vault.';
+      if (err.statusCode !== 413) console.error('PDF sign copy:', err);
+    }
+    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), placed, signingId, copyKept: !copyError, copyError });
   } catch (err) {
     console.error('PDF sign:', err);
     res.status(500).json({ error: err.message || 'Sign failed' });
+  }
+});
+
+// Signed PDFs: every signing record of the caller, newest first, with the kept copy (attachmentId is null when none was kept).
+// The copy itself downloads through the shared GET /api/attachments/:id/download.
+router.get('/signatures', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s."signingId", s."fileName", s."signerEmail", s."signedAt", s.placements, a.id AS "attachmentId", a."sizeBytes"
+       FROM pdf_signatures s
+       LEFT JOIN attachments a ON a."entityType"='pdf_signature' AND a."entityId"=s.id
+       WHERE s."userId"=$1 ORDER BY s."signedAt" DESC LIMIT 500`,
+      [req.user.id]
+    );
+    res.json({ signatures: rows });
+  } catch (err) {
+    console.error('PDF signatures list:', err);
+    res.status(500).json({ error: 'Could not load your signed PDFs' });
   }
 });
 

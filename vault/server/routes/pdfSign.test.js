@@ -17,7 +17,11 @@ if (!process.env.DATABASE_URL) {
 const assert = require('assert');
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const express = require('express');
+process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-sign-test-'));
 const { PDFDocument, PDFName } = require('pdf-lib');
 const { pool } = require('../db');
 
@@ -26,6 +30,7 @@ app.use(express.json({ limit: '10mb' }));
 let USER = {}; let OTHER = {}; let actAs;
 app.use((req, _res, next) => { req.user = { id: actAs.id, email: actAs.email, isAdmin: false }; next(); });
 app.use('/api/pdf', require('./pdf'));
+app.use('/api/attachments', require('./attachments'));
 
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const SIG_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -60,6 +65,7 @@ test('sign: stamps the hidden ID and stores a matching record', async () => {
   assert.strictEqual(row.userAgent, 'sign-test');
   assert.strictEqual(info.lookup(PDFName.of('VaultSignedAt')).decodeText(), row.signedAt.toISOString());
   signed.id = json.signingId;
+  signed.copyKept = json.copyKept;
 });
 
 test('lookup: the signer sees the record', async () => {
@@ -76,6 +82,22 @@ test('lookup: another user gets 404, and a malformed ID gets 404', async () => {
   assert.strictEqual((await fetch(`${base}/api/pdf/signatures/${signed.id}`)).status, 404);
   actAs = USER;
   assert.strictEqual((await fetch(`${base}/api/pdf/signatures/not-a-uuid`)).status, 404);
+});
+
+test('signed PDFs: a copy of the signed file is kept, listed and downloadable by the signer only', async () => {
+  actAs = USER;
+  assert.strictEqual(signed.copyKept, true);
+  const list = await (await fetch(`${base}/api/pdf/signatures`)).json();
+  const row = list.signatures.find((s) => s.signingId === signed.id);
+  assert.ok(row && row.attachmentId, 'listed with its copy');
+  assert.strictEqual(row.fileName, 'agreement.pdf');
+  const dl = await fetch(`${base}/api/attachments/${row.attachmentId}/download`);
+  assert.strictEqual(dl.status, 200);
+  assert.strictEqual(sha(Buffer.from(await dl.arrayBuffer())), sha(signed), 'the kept copy is byte-for-byte the signed file');
+
+  actAs = OTHER;
+  assert.strictEqual((await fetch(`${base}/api/attachments/${row.attachmentId}/download`)).status, 404);
+  assert.strictEqual((await (await fetch(`${base}/api/pdf/signatures`)).json()).signatures.length, 0, 'another user lists nothing');
 });
 
 test('sign: nothing placed means no record and an error', async () => {
@@ -104,7 +126,9 @@ test('sign: nothing placed means no record and an error', async () => {
     }
   } finally {
     server.close();
+    await pool.query(`DELETE FROM attachments WHERE "userId" = ANY($1)`, [[USER.id, OTHER.id]]);
     await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [[USER.id, OTHER.id]]); // pdf_signatures cascade
+    fs.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true });
     await pool.end();
   }
   console.log(failed ? `\n${failed} failed` : `\nall ${tests.length} passed`);
