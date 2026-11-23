@@ -5,9 +5,12 @@
 
 const { cleanText, valueKey, abnDigits, abnPretty } = require('./normalise');
 
-function confidence(values) {
+// Business names are compared without their company suffix: "SalesLogs" (site name) and "SalesLogs Pty Ltd" (© line, ABR) agree.
+const nameKey = (v) => valueKey(v).replace(/\b(?:pty|ltd|limited|proprietary|inc|incorporated|llc|co|company|the)\b/g, ' ').replace(/\s+/g, ' ').trim();
+
+function confidence(values, keyOf = valueKey) {
   if (!values.length) return { level: 'none', icon: '—', label: 'No value found' };
-  const distinct = [...new Set(values.map((v) => valueKey(v.value)).filter(Boolean))];
+  const distinct = [...new Set(values.map((v) => keyOf(v.value)).filter(Boolean))];
   const sources = new Set(values.map((v) => v.source));
   if (distinct.length > 1) return { level: 'conflicting', icon: '❌', label: 'Sources disagree' };
   if (sources.size >= 2) return { level: 'confirmed', icon: '✅', label: 'Confirmed by 2+ sources' };
@@ -38,9 +41,14 @@ function collectFields(seed = {}, results = {}) {
   add(out.businessName, data.places?.name, 'Google Places', data.places?.mapsUrl);
   add(out.businessName, seed.registration?.organisation, 'RDAP / WHOIS');
   add(out.businessName, seed.domainsTool?.name, 'Domain tool');
+  // the site's own names count as one source between them: the legal name from its © line first, then its site/title name
+  const homeUrl = (seed.website?.pages || [])[0]?.url || null;
+  add(out.businessName, data.website?.legalName, 'Website scrape', homeUrl);
+  add(out.businessName, data.website?.siteName, 'Website scrape', homeUrl);
 
   addAbn(out.abn, data.abr?.abn, 'ABN Lookup (ABR)', 'https://abr.business.gov.au');
   for (const match of [data.registration?.organisation, data.registration?.registrantName, data.domainsTool?.abn]) addAbn(out.abn, match, 'Public website / registry');
+  for (const match of data.website?.abns || []) addAbn(out.abn, match, 'Website scrape', homeUrl);
 
   add(out.address, data.registration?.address, 'RDAP / WHOIS', data.registration?.lookupUrl);
   add(out.address, data.places?.address, 'Google Places', data.places?.mapsUrl);
@@ -58,7 +66,7 @@ function reconcile(seed, results, resolutions = {}) {
   const fields = {};
   const conflicts = [];
   for (const [key, values] of Object.entries(collected)) {
-    const conf = confidence(values);
+    const conf = confidence(values, key === 'businessName' ? nameKey : valueKey);
     if (conf.level === 'conflicting') conflicts.push(key);
     fields[key] = {
       values,
@@ -69,4 +77,4 @@ function reconcile(seed, results, resolutions = {}) {
   return { fields, conflicts };
 }
 
-module.exports = { confidence, collectFields, reconcile };
+module.exports = { confidence, collectFields, reconcile, nameKey };

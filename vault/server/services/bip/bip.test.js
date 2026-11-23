@@ -696,3 +696,57 @@ test('store SQL: a reused parameter has one explicit cast at every use', () => {
     }
   }
 });
+
+// ── fixes from the live saleslogs.com profile (2026-11-23) ──────────────────────────────
+// The real footer: "Level 10, 637 Flinders Street<br>Docklands VIC 3008<br>Australia" and "©Copyright 2005-2026 SalesLogs Pty Ltd".
+
+test('website.looksLikePhone() keeps phone numbers and refuses dates, year ranges and ids', () => {
+  for (const ok of ['+61 2 9855 7852', '(03) 9000 1234', '0412 345 678', '1300 123 456', '+1 415 555 0100']) assert.ok(website.looksLikePhone(ok), ok);
+  for (const bad of ['2026-11-10', '2005-2026', '4 2023-11-03', '313209466-1', '2026-05-21', '12345678']) assert.ok(!website.looksLikePhone(bad), bad);
+});
+
+test('website.extractContact() reads an address split over lines and an ABN printed on the page', () => {
+  const c = website.extractContact('Level 10, 637 Flinders Street\nDocklands VIC 3008\nAustralia\nPhone: +61 2 9855 7852\nABN: 69 161 409 132\n© 2005-2026');
+  assert.deepStrictEqual(c.addresses, ['Level 10, 637 Flinders Street, Docklands VIC 3008']);
+  assert.deepStrictEqual(c.phones, ['+61 2 9855 7852']);
+  assert.deepStrictEqual(c.abns, ['69 161 409 132']);
+});
+
+test('website.extractNames() takes the legal name from the © line and the site name from page titles', () => {
+  const names = website.extractNames([
+    { title: 'Evolve on from spreadsheets with SalesLogs', text: 'Footer\n©Copyright 2005-2026 SalesLogs Pty Ltd\nPrivacy', html: '' },
+    { title: 'About Us | SalesLogs', text: '' },
+  ]);
+  assert.equal(names.legalName, 'SalesLogs Pty Ltd');
+  assert.equal(names.siteName, 'SalesLogs');
+  assert.equal(website.extractNames([{ title: 'Home', text: '© 2024 Just A Name. All rights reserved', html: '' }]).legalName, null, 'no company suffix, no legal name');
+});
+
+test('website.scrapeWebsite() keeps sitemap.xml out of the page text (its dates are not phones, its URLs not keywords)', async () => {
+  const sitemap = '<urlset><url><loc>https://x.test/hubfs/thumbnail-gxkmybaq.png</loc><lastmod>2026-11-10</lastmod></url></urlset>';
+  const out = await website.scrapeWebsite('x.test', {
+    fetchHtml: async (url) => ({ statusCode: 200, body: url.endsWith('/sitemap.xml') ? sitemap : '<title>Page | X Test</title><p>Phone 03 9000 1234</p>' }),
+    normaliseHttpUrl: (u) => u,
+    htmlToText: (html) => html.replace(/<[^>]+>/g, '\n'),
+  });
+  assert.deepStrictEqual(out.phones, ['03 9000 1234']);
+  assert.ok(!out.keywords.some((k) => /hubfs|thumbnail|gxkmybaq/.test(k)), out.keywords.join(','));
+  assert.deepStrictEqual(out.sitemapUrls, ['https://x.test/hubfs/thumbnail-gxkmybaq.png']);
+  assert.equal(out.siteName, 'X Test');
+});
+
+test('reconcile: the site name and the legal name are one business name from one source, not a conflict', () => {
+  const r = reconcile.reconcile({ domain: 'saleslogs.com' }, { website: { data: { legalName: 'SalesLogs Pty Ltd', siteName: 'SalesLogs' } } });
+  assert.deepStrictEqual(r.fields.businessName.values.map((v) => v.value), ['SalesLogs Pty Ltd', 'SalesLogs']);
+  assert.equal(r.fields.businessName.confidence.level, 'single');
+  assert.ok(!r.conflicts.includes('businessName'));
+  const withAbr = reconcile.reconcile({}, { abr: { data: { entityName: 'SALESLOGS PTY LIMITED' } }, website: { data: { siteName: 'SalesLogs' } } });
+  assert.equal(withAbr.fields.businessName.confidence.level, 'confirmed', 'ABR and the website agree once suffixes are ignored');
+});
+
+test('cards: a skipped Places module shows no Google rating, and years in business says what it is based on', () => {
+  const cards = buildCards({ domain: 'x.test' }, { places: { status: 'skipped' }, registration: { data: { domainAgeYears: 13.6 } } }, {});
+  assert.equal(cards.reputation.googlePlaces, null);
+  assert.equal(cards.financial.yearsInBusiness, 13.6);
+  assert.match(cards.financial.yearsInBusinessBasis, /domain age only/);
+});

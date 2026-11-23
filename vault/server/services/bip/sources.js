@@ -18,7 +18,7 @@ const skipped = (reason, data = null) => ({ status: 'skipped', reason, data });
 const failed = (error) => ({ status: 'failed', error: error?.message || String(error), data: null });
 
 function findAbn(seed) {
-  const bits = [seed?.abr?.abn, seed?.registration?.organisation, seed?.registration?.registrantName, seed?.domainsTool?.abn, ...(seed?.website?.text || [])];
+  const bits = [seed?.abr?.abn, seed?.registration?.organisation, seed?.registration?.registrantName, seed?.domainsTool?.abn, ...(seed?.website?.abns || []), ...(seed?.website?.text || [])];
   for (const bit of bits) {
     const abn = abnDigits(bit);
     if (abn) return abn;
@@ -27,7 +27,7 @@ function findAbn(seed) {
 }
 
 function businessName(seed) {
-  return cleanText(seed?.abr?.entityName || seed?.registration?.organisation || seed?.registration?.registrantName || seed?.domainsTool?.name || domainLabel(seed?.domain), 200) || domainLabel(seed?.domain);
+  return cleanText(seed?.abr?.entityName || seed?.registration?.organisation || seed?.registration?.registrantName || seed?.website?.legalName || seed?.domainsTool?.name || seed?.website?.siteName || domainLabel(seed?.domain), 200) || domainLabel(seed?.domain);
 }
 
 /** ABR's JSON API returns JSONP. Search by the ABN found in Stage 1, then by entity name when there is no ABN. */

@@ -36,6 +36,9 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
     registrantOrganisation: val(r.organisation || r.registrantName),
   };
 
+  entity.legalNameOnWebsite = val(w.legalName);
+  entity.siteName = val(w.siteName);
+
   const people = [
     ...(Array.isArray(w.people) ? w.people.map((x) => ({ ...x, source: 'Website scrape' })) : []),
     ...(Array.isArray(d.asic?.directors) ? d.asic.directors.map((x) => ({ ...x, source: 'ASIC Connect' })) : []),
@@ -64,7 +67,8 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
   };
 
   const reputation = {
-    googlePlaces: p.rating === null && p.reviewCount === null ? null : { rating: p.rating, reviewCount: p.reviewCount, url: p.mapsUrl || null, source: 'Google Places' },
+    // == null, not === null: a skipped Places module has no data at all, which printed as "url: ; source: Google Places"
+    googlePlaces: p.rating == null && p.reviewCount == null ? null : { rating: p.rating, reviewCount: p.reviewCount, url: p.mapsUrl || null, source: 'Google Places' },
     productReview: d.productReview?.rating == null ? null : { rating: d.productReview.rating, reviewCount: d.productReview.reviewCount ?? null, url: d.productReview.listingUrl || null, source: 'ProductReview.com.au' },
     trustpilot: d.trustpilot?.rating == null ? null : { rating: d.trustpilot.rating, reviewCount: d.trustpilot.reviewCount ?? null, url: d.trustpilot.listingUrl || null, source: 'Trustpilot' },
     mentions: Array.isArray(g.results) ? g.results.slice(0, 10) : [],
@@ -76,6 +80,8 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
     employeeCount: w.employeeCount ?? null,
     fundingStatus: null,
     yearsInBusiness: w.foundedYear ? Math.max(0, new Date().getFullYear() - Number(w.foundedYear)) : (entity.domainAgeYears ?? null),
+    // say what the figure is: a stated founding year, or only the domain's age (which is not when the business started)
+    yearsInBusinessBasis: w.foundedYear ? `founded ${w.foundedYear}, as stated on the website` : (entity.domainAgeYears != null ? 'domain age only; no founding year found' : null),
     note: 'Revenue and funding are not published by the sources BIP reads. Only the figures below were found; blanks are not estimates.',
   };
 

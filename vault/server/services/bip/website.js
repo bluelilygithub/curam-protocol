@@ -55,16 +55,72 @@ function extractAnalytics(html) {
   return ANALYTICS_PATTERNS.filter((p) => p.re.test(String(html || ''))).map((p) => p.name);
 }
 
+/**
+ * A phone number, not a date, year range or id: international (+, 8-15 digits) or an Australian shape (0X XXXX XXXX, 1300/1800).
+ * Dates such as 2026-11-10 and ids such as 313209466-1 used to pass a plain "8 to 15 digits" test.
+ */
+function looksLikePhone(s) {
+  const raw = String(s || '').trim();
+  if (/\b(?:19|20)\d{2}\s*[-–/.]\s*(?:\d{1,2}\b|(?:19|20)\d{2}\b)/.test(raw)) return false;
+  const d = raw.replace(/\D/g, '');
+  if (raw.startsWith('+')) return d.length >= 8 && d.length <= 15;
+  return /^0[2-478]\d{8}$/.test(d) || /^1[38]00\d{6}$/.test(d);
+}
+
+const STREET_RE = /(?:street|\bst\b|road|\brd\b|avenue|\bave\b|drive|\bdr\b|lane|\bln\b|\bway\b|place|\bpl\b|crescent|\bcres\b|boulevard|\bblvd\b|parade|\bpde\b|highway|\bhwy\b|level|suite|unit|p\.?\s?o\.?\s?box)/i;
+const STATE_RE = /(?:\b(?:VIC|NSW|QLD|WA|SA|TAS|NT|ACT)\b|Australia|\b\d{4}\b)/i;
+
+/** Addresses, read across line breaks: "Level 10, 637 Flinders Street" + "Docklands VIC 3008" (a <br> between them) is one address. */
+function extractAddresses(text) {
+  const lines = String(text || '').split(/\n|[!?]|\.\s+(?=[A-Z])/).map((line) => cleanText(line, 200)).filter(Boolean);
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/\d/.test(lines[i]) || !STREET_RE.test(lines[i])) continue;
+    for (let n = 0; n < 3 && i + n < lines.length; n += 1) {
+      if (!STATE_RE.test(lines[i + n])) continue;
+      const joined = lines.slice(i, i + n + 1).join(', ');
+      if (joined.length <= 200) out.push(joined);
+      break;
+    }
+  }
+  return out;
+}
+
 function extractContact(text) {
   const emails = [...String(text || '').matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi)].map((m) => m[0].toLowerCase());
   const phones = [...String(text || '').matchAll(/(?:\+?\d[\d\s().-]{7,}\d)/g)]
     .map((m) => m[0].trim())
-    .filter((s) => { const d = s.replace(/\D/g, ''); return d.length >= 8 && d.length <= 15; });
-  const addresses = String(text || '')
-    .split(/[\n.!?]/)
-    .map((line) => cleanText(line, 200))
-    .filter((line) => /\d/.test(line) && /(?:street|\bst\b|road|\brd\b|avenue|\bave\b|drive|\bdr\b|lane|\bln\b|way|place|\bpl\b|crescent|\bcres\b|boulevard|\bblvd\b|parade|\bpde\b|level|suite|unit)/i.test(line) && /(?:VIC|NSW|QLD|WA|SA|TAS|NT|ACT|Australia|\d{4})/i.test(line));
-  return { emails: unique(emails).slice(0, 20), phones: unique(phones).slice(0, 12), addresses: unique(addresses).slice(0, 12) };
+    .filter(looksLikePhone);
+  const abns = [...String(text || '').matchAll(/\bA\.?B\.?N\.?\s*(?:no\.?|number)?[:\s]*((?:\d\s?){11})/gi)].map((m) => m[1].replace(/\s+/g, ' ').trim());
+  return {
+    emails: unique(emails).slice(0, 20),
+    phones: unique(phones).slice(0, 12),
+    addresses: unique(extractAddresses(text)).slice(0, 12),
+    abns: unique(abns).slice(0, 5),
+  };
+}
+
+const LEGAL_SUFFIX = String.raw`(?:Pty\.?\s*Ltd\.?|Pty\.?\s*Limited|Proprietary\s+Limited|Limited|Ltd\.?|Inc\.?|LLC|Incorporated)`;
+
+/**
+ * The business's own names on its pages: the legal name in a "© 2005-2026 SalesLogs Pty Ltd" line (only when it ends in a company
+ * suffix), and the site name from og:site_name or the part of a page title after "|" / "–" ("About Us | SalesLogs" -> SalesLogs).
+ */
+function extractNames(pages) {
+  const text = pages.map((p) => p.text || '').join('\n');
+  const legal = text.match(new RegExp(String.raw`(?:©|\(c\)|copyright)\s*(?:copyright\s*)?(?:(?:19|20)\d{2}(?:\s*[-–]\s*(?:19|20)\d{2})?)?[\s,.]*([A-Z][A-Za-z0-9&'.\- ]{0,60}?\s${LEGAL_SUFFIX})`, 'i'));
+  const fromTitles = pages
+    .map((p) => String(p.title || '').split(/\s+[|–—-]\s+/))
+    .filter((parts) => parts.length > 1)
+    .map((parts) => cleanText(parts[parts.length - 1], 60))
+    .filter((s) => s && s.length <= 40 && !/^(home|welcome)$/i.test(s));
+  const counts = new Map();
+  for (const s of fromTitles) counts.set(s, (counts.get(s) || 0) + 1);
+  const titleName = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  return {
+    legalName: legal ? cleanText(legal[1], 80) : null,
+    siteName: meta(pages[0]?.html, ['og:site_name']) || titleName,
+  };
 }
 
 const ROLE_RE = /\b(CEO|CTO|CFO|COO|CMO|founder|co-founder|managing director|director|chair(?:man|woman)?|general manager|head of [A-Za-z ]{2,30}|operations manager|sales manager|marketing manager|principal|owner)\b/i;
@@ -146,7 +202,8 @@ async function fetchPage(normalisedUrl, deps = {}) {
 async function scrapeWebsite(domain, deps = {}) {
   const base = `https://${domain}`;
   const pages = await Promise.all(PATHS.map((p) => fetchPage(`${base}${p}`, deps)));
-  const live = pages.filter((p) => p && p.text);
+  // the HTML pages only: sitemap.xml is a list of URLs and <lastmod> dates, which became "keywords" (hubfs, thumbnail…) and "phones"
+  const live = pages.filter((p, i) => PATHS[i] !== '/sitemap.xml' && p && p.text);
   const allText = live.map((p) => p.text).join('\n');
   const allHtml = live.map((p) => p.html).join('\n');
   const homepage = pages[0] || {};
@@ -159,6 +216,7 @@ async function scrapeWebsite(domain, deps = {}) {
   return {
     domain,
     pages: pages.filter(Boolean).map(({ url, status, title, text, error }) => ({ url, status, title, textLength: text.length, error: error || null })),
+    ...extractNames(live),
     description: meta(homepage.html, ['description', 'og:description']) || meta(allHtml, ['description', 'og:description']),
     keywords: keywords(`${allText} ${meta(allHtml, ['keywords']) || ''}`),
     ...extractFacts(allText),
@@ -172,4 +230,7 @@ async function scrapeWebsite(domain, deps = {}) {
   };
 }
 
-module.exports = { PATHS, meta, extractSocialLinks, extractAnalytics, extractContact, extractPeople, extractFacts, techFromHtml, scrapeWebsite };
+module.exports = {
+  PATHS, meta, extractSocialLinks, extractAnalytics, extractContact, extractAddresses, extractNames, looksLikePhone,
+  extractPeople, extractFacts, techFromHtml, scrapeWebsite,
+};

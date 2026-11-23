@@ -34,6 +34,15 @@ The seed (name, ABN if found, domain) is passed to each module. A module returns
 
 Each module owns its timeout, small retry and minimum gap between calls; one slow or rate-limited source cannot hold up the rest of the profile.
 
+### Website extraction (fixed 2026-11-23 from the live saleslogs.com profile)
+
+- **sitemap.xml is not page text.** It used to be joined to the HTML pages' text, so its URLs became "keywords" (`hubfs`, `thumbnail`, hashes) and its `<lastmod>` dates and image ids became "phones". The sitemap is now only read for `sitemapUrls`.
+- **Phones** must look like a phone (`looksLikePhone`): `+` and 8–15 digits, or an Australian `0X XXXX XXXX` / `1300` / `1800` number. Dates, year ranges and ids are refused.
+- **Addresses** are read across line breaks (`extractAddresses`): a street line followed within two lines by a state, postcode or "Australia" line is one address ("Level 10, 637 Flinders Street" + "Docklands VIC 3008").
+- **Business names from the site** (`extractNames`): the legal name from a `© … Pty Ltd` line (only when it ends in a company suffix) and the site name from `og:site_name` or the part of page titles after `|` / `–`. Both go into reconciliation as `Website scrape`, and the legal name is used (after ABR and RDAP) for the profile title and the ABR name search. Business names are compared without company suffixes, so "SalesLogs" and "SALESLOGS PTY LIMITED" agree.
+- **ABN printed on the site** ("ABN: 69 161 409 132") is read and used for the ABR lookup and reconciliation.
+- **Cards and PDF:** a skipped Google Places no longer shows an empty rating line; "Years in business" says whether it is a stated founding year or only the domain's age; the PDF prints the confidence labels as words, since its built-in fonts cannot draw the ✅ ⚠️ ❌ icons.
+
 ### Stage 3 — reconciliation
 
 `businessName`, `abn`, `address` and `phone` are cross-referenced from all modules that supplied them. **Every value is kept** with its source name and, where there is one, the source URL. Values are normalised only for comparison (case, spacing, punctuation and ABN digits), never to pick a winner.

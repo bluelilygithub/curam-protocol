@@ -46,21 +46,23 @@ function buildDocument(deps, profile) {
   const financial = cards.financial || {};
   const web = cards.digital || {};
   const rep = cards.reputation || {};
-  const conf = (f) => f?.confidence?.icon ? `${f.confidence.icon} ${f.confidence.label}` : '';
+  // words, not the ✅ ⚠️ ❌ icons: the built-in PDF fonts cannot draw them and printed "??" / "?"
+  const conf = (f) => (f?.confidence?.label ? `[${f.confidence.label}]` : '');
 
   const children = [
     React.createElement(Text, { style: s.title }, safe(entity.businessName || profile.domain || 'Business profile')),
     React.createElement(Text, { style: s.sub }, safe(`${profile.domain || ''}  ·  profiled ${profile.scannedAt ? new Date(profile.scannedAt).toLocaleDateString('en-AU') : '—'}  ·  Vault Business Profiler`)),
-    React.createElement(Text, { style: s.badge }, safe('Public-source profile. Values with one source are marked ⚠️; disagreements are marked ❌ and are not resolved by BIP.')),
+    React.createElement(Text, { style: s.badge }, safe('Public-source profile. Each value is marked [Confirmed by 2+ sources], [One source only] or [Sources disagree]; BIP never resolves a disagreement.')),
     section('Entity overview', rows(entity, [
-      ['Business name', 'businessName'], ['ABN', 'abn'], ['Entity type', 'entityType'], ['GST status', 'gstStatus'],
+      ['Business name', 'businessName'], ['Legal name on website', 'legalNameOnWebsite'], ['ABN', 'abn'], ['Entity type', 'entityType'], ['GST status', 'gstStatus'],
       ['Trading names', 'tradingNames'], ['Domain', 'domain'], ['Domain age (years)', 'domainAgeYears'],
       ['Registered', 'registrationDate'], ['Expires', 'expiryDate'], ['Status', 'companyStatus'], ['Registrar', 'registrar'],
     ])),
     section('People', list(cards.people, (x) => `${x.name || 'Unknown'} — ${x.role || 'role not stated'} (${x.source || 'source not stated'})`)),
-    section('Locations', list(cards.locations, (x) => `${x.value} — ${x.source || 'source not stated'} [${x.confidence?.icon || '—'} ${x.confidence?.label || ''}]`)),
+    section('Locations', list(cards.locations, (x) => `${x.value} — ${x.source || 'source not stated'} ${conf(x)}`)),
     section('Products & services', [
       ...rows(cards.products || {}, [['Description', 'description'], ['Industry hints', 'industryHints'], ['Keywords', 'keywords']]),
+      ...(cards.products?.sitemapUrls?.length ? [React.createElement(Text, { key: 'sitemap-h', style: { ...s.muted, marginTop: 6, marginBottom: 3 } }, safe('Pages listed in the sitemap'))] : []),
       ...list(cards.products?.sitemapUrls, (u) => u),
     ]),
     section('Digital footprint', [
@@ -73,7 +75,7 @@ function buildDocument(deps, profile) {
       ...list(rep.mentions, (x) => `${x.title || '(no title)'} — ${x.url || ''}`),
     ]),
     section('Financial indicators — estimates from public sources', rows(financial, [
-      ['Employee count', 'employeeCount'], ['Years in business', 'yearsInBusiness'], ['Revenue estimate', 'revenueEstimate'], ['Funding status', 'fundingStatus'],
+      ['Employee count', 'employeeCount'], ['Years in business', 'yearsInBusiness'], ['Based on', 'yearsInBusinessBasis'], ['Revenue estimate', 'revenueEstimate'], ['Funding status', 'fundingStatus'],
     ]).concat(React.createElement(Text, { key: 'note', style: s.muted }, safe(financial.note || '')))),
     section('Sources & confidence', list((profile.sources || []).map((x) => ({ ...x, line: `${x.name}: ${x.status}${x.reason ? ` — ${x.reason}` : ''}${x.error ? ` — ${x.error}` : ''}` })), (x) => x.line)),
     section('Reconciliation', [
