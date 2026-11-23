@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (bip-summary)
+
+### Business Profiler — AI summary of the business
+When a profile finishes, the standard model writes three paragraphs from the saved profile only (no web search, no general knowledge). Any year, phone or count it uses that is not in the profile data is flagged to check. Shown above the cards with Regenerate (`POST /api/bip/profiles/:id/summary`), at the top of the PDF and in Save to Note. New column `bip_profiles.summary`; new test cases in `bip.test.js`.
+
+### Business Profiler — refreshing one source emptied the website fields
+A one-source refresh rebuilt the cards from the stored module statuses, which hold no data for the seed modules (website, registration, DNS), so the description, keywords, phone and address dropped out. The seed data is now put back from `seedData` first.
+
+---
+
 ## 2026-11-23 (bip-extraction-layout)
 
 ### Business Profiler — profiles missing the name, address and phone; junk keywords and phones

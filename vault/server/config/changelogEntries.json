@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "6aec5c90",
+   "fullHash": "6aec5c90f45c2afb73e261290236ec283dd6168a",
+   "committedAt": "2026-11-23T19:06:55+10:00",
+   "author": "mrb",
+   "area": "Business Profiler",
+   "subject": "Business Profiler: AI summary of the business; keep website data on a one-source refresh",
+   "filesChanged": 15,
+   "insertions": 279,
+   "deletions": 5,
+   "goal": "Turn the scraped profile into a few readable paragraphs about the company, without the model adding facts the profile does not hold.",
+   "whatChanged": "New server/services/bip/summary.js. After finishProfile, run.js calls generateSummary (progress phase 'summary'; a failure is logged and never fails the run). It uses the workspace standard model via getModelsForUser and callModel, with a system prompt requiring exactly three plain paragraphs of about 220-300 words (what the business is and sells, where and how long with the basis, online presence and gaps), only the given data, single-source and unconfirmed facts said as such, and no recommendations. The input is the reconciled fields with sources and confidence, the cards, the skipped sources with reasons, and up to 3,500 characters each of the homepage, About and Contact text from the saved scrape, fenced as information. cleanSummary strips markdown; checkFigures lists any year, phone or count not found in the input (long figures by digit substring, short ones only as whole numbers) as unverifiedFigures. Saved in new column bip_profiles.summary (JSONB) via store.saveSummary and returned by getProfile; POST /api/bip/profiles/:id/summary (behind aiLimiter, added to routeManifest) regenerates. Usage logged as bip_summary. BipPage shows a Summary card above the cards with Regenerate and an amber line for unverified figures; the PDF puts it first; Save to Note includes it in place of the one-line description; the guide catalogue and the info box describe it; recycle-bin restore keeps it. Fix in run.js: a one-source refresh rebuilt cards from enrichmentData, which holds only status for the seed modules, so website, registration and DNS data dropped out; seed data is now restored from seedData first.",
+   "filesImpacted": [
+    "server/services/bip/summary.js",
+    "server/services/bip/run.js",
+    "server/services/bip/store.js",
+    "server/services/bip/pdf.js",
+    "server/services/bip/bip.test.js",
+    "server/routes/bip.js",
+    "server/db.js",
+    "server/services/recycleBin/adapters/bip.js",
+    "server/testing/routeManifest.json",
+    "server/services/bipTutor.js",
+    "client/src/pages/BipPage.jsx",
+    "client/src/pages/bip/bipTools.mjs",
+    "client/src/pages/bip/bipNote.mjs",
+    "client/src/pages/bip/bipNote.test.mjs",
+    "docs/bip.md"
+   ],
+   "benefit": "Each profile opens with a short readable description of the business, which also goes into the PDF and saved notes, and a one-source refresh no longer wipes the website-based fields.",
+   "concerns": "No real model was called while building: the prompt, clean-up, figure check and save path are tested with a stubbed model, and the page passed a full client build. The figure check only covers digits, so a made-up name or claim without a number is not caught. Every finished run now makes one model call (cost per profile is small but not zero); profiles made before this commit have no summary until Regenerate or Re-scan. The quality of the paragraphs depends on the workspace's standard model."
+  },
+  {
    "commit": "c2917dfa",
    "fullHash": "c2917dfa6ba8f23b123c81726e73c2b36799203d",
    "committedAt": "2026-11-23T18:52:24+10:00",
