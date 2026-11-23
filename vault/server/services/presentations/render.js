@@ -112,10 +112,13 @@ function renderSlide(slide, index, colours, opts) {
   const p = plan(slide, opts);
   const scale = opts.scale;
   const bg = safeColor(slide.background, colours.bg);
-  const shapes = renderShapes(p.shapes, colours, scale);
+  const baseShapes = renderShapes(p.shapes.filter((s) => !s.overlay), colours, scale);
+  // Scrims and title strips are overlays: they must sit above the picture but below the words in both HTML and PPTX.
+  const overlayShapes = renderShapes(p.shapes.filter((s) => s.overlay), colours, scale);
   const images = p.images.map((im) => {
     const src = safeImage(im.ref);
-    return src ? `<img class="pic" style="${pos(im)};object-fit:${im.fit === 'cover' ? 'cover' : 'contain'}" src="${escapeHtml(src)}" alt="">` : '';
+    const position = /^(50% 50%|0% 50%|100% 50%|50% 0%|50% 100%)$/.test(im.objectPosition) ? im.objectPosition : '50% 50%';
+    return src ? `<img class="pic" style="${pos(im)};object-fit:${im.fit === 'cover' ? 'cover' : 'contain'};object-position:${position}" src="${escapeHtml(src)}" alt="">` : '';
   }).join('');
   const boxes = p.boxes.map((b) => {
     const style = [pos(b), `font-size:${Math.round(b.size * scale)}px`, `color:${colours[b.color] || colours.text}`,
@@ -140,7 +143,7 @@ function renderSlide(slide, index, colours, opts) {
     return `<div class="table-wrap" style="${g}">${renderTable(table, colours, scale)}</div>`;
   }).join('');
   const num = p.number ? `<span class="num">${index + 1}</span>` : '';
-  return `<section class="slide layout-${p.layout} design-${p.design}" data-slide="${index + 1}" style="background:${bg}">${shapes}${images}${boxes}${extras}${opts.logo}${num}</section>`;
+  return `<section class="slide layout-${p.layout} design-${p.design}" data-slide="${index + 1}" style="background:${bg}">${baseShapes}${images}${overlayShapes}${boxes}${extras}${opts.logo}${num}</section>`;
 }
 
 /** Speaker-notes pages, appended to every export but never to the live preview or the slideshow. */

@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (presentations-design-pass)
+
+### Presentations — automatic composition instead of dropped-in pictures
+Generated decks now get a deterministic design pass after their placeholder pictures are added. It reads each slide's words and, where the bytes are owned, the real picture aspect, then chooses a fitting layout and writes per-slide hints for picture role, side, crop/focal point, scrim, text density, emphasis and composition variant. Hero and background pictures fill the slide with a readable scrim; supporting pictures sit beside the words on alternating sides. The same geometry drives the live preview, PDF, PNG and PPTX, so focal crops and overlays stay in step.
+
+### Presentations — Remix design
+The slide editor has a **Remix design** action that re-runs the pass without a model call, without drag-and-drop and without changing any words. It reports the before/after composition score. Adding a slide also recomposes the new slide. Tooltips, the guide chat, per-tool help, documentation and the route manifest were updated; the six sidebar tools are unchanged.
+
+---
+
 ## 2026-11-23 (presentations-ai-picture-preview)
 
 ### Presentations — generated AI pictures can be previewed and inserted

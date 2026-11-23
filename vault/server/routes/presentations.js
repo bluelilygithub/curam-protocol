@@ -35,6 +35,7 @@ router.get('/meta', async (req, res) => {
 
 router.use(require('./presentations/create'));
 router.use(require('./presentations/outline'));
+router.use(require('./presentations/design'));
 router.use(require('./presentations/import'));
 router.use(require('./presentations/preview'));
 router.use(require('./presentations/jobs'));

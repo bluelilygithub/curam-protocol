@@ -23,10 +23,10 @@ export const GROUP_TIPS = {
 
 // The hover tips on the tool list.
 export const TOOL_TIPS = {
-  create: 'Write a brief, set the audience, tone, length and slide count, and optionally review the outline first. Low-cost AI placeholder pictures can be added as the deck is made.',
+  create: 'Write a brief, set the audience, tone, length and slide count, and optionally review the outline first. Low-cost AI placeholder pictures can be added, then a deterministic design pass composes each slide.',
   import: 'Pull text and pictures from a PDF, Word document, text file, web page or images. A .pptx/.potx file opens straight into the slide editor as an editable deck.',
   templates: 'Pick a design (how slides are laid out and decorated) and a colour theme. Save your own colours, import them from PowerPoint, or apply your Brand Kit on top.',
-  slides: 'Change the words, pictures, layout and order of the slides. Generate and preview AI pictures before inserting them, add shapes, charts, tables and inline formatting, rewrite one slide, and undo or redo edits. Presenter view shows notes, the next slide and a timer.',
+  slides: 'Change the words, pictures, layout and order of the slides. Generate and preview AI pictures before inserting them, add shapes, charts, tables and inline formatting, rewrite one slide, Remix design for better composition, and undo or redo edits. Presenter view shows notes, the next slide and a timer.',
   export: 'Download the deck as an editable PPTX with speaker notes, a PDF with notes pages, an HTML preview or a zip of PNGs with notes.txt. Finished files can be downloaded again.',
   decks: 'Open saved decks, duplicate or delete them, roll back to a saved version (including autosaves), re-download exports, and see decks opened recently on this device.',
 };
@@ -36,7 +36,7 @@ export const TOOL_BLURBS = {
   create: 'A brief in plain words is enough. Add audience, tone, length and slide count, or review the outline before the deck is written.',
   import: 'Up to 10 files at once, or one web page. Extracted text is editable; PowerPoint files become editable slides.',
   templates: 'A design lays out and decorates every slide; a colour theme sets colours, font and title size. Your Brand Kit can be laid over the top.',
-  slides: 'Edit words, pictures, shapes, charts, tables and notes. Undo or redo with the buttons or Ctrl+Z outside a text field, then press Present for the full-screen show.',
+  slides: 'Edit words, pictures, shapes, charts, tables and notes, or Remix design to let the deck recompose itself. Undo or redo with the buttons or Ctrl+Z outside a text field, then press Present for the full-screen show.',
   export: 'PPTX keeps the words editable with speaker notes; PDF, HTML and PNGs render from the same preview and include notes pages.',
   decks: 'Saved decks live on the server with version history and re-downloadable exports. Recent decks are an opt-in browser-only list.',
 };
@@ -49,6 +49,7 @@ export const TOOL_HELP = {
       'Choose the audience, tone, talk length and slide count (6 to 20) before generating',
       'Review outline first lets you edit headings, points, picture ideas and notes before the deck is written',
       'Optionally add a few small, low-cost AI placeholder pictures as the deck is made; a missing image provider never blocks the deck',
+      'A deterministic design pass then chooses image role, crop, side, text density and layout from each slide’s content — no extra model call',
       'Uses the workspace models configured by your admin, not a hard-coded provider',
       'Works from a brief alone, or from text and images brought in by Import source',
       'Runs in the background with progress, Cancel and Resume',
@@ -86,6 +87,7 @@ export const TOOL_HELP = {
       'Add extra pictures and shapes, bar/line/pie charts, tables, slide backgrounds and inline bold/italic/underline formatting',
       'Ask the model to rewrite one slide in place, or describe a small AI picture and generate one',
       'Generated AI pictures wait in a tray: preview each one, then Add to slide or Use as slide picture. Pictures added automatically with a new deck or slide can be previewed and promoted here too',
+      'Remix design re-runs the composition pass on the whole deck: it changes layout, picture treatment and text density, but not your words. No drag-and-drop is needed',
       'The live preview uses the same renderer as PDF and PNG export',
       'Present plays the deck full screen: arrow keys, Space and Page Up/Down move, type a number and press Enter to jump, Escape ends the show',
       'Presenter view (V) shows speaker notes, the next slide and a pauseable timer that can be reset',
@@ -120,7 +122,7 @@ export const TOOL_HELP = {
 // The (i) "How Presentations works" box.
 export const HOW_IT_WORKS = [
   ['Make', 'Create deck plans an editable outline and turns it into slides from a brief, with optional low-cost placeholder pictures. Import source pulls text, notes, slides and pictures from documents, PowerPoint files, web pages and images.'],
-  ['Design', 'Themes picks a design (bands, panels, frames, accents) and a colour theme, or brings colours from PowerPoint or your Brand Kit. Slide editor changes words, pictures, shapes, charts, tables, layout and order, with undo and redo.'],
+  ['Design', 'Themes picks a design (bands, panels, frames, accents) and a colour theme, or brings colours from PowerPoint or your Brand Kit. Slide editor changes words, pictures, shapes, charts, tables, layout and order, with undo and redo. A deterministic composition pass treats pictures as hero, background or supporting content, and Remix design re-runs it whenever you want.'],
   ['Finish', 'Export makes an editable PPTX, a PDF, an HTML preview or per-slide PNGs. Speaker notes go into every format. Presenter view shows notes, the next slide and a timer.'],
   ['Library', 'My decks reopens, duplicates, restores and deletes saved decks, and re-downloads exports; opt-in recent decks are kept in this browser only.'],
   ['One deck', 'There is one canonical deck model behind the browser edits, preview and every export, so they do not drift apart. Long jobs run in the background with progress, Cancel and Resume.'],

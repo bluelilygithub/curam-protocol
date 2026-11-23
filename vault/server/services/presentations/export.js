@@ -79,7 +79,7 @@ async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('p
     s.background = { color: pptxColor(slide.background, colours.bg) };
     const p = plan(slide, { designId: deck.designId, aspect: deck.aspect, titleSize: theme.titleSize });
 
-    for (const sh of p.shapes) {
+    const drawShape = (sh) => {
       const opts = {
         ...geo(sh),
         fill: sh.fill ? fill(sh.fill, sh.kind === 'line' ? 1 : sh.alpha) : { color: colours.bg, transparency: 100 },
@@ -94,13 +94,19 @@ async function buildPptx(deck, theme, { userId, filePath, PptxGenJS = require('p
           color: colours[sh.labelColor || 'bg'], align: 'center', valign: 'middle', margin: 0,
         });
       } else s.addShape(SHAPE[sh.kind] || SHAPE.rect, opts);
-    }
+    };
+    p.shapes.filter((sh) => !sh.overlay).forEach(drawShape);
 
     for (const im of p.images) {
       const image = imageForPptx(im.ref, userId);
       const g = geo(im);
-      if (image) s.addImage({ ...image, ...g, sizing: { type: im.fit === 'cover' ? 'cover' : 'contain', w: g.w, h: g.h } });
+      // A focal crop keeps the PPTX in step with the HTML object-position when the source aspect differs from the box.
+      const sizing = im.crop && im.crop.w > 0 && im.crop.h > 0
+        ? { type: 'crop', ...im.crop }
+        : { type: im.fit === 'cover' ? 'cover' : 'contain', w: g.w, h: g.h };
+      if (image) s.addImage({ ...image, ...g, sizing });
     }
+    p.shapes.filter((sh) => sh.overlay).forEach(drawShape);
 
     for (const b of p.boxes) {
       const opts = {

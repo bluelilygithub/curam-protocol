@@ -4,7 +4,9 @@
 // See docs/presentations.md.
 
 // The slide layouts and design styles live with their geometry (layouts.js), shared by the preview and every export.
-const { LAYOUTS, DESIGN_IDS, DESIGNS } = require('./layouts');
+const {
+  LAYOUTS, DESIGN_IDS, DESIGNS, IMAGE_ROLES, IMAGE_SIDES, IMAGE_FITS, FOCAL_POINTS, DENSITIES, EMPHASES, VARIANTS,
+} = require('./layouts');
 // How the full-screen slideshow moves between slides (client Slideshow.jsx). Kept on the deck so a saved deck remembers it.
 const TRANSITIONS = ['none', 'fade', 'push', 'wipe', 'zoom'];
 const SHAPE_KINDS = ['rect', 'ellipse', 'triangle', 'line'];
@@ -196,6 +198,25 @@ function normalizeRich(raw, bullets) {
   return value;
 }
 
+/** Composition hints produced by the design pass and consumed by plan(). Always present so a saved deck remembers them. */
+function normalizeDesign(raw) {
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const pick = (list, value, fallback) => (list.includes(value) ? value : fallback);
+  return {
+    imageRole: pick(IMAGE_ROLES, d.imageRole, 'supporting'),
+    imageSide: pick(IMAGE_SIDES, d.imageSide, 'right'),
+    imageFit: pick(IMAGE_FITS, d.imageFit, 'contain'),
+    focalPoint: pick(FOCAL_POINTS, d.focalPoint, 'center'),
+    scrim: clampNumber(d.scrim, 0, 0, 0.85),
+    density: pick(DENSITIES, d.density, 'balanced'),
+    emphasis: pick(EMPHASES, d.emphasis, 'balanced'),
+    variant: pick(VARIANTS, d.variant, 'standard'),
+    imageAspect: clampNumber(d.imageAspect, 0, 0, 8),
+    imageWidth: clampInt(d.imageWidth, 0, 0, 20000),
+    imageHeight: clampInt(d.imageHeight, 0, 0, 20000),
+  };
+}
+
 function normalizeSlide(raw, index) {
   const layout = LAYOUTS.includes(raw?.layout) ? raw.layout : 'bullets';
   const bullets = Array.isArray(raw?.bullets)
@@ -212,6 +233,7 @@ function normalizeSlide(raw, index) {
     notes: text(raw?.notes, 1200),
     background: hexColour(raw?.background),
     imagePrompt: text(raw?.imagePrompt, 300),
+    design: normalizeDesign(raw?.design),
     images: normalizeExtraImages(raw?.images),
     shapes: normalizeShapes(raw?.shapes),
     chart: normalizeChart(raw?.chart),
@@ -312,7 +334,8 @@ function normalizeOutline(raw) {
 
 module.exports = {
   SOURCE_MAX,
-  LAYOUTS, DESIGNS, DESIGN_IDS, TRANSITIONS, SHAPE_KINDS, SHAPE_COLOURS, CHART_TYPES, MIN_SLIDES, MAX_SLIDES, DEFAULT_SLIDES, BUILTIN_THEMES, PresentationError,
-  text, clampInt, clampNumber, hexColour, sanitizeRich, stripRich, resolveTheme, sanitizeCustomTheme, normalizeDeck, normalizeSlide, normalizeColumns,
+  LAYOUTS, DESIGNS, DESIGN_IDS, TRANSITIONS, IMAGE_ROLES, IMAGE_SIDES, IMAGE_FITS, FOCAL_POINTS, DENSITIES, EMPHASES, VARIANTS,
+  SHAPE_KINDS, SHAPE_COLOURS, CHART_TYPES, MIN_SLIDES, MAX_SLIDES, DEFAULT_SLIDES, BUILTIN_THEMES, PresentationError,
+  text, clampInt, clampNumber, hexColour, sanitizeRich, stripRich, resolveTheme, sanitizeCustomTheme, normalizeDeck, normalizeSlide, normalizeColumns, normalizeDesign,
   deckFromOutline, normalizeOutline,
 };

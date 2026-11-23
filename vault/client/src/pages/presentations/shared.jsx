@@ -21,6 +21,15 @@ export const BUILTIN_THEMES = ['paper', 'ink', 'warm', 'ocean', 'forest', 'mono'
 export const SHAPE_KINDS = ['rect', 'ellipse', 'triangle', 'line'];
 export const SHAPE_COLOURS = ['bg', 'text', 'primary', 'muted'];
 export const CHART_TYPES = ['bar', 'line', 'pie'];
+// Mirrors the server's composition hints. The client keeps them through edits; the server writes them in the design pass.
+export const IMAGE_ROLES = ['hero', 'supporting', 'background', 'spotlight'];
+export const IMAGE_SIDES = ['left', 'right', 'top', 'bottom', 'full'];
+export const IMAGE_FITS = ['contain', 'cover'];
+export const FOCAL_POINTS = ['center', 'left', 'right', 'top', 'bottom'];
+export const DENSITIES = ['calm', 'balanced', 'dense'];
+export const EMPHASES = ['title', 'image', 'content', 'balanced'];
+export const VARIANTS = ['standard', 'editorial', 'feature', 'quote-led'];
+const pickHint = (list, value, fallback) => (list.includes(value) ? value : fallback);
 
 const PRESENTATION_ASSET = /^\/api\/presentations\/assets\/\d+\/[A-Za-z0-9._-]+(?:\?.*)?$/;
 
@@ -128,6 +137,23 @@ const num = (v, fallback, min, max) => {
 const hex = (v) => (/^#[0-9a-fA-F]{3,8}$/.test(text(v)) ? text(v) : '');
 const rich = (v, n = 1200) => text(v).replace(/<\s*\/?\s*(?!b\b|strong\b|i\b|em\b|u\b|br\b)[^>]*>/gi, '').slice(0, n);
 
+function normalizeDesign(raw) {
+  const d = raw && typeof raw === 'object' ? raw : {};
+  return {
+    imageRole: pickHint(IMAGE_ROLES, d.imageRole, 'supporting'),
+    imageSide: pickHint(IMAGE_SIDES, d.imageSide, 'right'),
+    imageFit: pickHint(IMAGE_FITS, d.imageFit, 'contain'),
+    focalPoint: pickHint(FOCAL_POINTS, d.focalPoint, 'center'),
+    scrim: num(d.scrim, 0, 0, 0.85),
+    density: pickHint(DENSITIES, d.density, 'balanced'),
+    emphasis: pickHint(EMPHASES, d.emphasis, 'balanced'),
+    variant: pickHint(VARIANTS, d.variant, 'standard'),
+    imageAspect: num(d.imageAspect, 0, 0, 8),
+    imageWidth: num(d.imageWidth, 0, 0, 20000),
+    imageHeight: num(d.imageHeight, 0, 0, 20000),
+  };
+}
+
 /** Plain text from the small inline-format subset, for previews and labels that must not show tags. */
 export function stripRich(value) {
   return text(value)
@@ -142,7 +168,7 @@ export function newSlide(index = 0) {
     id: `s${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     layout: index === 0 ? 'title' : 'bullets',
     title: '', bullets: [], body: '', columns: [], imageRef: '', notes: '',
-    background: '', imagePrompt: '', images: [], shapes: [], chart: null, table: null, rich: null,
+    background: '', imagePrompt: '', design: normalizeDesign({}), images: [], shapes: [], chart: null, table: null, rich: null,
   };
 }
 
@@ -186,6 +212,7 @@ function normalizeMediaSlide(s, i) {
     notes: capped(s.notes, 1200),
     background: hex(s.background),
     imagePrompt: capped(s.imagePrompt, 300),
+    design: normalizeDesign(s.design),
     images: Array.isArray(s.images) ? s.images.slice(0, 12).map((im, j) => ({
       id: capped(im?.id, 80) || `img${j + 1}`, ref: capped(im?.ref, 2000),
       x: num(im?.x, 55, 0, 100), y: num(im?.y, 20, 0, 100),

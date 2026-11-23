@@ -188,6 +188,7 @@ export default function SlideEditor() {
   const [showPreview, setShowPreview] = useState(true);
   const [richOn, setRichOn] = useState({});
   const [rewrite, setRewrite] = useState({ instruction: '', index: null, busy: false });
+  const [remixing, setRemixing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [generating, setGenerating] = useState(null); // slide id with an image request in flight
   const [generated, setGenerated] = useState({}); // slide id -> generated asset refs waiting to be inserted
@@ -315,14 +316,48 @@ export default function SlideEditor() {
 
   const openPreview = (src, slideId, from = 'tray', extraIndex = null) => setPicturePreview({ src, slideId, from, extraIndex });
 
+  // Deterministic design pass. It never calls a model and never changes the words, only layout and composition hints.
+  const applyRemix = async (inputDeck, { silent = false } = {}) => {
+    if (!inputDeck?.slides?.length) return null;
+    setRemixing(true);
+    try {
+      const res = await api.post('/api/presentations/remix-design', { deck: inputDeck });
+      const data = await readJson(res, 'The design could not be remixed.');
+      if (data.deck) setDeck(data.deck);
+      if (!silent) {
+        const change = Number.isFinite(data.score) && Number.isFinite(data.previousScore) && data.score !== data.previousScore
+          ? ` Composition score ${data.previousScore} → ${data.score}.` : '';
+        toast(`Design remixed — no words changed.${change}`, 'success');
+      }
+      return data;
+    } catch (err) {
+      if (!silent) toast(err.message || 'The design could not be remixed.', 'error');
+      return null;
+    } finally {
+      setRemixing(false);
+    }
+  };
+
   const addSlide = async () => {
     const index = deck.slides.length;
     if (index >= (meta?.maxSlides || 20)) return;
     const slide = newSlide(index);
-    setDeck((prev) => ({ ...prev, slides: [...prev.slides, slide] }));
+    const withSlide = { ...deck, slides: [...deck.slides, slide] };
+    setDeck(withSlide);
     setAdding(true);
     const src = await requestPlaceholder(index, { slideId: slide.id, silent: true });
-    if (src) addPictureToSlide(index, src);
+    let withPicture = withSlide;
+    if (src) {
+      const composed = ['picture', 'full-picture'].includes(slide.layout)
+        ? { ...slide, imageRef: src }
+        : { ...slide, images: [...(slide.images || []), {
+          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          ref: src, x: 58, y: 52, w: 36, h: 36, fit: 'contain',
+        }] };
+      withPicture = { ...withSlide, slides: withSlide.slides.map((s, i) => (i === index ? composed : s)) };
+      setDeck(withPicture);
+    }
+    await applyRemix(withPicture, { silent: true });
     setAdding(false);
   };
 
@@ -417,6 +452,11 @@ export default function SlideEditor() {
                     <span className="inline-flex items-center gap-1.5">{getIcon('play', { size: 13 })} Present</span>
                   </button>
                 </Tooltip>
+                <Tooltip text="Improve picture treatment and composition from the slide content. No model call, no drag-and-drop, and no words changed.">
+                  <button type="button" onClick={() => applyRemix(deck)} disabled={remixing || deck.slides.length === 0} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
+                    {remixing ? 'Remixing…' : 'Remix design'}
+                  </button>
+                </Tooltip>
               </div>
             </div>
 
@@ -465,6 +505,12 @@ export default function SlideEditor() {
                   />
                 </div>
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{LAYOUT_HELP[slide.layout]}</p>
+                {slide.design?.variant && slide.design.variant !== 'standard' && (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Composition: {slide.design.variant} · {slide.design.imageRole} picture
+                    {slide.design.focalPoint !== 'center' ? ` · ${slide.design.focalPoint} focal point` : ''}
+                  </p>
+                )}
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block space-y-1">

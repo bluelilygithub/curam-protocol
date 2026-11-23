@@ -19,6 +19,20 @@ const DESIGN_IDS = DESIGNS.map((d) => d.id);
 const LAYOUTS = ['title', 'section', 'bullets', 'agenda', 'two-column', 'comparison', 'three-column', 'stats', 'quote', 'timeline', 'picture', 'full-picture', 'closing'];
 const HERO = new Set(['title', 'section', 'closing']);
 
+// Composition hints written by the deterministic design pass and carried on every canonical slide. plan() is the one
+// place they become geometry, so HTML/PDF/PNG and PPTX stay identical.
+const IMAGE_ROLES = ['hero', 'supporting', 'background', 'spotlight'];
+const IMAGE_SIDES = ['left', 'right', 'top', 'bottom', 'full'];
+const IMAGE_FITS = ['contain', 'cover'];
+const FOCAL_POINTS = ['center', 'left', 'right', 'top', 'bottom'];
+const DENSITIES = ['calm', 'balanced', 'dense'];
+const EMPHASES = ['title', 'image', 'content', 'balanced'];
+const VARIANTS = ['standard', 'editorial', 'feature', 'quote-led'];
+
+const OBJECT_POSITION = {
+  center: '50% 50%', left: '0% 50%', right: '100% 50%', top: '50% 0%', bottom: '50% 100%',
+};
+
 const ASPECT_RATIO = { '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1 };
 
 const BODY = 30; // px on a 720px-tall slide (about 24pt in PowerPoint on a 4:3 slide)
@@ -83,6 +97,31 @@ function columnsFor(slide, count) {
   return Array.from({ length: count }, (_, i) => ({ heading: '', bullets: bullets.slice(i * per, (i + 1) * per) })).filter((c) => c.bullets.length);
 }
 
+const rectAspect = (rect, ratio) => (rect.w / Math.max(0.01, rect.h)) * ratio;
+
+/**
+ * Source rectangle for a cover image. Focal points shift the crop instead of always cutting from the middle; PPTX can
+ * use the pixel rectangle directly, while HTML uses object-position as the equivalent.
+ */
+function cropFor(hint, rect, ratio) {
+  const width = Number(hint?.imageWidth) || 0;
+  const height = Number(hint?.imageHeight) || 0;
+  if (!width || !height || hint.imageFit !== 'cover') return null;
+  const focal = FOCAL_POINTS.includes(hint.focalPoint) ? hint.focalPoint : 'center';
+  const boxAspect = rectAspect(rect, ratio);
+  const imageAspect = width / height;
+  const round = (v) => Math.round(v * 100) / 100;
+  let x = 0; let y = 0; let w = width; let h = height;
+  if (imageAspect > boxAspect) {
+    w = height * boxAspect;
+    x = focal === 'left' ? 0 : focal === 'right' ? width - w : (width - w) / 2;
+  } else if (imageAspect < boxAspect) {
+    h = width / boxAspect;
+    y = focal === 'top' ? 0 : focal === 'bottom' ? height - h : (height - h) / 2;
+  }
+  return { x: round(Math.max(0, Math.min(width - w, x))), y: round(Math.max(0, Math.min(height - h, y))), w: round(w), h: round(h) };
+}
+
 /** Decoration shapes and the content area for a design. */
 function frameFor(designId, hero, ratio = 16 / 9) {
   const shapes = [];
@@ -139,6 +178,11 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
   const design = DESIGN_IDS.includes(designId) ? designId : 'clean';
   const ratio = ASPECT_RATIO[aspect] || ASPECT_RATIO['16:9'];
   const round = (h) => h / ratio; // width in % for a circle that is h% tall
+  const hint = slide.design && typeof slide.design === 'object' ? slide.design : {};
+  const focal = FOCAL_POINTS.includes(hint.focalPoint) ? hint.focalPoint : 'center';
+  const scrim = Math.max(0, Math.min(0.85, Number(hint.scrim) || 0));
+  const density = DENSITIES.includes(hint.density) ? hint.density : 'balanced';
+  const variant = VARIANTS.includes(hint.variant) ? hint.variant : 'standard';
   const hero = HERO.has(layout);
   // A quote has no title to put on Banded's band, so it uses the plain frame instead of an empty band.
   const f = layout === 'quote' && design === 'banded' ? frameFor('clean', false, ratio) : frameFor(design, hero, ratio);
@@ -175,7 +219,7 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
   const addExtras = (result) => {
     attachRich();
     for (const im of (Array.isArray(slide.images) ? slide.images : [])) {
-      images.push({ x: im.x, y: im.y, w: im.w, h: im.h, ref: im.ref, fit: im.fit || 'contain' });
+      images.push({ x: im.x, y: im.y, w: im.w, h: im.h, ref: im.ref, fit: im.fit || 'contain', focalPoint: 'center' });
     }
     for (const sh of (Array.isArray(slide.shapes) ? slide.shapes : [])) {
       shapes.push({ ...sh });
@@ -183,34 +227,55 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
     return { ...result, charts: slide.chart ? [{ ...slide.chart }] : [], tables: slide.table ? [{ ...slide.table }] : [] };
   };
 
+  /** One composed picture with its focal crop and overlay scrim decisions attached. */
+  const composedImage = (rect, fit, ref = slide.imageRef) => ({
+    ...rect,
+    ref,
+    fit,
+    focalPoint: focal,
+    objectPosition: OBJECT_POSITION[focal],
+    crop: cropFor({ ...hint, imageFit: fit }, rect, ratio),
+  });
+
   // ---- hero slides: title, section, closing ----
   if (hero) {
-    const big = layout === 'section' ? tSize + 4 : tSize + 12;
+    const big = (layout === 'section' ? tSize + 4 : tSize + 12) + (hint.emphasis === 'title' ? 4 : 0);
+    const hasHeroImage = Boolean(clean(slide.imageRef));
+    if (hasHeroImage) {
+      // A hero picture is a background, not a sticker: it fills the slide and gets a scrim before any words are drawn.
+      for (let i = shapes.length - 1; i >= 0; i -= 1) {
+        if (shapes[i].fill === 'primary' && shapes[i].w === 100 && shapes[i].h === 100) shapes.splice(i, 1);
+      }
+      images.push(composedImage({ x: 0, y: 0, w: 100, h: 100 }, IMAGE_FITS.includes(hint.imageFit) ? hint.imageFit : 'cover'));
+      shapes.push({ kind: 'rect', x: 0, y: 0, w: 100, h: 100, fill: 'text', alpha: scrim || 0.45, overlay: true });
+    }
     if (f.heroMode === 'band') {
       boxes.push({ x: 7, y: 36, w: 86, h: 28, text: title, size: big, bold: true, color: 'bg', align: 'center', valign: 'middle' });
-      if (body) boxes.push({ x: 10, y: 70, w: 80, h: 18, text: body, size: 30, color: 'muted', align: 'center', valign: 'top' });
+      if (body) boxes.push({ x: 10, y: 70, w: 80, h: 18, text: body, size: 30, color: hasHeroImage ? 'bg' : 'muted', align: 'center', valign: 'top' });
     } else if (f.heroMode === 'block') {
       boxes.push({ x: 5, y: 20, w: 37, h: 60, text: title, size: big, bold: true, color: 'bg', align: 'left', valign: 'middle' });
-      if (body) boxes.push({ x: 52, y: 20, w: 41, h: 60, text: body, size: 30, color: 'muted', align: 'left', valign: 'middle' });
+      if (body) boxes.push({ x: 52, y: 20, w: 41, h: 60, text: body, size: 30, color: hasHeroImage ? 'bg' : 'muted', align: 'left', valign: 'middle' });
     } else {
-      const colour = f.heroMode === 'fill' ? 'bg' : 'text';
+      const colour = hasHeroImage || f.heroMode === 'fill' ? 'bg' : 'text';
       const left = layout === 'section';
       const a = f.area;
       boxes.push({ x: a.x, y: a.y + a.h * 0.18, w: a.w, h: a.h * 0.38, text: title, size: big, bold: true, color: colour, align: left ? 'left' : 'center', valign: 'bottom' });
-      if (f.rule || layout === 'section') {
+      if ((f.rule || layout === 'section') && !hasHeroImage) {
         const rw = 9;
         shapes.push({ kind: 'rect', x: left ? a.x : 50 - rw / 2, y: a.y + a.h * 0.6, w: rw, h: 1, fill: f.heroMode === 'fill' ? 'bg' : 'primary' });
       }
-      if (body) boxes.push({ x: a.x, y: a.y + a.h * 0.66, w: a.w, h: a.h * 0.3, text: body, size: 30, color: f.heroMode === 'fill' ? 'bg' : 'muted', align: left ? 'left' : 'center', valign: 'top' });
+      if (body) boxes.push({ x: a.x, y: a.y + a.h * 0.66, w: a.w, h: a.h * 0.3, text: body, size: 30, color: hasHeroImage || f.heroMode === 'fill' ? 'bg' : 'muted', align: left ? 'left' : 'center', valign: 'top' });
     }
     return addExtras({ layout, design, shapes, boxes, images, number: false });
   }
 
   // ---- full-bleed picture with the title on a strip ----
   if (layout === 'full-picture') {
-    if (clean(slide.imageRef)) images.push({ x: 0, y: 0, w: 100, h: 100, ref: slide.imageRef, fit: 'cover' });
-    else shapes.push({ kind: 'rect', x: 0, y: 0, w: 100, h: 100, fill: 'primary', alpha: 0.18 });
-    shapes.push({ kind: 'rect', x: 0, y: 70, w: 100, h: 30, fill: 'text', alpha: 0.6 });
+    const full = { x: 0, y: 0, w: 100, h: 100 };
+    if (clean(slide.imageRef)) images.push(composedImage(full, IMAGE_FITS.includes(hint.imageFit) ? hint.imageFit : 'cover'));
+    else shapes.push({ kind: 'rect', ...full, fill: 'primary', alpha: 0.18 });
+    if (scrim) shapes.push({ kind: 'rect', ...full, fill: 'text', alpha: scrim, overlay: true });
+    else shapes.push({ kind: 'rect', x: 0, y: 70, w: 100, h: 30, fill: 'text', alpha: 0.6, overlay: true });
     boxes.push({ x: 6, y: 72, w: 88, h: body ? 13 : 24, text: title, size: tSize, bold: true, color: 'bg', align: 'left', valign: body ? 'bottom' : 'middle' });
     if (body) boxes.push({ x: 6, y: 86, w: 88, h: 11, text: body, size: SMALL + 2, color: 'bg', align: 'left', valign: 'top' });
     return addExtras({ layout, design, shapes, boxes, images, number: false });
@@ -234,6 +299,7 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
   }
   const c = f.titleOnBand ? { x: a.x, y: a.y, w: a.w, h: a.h } : { x: a.x, y: a.y + 20, w: a.w, h: a.h - 20 };
   const gap = 4;
+  const bodySize = density === 'dense' ? SMALL + 2 : density === 'calm' ? BODY + 2 : BODY;
 
   switch (layout) {
     case 'agenda': {
@@ -249,8 +315,8 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
     }
     case 'two-column': {
       const w = (c.w - gap) / 2;
-      if (body) boxes.push({ x: c.x, y: c.y, w, h: c.h, text: body, size: BODY, color: 'muted', align: 'left', valign: 'top' });
-      if (bullets.length) boxes.push({ x: c.x + w + gap, y: c.y, w, h: c.h, bullets, size: BODY, color: 'text', align: 'left', valign: 'top' });
+      if (body) boxes.push({ x: c.x, y: c.y, w, h: c.h, text: body, size: bodySize, color: 'muted', align: 'left', valign: 'top' });
+      if (bullets.length) boxes.push({ x: c.x + w + gap, y: c.y, w, h: c.h, bullets, size: bodySize, color: 'text', align: 'left', valign: 'top' });
       break;
     }
     case 'comparison':
@@ -301,20 +367,68 @@ function plan(slide, { designId = 'clean', aspect = '16:9', titleSize = 44 } = {
       break;
     }
     case 'picture': {
-      const w = (c.w - gap) / 2;
-      if (clean(slide.imageRef)) images.push({ x: c.x, y: c.y, w, h: c.h, ref: slide.imageRef, fit: 'contain' });
-      else shapes.push({ kind: 'rect', x: c.x, y: c.y, w, h: c.h, fill: 'primary', alpha: 0.1 });
-      const tx = c.x + w + gap;
-      if (bullets.length) boxes.push({ x: tx, y: c.y, w, h: body ? c.h * 0.6 : c.h, bullets, size: BODY, color: 'text', align: 'left', valign: 'top' });
-      if (body) boxes.push({ x: tx, y: bullets.length ? c.y + c.h * 0.62 : c.y, w, h: bullets.length ? c.h * 0.38 : c.h, text: body, size: bullets.length ? SMALL + 2 : BODY, color: 'muted', align: 'left', valign: 'top' });
+      const hasImage = Boolean(clean(slide.imageRef));
+      const role = IMAGE_ROLES.includes(hint.imageRole) ? hint.imageRole : 'supporting';
+      const fit = IMAGE_FITS.includes(hint.imageFit) ? hint.imageFit : (role === 'supporting' ? 'contain' : 'cover');
+      const side = IMAGE_SIDES.includes(hint.imageSide) ? hint.imageSide : 'right';
+      if (hasImage && role === 'background') {
+        const full = { x: 0, y: 0, w: 100, h: 100 };
+        images.push(composedImage(full, IMAGE_FITS.includes(hint.imageFit) ? hint.imageFit : 'cover'));
+        shapes.push({ kind: 'rect', ...full, fill: 'text', alpha: scrim || 0.5, overlay: true });
+        boxes.push({ x: 6, y: 62, w: 88, h: 18, text: title, size: tSize, bold: true, color: 'bg', align: 'left', valign: 'bottom' });
+        if (body) boxes.push({ x: 6, y: 80, w: 88, h: 14, text: body, size: SMALL + 2, color: 'bg', align: 'left', valign: 'top' });
+        break;
+      }
+      const emphasis = hint.emphasis;
+      let share = role === 'hero' || emphasis === 'image' ? 0.62
+        : role === 'spotlight' ? 0.56 : emphasis === 'content' ? 0.42 : 0.48;
+      share = Math.max(0.34, Math.min(0.68, share));
+      let ir; let tr;
+      if (side === 'top' || side === 'bottom') {
+        const ih = c.h * share;
+        if (side === 'top') {
+          ir = { x: c.x, y: c.y, w: c.w, h: ih };
+          tr = { x: c.x, y: c.y + ih + gap, w: c.w, h: c.h - ih - gap };
+        } else {
+          tr = { x: c.x, y: c.y, w: c.w, h: c.h - ih - gap };
+          ir = { x: c.x, y: tr.y + tr.h + gap, w: c.w, h: ih };
+        }
+      } else {
+        const iw = (c.w - gap) * share;
+        if (side === 'left') {
+          ir = { x: c.x, y: c.y, w: iw, h: c.h };
+          tr = { x: c.x + iw + gap, y: c.y, w: c.w - iw - gap, h: c.h };
+        } else {
+          tr = { x: c.x, y: c.y, w: c.w - iw - gap, h: c.h };
+          ir = { x: tr.x + tr.w + gap, y: c.y, w: iw, h: c.h };
+        }
+      }
+      if (hasImage) images.push(composedImage(ir, fit));
+      else shapes.push({ kind: 'rect', ...ir, fill: 'primary', alpha: 0.1 });
+      if (variant === 'editorial') {
+        shapes.push({ kind: 'rect', x: Math.min(99, tr.x - (side === 'right' ? 1.5 : 0)), y: tr.y, w: 0.8, h: tr.h, fill: 'primary', alpha: 0.8 });
+      }
+      const textSize = density === 'dense' ? SMALL : BODY;
+      if (bullets.length) boxes.push({ ...tr, h: body ? tr.h * 0.6 : tr.h, bullets, size: textSize, color: 'text', align: 'left', valign: 'top' });
+      if (body) boxes.push({
+        ...tr,
+        y: bullets.length ? tr.y + tr.h * 0.63 : tr.y,
+        h: bullets.length ? tr.h * 0.37 : tr.h,
+        text: body,
+        size: bullets.length ? SMALL : textSize,
+        color: 'muted', align: 'left', valign: 'top',
+      });
       break;
     }
     default: { // bullets
-      if (bullets.length) boxes.push({ x: c.x, y: c.y, w: c.w, h: body ? c.h * 0.7 : c.h, bullets, size: BODY + 2, color: 'text', align: 'left', valign: 'top' });
-      if (body) boxes.push({ x: c.x, y: bullets.length ? c.y + c.h * 0.74 : c.y, w: c.w, h: bullets.length ? c.h * 0.26 : c.h, text: body, size: bullets.length ? SMALL + 2 : BODY + 2, color: 'muted', align: 'left', valign: 'top' });
+      if (bullets.length) boxes.push({ x: c.x, y: c.y, w: c.w, h: body ? c.h * 0.7 : c.h, bullets, size: bodySize + 2, color: 'text', align: 'left', valign: 'top' });
+      if (body) boxes.push({ x: c.x, y: bullets.length ? c.y + c.h * 0.74 : c.y, w: c.w, h: bullets.length ? c.h * 0.26 : c.h, text: body, size: bullets.length ? SMALL + 2 : bodySize + 2, color: 'muted', align: 'left', valign: 'top' });
     }
   }
   return addExtras({ layout, design, shapes, boxes, images, number: true });
 }
 
-module.exports = { DESIGNS, DESIGN_IDS, LAYOUTS, HERO, ASPECT_RATIO, plan, columnsFor, richRuns, richText };
+module.exports = {
+  DESIGNS, DESIGN_IDS, LAYOUTS, HERO, ASPECT_RATIO, IMAGE_ROLES, IMAGE_SIDES, IMAGE_FITS, FOCAL_POINTS, DENSITIES, EMPHASES, VARIANTS,
+  plan, columnsFor, cropFor, richRuns, richText,
+};

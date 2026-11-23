@@ -6,6 +6,7 @@ const { generateOutline, generateDeck } = require('../../services/presentations/
 const { text, clampInt, normalizeOutline, DESIGN_IDS } = require('../../services/presentations/schema');
 const { getBrand, resolveThemeForUser } = require('../../services/presentations/store');
 const { addDeckPlaceholders } = require('../../services/presentations/placeholders');
+const { remixDeck } = require('../../services/presentations/design');
 const { startJob } = require('../../services/presentations/jobs');
 const { resolveRequestedModel } = require('../../utils/userModelSelection');
 const { sendError } = require('./shared');
@@ -74,6 +75,11 @@ router.post('/create', async (req, res) => {
           warning = withPictures.warning;
         }
         if (signal.aborted) return null;
+        // Compose after pictures exist: the pass can size, crop and place them instead of dropping them into a fixed box.
+        setProgress(95, 'Composing each slide');
+        const remixed = await remixDeck(deck, { userId: req.user.id, deps });
+        if (signal.aborted) return null;
+        deck = remixed.deck;
         return { deck, outline, warning };
       },
     });

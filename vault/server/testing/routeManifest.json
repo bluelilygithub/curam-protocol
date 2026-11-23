@@ -1759,6 +1759,9 @@
   "POST /api/presentations/rewrite-slide": {
    "class": "authed"
   },
+  "POST /api/presentations/remix-design": {
+   "class": "authed"
+  },
   "POST /api/presentations/placeholders": {
    "class": "authed"
   },
