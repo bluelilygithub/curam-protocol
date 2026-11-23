@@ -55,7 +55,11 @@ async function getFinnhubQuote(symbol) {
   const current = Number(data.c);
   const previousClose = Number(data.pc);
   if (!current || current <= 0) throw new Error(`Finnhub: no price for ${sym}`);
-  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'USD', source: 'finnhub' };
+  // tradingDay: the session the quote belongs to, in New York time (Finnhub `t` is unix seconds).
+  const tradingDay = Number(data.t) > 0
+    ? new Date(Number(data.t) * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    : null;
+  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'USD', source: 'finnhub', tradingDay };
 }
 
 async function getEarningsCalendar(symbol, fromDate, toDate) {
@@ -110,7 +114,8 @@ async function getAlphaVantageQuote(symbol) {
   const current = Number(gq['05. price']);
   const previousClose = Number(gq['08. previous close']);
   if (!current || current <= 0) throw new Error(`Alpha Vantage: zero price for ${sym}`);
-  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'AUD', source: 'alphavantage' };
+  const tradingDay = /^\d{4}-\d{2}-\d{2}$/.test(gq['07. latest trading day'] || '') ? gq['07. latest trading day'] : null;
+  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'AUD', source: 'alphavantage', tradingDay };
 }
 
 // ─── Gold spot (metalpriceapi.com — 100 req/month free tier) ─────────────────

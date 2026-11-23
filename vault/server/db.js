@@ -3513,6 +3513,22 @@ async function initSchema() {
       ON share_symbol_snapshots ("userId", symbol, "recordedAt" DESC)
   `);
 
+  // One close per index proxy (QQQ, SOXX, STW) per trading day, kept permanently: the
+  // observation rows that also carry index moves are pruned at 45 days, too short for beta.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_benchmark_closes (
+      symbol            TEXT NOT NULL,
+      "tradingDay"      DATE NOT NULL,
+      currency          TEXT NOT NULL,
+      "closeNative"     NUMERIC(18, 6) NOT NULL,
+      "prevCloseNative" NUMERIC(18, 6),
+      "usdAud"          NUMERIC(12, 6),
+      "closeAud"        NUMERIC(18, 6),
+      "recordedAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (symbol, "tradingDay")
+    )
+  `);
+
   await pool.query(`
     DO $$
     BEGIN

@@ -12,6 +12,7 @@ const {
 } = require('../services/portfolioAlerts');
 const { generateDailyBriefing, generateMonthlySummary, generateObservation } = require('../services/sharesNewsService');
 const { reportSharesCron } = require('../services/SuggestionService');
+const { recordBenchmarkCloses } = require('../services/sharesBenchmarks');
 const sendEmail = require('../utils/sendEmail');
 
 const DROP_ALERT_KEY = 'shares_daily_drop_alert_pct';
@@ -21,6 +22,7 @@ let usCronTask = null;
 let newsCronTask = null;
 let observationCronTask = null;
 let summaryMonthCronTask = null;
+let asxBenchmarkCronTask = null;
 
 async function getWorkspaceTimezone() {
   try {
@@ -311,6 +313,7 @@ async function startSharesCron() {
   if (newsCronTask) newsCronTask.stop();
   if (observationCronTask) observationCronTask.stop();
   if (summaryMonthCronTask) summaryMonthCronTask.stop();
+  if (asxBenchmarkCronTask) asxBenchmarkCronTask.stop();
 
   const tz = await getWorkspaceTimezone();
 
@@ -330,8 +333,17 @@ async function startSharesCron() {
     () => withCronLock('shares-us', async () => {
       await runSharesPoll(['NYSE', 'NASDAQ']);
       await checkDailyDropAlerts();
+      await recordBenchmarkCloses(['nasdaq', 'sox']);
     }),
     { timezone: 'America/New_York' }
+  );
+
+  // ASX benchmark (STW) close: once a day, Tue–Sat 5:05 AM, after each Mon–Fri session.
+  // One Alpha Vantage call a day (25/day cap shared with the ASX holding polls).
+  asxBenchmarkCronTask = cron.schedule(
+    '5 5 * * 2-6',
+    () => withCronLock('shares-asx-benchmark', () => recordBenchmarkCloses(['asx'])),
+    { timezone: tz }
   );
 
   // News briefings: 4 AM daily (after overnight US session closes)
@@ -391,7 +403,7 @@ async function startSharesCron() {
     { timezone: tz }
   );
 
-  console.log(`[shares-cron] ASX: 5 AM + 1 PM (${tz}) | US: hourly 10:00–16:00 ET Mon–Fri | News: 4 AM | Observation: 7 AM | Monthly summary: 1st 4:30 AM (${tz})`);
+  console.log(`[shares-cron] ASX: 5 AM + 1 PM (${tz}) | US: hourly 10:00–16:00 ET Mon–Fri | News: 4 AM | Observation: 7 AM | Monthly summary: 1st 4:30 AM | ASX benchmark: Tue–Sat 5:05 AM (${tz})`);
 }
 
 module.exports = { startSharesCron, runSharesPoll, checkDailyDropAlerts };
