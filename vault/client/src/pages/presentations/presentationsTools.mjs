@@ -25,7 +25,7 @@ export const GROUP_TIPS = {
 export const TOOL_TIPS = {
   create: 'Write a brief, set the audience, tone, length and slide count, and optionally review the outline first. Low-cost AI placeholder pictures can be added, then a deterministic design pass composes each slide.',
   import: 'Pull text and pictures from a PDF, Word document, text file, web page or images. A .pptx/.potx file opens straight into the slide editor as an editable deck.',
-  templates: 'Pick a design (how slides are laid out and decorated) and a colour theme. Save your own colours, import them from PowerPoint, or apply your Brand Kit on top.',
+  templates: 'Preview designs on your own slides, then apply one. Pick a colour theme, save your own colours, import them from PowerPoint, or apply your Brand Kit on top.',
   slides: 'Change the words, pictures, layout and order of the slides. Generate and preview AI pictures before inserting them, add shapes, charts, tables and inline formatting, rewrite one slide, Remix design for better composition, and undo or redo edits. Presenter view shows notes, the next slide and a timer.',
   export: 'Download the deck as an editable PPTX with speaker notes, a PDF with notes pages, an HTML preview or a zip of PNGs with notes.txt. Finished files can be downloaded again.',
   decks: 'Open saved decks, duplicate or delete them, roll back to a saved version (including autosaves), re-download exports, and see decks opened recently on this device.',
@@ -35,7 +35,7 @@ export const TOOL_TIPS = {
 export const TOOL_BLURBS = {
   create: 'A brief in plain words is enough. Add audience, tone, length and slide count, or review the outline before the deck is written.',
   import: 'Up to 10 files at once, or one web page. Extracted text is editable; PowerPoint files become editable slides.',
-  templates: 'A design lays out and decorates every slide; a colour theme sets colours, font and title size. Your Brand Kit can be laid over the top.',
+  templates: 'See each design previewed on your own slides before you apply it. A colour theme sets colours, font and title size; your Brand Kit can be laid over the top.',
   slides: 'Edit words, pictures, shapes, charts, tables and notes, or Remix design to let the deck recompose itself. Undo or redo with the buttons or Ctrl+Z outside a text field, then press Present for the full-screen show.',
   export: 'PPTX keeps the words editable with speaker notes; PDF, HTML and PNGs render from the same preview and include notes pages.',
   decks: 'Saved decks live on the server with version history and re-downloadable exports. Recent decks are an opt-in browser-only list.',
@@ -68,13 +68,13 @@ export const TOOL_HELP = {
   templates: {
     what: 'Choose the look of the deck: a design for the layout and decoration, and a colour theme.',
     features: [
-      'Eight designs: Clean, Underline, Banded, Sidebar, Split, Framed, Bold and Corner, each shown on sample slides',
+      'Eight designs: Clean, Underline, Banded, Sidebar, Split, Framed, Bold and Corner, shown on sample slides and, when a deck is open, previewed on your own slides before you apply one',
       'Six built-in colour themes: Paper, Ink, Warm, Ocean, Forest and Mono; any design works with any colours',
       'Save a theme with your own colours, font and title size',
       'Importing a .pptx/.potx takes its colours and fonts; slides themselves open in the editor as editable deck slides',
 
       'Brand Kit is an override on top of the chosen theme',
-      'The current deck is previewed so you can see the effect',
+      'The current deck is previewed so you can see the effect; picking a design card previews it there, and Apply commits it to the deck',
     ],
   },
   slides: {
@@ -84,7 +84,9 @@ export const TOOL_HELP = {
       'Thirteen layouts: Title, Section header, Bullets, Agenda, Two column, Comparison, Three columns, Big numbers, Quote, Timeline, Picture, Full picture and Closing',
       'Comparison, Three columns and Big numbers have their own column boxes',
       'Undo and redo with the buttons or Ctrl+Z / Ctrl+Shift+Z outside a text field; duplicate, add, delete and reorder slides',
-      'Add extra pictures and shapes, bar/line/pie charts, tables, slide backgrounds and inline bold/italic/underline formatting',
+      'Add extra pictures and shapes, bar/line/pie charts, tables and slide backgrounds (type a full hex colour such as #ffffff); hover any field for a plain-English tip',
+      'Inline formatting adds bold, italic, underline and line breaks to the heading, body and points: switch it on, edit in the Formatted… boxes, and the plain fields plus the preview stay in sync',
+      'Extra pictures and shapes use X / Y for their top-left corner and W / H for size, each a percentage of the slide instead of drag-and-drop',
       'Ask the model to rewrite one slide in place, or describe a small AI picture and generate one',
       'Generated AI pictures wait in a tray: preview each one, then Add to slide or Use as slide picture. Pictures added automatically with a new deck or slide can be previewed and promoted here too',
       'Remix design re-runs the composition pass on the whole deck: it changes layout, picture treatment and text density, but not your words. No drag-and-drop is needed',

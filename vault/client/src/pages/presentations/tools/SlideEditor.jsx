@@ -14,15 +14,16 @@ import {
 } from '../shared';
 
 /** A one-item-per-line box that keeps what is typed (spaces, new lines) and hands the deck the cleaned list (lines.mjs). */
-function LinesField({ lines, onLines, ...props }) {
+const LinesField = React.forwardRef(function LinesField({ lines, onLines, ...props }, ref) {
   const [draft, setDraft] = useState(() => (lines || []).join('\n'));
   const joined = (lines || []).join('\n');
   useEffect(() => { setDraft((d) => syncDraft(d, lines)); }, [joined]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <VoiceInput type="textarea" value={draft} onChange={(v) => { setDraft(v); onLines(parseLines(v)); }} append {...props} />;
-}
+  return <VoiceInput ref={ref} type="textarea" value={draft} onChange={(v) => { setDraft(v); onLines(parseLines(v)); }} append {...props} />;
+});
 
 const escapeRich = (value) => stripRich(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 const placeholderHtml = (value, placeholder) => (value || '' ? escapeRich(value) : `<span style="opacity:.55">${escapeRich(placeholder)}</span>`);
+const geometryTip = (what) => `${what}: X and Y put its top-left corner as a percentage across and down the slide. W and H are its width and height as a percentage of the slide. There is no drag-and-drop canvas; these numbers place it precisely.`;
 
 /** A tiny bold/italic/underline editor. The deck stores only the five allowed tags; the server sanitises them again. */
 function RichField({ value, onChange, label, placeholder, rows = 2 }) {
@@ -35,6 +36,9 @@ function RichField({ value, onChange, label, placeholder, rows = 2 }) {
   const emit = () => { if (ref.current) onChange(ref.current.innerHTML.replace(/<span style="opacity:.55">.*?<\/span>/g, '')); };
   const command = (cmd, arg) => {
     ref.current?.focus();
+    if (typeof document.execCommand !== 'function') return;
+    // Make browsers emit <b>/<i>/<u> rather than <span style="…">, which the v2 schema strips out.
+    document.execCommand('styleWithCSS', false, false);
     document.execCommand(cmd, false, arg);
     emit();
   };
@@ -55,7 +59,7 @@ function RichField({ value, onChange, label, placeholder, rows = 2 }) {
             style={{ ...FIELD_STYLE, borderColor: 'var(--color-border)' }}
           >{glyph}</button>
         ))}
-        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Select text, then choose a style.</span>
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Type here, then select words and choose a style. Shown in the preview and exports.</span>
       </div>
       <div
         ref={ref}
@@ -67,6 +71,12 @@ function RichField({ value, onChange, label, placeholder, rows = 2 }) {
         onFocus={() => { focused.current = true; if (ref.current && !value) ref.current.innerHTML = ''; }}
         onBlur={() => { focused.current = false; emit(); }}
         onInput={emit}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          // A plain Enter makes browsers insert <div>/<p>, which the schema strips. Use the supported <br> instead.
+          e.preventDefault();
+          command('insertLineBreak');
+        }}
         className={`w-full rounded-xl border px-3 py-2 text-sm overflow-auto ${rows > 2 ? 'min-h-[5rem]' : ''}`}
         style={FIELD_STYLE}
       />
@@ -452,7 +462,7 @@ export default function SlideEditor() {
                     <span className="inline-flex items-center gap-1.5">{getIcon('play', { size: 13 })} Present</span>
                   </button>
                 </Tooltip>
-                <Tooltip text="Improve picture treatment and composition from the slide content. No model call, no drag-and-drop, and no words changed.">
+                <Tooltip text="Re-runs the automatic design pass over the whole deck. It re-reads each slide's words and pictures, then adjusts image role (hero, background or supporting), crop and focal point, scrim, side, density and layout fit. It makes no model call, changes no words, and shows the composition score before and after. Use it after changing pictures or headings.">
                   <button type="button" onClick={() => applyRemix(deck)} disabled={remixing || deck.slides.length === 0} className={BTN_SECONDARY} style={{ ...SECONDARY_STYLE, color: 'var(--color-primary)' }}>
                     {remixing ? 'Remixing…' : 'Remix design'}
                   </button>
@@ -506,10 +516,12 @@ export default function SlideEditor() {
                 </div>
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{LAYOUT_HELP[slide.layout]}</p>
                 {slide.design?.variant && slide.design.variant !== 'standard' && (
-                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                    Composition: {slide.design.variant} · {slide.design.imageRole} picture
-                    {slide.design.focalPoint !== 'center' ? ` · ${slide.design.focalPoint} focal point` : ''}
-                  </p>
+                  <Tooltip text="This is the automatic composition chosen for this slide: the decorative variant, how the picture is treated (hero, background, spotlight or supporting) and the part of the picture kept in frame. Remix design refreshes it from the slide content.">
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Composition: {slide.design.variant} · {slide.design.imageRole} picture
+                      {slide.design.focalPoint !== 'center' ? ` · ${slide.design.focalPoint} focal point` : ''}
+                    </p>
+                  </Tooltip>
                 )}
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -521,14 +533,14 @@ export default function SlideEditor() {
                   </label>
                   <label className="block space-y-1">
                     <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Slide background (optional)</span>
-                    <Tooltip text="A hex colour for just this slide. Leave blank to use the colour theme.">
+                    <Tooltip text="A colour for this slide only. Type a full hex code such as #ffffff or #0f172a; it takes effect once complete. Leave it blank to use the deck's colour theme.">
                       <VoiceInput value={slide.background || ''} onChange={(background) => updateSlide(i, { background })} label={`Background for slide ${i + 1}`} placeholder="#ffffff" />
                     </Tooltip>
                   </label>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Tooltip text="Use a small bold, italic and underline toolbar for the heading, body and points. Everything else stays plain text.">
+                  <Tooltip text="Switch on the small B / I / U toolbar for this slide's heading, body and points. Select words in the Formatted… boxes below, then choose a style. Only bold, italic, underline and line breaks are allowed; the plain fields above stay in sync, and the styling appears in the preview and exports. It does not add a separate visible panel on the slide.">
                     <button type="button" onClick={() => setRichOn((v) => ({ ...v, [i]: !v[i] }))} className={BTN_SECONDARY} style={SECONDARY_STYLE}>
                       {richOn[i] ? 'Hide inline formatting' : 'Inline formatting'}
                     </button>
@@ -542,6 +554,9 @@ export default function SlideEditor() {
 
                 {richOn[i] && (
                   <div className={`${ROW} space-y-3`} style={FIELD_STYLE}>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      These boxes mirror the plain fields above. Type here, select words and use B / I / U. The plain text updates too; the styling is kept for the preview and exports.
+                    </p>
                     <RichField
                       label={`Formatted heading ${i + 1}`}
                       value={ensureRich(slide).title}
@@ -626,7 +641,7 @@ export default function SlideEditor() {
                   </Tooltip>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Tooltip text="An image URL, an uploaded asset reference, or a data URL. Graphics handoffs can be pasted here too.">
+                  <Tooltip text="The main picture for this slide: paste an image URL, an uploaded asset reference, a data URL, or a Graphics handoff. On Picture and Full picture layouts it is the large picture; on other layouts it becomes a supporting image. Generated and uploaded pictures fill this in for you, so you rarely need to type here.">
                     <VoiceInput value={slide.imageRef} onChange={(imageRef) => updateSlide(i, { imageRef })} label={`Image for slide ${i + 1}`} placeholder="Image reference (optional)" />
                   </Tooltip>
                   <Tooltip text="Speaker notes are kept in the deck but do not appear on the slide. They appear in the presenter view and every export.">
@@ -675,9 +690,11 @@ export default function SlideEditor() {
                 </div>
 
                 <details className="rounded-xl border p-3 space-y-3" style={FIELD_STYLE}>
-                  <summary className="cursor-pointer text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                    More pictures and shapes ({(slide.images || []).length} pictures, {(slide.shapes || []).length} shapes)
-                  </summary>
+                  <Tooltip text="Open to add extra pictures and simple shapes to this slide. Each one has a precise reference and X / Y / W / H % position. The slide's main picture is managed above.">
+                    <summary className="cursor-pointer text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                      More pictures and shapes ({(slide.images || []).length} pictures, {(slide.shapes || []).length} shapes)
+                    </summary>
+                  </Tooltip>
                   {(slide.images || []).map((image, ii) => (
                     <div key={image.id || ii} className={`${ROW} space-y-2`} style={FIELD_STYLE}>
                       <div className="flex items-center justify-between gap-2">
@@ -696,10 +713,12 @@ export default function SlideEditor() {
                       <VoiceInput value={image.ref} onChange={(ref) => updateList(i, 'images', ii, { ref })} label={`Picture ${ii + 1} reference`} placeholder="Asset path or image URL" />
                       <div className="grid grid-cols-4 gap-2">
                         {['x', 'y', 'w', 'h'].map((key) => (
-                          <label key={key} className="block space-y-1">
-                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{key.toUpperCase()} %</span>
-                            <input type="number" min="0" max="100" value={image[key]} onChange={(e) => updateList(i, 'images', ii, { [key]: Number(e.target.value) })} className={SELECT} style={FIELD_STYLE} />
-                          </label>
+                          <Tooltip key={key} text={geometryTip(`${key.toUpperCase()} — ${key === 'x' ? 'left' : key === 'y' ? 'top' : key === 'w' ? 'width' : 'height'}`)}>
+                            <label className="block space-y-1">
+                              <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{key.toUpperCase()} %</span>
+                              <input type="number" min="0" max="100" value={image[key]} onChange={(e) => updateList(i, 'images', ii, { [key]: Number(e.target.value) })} className={SELECT} style={FIELD_STYLE} aria-label={`Picture ${ii + 1} ${key.toUpperCase()} percent`} />
+                            </label>
+                          </Tooltip>
                         ))}
                       </div>
                     </div>
@@ -727,10 +746,12 @@ export default function SlideEditor() {
                       </div>
                       <div className="grid grid-cols-4 gap-2">
                         {['x', 'y', 'w', 'h'].map((key) => (
-                          <label key={key} className="block space-y-1">
-                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{key.toUpperCase()} %</span>
-                            <input type="number" min="0" max="100" value={shape[key]} onChange={(e) => updateList(i, 'shapes', si, { [key]: Number(e.target.value) })} className={SELECT} style={FIELD_STYLE} />
-                          </label>
+                          <Tooltip key={key} text={geometryTip(`${key.toUpperCase()} — ${key === 'x' ? 'left' : key === 'y' ? 'top' : key === 'w' ? 'width' : 'height'}`)}>
+                            <label className="block space-y-1">
+                              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{key.toUpperCase()} %</span>
+                              <input type="number" min="0" max="100" value={shape[key]} onChange={(e) => updateList(i, 'shapes', si, { [key]: Number(e.target.value) })} className={SELECT} style={FIELD_STYLE} aria-label={`Shape ${si + 1} ${key.toUpperCase()} percent`} />
+                            </label>
+                          </Tooltip>
                         ))}
                       </div>
                     </div>

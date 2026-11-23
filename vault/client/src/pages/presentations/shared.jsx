@@ -134,7 +134,12 @@ const num = (v, fallback, min, max) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
 };
-const hex = (v) => (/^#[0-9a-fA-F]{3,8}$/.test(text(v)) ? text(v) : '');
+// Keep a part-typed colour while someone edits a slide background. The server validates hex colours on save, but
+// setDeck() normalises on every keystroke, so rejecting "#f" here made the field look uneditable.
+const hex = (v) => {
+  const s = text(v);
+  return /^#?[0-9a-fA-F]{0,8}$/.test(s) ? s : '';
+};
 const rich = (v, n = 1200) => text(v).replace(/<\s*\/?\s*(?!b\b|strong\b|i\b|em\b|u\b|br\b)[^>]*>/gi, '').slice(0, n);
 
 function normalizeDesign(raw) {

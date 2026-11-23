@@ -35,6 +35,7 @@ export default function Themes() {
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [previewDesign, setPreviewDesign] = useState(null);
   const fileRef = useRef(null);
 
   const refresh = async () => {
@@ -121,10 +122,19 @@ export default function Themes() {
           <div className={CARD} style={CARD_STYLE}>
             <div className="space-y-1">
               <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Design</h3>
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>How every slide is laid out and decorated: bands, panels, frames and accents. Works with any colour theme below.</p>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                How every slide is laid out and decorated: bands, panels, frames and accents. The cards show each design on your own slides. Click a card to preview it on the right, then press <strong>Use this design</strong> to apply it. Words, pictures and notes never change.
+              </p>
             </div>
             {meta?.designs?.length
-              ? <DesignGallery designs={meta.designs} designId={deck.designId || 'clean'} colours={colours} onPick={chooseDesign} />
+              ? <DesignGallery
+                designs={meta.designs}
+                designId={previewDesign || deck.designId || 'clean'}
+                colours={colours}
+                deck={deck.slides.length ? deck : null}
+                onPick={setPreviewDesign}
+                onApply={(id) => { chooseDesign(id); setPreviewDesign(null); toast('Design applied to this deck.', 'success'); }}
+              />
               : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>The designs could not be loaded. Refresh the page to try again.</p>}
           </div>
 
@@ -226,7 +236,9 @@ export default function Themes() {
 
         <div className={`${CARD} xl:sticky xl:top-4`} style={CARD_STYLE}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Current deck preview</h3>
+            <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+              {previewDesign ? 'Design preview' : 'Current deck preview'}
+            </h3>
             <Tooltip text={meta?.brandKit?.available ? `Apply ${meta.brandKit.label || 'your Brand Kit'} over the selected theme.` : 'No saved Brand Kit yet. Set one up in Graphics first.'}>
               <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
                 <input type="checkbox" checked={applyBrand} onChange={(e) => setApplyBrand(e.target.checked)} />
@@ -234,10 +246,28 @@ export default function Themes() {
               </label>
             </Tooltip>
           </div>
+          {previewDesign && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2" style={FIELD_STYLE}>
+              <span className="flex-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                Previewing <strong style={{ color: 'var(--color-text)' }}>{(meta.designs || []).find((d) => d.id === previewDesign)?.label || previewDesign}</strong> on your slides. The deck is unchanged until you apply it.
+              </span>
+              <Tooltip text="Apply this design to the current deck. Words, pictures and notes stay exactly the same.">
+                <button
+                  type="button"
+                  onClick={() => { chooseDesign(previewDesign); setPreviewDesign(null); toast('Design applied to this deck.', 'success'); }}
+                  className={BTN_PRIMARY}
+                  style={PRIMARY_STYLE}
+                >Apply this design</button>
+              </Tooltip>
+              <Tooltip text="Go back to the real deck and clear this preview.">
+                <button type="button" onClick={() => setPreviewDesign(null)} className="text-xs underline" style={{ color: 'var(--color-primary)' }}>Cancel</button>
+              </Tooltip>
+            </div>
+          )}
           {applyBrand && !meta?.brandKit?.available && <Notice tone="warn">No saved Brand Kit was found, so this override will have no effect.</Notice>}
           {deck.slides.length
-            ? <PresentationPreview deck={{ ...deck, themeId }} />
-            : <EmptyState icon="palette" title="No deck to preview yet" body="Make or open a deck and the theme you pick is shown on it here." />}
+            ? <PresentationPreview deck={{ ...deck, themeId, designId: previewDesign || deck.designId }} />
+            : <EmptyState icon="palette" title="No deck to preview yet" body="Make or open a deck and the designs are shown on its slides here." />}
         </div>
       </div>
     </section>

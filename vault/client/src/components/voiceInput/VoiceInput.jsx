@@ -160,10 +160,10 @@ const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-b
  *    say it consumed it, in which case the field value is left alone.
  *  - `append` adds speech after the existing text (long fields) instead of replacing it.
  */
-export function VoiceInput({
+export const VoiceInput = React.forwardRef(function VoiceInput({
   value, onChange, placeholder = '', type = 'text', parse, onSpoken, append = false, continuous, rows = 3,
   className = '', style, inputRef, label, onKeyDown, onFocus, onBlur, disabled = false, id: idProp, mic = true, ...rest
-}) {
+}, forwardedRef) {
   const ctx = useMic();
   const autoId = useId();
   const fieldId = idProp || autoId;
@@ -184,11 +184,20 @@ export function VoiceInput({
 
   const showErr = ctx?.error?.message && ctx.error.id === idRef.current;
 
+  // Tooltip clones this component with a ref so it can position itself. React 18 does not pass refs to plain
+  // function components, so forward it to the real input as well as any caller-supplied inputRef.
+  const setFieldRef = useCallback((node) => {
+    if (typeof inputRef === 'function') inputRef(node);
+    else if (inputRef) inputRef.current = node;
+    if (typeof forwardedRef === 'function') forwardedRef(node);
+    else if (forwardedRef) forwardedRef.current = node;
+  }, [inputRef, forwardedRef]);
+
   return (
     <div className="relative w-full">
       <Tag
         id={fieldId}
-        ref={inputRef}
+        ref={setFieldRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -226,4 +235,4 @@ export function VoiceInput({
       {showErr && <p className="text-[11px] mt-1" style={{ color: '#b45309' }} role="status">{ctx.error.message}</p>}
     </div>
   );
-}
+});

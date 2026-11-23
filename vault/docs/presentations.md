@@ -23,17 +23,17 @@ It is deliberately **not** a clone of Presenton. It keeps the useful feature set
 | Guide chat | `client/src/pages/presentations/PresentationsGuide.jsx` → `/api/presentations-tutor` (`server/routes/presentationsTutor.js`, `server/services/presentationsTutor.js`) |
 | API | `server/routes/presentations.js` + `server/routes/presentations/*.js`, mounted at `/api/presentations` |
 | Slide geometry | `server/services/presentations/layouts.js`: the 8 design styles and 13 slide layouts, as percent boxes (`plan()`); used by the HTML renderer, the PPTX exporter and the Themes gallery thumbnails |
-| Design gallery | `client/src/pages/presentations/DesignGallery.jsx` (draws the `designs[].samples` from `GET /api/presentations/meta`) |
+| Design gallery | `client/src/pages/presentations/DesignGallery.jsx` (draws `designs[].samples` from `GET /api/presentations/meta`, or the person's own slides via `POST /api/presentations/design-samples`) |
 | Generation and export | `server/services/presentations/*.js` |
 | Tables | `presentation_decks`, `presentation_versions`, `presentation_exports`, `presentation_templates` in `server/db.js` |
 | Recycle bin | `server/services/recycleBin/adapters/presentations.js` |
 
-The page uses the same shell as Contract Review and DocCompare: the shared `ToolSidebar` (tool search with a microphone, `/` to jump to it, groups that open and close, a hint on Slide editor and Export until a deck exists), the “What do you want to do?” start screen, `BackToJobs` and the job bar, then one line describing the open tool. Every control has a tooltip; loading uses `Skeleton`, empty lists use `EmptyState`, routine deletes confirm in place (`InlineDelete`). The preview rebuilds by itself 600 ms after typing stops (Refresh rebuilds at once). Theme pickers show each theme's own colours and names.
+The page uses the same shell as Contract Review and DocCompare: the shared `ToolSidebar` (tool search with a microphone, `/` to jump to it, groups that open and close, a hint on Slide editor and Export until a deck exists), the “What do you want to do?” start screen, `BackToJobs` and the job bar, then one line describing the open tool. Every control has a tooltip — including the new field-level explanations for slide backgrounds, inline formatting, `Image reference`, `X / Y / W / H %`, composition hints and Remix design (`VoiceInput` and `LinesField` now forward refs so `Tooltip` can position itself in React 18). Loading uses `Skeleton`, empty lists use `EmptyState`, routine deletes confirm in place (`InlineDelete`). The preview rebuilds by itself 600 ms after typing stops (Refresh rebuilds at once). Theme pickers show each theme's own colours and names; the design cards preview each design on the current deck before Apply commits it. The client keeps part-typed hex colours while editing a slide background; the server still validates them on save.
 
 ## Onboarding in the app
 
 - **Guided tour** — six Shepherd steps from Settings → Tours → Presentations Tour (which opens `/presentations?tour=1`), or the compass button beside the title. It covers the start jobs, the four tool groups and search, the help/microphone controls, make → edit → export, and the guide chat. Finishing or skipping stores `vault_tour_presentations_completed` so it does not open again; the card in Settings then says “Retake Tour”.
-- **Tooltips** — every group button and every tool button has a plain-English hover tip; the “What do you want to do?” button and the tool search have their own. A `?` button on each open tool gives a longer, tool-specific help box.
+- **Tooltips** — every group button and every tool button has a plain-English hover tip; the “What do you want to do?” button and the tool search have their own. Field-level tips explain the slide background hex colour, Inline formatting, Image reference, X / Y / W / H %, composition hints and Remix design. A `?` button on each open tool gives a longer, tool-specific help box.
 - **Help** — the `(i)` beside the title opens “How Presentations Works” once (tracked by `vault_presentations_info_seen`); the per-tool boxes explain what each tool can and cannot do.
 - **Voice** — the shared `VoiceInputProvider` and microphone are available on the search box, the brief, and the other text inputs, as in the other tool pages.
 - **Guide chat (the helper chatbot)** — `PresentationsGuide.jsx` uses the shared `TutorChat` component and the `presentations` catalogue entry in `server/config/guides.js`, behind `POST /api/presentations-tutor`. It knows the six tools and their order, suggests the right ones for a goal, and has Open buttons; it cannot see, read or change decks, documents or settings. It is a shell helper, not a seventh tool.
@@ -172,6 +172,7 @@ app.use('/api/presentations', requireFeature('presentations'), require('./routes
 | `POST /api/presentations/outline` | Plan an outline for review without writing the deck |
 | `POST /api/presentations/rewrite-slide` | Rewrite one slide in place from an instruction |
 | `POST /api/presentations/remix-design` | Re-run the deterministic composition pass; returns the deck plus before/after scores |
+| `POST /api/presentations/design-samples` | `plan()` geometry for two of the deck's own slides under each design id; powers the visual design previews in Themes |
 | `POST /api/presentations/placeholders` | Make one low-cost AI placeholder picture as an owned asset |
 | `POST /api/presentations/import` | Multipart document/image import; `.pptx/.potx` returns `deck`; `POST /api/presentations/import/url` for a URL |
 | `GET /api/presentations/assets/:userId/:name` | Serve an owned image with the caller's Bearer token; editor thumbnails fetch it as a blob URL |
