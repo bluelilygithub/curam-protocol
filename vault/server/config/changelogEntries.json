@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "92666c03",
+   "fullHash": "92666c03d23f8239c3e4d7745640aaa466d69743",
+   "committedAt": "2026-11-23T20:43:08+10:00",
+   "author": "mrb",
+   "area": "Code Map, Docs",
+   "subject": "Code Map: add the briefing prompt for a Context tab (spec only)",
+   "filesChanged": 1,
+   "insertions": 61,
+   "deletions": 0,
+   "goal": "Keep the agreed prompt for a future Code Map 'Context' tab in the repo, next to the other Code Map kit files, so it can be handed to Claude Code when the feature is built.",
+   "whatChanged": "New specs/code-map/briefing-prompt.md. It specifies a Context tab on Code Map with a Build briefing button that produces a readable report and a Markdown briefing for the Claude app from the latest Code Map run, feature flags and navigation, the last 30 days of changelog and open concerns, an optional Ponytail summary, which outside services are configured (yes/no only, never values), installed package names and CLAUDE.md. It also covers curated about/rules/building-blocks files with a CLAUDE.md hash check, per-admin owner notes, a size limit with trimming, privacy rules with a fixture test, a CLAUDE.md sub-view, a stored history of the last 10 briefings, the route and its admin guard, tests and docs. No code changes.",
+   "filesImpacted": [
+    "specs/code-map/briefing-prompt.md"
+   ],
+   "benefit": "The design for the Context tab is written down and versioned, ready for a Claude Code session to build from.",
+   "concerns": "Spec only: nothing in it is built or tested yet, and it says to use the real names in the code where they differ from the prompt."
+  },
+  {
    "commit": "d174e41f",
    "fullHash": "d174e41f11551fbcf40b54b79b6b2876cd03ffd8",
    "committedAt": "2026-11-23T20:40:46+10:00",
