@@ -813,3 +813,35 @@ test('summary.generateSummary() writes, checks and saves; refuses unfinished pro
   await assert.rejects(summaryLib.generateSummary(3, 7, { ...deps, getModels: async () => ({}) }), (e) => e.status === 503);
   await assert.rejects(summaryLib.generateSummary(3, 7, { ...deps, getProfile: async () => null }), (e) => e.status === 404);
 });
+
+// ── more of the company's own site: legal, people and history pages ─────────────────────
+test('website.pickExtraPages() picks same-site legal, people and history pages by the last part of the path', () => {
+  const home = '<a href="/terms">Terms</a><a href="https://www.x.test/privacy">Privacy</a><a href="/teams">Product</a>'
+    + '<a href="/benefits-sales-team">Benefits</a><a href="https://news.x.test/press">Other host</a><a href="/files/terms.pdf">PDF</a><a href="/history/">History</a>';
+  const picked = website.pickExtraPages('x.test', home, ['https://x.test/our-team', 'https://x.test/about'], ['https://x.test/about']);
+  assert.deepStrictEqual(picked, ['https://x.test/terms', 'https://www.x.test/privacy', 'https://x.test/our-team', 'https://x.test/history']);
+});
+
+test('website.scrapeWebsite() reads the legal pages for the entity name and ABN, but not their phone numbers', async () => {
+  const pages = {
+    '/': '<title>Home | Acme</title><a href="/terms">Terms</a><a href="/privacy">Privacy</a><p>Call 02 9000 1111</p>',
+    '/terms': '<p>A. Acme Widgets Pty Limited ABN 69 161 409 132 ("Acme") provides the service.</p>',
+    '/privacy': '<p>Complain to the OAIC on 1300 363 992.</p>',
+  };
+  const seen = [];
+  const out = await website.scrapeWebsite('acme.test', {
+    fetchHtml: async (url) => { seen.push(url); const p = new URL(url).pathname; return pages[p] ? { statusCode: 200, body: pages[p] } : { statusCode: 404, body: '' }; },
+    normaliseHttpUrl: (u) => u,
+    htmlToText: (html) => html.replace(/<[^>]+>/g, '\n'),
+  });
+  assert.ok(seen.includes('https://acme.test/terms') && seen.includes('https://acme.test/privacy'));
+  assert.equal(out.legalName, 'Acme Widgets Pty Limited', 'the name before the ABN, without the "A." list label');
+  assert.deepStrictEqual(out.abns, ['69 161 409 132']);
+  assert.deepStrictEqual(out.phones, ['02 9000 1111'], 'the regulator number on the privacy page is not the business phone');
+  assert.deepStrictEqual(out.extraPages.map((p) => p.url), ['https://acme.test/terms', 'https://acme.test/privacy']);
+});
+
+test('website.extractAddresses() ignores sentences that only look like addresses', () => {
+  assert.deepStrictEqual(website.extractAddresses('This Privacy Policy replaces the policy previously published (last updated July 2020)\nIt applied until 15 November 2026'), []);
+  assert.deepStrictEqual(website.extractAddresses('Shop 4, 12 King Street\nNewcastle NSW 2300\nAustralia'), ['Shop 4, 12 King Street, Newcastle NSW 2300']);
+});

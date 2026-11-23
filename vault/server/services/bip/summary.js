@@ -55,8 +55,9 @@ function profileFacts(profile) {
 /** The site's own words: homepage, About and Contact text from the saved scrape, each capped. */
 function pageExcerpts(profile) {
   const raw = profile?.seed?.website?.raw || {};
-  return ['homepage', 'about', 'contact']
-    .map((name) => [name, raw[name] ? htmlToText(String(raw[name]), PAGE_CHARS) : ''])
+  const extra = (profile?.seed?.website?.extraPages || []).slice(0, 4)
+    .map((p) => [`${String(p.url || '').replace(/^https?:\/\//, '')}`, String(p.text || '').slice(0, 2000)]);
+  return [...['homepage', 'about', 'contact'].map((name) => [name, raw[name] ? htmlToText(String(raw[name]), PAGE_CHARS) : '']), ...extra]
     .filter(([, t]) => t.trim());
 }
 

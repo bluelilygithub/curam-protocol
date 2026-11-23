@@ -67,19 +67,23 @@ function looksLikePhone(s) {
   return /^0[2-478]\d{8}$/.test(d) || /^1[38]00\d{6}$/.test(d);
 }
 
-const STREET_RE = /(?:street|\bst\b|road|\brd\b|avenue|\bave\b|drive|\bdr\b|lane|\bln\b|\bway\b|place|\bpl\b|crescent|\bcres\b|boulevard|\bblvd\b|parade|\bpde\b|highway|\bhwy\b|level|suite|unit|p\.?\s?o\.?\s?box)/i;
-const STATE_RE = /(?:\b(?:VIC|NSW|QLD|WA|SA|TAS|NT|ACT)\b|Australia|\b\d{4}\b)/i;
+// whole words only ("replaces" is not "place"), with a street number before the street word, or a Level/Suite/Unit/PO Box line
+const STREET_WORD = String.raw`(?:street|st|road|rd|avenue|ave|drive|dr|lane|ln|way|place|pl|crescent|cres|boulevard|blvd|parade|pde|highway|hwy|terrace|tce|court|ct|circuit|cct)`;
+const STREET_RE = new RegExp(String.raw`(?:\b\d+[A-Za-z]?(?:\s*[-/]\s*\d+)?\s+(?:[A-Za-z'.-]+\s+){1,4}${STREET_WORD}\b|^\s*(?:level|suite|unit|shop)\s+\d+|\bp\.?\s?o\.?\s?box\s+\d+)`, 'i');
+// a state (optionally with its postcode) or the country; a bare 4-digit number is too often a year
+const STATE_RE = /\b(?:VIC|NSW|QLD|WA|SA|TAS|NT|ACT|Victoria|New South Wales|Queensland|Tasmania)\b|\bAustralia\b/i;
 
 /** Addresses, read across line breaks: "Level 10, 637 Flinders Street" + "Docklands VIC 3008" (a <br> between them) is one address. */
 function extractAddresses(text) {
   const lines = String(text || '').split(/\n|[!?]|\.\s+(?=[A-Z])/).map((line) => cleanText(line, 200)).filter(Boolean);
   const out = [];
   for (let i = 0; i < lines.length; i += 1) {
-    if (!/\d/.test(lines[i]) || !STREET_RE.test(lines[i])) continue;
+    if (lines[i].length > 120 || !STREET_RE.test(lines[i])) continue;
     for (let n = 0; n < 3 && i + n < lines.length; n += 1) {
       if (!STATE_RE.test(lines[i + n])) continue;
-      const joined = lines.slice(i, i + n + 1).join(', ');
-      if (joined.length <= 200) out.push(joined);
+      // "…, Docklands VIC 3008, Australia" and "…, Docklands VIC 3008" are the same address
+      const joined = lines.slice(i, i + n + 1).join(', ').replace(/,?\s*Australia\.?$/i, '').trim();
+      if (joined.length <= 200 && joined.length > 8) out.push(joined);
       break;
     }
   }
@@ -108,7 +112,10 @@ const LEGAL_SUFFIX = String.raw`(?:Pty\.?\s*Ltd\.?|Pty\.?\s*Limited|Proprietary\
  */
 function extractNames(pages) {
   const text = pages.map((p) => p.text || '').join('\n');
-  const legal = text.match(new RegExp(String.raw`(?:©|\(c\)|copyright)\s*(?:copyright\s*)?(?:(?:19|20)\d{2}(?:\s*[-–]\s*(?:19|20)\d{2})?)?[\s,.]*([A-Z][A-Za-z0-9&'.\- ]{0,60}?\s${LEGAL_SUFFIX})`, 'i'));
+  // a legal page's "SalesLogs Pty Limited ABN 69 161 409 132" first (the registered name), then the footer's "© 2005-2026 SalesLogs Pty Ltd"
+  // the first word needs 2+ letters and no dot, so a list label such as "A." is not taken as part of the name
+  const withAbn = text.match(new RegExp(String.raw`\b([A-Z][A-Za-z0-9&'\-]+(?: [A-Za-z0-9&'.\-]+){0,6}? ${LEGAL_SUFFIX})\s*\(?\s*(?:ABN|ACN)\b`));
+  const legal = withAbn || text.match(new RegExp(String.raw`(?:©|\(c\)|copyright)\s*(?:copyright\s*)?(?:(?:19|20)\d{2}(?:\s*[-–]\s*(?:19|20)\d{2})?)?[\s,.]*([A-Z][A-Za-z0-9&'.\- ]{0,60}?\s${LEGAL_SUFFIX})`, 'i'));
   const fromTitles = pages
     .map((p) => String(p.title || '').split(/\s+[|–—-]\s+/))
     .filter((parts) => parts.length > 1)
@@ -198,16 +205,57 @@ async function fetchPage(normalisedUrl, deps = {}) {
   }
 }
 
-/** Stage 1 website scrape: homepage, /about, /contact and /sitemap.xml. */
+// Further pages worth reading, by the LAST part of their path (so /teams or /benefits-sales-team, product pages, are not "team"):
+// legal pages carry the entity name and ABN ("SalesLogs Pty Limited ABN 69 161 409 132"), the others name people and history.
+const EXTRA_PAGES = [
+  /^(terms|terms-of-use|terms-of-service|terms-and-conditions|legal|disclaimer)$/,
+  /^(privacy|privacy-policy)$/,
+  /^(team|our-team|meet-the-team|leadership|management|founders?|people|our-people|who-we-are)$/,
+  /^(history|our-story|story|company|about-us)$/,
+  /^(press|media|newsroom|in-the-news)$/,
+  /^(case-studies|customers|testimonials)$/,
+  /^(careers|jobs)$/,
+];
+const MAX_EXTRA = 8;
+
+/** Same-site links (homepage hrefs and sitemap URLs) whose last path part matches EXTRA_PAGES, best first, at most MAX_EXTRA. */
+function pickExtraPages(domain, homeHtml, sitemapUrls, alreadyFetched = []) {
+  const host = String(domain).replace(/^www\./i, '').toLowerCase();
+  const seen = new Set(alreadyFetched.map((u) => { try { return new URL(u).pathname.replace(/\/+$/, '') || '/'; } catch { return u; } }));
+  const hrefs = [...String(homeHtml || '').matchAll(/href=["']([^"'#?]+)["']/gi)].map((m) => m[1]);
+  const scored = [];
+  for (const raw of [...hrefs, ...(sitemapUrls || [])]) {
+    let url;
+    try { url = new URL(raw, `https://${domain}/`); } catch { continue; }
+    if (url.hostname.replace(/^www\./i, '').toLowerCase() !== host || !/^https?:$/.test(url.protocol)) continue;
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    if (seen.has(path) || /\.(pdf|jpe?g|png|gif|svg|webp|zip|xml|css|js)$/i.test(path)) continue;
+    const last = path.split('/').pop().toLowerCase();
+    const rank = EXTRA_PAGES.findIndex((re) => re.test(last));
+    if (rank < 0) continue;
+    seen.add(path);
+    scored.push({ rank, url: `${url.origin}${path}` });
+  }
+  return scored.sort((a, b) => a.rank - b.rank).slice(0, MAX_EXTRA).map((s) => s.url);
+}
+
+/** Stage 1 website scrape: homepage, /about, /contact and /sitemap.xml, then up to MAX_EXTRA legal, people and history pages. */
 async function scrapeWebsite(domain, deps = {}) {
   const base = `https://${domain}`;
-  const pages = await Promise.all(PATHS.map((p) => fetchPage(`${base}${p}`, deps)));
+  const firstPages = await Promise.all(PATHS.map((p) => fetchPage(`${base}${p}`, deps)));
+  const sitemapLocs = [...String(firstPages[3]?.html || '').matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
+  const extraUrls = pickExtraPages(domain, firstPages[0]?.html, sitemapLocs, PATHS.map((p) => `${base}${p}`));
+  const extraPages = await Promise.all(extraUrls.map((u) => fetchPage(u, deps)));
+  const pages = [...firstPages, ...extraPages];
   // the HTML pages only: sitemap.xml is a list of URLs and <lastmod> dates, which became "keywords" (hubfs, thumbnail…) and "phones"
-  const live = pages.filter((p, i) => PATHS[i] !== '/sitemap.xml' && p && p.text);
+  const live = pages.filter((p, i) => i !== 3 && p && p.text);
   const allText = live.map((p) => p.text).join('\n');
   const allHtml = live.map((p) => p.html).join('\n');
   const homepage = pages[0] || {};
-  const contact = extractContact(allText);
+  // phones, emails and addresses from the business's own pages, not its legal pages: a privacy policy lists the regulator's
+  // contact details (OAIC 1300 363 992). ABNs are read everywhere, since the legal pages are where they usually are.
+  const ownText = live.filter((p) => !/\/(terms|privacy|legal|disclaimer)[^/]*$/i.test(p.url)).map((p) => p.text).join('\n');
+  const contact = { ...extractContact(ownText), abns: extractContact(allText).abns };
   const analytics = extractAnalytics(allHtml);
   const socialLinks = unique(extractSocialLinks(allHtml).map((l) => l.url)).map((url) => {
     const found = extractSocialLinks(allHtml).find((l) => l.url === url);
@@ -221,16 +269,18 @@ async function scrapeWebsite(domain, deps = {}) {
     keywords: keywords(`${allText} ${meta(allHtml, ['keywords']) || ''}`),
     ...extractFacts(allText),
     ...contact,
-    people: extractPeople(live.find((p) => /about/i.test(p.url))?.text || allText),
+    people: extractPeople(live.filter((p) => /about|team|leadership|management|founder|people|history|story/i.test(p.url)).map((p) => p.text).join('\n') || allText),
     socialLinks,
     analytics,
     tech: techFromHtml(allHtml, analytics),
-    sitemapUrls: [...String(pages[3]?.html || '').matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((m) => m[1]).slice(0, 100),
+    sitemapUrls: sitemapLocs.slice(0, 100),
+    // text of the extra pages for the summary and web research (the first three pages keep their HTML in `raw`)
+    extraPages: extraPages.filter((p) => p && p.text).map((p) => ({ url: p.url, title: p.title || null, text: p.text.slice(0, 4000) })),
     raw: { homepage: (homepage.html || '').slice(0, MAX_HTML), about: (pages[1]?.html || '').slice(0, MAX_HTML), contact: (pages[2]?.html || '').slice(0, MAX_HTML) },
   };
 }
 
 module.exports = {
-  PATHS, meta, extractSocialLinks, extractAnalytics, extractContact, extractAddresses, extractNames, looksLikePhone,
+  PATHS, meta, extractSocialLinks, extractAnalytics, extractContact, extractAddresses, extractNames, looksLikePhone, pickExtraPages,
   extractPeople, extractFacts, techFromHtml, scrapeWebsite,
 };
