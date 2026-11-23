@@ -36,7 +36,7 @@ function createSkillScanRouter({ service, limiter } = {}) {
     try { res.json(await S().config(req.user.id)); } catch (err) { fail(res, err, 'config'); }
   });
 
-  // Which connected model writes the explanation and runs a Deep scan ('' = the workspace default). Settings -> AI & Chat.
+  // Which connected model writes the explanation and runs a Deep scan ('' = the workspace default). Settings -> Models.
   router.get('/model-config', async (req, res) => {
     try { res.json(await S().getModelConfig(req.user.id)); } catch (err) { fail(res, err, 'model config'); }
   });

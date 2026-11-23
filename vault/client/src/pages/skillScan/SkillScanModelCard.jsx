@@ -3,7 +3,7 @@ import api from '../../utils/apiClient';
 import { formatModelSelectLabel } from '../../utils/models';
 
 /**
- * Settings -> AI & Chat (admins): which connected model Skill Scanner uses to explain findings and run a Deep scan. Same pattern as the
+ * Settings -> Models (admins): which connected model Skill Scanner uses to explain findings and run a Deep scan. Same pattern as the
  * Email Follow-Up and Topic Research cards: the first option is the workspace default, the rest are the connected models. An Anthropic
  * (Claude) model is recommended, and a Deep scan needs one; the card says so and warns when the model in use is not one.
  */

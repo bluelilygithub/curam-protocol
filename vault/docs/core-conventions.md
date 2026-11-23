@@ -108,7 +108,7 @@ If the user has no **`vault_models`** row (or empty list), resolver uses the **f
 
 **Frontend:**
 
-- **`useModels`** + Settings **AI & Chat** tab persist **`vault_models`** and **`default_model`** via **`POST /api/settings`**.
+- **`useModels`** + Settings **Models** tab persist **`vault_models`** and **`default_model`** via **`POST /api/settings`**. Settings **AI & Chat** holds only the chat budgets, alerts and upload file types.
 - **`client/src/utils/models.js`** — seed list for reset, tours, **`PROJECT_TYPES` recommendations**, and display helpers. **`getModelShortName(id)`** shows **`emoji name`** only when `id` is in that catalog; unknown ids render as **the raw string** (no silent substitute).
 
 **Exceptions (hardcoded ids allowed):**

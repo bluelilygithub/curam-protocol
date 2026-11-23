@@ -14,7 +14,8 @@ export const SETTINGS_GROUPS = [
     { id: 'Tours', tip: 'Replay the guided tours of each part of Vault.', admin: true },
   ] },
   { id: 'ai', label: 'AI and tools', admin: true, tabs: [
-    { id: 'AI & Chat', tip: 'Which AI models are available and which one is the default.' },
+    { id: 'AI & Chat', tip: 'Chat session budgets, token budget alerts and accepted upload file types.' },
+    { id: 'Models', tip: 'Which AI models are available, the default, and the model each AI job uses.' },
     { id: 'Translation', tip: 'Languages and translation choices.' },
     { id: 'Amazon Search', tip: 'The Amazon store Product Scout searches.' },
     { id: 'Topic Research', tip: 'Which AI model writes Topic Research briefs.' },
