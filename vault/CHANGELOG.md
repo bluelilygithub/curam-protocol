@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-progress)
+
+### Skill Scanner — every scan skill by skill, a time limit that fits, a progress bar
+The one-bundle scan of claude-trading-skills took 5 minutes but read only 14-20%, and gave one capped score. The "Scan each skill separately" option is gone; every scan now goes skill by skill, and a single skill is still scanned as itself. The fixed 15-minute limit likely stopped the 68-skill per-skill run, so the limit now grows with the number of skills (about 27 minutes for 68, capped at 45). A progress bar shows the stage, "Skill 12 of 68: name" and the time left, read live from SkillSpector's output. Before the first skill, it shows an estimate based on your earlier scans.
+
+The same push also explains degraded analysers correctly: the explanation said four were degraded when the scan listed ten.
+
+---
+
 ## 2026-11-24 (skill-scanner-model)
 
 ### Skill Scanner — its own model choice in Settings → AI & Chat

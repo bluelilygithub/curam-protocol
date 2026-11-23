@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b2ba69cc",
+   "fullHash": "b2ba69cc83e124465b1f9a8a44b7381774642cb0",
+   "committedAt": "2026-11-24T07:57:01+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: every scan skill by skill, a time limit sized to the skills, live progress and an estimate",
+   "filesChanged": 11,
+   "insertions": 310,
+   "deletions": 111,
+   "goal": "Make per-skill scanning the only mode and make it finish reliably, with a progress bar and a time estimate.",
+   "whatChanged": "The owner's one-bundle scan of claude-trading-skills took 5 minutes, read 14-20% of the code (SkillSpector's own limits) and gave one capped score, and the per-skill run failed, likely on the fixed 15-minute limit. runner.js now always uses prepareFolder (GitHub archive or uploaded zip unpacked into the temp folder) and --recursive, so the each-skill option and its 'recursive' request field are removed (a folder with one skill is scanned as that skill). countFolder counts sub-skills (folders holding SKILL.md, depth 10, 20,000 entries), files and bytes; --max-skills 100 is passed only when more than 32 sub-skills are counted, and the run is retried without it if SkillSpector replies '--max-skills requires'. timeoutFor sets static 4 min + 20 s per skill (6 min floor, 45 min cap) and deep 6 min + 90 s per skill (20 min floor, 60 min cap), and the timeout message names the skill count. runProcess streams complete output lines to an onLine callback; parseProgressLine reads 'Multi-skill directory detected: N skills found' and '[i/N] Scanning name' (from SkillSpector's cli.py at the pinned commit); runScan reports download, unpack and scan progress with current skill, total, name, time left from the skills finished so far (a rate of 0 counts), files, the time limit and an estimate. The service stores durationMs, skillCount and fileCount (new columns) and estimates from the median seconds per skill of the person's last 10 finished scans of the same mode. The page drops the checkbox, adds ScanProgress (stage, 'Skill i of N: name', time left or estimate, files, limit; single-skill folders follow the estimate up to 95%), shows skills and time taken on saved scans, and the job tile, tour, guide catalogue, (i) box and docs are updated. Tests cover the arguments, limits, counting, progress lines, stages and ETA, and the --max-skills retry; the real 68-skill archive was run through the new runner with a stub scanner (68 skills, --max-skills 100, a 27-minute limit, 352 files).",
+   "filesImpacted": [
+    "server/services/skillScan/runner.js",
+    "server/services/skillScan/index.js",
+    "server/services/skillScan/skillScan.test.js",
+    "server/routes/skillScan.js",
+    "server/db.js",
+    "server/services/skillScanTutor.js",
+    "client/src/pages/SkillScanPage.jsx",
+    "client/src/pages/skillScan/skillScanGoals.mjs",
+    "client/src/pages/skillScan/skillScanTools.mjs",
+    "client/src/utils/tours/skillScanTour.js",
+    "docs/skill-scan.md"
+   ],
+   "benefit": "Every scan gives a verdict per skill and reads far more of the code, finishes within a limit that fits its size, and shows which skill it is on and how long is left.",
+   "concerns": "The progress lines are read from SkillSpector's output format at the pinned commit; a SkillSpector update could change them (the bar then falls back to the estimate). The per-skill run has not yet completed on Railway; the earlier failure's message was not seen, so the 15-minute limit as its cause is likely but unconfirmed. The first scans show no estimate until there is history. Large collections now always take minutes, and a deep scan of one can be costly and run up to 60 minutes. Every scan now downloads and unpacks in Vault rather than handing SkillSpector the link."
+  },
+  {
    "commit": "870bfe51",
    "fullHash": "870bfe51791e66dcc976fdbf3c32620f76096205",
    "committedAt": "2026-11-24T07:44:49+10:00",
