@@ -172,8 +172,8 @@ app.use('/api/presentations', requireFeature('presentations'), require('./routes
 | `POST /api/presentations/rewrite-slide` | Rewrite one slide in place from an instruction |
 | `POST /api/presentations/placeholders` | Make one low-cost AI placeholder picture as an owned asset |
 | `POST /api/presentations/import` | Multipart document/image import; `.pptx/.potx` returns `deck`; `POST /api/presentations/import/url` for a URL |
-| `GET /api/presentations/assets/:userId/:name` | Serve an uploaded image to the preview and editor |
-| `POST /api/presentations/preview` | Render canonical deck HTML without starting a job |
+| `GET /api/presentations/assets/:userId/:name` | Serve an owned image with the caller's Bearer token; editor thumbnails fetch it as a blob URL |
+| `POST /api/presentations/preview` | Render canonical deck HTML without starting a job, inlining owned assets so the sandboxed preview and slideshow can show them |
 | `GET /api/presentations/jobs/:id` | Job status |
 | `POST /api/presentations/jobs/:id/cancel` / `/resume` | Cancel a running job or resume a cancelled one |
 | `GET /api/presentations/jobs/:id/result` | Finished canonical deck or export payload |

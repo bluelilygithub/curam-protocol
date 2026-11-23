@@ -10,7 +10,7 @@ import PresentationPreview from '../PresentationPreview';
 import { parseLines, syncDraft } from '../lines.mjs';
 import {
   ASPECTS, BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, CHART_TYPES, COLUMN_LAYOUTS, FIELD_STYLE, LAYOUTS, LAYOUT_HELP, LAYOUT_LABELS, PRIMARY_STYLE, ROW, SECONDARY_STYLE, SELECT, SHAPE_COLOURS, SHAPE_KINDS, TRANSITIONS,
-  DeckHandoff, InlineDelete, ToolHeader, newSlide, readDeckFile, readJson, stripRich, usePresentations,
+  DeckHandoff, InlineDelete, PresentationImage, ToolHeader, newSlide, readDeckFile, readJson, stripRich, usePresentations,
 } from '../shared';
 
 /** A one-item-per-line box that keeps what is typed (spaces, new lines) and hands the deck the cleaned list (lines.mjs). */
@@ -85,7 +85,7 @@ function PictureTile({ src, label, onPreview, children }) {
         className="block w-full rounded-lg border overflow-hidden transition-opacity duration-200 hover:opacity-70"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
       >
-        <img src={src} alt={label} className="h-24 w-full object-contain" />
+        <PresentationImage src={src} alt={label} className="h-24 w-full object-contain" />
       </button>
       <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{label}</p>
       <div className="flex flex-wrap gap-1">{children}</div>
@@ -796,7 +796,7 @@ export default function SlideEditor() {
             )}
           >
             <div className="space-y-3">
-              <img
+              <PresentationImage
                 src={picturePreview.src}
                 alt="Large picture preview"
                 className="max-h-[60vh] w-full rounded-xl border object-contain"

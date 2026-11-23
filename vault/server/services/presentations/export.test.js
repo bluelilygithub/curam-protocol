@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { exportDeck } = require('./export');
+const { exportDeck, inlineAssets } = require('./export');
 const { renderDeckHtml } = require('./render');
 const { normalizeDeck } = require('./schema');
 const { LAYOUTS, DESIGN_IDS } = require('./layouts');
@@ -28,6 +28,16 @@ async function run() {
   assert.ok(html.includes('&lt;script&gt;'), 'deck text is escaped');
   assert.ok(!html.includes('<script>'));
   assert.equal((html.match(/<section class="slide\b/g) || []).length, 6);
+
+  // The live preview and slideshow cannot send a Bearer header from an iframe, so owned assets are inlined there too.
+  const assetName = 'cc1e84a9-5497-453c-9ba6-2f9e12dca676.png';
+  const inlined = await inlineAssets(`<img src="/api/presentations/assets/7/${assetName}">`, 7, {
+    readFile: async (asset) => {
+      assert.match(asset, /cc1e84a9-5497-453c-9ba6-2f9e12dca676\.png$/);
+      return Buffer.from('abc');
+    },
+  });
+  assert.ok(inlined.includes('data:image/png;base64,YWJj'), 'owned asset URLs become inline data URLs');
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'presentations-export-'));
   try {

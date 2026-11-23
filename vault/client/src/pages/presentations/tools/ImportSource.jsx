@@ -4,7 +4,7 @@ import Tooltip from '../../../components/Tooltip';
 import { VoiceInput } from '../../../components/voiceInput/VoiceInput';
 import {
   BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, PRIMARY_STYLE, ROW, SECONDARY_STYLE,
-  Notice, ToolHeader, readJson, usePresentations,
+  Notice, PresentationImage, ToolHeader, readJson, usePresentations,
 } from '../shared';
 
 const ACCEPT = '.pdf,.doc,.docx,.txt,.md,.markdown,.pptx,.potx,image/*';
@@ -166,7 +166,7 @@ export default function ImportSource() {
             {imageRefs.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {imageRefs.map((ref, i) => (
-                  <img key={`${ref}-${i}`} src={ref} alt={`Imported ${i + 1}`} className="h-20 w-24 rounded-lg border object-cover" style={{ borderColor: 'var(--color-border)' }} />
+                  <PresentationImage key={`${ref}-${i}`} src={ref} alt={`Imported ${i + 1}`} className="h-20 w-24 rounded-lg border object-cover" style={{ borderColor: 'var(--color-border)' }} />
                 ))}
               </div>
             )}

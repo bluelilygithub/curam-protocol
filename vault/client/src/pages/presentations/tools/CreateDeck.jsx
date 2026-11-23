@@ -7,7 +7,7 @@ import { useIcon } from '../../../providers/IconProvider';
 import { parseLines } from '../lines.mjs';
 import {
   ASPECTS, BUILTIN_THEMES, BTN_PRIMARY, BTN_QUIET, BTN_SECONDARY, CARD, CARD_STYLE, FIELD_STYLE, LAYOUTS, LAYOUT_LABELS, PRIMARY_STYLE, ROW, SECONDARY_STYLE, SELECT,
-  Notice, ToolHeader, readJson, themeOptions, usePresentations,
+  Notice, PresentationImage, ToolHeader, readJson, themeOptions, usePresentations,
 } from '../shared';
 
 const TONES = ['', 'Plain and direct', 'Warm and friendly', 'Formal', 'Playful', 'Calm and considered'];
@@ -194,7 +194,7 @@ export default function CreateDeck() {
             {imageRefs.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {imageRefs.slice(0, 8).map((ref, i) => (
-                  <img key={`${ref}-${i}`} src={ref} alt={`Source ${i + 1}`} className="h-16 w-20 rounded-lg border object-cover" style={{ borderColor: 'var(--color-border)' }} />
+                  <PresentationImage key={`${ref}-${i}`} src={ref} alt={`Source ${i + 1}`} className="h-16 w-20 rounded-lg border object-cover" style={{ borderColor: 'var(--color-border)' }} />
                 ))}
               </div>
             )}

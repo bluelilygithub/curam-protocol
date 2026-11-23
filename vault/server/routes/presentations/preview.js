@@ -3,6 +3,7 @@
 const express = require('express');
 const { pool } = require('../../db');
 const { getBrand, getBrandFont, resolveThemeForUser } = require('../../services/presentations/store');
+const { inlineAssets } = require('../../services/presentations/export');
 const { renderDeckHtml } = require('../../services/presentations/render');
 const { sendError } = require('./shared');
 
@@ -17,7 +18,10 @@ router.post('/preview', async (req, res) => {
     if (applyBrand && !brand.available) throw Object.assign(new Error('There is no Graphics Brand Kit to apply yet.'), { status: 400 });
     const theme = await resolveThemeForUser(pool, req.user.id, body.theme || body.deck.themeId, brand, { applyBrand });
     const font = applyBrand ? await getBrandFont(pool, req.user.id, brand) : null;
-    res.json({ html: renderDeckHtml(body.deck, theme, { font }) });
+    // The live preview and slideshow run in a sandboxed iframe, which cannot send the Bearer token either.
+    // Inline owned assets the same way the exported HTML does.
+    const html = await inlineAssets(renderDeckHtml(body.deck, theme, { font }), req.user.id);
+    res.json({ html });
   } catch (err) { sendError(res, err, 'The preview could not be made.'); }
 });
 

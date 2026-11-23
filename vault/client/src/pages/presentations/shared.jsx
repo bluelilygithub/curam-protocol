@@ -22,6 +22,44 @@ export const SHAPE_KINDS = ['rect', 'ellipse', 'triangle', 'line'];
 export const SHAPE_COLOURS = ['bg', 'text', 'primary', 'muted'];
 export const CHART_TYPES = ['bar', 'line', 'pie'];
 
+const PRESENTATION_ASSET = /^\/api\/presentations\/assets\/\d+\/[A-Za-z0-9._-]+(?:\?.*)?$/;
+
+/** An <img> cannot send the Bearer token, so owned presentation assets are fetched and shown from a blob URL. */
+export function PresentationImage({ src, alt = '', ...rest }) {
+  const owned = PRESENTATION_ASSET.test(String(src || ''));
+  const [shown, setShown] = useState(() => (owned ? '' : src || ''));
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    let objectUrl = '';
+    setFailed(false);
+    if (!owned) {
+      setShown(src || '');
+      return undefined;
+    }
+    setShown('');
+    api.get(src)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Asset failed (${res.status})`);
+        const blob = await res.blob();
+        if (!live) return;
+        objectUrl = URL.createObjectURL(blob);
+        setShown(objectUrl);
+      })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [owned, src]);
+
+  if (failed) {
+    return <span {...rest} role="img" aria-label={`${alt} (unavailable)`} style={{ ...(rest.style || {}), display: 'grid', placeItems: 'center', color: 'var(--color-muted)', fontSize: '11px' }}>Unavailable</span>;
+  }
+  if (!shown) {
+    return <span {...rest} role="img" aria-label={alt} style={{ ...(rest.style || {}), background: 'var(--color-surface)' }} />;
+  }
+  return <img {...rest} src={shown} alt={alt} />;
+}
+
 export const FIELD_STYLE = {
   background: 'var(--color-bg)',
   borderColor: 'var(--color-border)',
