@@ -295,7 +295,7 @@ export default function SkillScanPage() {
         {file && <Tooltip text="Remove the uploaded zip."><button type="button" className="underline text-xs" onClick={() => setFile(null)} style={{ color: 'var(--color-primary)' }}>remove</button></Tooltip>}
       </div>
       <div className="flex flex-wrap gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
-        <Tooltip text="Scan each skill in a repository or plugin on its own (up to 32), with a verdict for each. Recommended: one big bundle can hit the scanner's time limits and leave much of it unread.">
+        <Tooltip text="Scan each skill in a repository or plugin on its own (up to 100), with a verdict for each. Vault downloads or unpacks it first, then scans skill by skill. Recommended: one big bundle can hit the scanner's time limits and leave much of it unread.">
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} /> Scan each skill separately</label>
         </Tooltip>
         <Tooltip text={config?.deepAvailable ? TOOL_TIPS.deep : (config?.deepReason || TOOL_TIPS.deep)}>

@@ -55,9 +55,13 @@ test('scanEnv() gives SkillSpector no Vault secrets; only a deep scan gets the A
   } finally { process.env = saved; }
 });
 
-test('buildArgs(): a static scan always passes --no-llm (model analysis is on by default); --recursive caps at 32 skills', () => {
+test('buildArgs(): a static scan always passes --no-llm (model analysis is on by default); each-skill scans (always a local folder) raise --max-skills to 100', () => {
   assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O' }), ['scan', 'T', '-f', 'json', '-o', 'O', '--no-llm']);
-  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O', deep: true, recursive: true }), ['scan', 'T', '-f', 'json', '-o', 'O', '--recursive', '--max-skills', '32']);
+  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O', deep: true, recursive: true }), ['scan', 'T', '-f', 'json', '-o', 'O', '--recursive', '--max-skills', '100']);
+  assert.equal(runner.timeoutFor({}), 6 * 60000);
+  assert.equal(runner.timeoutFor({ recursive: true }), 15 * 60000);
+  assert.equal(runner.timeoutFor({ deep: true, recursive: true }), 20 * 60000);
+  assert.equal(runner.scanEnv({ home: 'h', timeoutMs: 15 * 60000 }).SKILLSPECTOR_MAX_WORKFLOW_SECONDS, '870');
 });
 
 test('normalizeReport(): one skill — verdict, score, counts, findings with file and line', () => {
@@ -255,4 +259,73 @@ test('explainScan(): one model call with the system rules; refuses unfinished sc
   await assert.rejects(summaryLib.explainScan(1, { ...scan, status: 'running' }, deps), (e) => e.status === 409);
   await assert.rejects(summaryLib.explainScan(1, scan, { ...deps, getModels: async () => ({}) }), (e) => e.status === 503);
   await assert.rejects(summaryLib.explainScan(1, scan, { ...deps, callModel: async () => ({ text: 'no json here' }) }), /usable explanation/);
+});
+
+// ── each skill separately: Vault unpacks to a local folder (SkillSpector's --recursive needs one) ──
+const JSZip = require('jszip');
+const os = require('os');
+const zipOf = async (files, opts = {}) => {
+  const z = new JSZip();
+  for (const [name, body] of Object.entries(files)) z.file(name, body, opts[name] || {});
+  return z.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', platform: 'UNIX' });
+};
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'skillscan-test-'));
+
+test('githubArchive(): repo root uses HEAD; a /tree/ link gives the ref and the folder', () => {
+  assert.deepEqual(runner.githubArchive('https://github.com/agiprolabs/claude-trading-skills'), { archiveUrl: 'https://github.com/agiprolabs/claude-trading-skills/archive/HEAD.zip', subPath: '' });
+  assert.deepEqual(runner.githubArchive('https://github.com/o/r/tree/main/skills/pdf'), { archiveUrl: 'https://github.com/o/r/archive/main.zip', subPath: 'skills/pdf' });
+});
+
+test('extractZip(): unpacks files, refuses "..", stops at the size cap while streaming, never creates symlinks', async () => {
+  const d = tmp();
+  try {
+    await runner.extractZip(await zipOf({ 'a/SKILL.md': '# A', 'a/scripts/run.py': 'print(1)' }), d);
+    assert.equal(fs.readFileSync(path.join(d, 'a/scripts/run.py'), 'utf8'), 'print(1)');
+
+    // made with Python's zipfile: entries 'ok.txt', '../evil.txt' and '/abs.txt' (jszip itself would rename '../evil.txt' to 'evil.txt')
+    const EVIL_ZIP = Buffer.from('UEsDBBQAAAAAABA7eF2DFtyMAQAAAAEAAAAGAAAAb2sudHh0eFBLAwQUAAAAAAAQO3hdflME2QUAAAAFAAAACwAAAC4uL2V2aWwudHh0cHduZWRQSwMEFAAAAAAAEDt4XUO+t+gBAAAAAQAAAAgAAAAvYWJzLnR4dGFQSwECFAAUAAAAAAAQO3hdgxbcjAEAAAABAAAABgAAAAAAAAAAAAAAgAEAAAAAb2sudHh0UEsBAhQAFAAAAAAAEDt4XX5TBNkFAAAABQAAAAsAAAAAAAAAAAAAAIABJQAAAC4uL2V2aWwudHh0UEsBAhQAFAAAAAAAEDt4XUO+t+gBAAAAAQAAAAgAAAAAAAAAAAAAAIABUwAAAC9hYnMudHh0UEsFBgAAAAADAAMAowAAAHoAAAAAAA==', 'base64');
+    const evilDir = tmp();
+    await assert.rejects(runner.extractZip(EVIL_ZIP, evilDir), /unsafe path/);
+    assert.ok(!fs.existsSync(path.join(evilDir, 'evil.txt')) && !fs.existsSync(path.join(evilDir, '..', 'evil.txt')), 'nothing written');
+    assert.ok(!fs.existsSync(path.join(d, '..', 'evil.txt')));
+
+    await assert.rejects(runner.extractZip(await zipOf({ 'big.txt': 'x'.repeat(5000) }), tmp(), { maxBytes: 1000 }), /unpacks to more than/);
+
+    const link = tmp();
+    await runner.extractZip(await zipOf({ 'skill/SKILL.md': '# S', 'skill/link': '/etc/passwd' }, { 'skill/link': { unixPermissions: 0o120777 } }), link);
+    assert.ok(fs.existsSync(path.join(link, 'skill/SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(link, 'skill/link')), 'symlink entry skipped');
+    await assert.rejects(runner.extractZip(Buffer.from('not a zip'), tmp()), /could not be opened/);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('prepareFolder(): downloads the GitHub archive, steps into its top folder and the /tree/ folder; refuses a missing folder', async () => {
+  const archive = await zipOf({ 'repo-abc123/skills/pdf/SKILL.md': '# pdf', 'repo-abc123/skills/csv/SKILL.md': '# csv', 'repo-abc123/README.md': 'hi' });
+  const fetched = [];
+  const deps = { fetchFile: async (u, o) => { fetched.push([u, o.maxBytes]); return { buffer: archive }; } };
+  const d1 = tmp();
+  const root = await runner.prepareFolder({ url: 'https://github.com/o/repo', dir: d1 }, deps);
+  assert.equal(path.basename(root), 'repo-abc123');
+  assert.ok(fs.existsSync(path.join(root, 'skills/csv/SKILL.md')));
+  assert.deepEqual(fetched[0], ['https://github.com/o/repo/archive/HEAD.zip', 100 * 1024 * 1024]);
+  const sub = await runner.prepareFolder({ url: 'https://github.com/o/repo/tree/main/skills/pdf', dir: tmp() }, deps);
+  assert.ok(sub.endsWith(path.join('skills', 'pdf')));
+  await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo/tree/main/skills/nope', dir: tmp() }, deps), /is not in that repository/);
+  await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo', dir: tmp() }, { fetchFile: async () => { throw new Error('HTTP 404'); } }), /could not be downloaded from GitHub \(HTTP 404\)/);
+  fs.rmSync(d1, { recursive: true, force: true });
+});
+
+test('runScan(): each skill separately gives SkillSpector the unpacked local folder with --recursive; one bundle still passes the link', async () => {
+  const archive = await zipOf({ 'repo-x/skills/a/SKILL.md': '# a', 'repo-x/skills/b/SKILL.md': '# b' });
+  const f = fakeRun(SINGLE);
+  let seenSkill = null;
+  const run = async (bin, args, opts) => { seenSkill = fs.existsSync(path.join(args[1], 'skills/b/SKILL.md')); return f.run(bin, args, opts); };
+  await runner.runScan({ url: 'https://github.com/o/repo', recursive: true }, { run, fetchFile: async () => ({ buffer: archive }) });
+  const { args } = f.calls[0];
+  assert.ok(args.includes('--recursive') && args.includes('--max-skills'));
+  assert.ok(!/^https:/.test(args[1]), 'a local folder, not the link');
+  assert.equal(seenSkill, true, 'the folder holds the repository');
+  const g = fakeRun(SINGLE);
+  await runner.runScan({ url: 'https://github.com/o/repo' }, { run: g.run });
+  assert.equal(g.calls[0].args[1], 'https://github.com/o/repo');
 });

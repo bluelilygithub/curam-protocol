@@ -20,6 +20,8 @@ const path = require('path');
 const BIN = process.env.SKILLSPECTOR_BIN || 'skillspector';
 const STATIC_TIMEOUT_MS = 6 * 60 * 1000;
 const DEEP_TIMEOUT_MS = 20 * 60 * 1000;
+const EACH_SKILL_TIMEOUT_MS = 15 * 60 * 1000; // a static scan of up to MAX_SKILLS skills, one after another
+const timeoutFor = ({ deep = false, recursive = false } = {}) => (deep ? DEEP_TIMEOUT_MS : recursive ? EACH_SKILL_TIMEOUT_MS : STATIC_TIMEOUT_MS);
 const MAX_ISSUES = 2000;
 const GITHUB_URL_RE = /^https:\/\/github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?(\/tree\/[A-Za-z0-9._/-]{1,300})?\/?$/;
 
@@ -32,7 +34,7 @@ function parseGithubUrl(raw) {
 }
 
 /** The only environment SkillSpector gets. */
-function scanEnv({ home, deep = false, anthropicKey = null, model = null }) {
+function scanEnv({ home, deep = false, anthropicKey = null, model = null, timeoutMs = timeoutFor({ deep }) }) {
   const env = {
     PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
     HOME: home,
@@ -41,7 +43,7 @@ function scanEnv({ home, deep = false, anthropicKey = null, model = null }) {
     PYTHONIOENCODING: 'utf-8',
     NO_COLOR: '1',
     TERM: 'dumb',
-    SKILLSPECTOR_MAX_WORKFLOW_SECONDS: String(Math.floor((deep ? DEEP_TIMEOUT_MS : STATIC_TIMEOUT_MS) / 1000) - 30),
+    SKILLSPECTOR_MAX_WORKFLOW_SECONDS: String(Math.floor(timeoutMs / 1000) - 30),
   };
   // Windows (local development only) needs these to start a process at all
   for (const k of ['SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'USERPROFILE']) if (process.platform === 'win32' && process.env[k]) env[k] = process.env[k];
@@ -53,12 +55,108 @@ function scanEnv({ home, deep = false, anthropicKey = null, model = null }) {
   return env;
 }
 
+// --recursive only works on a LOCAL folder: SkillSpector ignores it for a link or a zip (one bundle) and refuses --max-skills there
+// ("--max-skills requires a local --recursive multi-skill directory"). So an each-skill scan is always given a folder that Vault
+// unpacked itself (prepareFolder below), where --max-skills is allowed. Its default of 32 would leave most of a big repository
+// unscanned (claude-trading-skills has 68 skills), so it is raised to MAX_SKILLS.
+const MAX_SKILLS = 100;
 function buildArgs({ target, outFile, deep = false, recursive = false }) {
   return [
     'scan', target, '-f', 'json', '-o', outFile,
     ...(deep ? [] : ['--no-llm']),
-    ...(recursive ? ['--recursive', '--max-skills', '32'] : []),
+    ...(recursive ? ['--recursive', '--max-skills', String(MAX_SKILLS)] : []),
   ];
+}
+
+const MAX_UNPACKED_BYTES = 100 * 1024 * 1024; // the same caps SkillSpector applies to its own downloads and zips
+const MAX_ENTRIES = 10000;
+
+/** A github.com link -> the archive to download and the folder inside it ("/tree/main/skills/pdf" -> ref main, folder skills/pdf). */
+function githubArchive(url) {
+  const m = String(url).match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\/tree\/([^/]+)((?:\/[^/]+)*))?$/);
+  if (!m) return null;
+  return {
+    archiveUrl: `https://github.com/${m[1]}/${m[2]}/archive/${m[3] ? encodeURIComponent(m[3]) : 'HEAD'}.zip`,
+    subPath: (m[4] || '').replace(/^\/+/, ''),
+  };
+}
+
+/**
+ * Unpack a zip into `dest`, refusing anything unsafe: absolute or drive paths, "..", more than MAX_ENTRIES entries, and more than
+ * MAX_UNPACKED_BYTES unpacked (counted while streaming, so a zip bomb is stopped part-way, not after inflating in memory). Symlinks are
+ * skipped, never created. Every path is checked to stay inside `dest`.
+ */
+async function extractZip(buffer, dest, { maxBytes = MAX_UNPACKED_BYTES, maxEntries = MAX_ENTRIES } = {}) {
+  const JSZip = require('jszip');
+  let zip;
+  try { zip = await JSZip.loadAsync(buffer); } catch (err) { throw Object.assign(new Error(`That zip could not be opened (${err.message}).`), { status: 400 }); }
+  const entries = Object.values(zip.files);
+  if (entries.length > maxEntries) throw Object.assign(new Error(`The zip has more than ${maxEntries} files.`), { status: 400 });
+  const root = path.resolve(dest);
+  let total = 0;
+  for (const e of entries) {
+    // jszip quietly rewrites "../x" to "x"; check the name as written in the zip too, and refuse the whole zip if it tries to escape
+    const original = String(e.unsafeOriginalName || '').replace(/\\/g, '/');
+    if (original.startsWith('/') || /^[A-Za-z]:/.test(original) || original.split('/').includes('..')) {
+      throw Object.assign(new Error('The zip contains an unsafe path, so it was not scanned.'), { status: 400 });
+    }
+    const name = String(e.name || '').replace(/\\/g, '/');
+    if (!name || name.startsWith('/') || /^[A-Za-z]:/.test(name) || name.split('/').includes('..')) {
+      throw Object.assign(new Error('The zip contains an unsafe path, so it was not scanned.'), { status: 400 });
+    }
+    if (e.dir) continue;
+    const mode = Number(e.unixPermissions) || 0;
+    if ((mode & 0o170000) === 0o120000) continue; // a symlink: never created
+    const out = path.resolve(root, name);
+    if (!out.startsWith(root + path.sep)) throw Object.assign(new Error('The zip contains an unsafe path, so it was not scanned.'), { status: 400 });
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    await new Promise((resolve, reject) => {
+      const ws = fs.createWriteStream(out);
+      const st = e.nodeStream('nodebuffer');
+      st.on('data', (chunk) => {
+        total += chunk.length;
+        if (total > maxBytes) {
+          st.pause();
+          ws.destroy();
+          reject(Object.assign(new Error(`The zip unpacks to more than ${Math.round(maxBytes / 1048576)} MB, so it was not scanned.`), { status: 400 }));
+        }
+      });
+      st.on('error', reject);
+      ws.on('error', reject);
+      ws.on('finish', resolve);
+      st.pipe(ws);
+    });
+  }
+}
+
+/** The folder to scan: unpack, step into a lone top folder (GitHub archives always have one), then into the /tree/ folder if asked. */
+async function prepareFolder({ zipBuffer, url, dir }, deps = {}) {
+  let buffer = zipBuffer;
+  let subPath = '';
+  if (!buffer) {
+    const gh = githubArchive(url);
+    if (!gh) throw Object.assign(new Error('That GitHub link cannot be downloaded.'), { status: 400 });
+    subPath = gh.subPath;
+    try {
+      buffer = (await (deps.fetchFile || require('../../utils/safeFetch').fetchPublicFile)(gh.archiveUrl, { maxBytes: MAX_UNPACKED_BYTES, timeoutMs: 60000, accept: 'application/zip' })).buffer;
+    } catch (err) {
+      throw new Error(`The repository could not be downloaded from GitHub (${err.message}). Check the link is public and the branch name is right.`);
+    }
+  }
+  const src = path.join(dir, 'src');
+  fs.mkdirSync(src);
+  await extractZip(buffer, src, deps.limits);
+  let root = src;
+  const top = fs.readdirSync(root, { withFileTypes: true });
+  if (top.length === 1 && top[0].isDirectory()) root = path.join(root, top[0].name);
+  if (subPath) {
+    const sub = path.resolve(root, subPath);
+    if (!sub.startsWith(path.resolve(root) + path.sep) || !fs.existsSync(sub) || !fs.statSync(sub).isDirectory()) {
+      throw Object.assign(new Error(`The folder "${subPath}" is not in that repository.`), { status: 400 });
+    }
+    root = sub;
+  }
+  return root;
 }
 
 /** spawn without a shell; resolves { code, stdout, stderr, timedOut }. Output is capped so a noisy run cannot fill memory. */
@@ -179,16 +277,19 @@ async function runScan({ url = null, zipBuffer = null, deep = false, recursive =
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vault-skillscan-'));
   try {
     let target = target0;
-    if (zipBuffer) {
+    if (recursive) {
+      // each skill separately needs a local folder (see buildArgs)
+      target = await prepareFolder({ zipBuffer, url: target0, dir }, deps);
+    } else if (zipBuffer) {
       target = path.join(dir, 'skill.zip');
       fs.writeFileSync(target, zipBuffer);
     }
     const outFile = path.join(dir, 'report.json');
     const home = path.join(dir, 'home');
     fs.mkdirSync(home);
-    const timeoutMs = deep ? DEEP_TIMEOUT_MS : STATIC_TIMEOUT_MS;
+    const timeoutMs = timeoutFor({ deep, recursive });
     const res = await (deps.run || runProcess)(BIN, buildArgs({ target, outFile, deep, recursive }),
-      { env: scanEnv({ home, deep, anthropicKey: deps.anthropicKey ?? process.env.ANTHROPIC_API_KEY, model }), cwd: dir, timeoutMs });
+      { env: scanEnv({ home, deep, anthropicKey: deps.anthropicKey ?? process.env.ANTHROPIC_API_KEY, model, timeoutMs }), cwd: dir, timeoutMs });
     if (res.timedOut) throw new Error(`The scan took longer than ${Math.round(timeoutMs / 60000)} minutes and was stopped.`);
     let raw = null;
     try { raw = JSON.parse(fs.readFileSync(outFile, 'utf8')); } catch { /* no report written */ }
@@ -203,6 +304,7 @@ async function runScan({ url = null, zipBuffer = null, deep = false, recursive =
 }
 
 module.exports = {
-  BIN, STATIC_TIMEOUT_MS, DEEP_TIMEOUT_MS, GITHUB_URL_RE,
+  BIN, STATIC_TIMEOUT_MS, DEEP_TIMEOUT_MS, EACH_SKILL_TIMEOUT_MS, MAX_SKILLS, GITHUB_URL_RE, timeoutFor,
   parseGithubUrl, scanEnv, buildArgs, runProcess, isInstalled, normIssue, normSkill, normalizeReport, runScan,
+  githubArchive, extractZip, prepareFolder,
 };
