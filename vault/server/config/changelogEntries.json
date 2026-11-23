@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "26e9b433",
+   "fullHash": "26e9b433bcc03b8ea4697581237bdf6d31444c5e",
+   "committedAt": "2026-11-24T07:26:03+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: fix 'Scan each skill separately' on GitHub links (local folder, --max-skills)",
+   "filesChanged": 4,
+   "insertions": 187,
+   "deletions": 11,
+   "goal": "Make per-skill scans work for GitHub links and zips, and scan every skill in a large repository.",
+   "whatChanged": "Reading SkillSpector's cli.py at the pinned commit showed it only splits a scan by skill for a local directory: for a URL or zip it ignores --recursive (one bundle) and exits 2 on --max-skills, which Vault passed, so every each-skill scan of a GitHub link failed. runner.js gains githubArchive (repo -> archive/HEAD.zip, /tree/<ref>/<folder> -> archive/<ref>.zip plus the folder), extractZip (jszip, already a dependency: at most 10,000 entries and 100 MB unpacked counted while streaming, refuses absolute, drive and '..' paths checked on unsafeOriginalName because jszip rewrites '../x' to 'x', skips symlink entries, checks every output path stays inside the folder) and prepareFolder (downloads the archive through safeFetch.fetchPublicFile with redirect-hop checks, 100 MB and 60 s, or uses the uploaded zip; unpacks into the scan's temp folder; steps into a lone top folder and the /tree/ folder, refusing one that is missing). runScan uses prepareFolder for each-skill scans and passes the folder with --recursive --max-skills 100 (the default 32 would skip 36 of claude-trading-skills' 68 skills); timeoutFor gives each-skill static scans 15 minutes (SKILLSPECTOR_MAX_WORKFLOW_SECONDS follows). One-bundle scans still pass the link or zip unchanged. The tooltip says up to 100; docs/skill-scan.md explains why. Tests: archive URLs, extraction (including a Python-made zip with '../evil.txt' and '/abs.txt'), the streaming size cap, symlinks, folder selection, the download error and the each-skill run.",
+   "filesImpacted": [
+    "server/services/skillScan/runner.js",
+    "server/services/skillScan/skillScan.test.js",
+    "client/src/pages/SkillScanPage.jsx",
+    "docs/skill-scan.md"
+   ],
+   "benefit": "Each-skill scans now work for GitHub links and uploaded zips and cover up to 100 skills, giving a verdict per skill and much better coverage than one bundle.",
+   "concerns": "Checked by tests and by unpacking the real claude-trading-skills archive locally (68 skills, under a second); not yet run end to end on Railway. Vault now downloads and unpacks repositories itself for these scans (SkillSpector's own hardened clone is used only for one-bundle scans). A 68-skill static scan may take several minutes; a deep each-skill scan of a large repository may hit the 20-minute limit and is costly. The streaming size check relies on jszip producing chunks as it inflates."
+  },
+  {
    "commit": "2a692bf0",
    "fullHash": "2a692bf00cd19117e4a36f93692a29512c615ed6",
    "committedAt": "2026-11-24T07:12:30+10:00",

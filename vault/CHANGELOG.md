@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-each-skill)
+
+### Skill Scanner — "Scan each skill separately" failed on GitHub links
+Error: "--max-skills requires a local --recursive multi-skill directory". SkillSpector only scans skill by skill in a local folder. For a link or a zip it ignores `--recursive`, which is why the first scan covered only 20%, and it refuses `--max-skills`. Vault now downloads the GitHub archive (or takes the uploaded zip), unpacks it safely into the scan's temporary folder, and scans that folder per skill. The unpacking caps size and file count, refuses `..` and absolute paths, and skips symlinks. The skill limit is raised to 100 (the trading repo has 68 skills) and the timeout to 15 minutes.
+
+---
+
 ## 2026-11-24 (skill-scanner-explain)
 
 ### Skill Scanner — findings explained in context, copy/download, Graphics-style layout
