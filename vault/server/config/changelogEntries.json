@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "38fe39f1",
+   "fullHash": "38fe39f16c98a04e01791d194382e22345e3d484",
+   "committedAt": "2026-11-23T20:27:34+10:00",
+   "author": "mrb",
+   "area": "Business Profiler",
+   "subject": "Business Profiler: ask questions about a profile, with saved Q&As and the microphone",
+   "filesChanged": 13,
+   "insertions": 389,
+   "deletions": 4,
+   "goal": "Let the person ask questions about a business profile in plain words, by typing or speaking, and keep the answers worth keeping.",
+   "whatChanged": "New server/services/bip/ask.js: askProfile builds a prompt from the same data as the summary (summary.profileFacts and pageExcerpts) plus the web-research facts with their quotes and the existing summary, and asks the standard model with a system prompt requiring only the given data, the source of each claim in brackets, research labels kept (company claims said as such, estimates named, press-named founders not called directors), both values where sources disagree, and a plain 'not in the data' with the source that would answer. checkFigures flags figures not in the data; usage logged as bip_ask; markdown headings and bold are stripped. Routes: POST /api/bip/profiles/:id/ask (aiLimiter, stores nothing), GET and POST /profiles/:id/qa (save validates and trims question, answer, model and unverifiedFigures), DELETE /profiles/:id/qa/:qaId; all added to routeManifest. New table bip_qa (userId, profileId with cascade, question, answer, model, unverifiedFigures JSONB, createdAt) with store listQa, saveQa and deleteQa. Profile delete snapshots its Q&As into the recycle-bin payload and restore re-inserts them. New BipAsk.jsx (VoiceInput textarea with mic, four suggested questions, Ask, a pending answer with Save and Discard, saved list newest first with Delete after a confirm) registered as tool 'ask' in the Report group; guide catalogue, tool tips and the 'Check out a business' job gain the step. Tests for the prompt and the answer path.",
+   "filesImpacted": [
+    "server/services/bip/ask.js",
+    "server/services/bip/store.js",
+    "server/routes/bip.js",
+    "server/db.js",
+    "server/services/recycleBin/adapters/bip.js",
+    "server/testing/routeManifest.json",
+    "server/services/bipTutor.js",
+    "server/services/bip/bip.test.js",
+    "client/src/pages/bip/BipAsk.jsx",
+    "client/src/pages/BipPage.jsx",
+    "client/src/pages/bip/bipTools.mjs",
+    "client/src/pages/bip/bipGoals.mjs",
+    "docs/bip.md"
+   ],
+   "benefit": "Questions like 'who runs it?' or 'do the sources agree on where it is?' get a sourced answer from the profile, spoken or typed, and useful answers stay with the profile.",
+   "concerns": "No real model call was made while building (stubbed in tests; full client build passed). Each question is one model call with the whole profile as input. Deleting a saved Q&A is permanent (a confirm is shown; only a profile delete goes to the recycle bin). The figure check covers numbers only, not names or wording. The new routes were not run through crossUserOwnership.test.js, which needs a database."
+  },
+  {
    "commit": "dfdfced9",
    "fullHash": "dfdfced91a3b36cb057baf25a16311f53afb98fb",
    "committedAt": "2026-11-23T20:18:57+10:00",

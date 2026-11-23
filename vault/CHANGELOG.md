@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (bip-ask)
+
+### Business Profiler — ask questions about a profile
+New **Ask about this profile** tool: a question box with the microphone and suggested questions. Answers come from the saved profile only, name their sources, and flag any figure not in the data. Each answer can be saved or discarded; saved Q&As are listed with Delete (new table `bip_qa`, kept with the profile in the recycle bin).
+
+---
+
 ## 2026-11-23 (bip-deeper-search)
 
 Compared with a manual web search, the profile missed the ABN, registration history, NSW base, founders, history and customers. Three changes, one commit each:
