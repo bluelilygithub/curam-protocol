@@ -5898,6 +5898,10 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS skill_scans_user_idx ON skill_scans ("userId", "createdAt" DESC)`);
   // the plain-English explanation in context (services/skillScan/summary.js): { overview, reading, readingReason, groups, nextSteps, model, generatedAt }
   await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS summary JSONB`);
+  // how long a scan took and how big it was, for the estimate shown before and during the next scan
+  await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "durationMs" INTEGER`);
+  await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "skillCount" INTEGER`);
+  await pool.query(`ALTER TABLE skill_scans ADD COLUMN IF NOT EXISTS "fileCount" INTEGER`);
   // a scan cut off by a restart can never finish: show it as failed rather than running for ever
   await pool.query(`UPDATE skill_scans SET status = 'failed', error = 'The server restarted while this scan was running. Run it again.', "finishedAt" = NOW() WHERE status = 'running'`);
   await pool.query(`

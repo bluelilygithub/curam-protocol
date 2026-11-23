@@ -86,6 +86,47 @@ function Issue({ issue }) {
   );
 }
 
+const PHASE_LABEL = { queued: 'Starting', download: 'Downloading from GitHub', unpack: 'Unpacking', scan: 'Scanning', summary: 'Writing the explanation' };
+const minutes = (sec) => (sec == null ? null : sec < 60 ? 'under a minute' : `about ${Math.round(sec / 60)} min`);
+
+/**
+ * Where a running scan is. The scanning stage is a true count ("Skill 12 of 68") from SkillSpector's own "[i/N] Scanning" lines, with time
+ * left from the skills finished so far; before the first skill it uses the estimate from earlier scans (estimateSec) when there is one.
+ * A folder with a single skill prints no count, so that bar follows the estimate (never past 95%) or just shows elapsed time.
+ */
+function ScanProgress({ job }) {
+  const p = job?.progress || {};
+  const elapsed = job?.elapsedSec || 0;
+  let pct = 2;
+  if (p.phase === 'download') pct = 3;
+  else if (p.phase === 'unpack') pct = 6;
+  else if (p.phase === 'scan') {
+    if (p.total && p.current) pct = 8 + 86 * ((p.current - 1) / p.total);
+    else if (p.estimateSec) pct = 8 + 86 * Math.min(0.95, elapsed / p.estimateSec);
+    else pct = 8;
+  } else if (p.phase === 'summary') pct = 96;
+  const where = p.phase === 'scan' && p.current ? `Skill ${p.current} of ${p.total}${p.module ? `: ${p.module}` : ''}`
+    : p.phase === 'scan' && p.total > 1 ? `${p.total} skills found` : PHASE_LABEL[p.phase] || 'Working';
+  const timeText = p.phase === 'summary' ? 'nearly done'
+    : p.etaSec != null ? `${minutes(p.etaSec)} left`
+      : p.estimateSec ? `estimated ${minutes(p.estimateSec)} (from your earlier scans)`
+        : p.phase === 'scan' ? 'no estimate yet (it learns from each scan)' : '';
+  return (
+    <div className="space-y-1.5" role="status" aria-live="polite">
+      <div className="flex flex-wrap justify-between gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+        <span className="min-w-0 truncate">{p.phase === 'scan' ? 'Scanning · ' : ''}{where}</span>
+        <span style={{ color: 'var(--color-muted)' }}>{elapsed}s{timeText ? ` · ${timeText}` : ''}</span>
+      </div>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
+        <div className="h-full transition-all duration-500" style={{ width: `${Math.round(pct)}%`, background: 'var(--color-primary)' }} />
+      </div>
+      {p.phase === 'scan' && (p.files || p.timeoutMin) && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{p.files ? `${p.files} files` : ''}{p.files && p.timeoutMin ? ' · ' : ''}{p.timeoutMin ? `stops after ${p.timeoutMin} min if not finished` : ''}</p>
+      )}
+    </div>
+  );
+}
+
 /** One row per rule: severity, count, where, and the explanation's judgment of it. */
 function RuleGroup({ group, assessed }) {
   const [open, setOpen] = useState(false);
@@ -124,7 +165,6 @@ export default function SkillScanPage() {
   const [config, setConfig] = useState(null);
   const [url, setUrl] = useState('');
   const [file, setFile] = useState(null);
-  const [recursive, setRecursive] = useState(true);
   const [deep, setDeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [job, setJob] = useState(null);
@@ -220,7 +260,6 @@ export default function SkillScanPage() {
       const form = new FormData();
       if (file) form.append('file', file); else form.append('url', url.trim());
       form.append('deep', String(!!deep));
-      form.append('recursive', String(!!recursive));
       const d = await json(await api.postForm('/api/skill-scan/scans', form), 'The scan could not be started.');
       setJobId(d.jobId);
       setJob({ status: 'running', label: 'Starting the scan', elapsedSec: 0 });
@@ -265,7 +304,7 @@ export default function SkillScanPage() {
     <div key={s.id} className="rounded-xl border p-3 flex flex-wrap items-center justify-between gap-3" style={{ ...panel, borderColor: scan?.id === s.id ? 'var(--color-primary)' : 'var(--color-border)' }}>
       <div className="min-w-0">
         <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>{s.fileName || s.source}</p>
-        <p className="text-xs" style={muted}>{dateOf(s.createdAt)} · {s.mode}{s.recursive ? ', each skill' : ''}{s.score != null ? ` · score ${s.score}` : ''}{s.issueCount != null ? ` · ${s.issueCount} findings` : ''}</p>
+        <p className="text-xs" style={muted}>{dateOf(s.createdAt)} · {s.mode}{s.skillCount ? ` · ${s.skillCount} skill${s.skillCount === 1 ? '' : 's'}` : ''}{s.durationMs ? ` · took ${minutes(s.durationMs / 1000)}` : ''}{s.score != null ? ` · score ${s.score}` : ''}{s.issueCount != null ? ` · ${s.issueCount} findings` : ''}</p>
       </div>
       <div className="flex items-center gap-2">
         <VerdictPill recommendation={s.recommendation} status={s.status} small />
@@ -294,10 +333,8 @@ export default function SkillScanPage() {
           onChange={(e) => { const f = e.target.files?.[0] || null; setFile(f); if (f) setUrl(''); e.target.value = ''; }} />
         {file && <Tooltip text="Remove the uploaded zip."><button type="button" className="underline text-xs" onClick={() => setFile(null)} style={{ color: 'var(--color-primary)' }}>remove</button></Tooltip>}
       </div>
+      <p className="text-xs" style={muted}>Every scan goes skill by skill (up to 100 skills), with a verdict for each. A single skill is scanned as itself. Big collections take a few minutes; the progress bar shows which skill it is on.</p>
       <div className="flex flex-wrap gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
-        <Tooltip text="Scan each skill in a repository or plugin on its own (up to 100), with a verdict for each. Vault downloads or unpacks it first, then scans skill by skill. Recommended: one big bundle can hit the scanner's time limits and leave much of it unread.">
-          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} /> Scan each skill separately</label>
-        </Tooltip>
         <Tooltip text={config?.deepAvailable ? TOOL_TIPS.deep : (config?.deepReason || TOOL_TIPS.deep)}>
           <label className="flex items-center gap-2 cursor-pointer" style={{ opacity: config?.deepAvailable ? 1 : 0.5 }}>
             <input type="checkbox" checked={deep} disabled={!config?.deepAvailable} onChange={(e) => setDeep(e.target.checked)} /> Deep scan (AI{config?.model ? `: ${config.model}` : ''})
@@ -311,7 +348,7 @@ export default function SkillScanPage() {
           {getIcon('shield', { size: 14 })} {busy || jobId ? 'Scanning…' : 'Scan'}
         </button>
       </Tooltip>
-      {running && <p className="text-sm" style={muted}>{job.label || 'Scanning'}{job.progress?.phase === 'summary' ? ' — writing the explanation' : ''}… {job.elapsedSec || 0}s</p>}
+      {running && <ScanProgress job={job} />}
     </section>
   );
 
@@ -341,7 +378,7 @@ export default function SkillScanPage() {
           )}
         </div>
         <p className="text-sm break-all" style={{ color: 'var(--color-text)' }}>{scan.fileName || scan.source}{scan.sourceType === 'github' && <> · <a href={scan.source} target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--color-primary)' }}>open on GitHub</a></>}</p>
-        <p className="text-xs" style={muted}>{scan.mode === 'deep' ? `Deep scan (${scan.model || 'AI'})` : 'Static scan'}{scan.recursive ? ', each skill separately' : ''} · {dateOf(scan.finishedAt || scan.createdAt)}{report?.version ? ` · SkillSpector ${report.version}` : ''}</p>
+        <p className="text-xs" style={muted}>{scan.mode === 'deep' ? `Deep scan (${scan.model || 'AI'})` : 'Static scan'}{scan.recursive ? ', skill by skill' : ', one bundle (an older scan)'}{scan.skillCount ? ` · ${scan.skillCount} skills` : ''}{scan.durationMs ? ` · took ${minutes(scan.durationMs / 1000)}` : ''} · {dateOf(scan.finishedAt || scan.createdAt)}{report?.version ? ` · SkillSpector ${report.version}` : ''}</p>
         {scan.status === 'failed' && <p className="text-sm" style={{ color: '#ef4444' }}>{scan.error}</p>}
         {report && (
           <div className="flex flex-wrap gap-2">
@@ -472,7 +509,7 @@ export default function SkillScanPage() {
                   {scans.slice(0, 5).map(scanRow)}
                 </section>
               )}
-              {running && <p className="text-sm" style={muted}>{job.label || 'Scanning'}… {job.elapsedSec || 0}s</p>}
+              {running && <ScanProgress job={job} />}
             </>
           )}
           {tool !== 'start' && (

@@ -36,7 +36,7 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
 
   async function list(userId) {
     const { rows } = await pool.query(
-      `SELECT id, source, "sourceType", "fileName", mode, recursive, status, score, severity, recommendation, "issueCount", error, "createdAt", "finishedAt"
+      `SELECT id, source, "sourceType", "fileName", mode, recursive, status, score, severity, recommendation, "issueCount", error, "durationMs", "skillCount", "createdAt", "finishedAt"
          FROM skill_scans WHERE "userId" = $1 ORDER BY "createdAt" DESC, id DESC LIMIT 200`, [userId]);
     return rows;
   }
@@ -58,8 +58,21 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
     return summary;
   }
 
-  /** Start a scan; resolves { jobId, scanId } at once. input: { url } or { zipBuffer, fileName }, plus deep, recursive. */
-  async function start(userId, { url = null, zipBuffer = null, fileName = null, deep = false, recursive = false }) {
+  /**
+   * Seconds per skill from this person's last 10 finished scans of the same kind (median), for the estimate before and during a scan.
+   * null until there is history.
+   */
+  async function secondsPerSkill(userId, mode) {
+    const { rows } = await pool.query(
+      `SELECT "durationMs", "skillCount" FROM skill_scans
+        WHERE "userId" = $1 AND mode = $2 AND status = 'done' AND "durationMs" > 0 AND "skillCount" > 0
+        ORDER BY "finishedAt" DESC LIMIT 10`, [userId, mode]);
+    const rates = rows.map((r) => r.durationMs / 1000 / r.skillCount).sort((a, b) => a - b);
+    return rates.length ? Math.round(rates[Math.floor(rates.length / 2)] * 10) / 10 : null;
+  }
+
+  /** Start a scan (always skill by skill); resolves { jobId, scanId } at once. input: { url } or { zipBuffer, fileName }, plus deep. */
+  async function start(userId, { url = null, zipBuffer = null, fileName = null, deep = false }) {
     const source = url ? runner.parseGithubUrl(url) : null;
     if (url && !source) throw Object.assign(new Error('Paste a public github.com link, e.g. https://github.com/owner/repo or a /tree/main/folder link.'), { status: 400 });
     if (!url && !zipBuffer) throw Object.assign(new Error('Paste a GitHub link or upload a zip.'), { status: 400 });
@@ -73,24 +86,26 @@ function createSkillScanService({ pool = require('../../db').pool, deps = {} } =
     const { rows } = await pool.query(
       `INSERT INTO skill_scans ("userId", source, "sourceType", "fileName", mode, recursive, model, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'running') RETURNING id`,
-      [userId, source || fileName || 'upload.zip', url ? 'github' : 'zip', fileName ? String(fileName).slice(0, 200) : null, deep ? 'deep' : 'static', !!recursive, model]);
+      [userId, source || fileName || 'upload.zip', url ? 'github' : 'zip', fileName ? String(fileName).slice(0, 200) : null, deep ? 'deep' : 'static', true, model]);
     const scanId = rows[0].id;
     running += 1;
+    const rate = await secondsPerSkill(userId, deep ? 'deep' : 'static').catch(() => null);
     const label = `${deep ? 'Deep' : 'Static'} scan of ${source || fileName || 'the upload'}`;
     const jobId = jobs.startJob(userId, label, async (onProgress) => {
-      onProgress({ phase: deep ? 'deep' : 'static', current: 0, total: 1, module: null });
+      onProgress({ phase: url ? 'download' : 'unpack', current: 0, total: null, module: null });
       try {
-        const { exitCode, report, raw } = await (deps.runScan || runner.runScan)({ url: source, zipBuffer, deep, recursive, model });
+        const { exitCode, report, raw, stats = {} } = await (deps.runScan || runner.runScan)({ url: source, zipBuffer, deep, model, secondsPerSkill: rate }, undefined, onProgress);
         await pool.query(
           `UPDATE skill_scans SET status = 'done', score = $3, severity = $4, recommendation = $5, "issueCount" = $6, report = $7::jsonb,
-                  "exitCode" = $8, "finishedAt" = NOW() WHERE id = $1 AND "userId" = $2`,
-          [scanId, userId, report.score, report.severity, report.recommendation, report.issueCount, JSON.stringify(report), exitCode]);
+                  "exitCode" = $8, "durationMs" = $9, "skillCount" = $10, "fileCount" = $11, "finishedAt" = NOW() WHERE id = $1 AND "userId" = $2`,
+          [scanId, userId, report.score, report.severity, report.recommendation, report.issueCount, JSON.stringify(report), exitCode,
+            stats.durationMs ?? null, stats.skillCount ?? null, stats.fileCount ?? null]);
         const usage = raw?.metadata?.inference_usage;
         if (deep && usage && (Number(usage.input_tokens) || Number(usage.output_tokens))) {
           (deps.logUsage || require('../../utils/logUsage').logUsage)({ userId, model, inputTokens: Number(usage.input_tokens) || 0, outputTokens: Number(usage.output_tokens) || 0, feature: 'skill_scan_deep' });
         }
         // the explanation in context (summary.js); a failure leaves the scan done, and Regenerate can try again
-        onProgress({ phase: 'summary', current: 1, total: 1, module: null });
+        onProgress({ phase: 'summary', current: report.skillCount, total: report.skillCount, module: null });
         await summarise(userId, scanId).catch((err) => console.warn(`[skillScan] explanation for scan ${scanId} not written:`, err.message));
         return { scanId, score: report.score, recommendation: report.recommendation };
       } catch (err) {

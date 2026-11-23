@@ -55,15 +55,6 @@ test('scanEnv() gives SkillSpector no Vault secrets; only a deep scan gets the A
   } finally { process.env = saved; }
 });
 
-test('buildArgs(): a static scan always passes --no-llm (model analysis is on by default); each-skill scans (always a local folder) raise --max-skills to 100', () => {
-  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O' }), ['scan', 'T', '-f', 'json', '-o', 'O', '--no-llm']);
-  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O', deep: true, recursive: true }), ['scan', 'T', '-f', 'json', '-o', 'O', '--recursive', '--max-skills', '100']);
-  assert.equal(runner.timeoutFor({}), 6 * 60000);
-  assert.equal(runner.timeoutFor({ recursive: true }), 15 * 60000);
-  assert.equal(runner.timeoutFor({ deep: true, recursive: true }), 20 * 60000);
-  assert.equal(runner.scanEnv({ home: 'h', timeoutMs: 15 * 60000 }).SKILLSPECTOR_MAX_WORKFLOW_SECONDS, '870');
-});
-
 test('normalizeReport(): one skill — verdict, score, counts, findings with file and line', () => {
   const r = runner.normalizeReport(SINGLE);
   assert.equal(r.multi, false);
@@ -107,35 +98,6 @@ function fakeRun(writeJson, extra = {}) {
   };
 }
 
-test('runScan(): a GitHub link is passed through; exit 1 (risk found) is a normal result; the temporary folder is removed', async () => {
-  const f = fakeRun(SINGLE);
-  const out = await runner.runScan({ url: 'https://github.com/o/r' }, { run: f.run });
-  assert.equal(out.exitCode, 1);
-  assert.equal(out.report.score, 62);
-  const { args, opts } = f.calls[0];
-  assert.equal(args[1], 'https://github.com/o/r');
-  assert.ok(args.includes('--no-llm'));
-  assert.ok(!fs.existsSync(opts.cwd), 'temp folder deleted');
-});
-
-test('runScan(): a zip is written into the temporary folder and scanned from there', async () => {
-  const f = fakeRun(SINGLE);
-  let seen = null;
-  const run = async (bin, args, opts) => { seen = fs.readFileSync(args[1], 'utf8'); return f.run(bin, args, opts); };
-  await runner.runScan({ zipBuffer: Buffer.from('PK-fake') }, { run });
-  assert.equal(seen, 'PK-fake');
-  assert.match(f.calls[0].args[1], /skill\.zip$/);
-});
-
-test('runScan(): refuses bad links and empty input; reports SkillSpector errors, a missing install and timeouts plainly', async () => {
-  await assert.rejects(runner.runScan({ url: 'https://evil.com/x' }, { run: async () => ({}) }), (e) => e.status === 400);
-  await assert.rejects(runner.runScan({}, { run: async () => ({}) }), (e) => e.status === 400);
-  await assert.rejects(runner.runScan({ url: 'https://github.com/o/r' }, fakeRun(null, { code: 2, stderr: 'progress\nValueError: no skills found' })),
-    /could not scan that: .*no skills found/);
-  await assert.rejects(runner.runScan({ url: 'https://github.com/o/r' }, fakeRun(null, { code: -1, stderr: 'spawn ENOENT' })), /not installed/);
-  await assert.rejects(runner.runScan({ url: 'https://github.com/o/r' }, fakeRun(null, { timedOut: true })), /longer than 6 minutes/);
-});
-
 test('isInstalled(): true only when `skillspector --help` succeeds', async () => {
   assert.equal(await runner.isInstalled({ run: async () => ({ code: 0 }) }), true);
   assert.equal(await runner.isInstalled({ run: async () => ({ code: -1 }) }), false);
@@ -167,7 +129,7 @@ test('routes: link or zip (not both), .zip only, deep scans go through the AI li
     r = await fetch(`${base}/scans`, { method: 'POST', body: form({ deep: 'true', recursive: 'true' }, { name: 'skill.zip', body: 'PKxx' }) });
     assert.equal(r.status, 202);
     assert.equal(hits.n, 1, 'a deep scan does');
-    assert.deepEqual(started.map((s) => [s.url, s.zipBuffer, s.fileName, s.deep, s.recursive]), [['https://github.com/o/r', null, null, false, false], [null, 4, 'skill.zip', true, true]]);
+    assert.deepEqual(started.map((s) => [s.url, s.zipBuffer, s.fileName, s.deep, s.recursive]), [['https://github.com/o/r', null, null, false, undefined], [null, 4, 'skill.zip', true, undefined]], 'no each-skill option any more: every scan is skill by skill');
     r = await fetch(`${base}/scans`, { method: 'POST', body: form({}, { name: 'evil.exe', body: 'MZ' }) });
     assert.equal(r.status, 400);
     r = await fetch(`${base}/scans`, { method: 'POST', body: form({ url: 'https://github.com/o/r' }, { name: 'a.zip', body: 'PK' }) });
@@ -315,21 +277,6 @@ test('prepareFolder(): downloads the GitHub archive, steps into its top folder a
   fs.rmSync(d1, { recursive: true, force: true });
 });
 
-test('runScan(): each skill separately gives SkillSpector the unpacked local folder with --recursive; one bundle still passes the link', async () => {
-  const archive = await zipOf({ 'repo-x/skills/a/SKILL.md': '# a', 'repo-x/skills/b/SKILL.md': '# b' });
-  const f = fakeRun(SINGLE);
-  let seenSkill = null;
-  const run = async (bin, args, opts) => { seenSkill = fs.existsSync(path.join(args[1], 'skills/b/SKILL.md')); return f.run(bin, args, opts); };
-  await runner.runScan({ url: 'https://github.com/o/repo', recursive: true }, { run, fetchFile: async () => ({ buffer: archive }) });
-  const { args } = f.calls[0];
-  assert.ok(args.includes('--recursive') && args.includes('--max-skills'));
-  assert.ok(!/^https:/.test(args[1]), 'a local folder, not the link');
-  assert.equal(seenSkill, true, 'the folder holds the repository');
-  const g = fakeRun(SINGLE);
-  await runner.runScan({ url: 'https://github.com/o/repo' }, { run: g.run });
-  assert.equal(g.calls[0].args[1], 'https://github.com/o/repo');
-});
-
 // ── modelResolver.js: the Skill Scanner model chosen in Settings -> AI & Chat ───────────
 const { createModelResolver, isAnthropicModel } = require('./modelResolver');
 
@@ -408,4 +355,112 @@ test('buildSummaryPrompt(): every limitation reaches the model with its count (n
   const p = summaryLib.buildSummaryPrompt({ source: 'x', mode: 'static', report: ten }, []);
   assert.match(p, /"limitationCount": 10/);
   assert.match(p, /Analyzer a9 status: degraded/);
+});
+
+// ── every scan is skill by skill: args, time limit, counting, live progress ─────────────────
+test('buildArgs(): always --recursive on a local folder; --no-llm for static; --max-skills only above 32 sub-skills', () => {
+  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O' }), ['scan', 'T', '-f', 'json', '-o', 'O', '--no-llm', '--recursive']);
+  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O', subSkills: 32 }), ['scan', 'T', '-f', 'json', '-o', 'O', '--no-llm', '--recursive']);
+  assert.deepEqual(runner.buildArgs({ target: 'T', outFile: 'O', deep: true, subSkills: 68 }), ['scan', 'T', '-f', 'json', '-o', 'O', '--recursive', '--max-skills', '100']);
+});
+
+test('timeoutFor(): grows with the number of skills between a floor and a cap', () => {
+  assert.equal(runner.timeoutFor({ skills: 1 }), 6 * 60000, 'static floor');
+  assert.equal(runner.timeoutFor({ skills: 68 }), 4 * 60000 + 68 * 20000, '68 skills: about 27 minutes');
+  assert.equal(runner.timeoutFor({ skills: 1000 }), 45 * 60000, 'static cap');
+  assert.equal(runner.timeoutFor({ deep: true, skills: 1 }), 20 * 60000);
+  assert.equal(runner.timeoutFor({ deep: true, skills: 100 }), 60 * 60000);
+  assert.equal(runner.scanEnv({ home: 'h', timeoutMs: 15 * 60000 }).SKILLSPECTOR_MAX_WORKFLOW_SECONDS, '870');
+});
+
+test('countFolder(): sub-skills, a skill at the top, files and bytes', () => {
+  const d = tmp();
+  fs.mkdirSync(path.join(d, 'skills/a'), { recursive: true });
+  fs.mkdirSync(path.join(d, 'skills/b'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'skills/a/SKILL.md'), '# a');
+  fs.writeFileSync(path.join(d, 'skills/b/skill.md'), '# b');
+  fs.writeFileSync(path.join(d, 'README.md'), 'hello');
+  assert.deepEqual(runner.countFolder(d), { subSkills: 2, rootSkill: false, files: 3, bytes: 11 });
+  fs.writeFileSync(path.join(d, 'SKILL.md'), 'x');
+  assert.equal(runner.countFolder(d).rootSkill, true);
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
+test('parseProgressLine(): the "N skills found" and "[i/N] Scanning name" lines', () => {
+  assert.deepEqual(runner.parseProgressLine('Multi-skill directory detected: 68 skills found'), { type: 'total', total: 68 });
+  assert.deepEqual(runner.parseProgressLine('  [12/68] Scanning helius-api'), { type: 'skill', current: 12, total: 68, name: 'helius-api' });
+  assert.deepEqual(runner.parseProgressLine('\u001b[1m  [1/2] Scanning pdf \u001b[0m'), { type: 'skill', current: 1, total: 2, name: 'pdf' });
+  assert.equal(runner.parseProgressLine('Report saved to /tmp/x'), null);
+});
+
+const archiveOf = () => zipOf({ 'repo-x/skills/a/SKILL.md': '# a', 'repo-x/skills/b/SKILL.md': '# b', 'repo-x/README.md': 'r' });
+
+test('runScan(): downloads, unpacks and scans the folder with --recursive; exit 1 is a normal result; stats; temp folder removed', async () => {
+  const archive = await archiveOf();
+  const f = fakeRun(SINGLE);
+  let sawFolder = null;
+  const run = async (bin, args, opts) => { sawFolder = fs.existsSync(path.join(args[1], 'skills/b/SKILL.md')); return f.run(bin, args, opts); };
+  const out = await runner.runScan({ url: 'https://github.com/o/repo' }, { run, fetchFile: async () => ({ buffer: archive }) });
+  assert.equal(out.exitCode, 1);
+  assert.equal(out.report.score, 62);
+  const { args, opts } = f.calls[0];
+  assert.ok(!/^https:/.test(args[1]) && sawFolder, 'a local folder holding the repository');
+  assert.ok(args.includes('--recursive') && args.includes('--no-llm') && !args.includes('--max-skills'));
+  assert.equal(out.stats.skillCount, 1);
+  assert.equal(out.stats.fileCount, 3);
+  assert.ok(out.stats.durationMs >= 0);
+  assert.ok(!fs.existsSync(opts.cwd), 'temp folder deleted');
+});
+
+test('runScan(): a zip is unpacked and scanned as a folder too', async () => {
+  const f = fakeRun(SINGLE);
+  let seen = null;
+  const run = async (bin, args, opts) => { seen = fs.existsSync(path.join(args[1], 'skills/a/SKILL.md')); return f.run(bin, args, opts); };
+  await runner.runScan({ zipBuffer: await archiveOf() }, { run });
+  assert.equal(seen, true);
+});
+
+test('runScan(): reports each stage and live per-skill progress with time left', async () => {
+  const archive = await archiveOf();
+  const events = [];
+  const run = async (bin, args, opts) => {
+    opts.onLine('Multi-skill directory detected: 2 skills found');
+    opts.onLine('  [1/2] Scanning a');
+    opts.onLine('  [2/2] Scanning b');
+    fs.writeFileSync(args[args.indexOf('-o') + 1], JSON.stringify(SINGLE));
+    return { code: 0, stdout: '', stderr: '', timedOut: false };
+  };
+  await runner.runScan({ url: 'https://github.com/o/repo', secondsPerSkill: 3 }, { run, fetchFile: async () => ({ buffer: archive }) }, (p) => events.push(p));
+  assert.deepEqual(events.map((e) => e.phase).filter((v, i, a) => a.indexOf(v) === i), ['download', 'unpack', 'scan']);
+  const firstScan = events.find((e) => e.phase === 'scan');
+  assert.equal(firstScan.total, 2);
+  assert.equal(firstScan.estimateSec, 6, '2 skills at 3 s each, from history');
+  const skills = events.filter((e) => e.module);
+  assert.deepEqual(skills.map((e) => [e.current, e.total, e.module]), [[1, 2, 'a'], [2, 2, 'b']]);
+  assert.ok(skills.every((e) => Number.isFinite(e.etaSec)));
+});
+
+test('runScan(): retries without --max-skills when SkillSpector refuses it', async () => {
+  const many = {};
+  for (let i = 0; i < 40; i += 1) many[`r/skills/s${i}/SKILL.md`] = '# s';
+  const calls = [];
+  const run = async (bin, args) => {
+    calls.push(args.includes('--max-skills'));
+    if (args.includes('--max-skills')) return { code: 2, stdout: '', stderr: 'Error: --max-skills requires detected sub-skills; scan this input without --max-skills', timedOut: false };
+    fs.writeFileSync(args[args.indexOf('-o') + 1], JSON.stringify(SINGLE));
+    return { code: 0, stdout: '', stderr: '', timedOut: false };
+  };
+  const out = await runner.runScan({ zipBuffer: await zipOf(many) }, { run });
+  assert.deepEqual(calls, [true, false]);
+  assert.equal(out.report.score, 62);
+});
+
+test('runScan(): refuses bad links and empty input; reports SkillSpector errors, a missing install and timeouts plainly', async () => {
+  const deps = async (extra) => ({ fetchFile: async () => ({ buffer: await archiveOf() }), ...extra });
+  await assert.rejects(runner.runScan({ url: 'https://evil.com/x' }, { run: async () => ({}) }), (e) => e.status === 400);
+  await assert.rejects(runner.runScan({}, { run: async () => ({}) }), (e) => e.status === 400);
+  await assert.rejects(runner.runScan({ url: 'https://github.com/o/r' }, await deps(fakeRun(null, { code: 2, stderr: 'progress\nValueError: no skills found' }))),
+    /could not scan that: .*no skills found/);
+  await assert.rejects(runner.runScan({ url: 'https://github.com/o/r' }, await deps(fakeRun(null, { code: -1, stderr: 'spawn ENOENT' }))), /not installed/);
+  await assert.rejects(runner.runScan({ url: 'https://github.com/o/r' }, await deps(fakeRun(null, { timedOut: true }))), /longer than 6 minutes \(the limit for 2 skills\)/);
 });

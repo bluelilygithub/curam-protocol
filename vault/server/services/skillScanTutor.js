@@ -8,7 +8,7 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'scan', label: 'Scan a skill', group: 'Scan',
-    does: 'Scan a skill in the tool list on the left (or a job tile on the start screen). Paste a public github.com link to a skill or plugin (the whole repository, or a folder in it via a /tree/ link), or upload a zip of its folder, up to 20 MB. Tick "Scan each skill separately" for a repository or plugin that holds several skills. Press Scan; it runs in the background and the report opens when it finishes.',
+    does: 'Scan a skill in the tool list on the left (or a job tile on the start screen). Paste a public github.com link to a skill or plugin (the whole repository, or a folder in it via a /tree/ link), or upload a zip of its folder, up to 20 MB. Every scan goes skill by skill (up to 100), with a verdict for each and a progress bar that names the skill it is on and the time left. Press Scan; it runs in the background and the report opens when it finishes.',
     notes: 'The static scan reads the files and never runs them. It is free; only dependency names are sent to OSV.dev to look up known vulnerabilities. A plugin on your own computer must be zipped and uploaded.' },
   { id: 'deep', label: 'Deep scan', group: 'Scan',
     does: 'The Deep scan tick box next to Scan. As well as the static checks, an AI model reads the files for risks the patterns miss. It uses the Skill Scanner model chosen in Settings → AI & Chat, which must be an Anthropic (Claude) model.',

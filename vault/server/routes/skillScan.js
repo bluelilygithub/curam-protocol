@@ -57,10 +57,9 @@ function createSkillScanRouter({ service, limiter } = {}) {
     async (req, res) => {
       try {
         const deep = String(req.body?.deep) === 'true';
-        const recursive = String(req.body?.recursive) === 'true';
         const url = typeof req.body?.url === 'string' && req.body.url.trim() ? req.body.url.trim() : null;
         if (url && req.file) return res.status(400).json({ error: 'Send a GitHub link or a zip, not both.' });
-        const out = await S().start(req.user.id, { url, zipBuffer: req.file?.buffer || null, fileName: req.file?.originalname || null, deep, recursive });
+        const out = await S().start(req.user.id, { url, zipBuffer: req.file?.buffer || null, fileName: req.file?.originalname || null, deep });
         res.status(202).json(out);
       } catch (err) { fail(res, err, 'start'); }
     });

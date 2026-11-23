@@ -18,10 +18,16 @@ const os = require('os');
 const path = require('path');
 
 const BIN = process.env.SKILLSPECTOR_BIN || 'skillspector';
-const STATIC_TIMEOUT_MS = 6 * 60 * 1000;
-const DEEP_TIMEOUT_MS = 20 * 60 * 1000;
-const EACH_SKILL_TIMEOUT_MS = 15 * 60 * 1000; // a static scan of up to MAX_SKILLS skills, one after another
-const timeoutFor = ({ deep = false, recursive = false } = {}) => (deep ? DEEP_TIMEOUT_MS : recursive ? EACH_SKILL_TIMEOUT_MS : STATIC_TIMEOUT_MS);
+// Every scan goes skill by skill, so the time limit grows with the number of skills found, between a floor and a hard cap.
+// (A fixed 15 minutes was too short for the 68 skills of claude-trading-skills.)
+const LIMITS = {
+  static: { baseMs: 4 * 60000, perSkillMs: 20000, minMs: 6 * 60000, maxMs: 45 * 60000 },
+  deep: { baseMs: 6 * 60000, perSkillMs: 90000, minMs: 20 * 60000, maxMs: 60 * 60000 },
+};
+function timeoutFor({ deep = false, skills = 1 } = {}) {
+  const l = deep ? LIMITS.deep : LIMITS.static;
+  return Math.min(l.maxMs, Math.max(l.minMs, l.baseMs + l.perSkillMs * Math.max(1, skills)));
+}
 const MAX_ISSUES = 2000;
 const GITHUB_URL_RE = /^https:\/\/github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?(\/tree\/[A-Za-z0-9._/-]{1,300})?\/?$/;
 
@@ -55,17 +61,58 @@ function scanEnv({ home, deep = false, anthropicKey = null, model = null, timeou
   return env;
 }
 
-// --recursive only works on a LOCAL folder: SkillSpector ignores it for a link or a zip (one bundle) and refuses --max-skills there
-// ("--max-skills requires a local --recursive multi-skill directory"). So an each-skill scan is always given a folder that Vault
-// unpacked itself (prepareFolder below), where --max-skills is allowed. Its default of 32 would leave most of a big repository
-// unscanned (claude-trading-skills has 68 skills), so it is raised to MAX_SKILLS.
+// Every scan is skill by skill (one bundle hit SkillSpector's own time limits and read 14-20% of a big repository, and its single capped
+// score said little). --recursive only works on a LOCAL folder: for a link or a zip SkillSpector ignores it and refuses --max-skills
+// ("--max-skills requires a local --recursive multi-skill directory"). So every scan is given a folder Vault unpacked itself
+// (prepareFolder below). A folder with one skill and no sub-skills is scanned as that one skill, the same as before.
+// --max-skills: its default of 32 would skip most of a big repository (claude-trading-skills has 68), but SkillSpector refuses it when
+// it detects no sub-skills, so it is passed only when Vault counts more than 32 (and runScan retries without it if refused).
 const MAX_SKILLS = 100;
-function buildArgs({ target, outFile, deep = false, recursive = false }) {
+const DEFAULT_SKILL_LIMIT = 32;
+function buildArgs({ target, outFile, deep = false, subSkills = 0 }) {
   return [
     'scan', target, '-f', 'json', '-o', outFile,
     ...(deep ? [] : ['--no-llm']),
-    ...(recursive ? ['--recursive', '--max-skills', String(MAX_SKILLS)] : []),
+    '--recursive',
+    ...(subSkills > DEFAULT_SKILL_LIMIT ? ['--max-skills', String(MAX_SKILLS)] : []),
   ];
+}
+
+/**
+ * Count what is in an unpacked folder: skills below the top (folders holding a SKILL.md), whether the top is a skill itself, files and
+ * bytes. Bounded (depth 10, 20,000 entries). Symlinks are not followed. Used for the time limit, --max-skills and the estimate.
+ */
+function countFolder(root) {
+  let subSkills = 0; let files = 0; let bytes = 0; let seen = 0;
+  const rootSkill = ['SKILL.md', 'skill.md'].some((n) => fs.existsSync(path.join(root, n)));
+  const walk = (dir, depth) => {
+    if (depth > 10 || seen > 20000) return;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    if (depth > 0 && entries.some((e) => e.isFile() && /^skill\.md$/i.test(e.name))) subSkills += 1;
+    for (const e of entries) {
+      seen += 1;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory() && !e.isSymbolicLink()) walk(p, depth + 1);
+      else if (e.isFile()) { files += 1; try { bytes += fs.statSync(p).size; } catch { /* gone */ } }
+    }
+  };
+  walk(root, 0);
+  return { subSkills, rootSkill, files, bytes };
+}
+
+/**
+ * One line of SkillSpector's output -> progress. With -o and JSON it prints, for a multi-skill folder:
+ *   "Multi-skill directory detected: 68 skills found"   then for each skill   "  [12/68] Scanning helius-api"
+ * (read from its cli.py at the pinned commit). Anything else -> null. Pure.
+ */
+function parseProgressLine(line) {
+  const s = String(line || '').replace(/\u001b\[[0-9;]*m/g, '');
+  let m = s.match(/Multi-skill directory detected:\s*(\d+)\s+skills? found/i);
+  if (m) return { type: 'total', total: Number(m[1]) };
+  m = s.match(/\[(\d+)\/(\d+)\]\s+Scanning\s+(.+?)\s*$/);
+  if (m) return { type: 'skill', current: Number(m[1]), total: Number(m[2]), name: m[3].slice(0, 120) };
+  return null;
 }
 
 const MAX_UNPACKED_BYTES = 100 * 1024 * 1024; // the same caps SkillSpector applies to its own downloads and zips
@@ -145,6 +192,7 @@ async function prepareFolder({ zipBuffer, url, dir }, deps = {}) {
   }
   const src = path.join(dir, 'src');
   fs.mkdirSync(src);
+  if (deps.onUnpack) deps.onUnpack();
   await extractZip(buffer, src, deps.limits);
   let root = src;
   const top = fs.readdirSync(root, { withFileTypes: true });
@@ -159,18 +207,28 @@ async function prepareFolder({ zipBuffer, url, dir }, deps = {}) {
   return root;
 }
 
-/** spawn without a shell; resolves { code, stdout, stderr, timedOut }. Output is capped so a noisy run cannot fill memory. */
-function runProcess(bin, args, { env, cwd, timeoutMs }) {
+/**
+ * spawn without a shell; resolves { code, stdout, stderr, timedOut }. Output is capped so a noisy run cannot fill memory.
+ * `onLine` (optional) gets every complete output line as it arrives, for live progress.
+ */
+function runProcess(bin, args, { env, cwd, timeoutMs, onLine = null }) {
   return new Promise((resolve) => {
     const cap = (s, add) => (s.length > 40000 ? s : s + add);
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    const partial = { out: '', err: '' };
+    const lines = (key, text) => {
+      if (!onLine) return;
+      const parts = (partial[key] + text).split(/\r?\n|\r/);
+      partial[key] = parts.pop().slice(-2000);
+      for (const l of parts) { try { onLine(l); } catch { /* progress is best effort */ } }
+    };
     let child;
     try { child = spawn(bin, args, { env, cwd, shell: false, windowsHide: true }); } catch (err) { resolve({ code: -1, stdout, stderr: err.message, timedOut }); return; }
     const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeoutMs);
-    child.stdout.on('data', (d) => { stdout = cap(stdout, d.toString()); });
-    child.stderr.on('data', (d) => { stderr = cap(stderr, d.toString()); });
+    child.stdout.on('data', (d) => { const t = d.toString(); stdout = cap(stdout, t); lines('out', t); });
+    child.stderr.on('data', (d) => { const t = d.toString(); stderr = cap(stderr, t); lines('err', t); });
     child.on('error', (err) => { clearTimeout(timer); resolve({ code: -1, stdout, stderr: `${stderr}\n${err.message}`, timedOut }); });
     child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr, timedOut }); });
   });
@@ -267,44 +325,72 @@ function normalizeReport(raw) {
 const lastLines = (s, n = 3) => String(s || '').trim().split(/\r?\n/).filter((l) => l.trim() && !/^\s*[│┃╭╰─━]+/.test(l)).slice(-n).join(' ').slice(0, 400);
 
 /**
- * Scan a GitHub link (`url`) or a zip (`zipBuffer`). Resolves { exitCode, report, raw } or throws with a plain message.
+ * Scan a GitHub link (`url`) or a zip (`zipBuffer`), skill by skill. Resolves { exitCode, report, raw, stats } or throws a plain message.
  * Exit 0 = no policy failure, 1 = risk above the threshold (a normal result), 2 = SkillSpector could not complete.
+ * onProgress({ phase: 'download'|'unpack'|'scan', current, total, module, etaSec, estimateSec, files }) reports each stage; `current`
+ * is the skill being scanned (1-based) once SkillSpector names it. `secondsPerSkill` (from earlier scans) gives the estimate.
  */
-async function runScan({ url = null, zipBuffer = null, deep = false, recursive = false, model = null }, deps = {}) {
+async function runScan({ url = null, zipBuffer = null, deep = false, model = null, secondsPerSkill = null }, deps = {}, onProgress = () => {}) {
   const target0 = url ? parseGithubUrl(url) : null;
   if (url && !target0) throw Object.assign(new Error('Paste a public github.com link, e.g. https://github.com/owner/repo or a /tree/main/folder link.'), { status: 400 });
   if (!url && !zipBuffer) throw Object.assign(new Error('Paste a GitHub link or upload a zip.'), { status: 400 });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vault-skillscan-'));
+  const report = (p) => { try { onProgress(p); } catch { /* best effort */ } };
   try {
-    let target = target0;
-    if (recursive) {
-      // each skill separately needs a local folder (see buildArgs)
-      target = await prepareFolder({ zipBuffer, url: target0, dir }, deps);
-    } else if (zipBuffer) {
-      target = path.join(dir, 'skill.zip');
-      fs.writeFileSync(target, zipBuffer);
-    }
+    report({ phase: zipBuffer ? 'unpack' : 'download', current: 0, total: null, module: null });
+    const target = await prepareFolder({ zipBuffer, url: target0, dir }, { ...deps, onUnpack: () => report({ phase: 'unpack', current: 0, total: null, module: null }) });
+    const found = countFolder(target);
+    const skillsGuess = Math.max(1, found.subSkills);
     const outFile = path.join(dir, 'report.json');
     const home = path.join(dir, 'home');
     fs.mkdirSync(home);
-    const timeoutMs = timeoutFor({ deep, recursive });
-    const res = await (deps.run || runProcess)(BIN, buildArgs({ target, outFile, deep, recursive }),
-      { env: scanEnv({ home, deep, anthropicKey: deps.anthropicKey ?? process.env.ANTHROPIC_API_KEY, model, timeoutMs }), cwd: dir, timeoutMs });
-    if (res.timedOut) throw new Error(`The scan took longer than ${Math.round(timeoutMs / 60000)} minutes and was stopped.`);
+    const timeoutMs = timeoutFor({ deep, skills: skillsGuess });
+    const estimateSec = secondsPerSkill ? Math.round(secondsPerSkill * skillsGuess) : null;
+    // live progress from SkillSpector's "[i/N] Scanning name" lines; time left from the average of the skills finished so far
+    const scanStart = Date.now();
+    const state = { total: found.subSkills || 1, current: 0, startedFirst: null };
+    report({ phase: 'scan', current: 0, total: state.total, module: null, estimateSec, files: found.files, timeoutMin: Math.round(timeoutMs / 60000) });
+    const onLine = (line) => {
+      const p = parseProgressLine(line);
+      if (!p) return;
+      if (p.type === 'total') state.total = p.total;
+      if (p.type === 'skill') {
+        state.total = p.total;
+        state.current = p.current;
+        if (p.current === 1) state.startedFirst = Date.now();
+        const doneCount = p.current - 1;
+        const perSkill = doneCount > 0 && state.startedFirst ? (Date.now() - state.startedFirst) / 1000 / doneCount : secondsPerSkill;
+        // != null, not truthiness: skills that finish within a second give a rate of 0, which is a real (tiny) time left
+        const etaSec = perSkill != null ? Math.round(perSkill * (state.total - doneCount)) : null;
+        report({ phase: 'scan', current: p.current, total: state.total, module: p.name, etaSec, estimateSec, files: found.files, timeoutMin: Math.round(timeoutMs / 60000) });
+      }
+    };
+    const run = (subSkills) => (deps.run || runProcess)(BIN, buildArgs({ target, outFile, deep, subSkills }),
+      { env: scanEnv({ home, deep, anthropicKey: deps.anthropicKey ?? process.env.ANTHROPIC_API_KEY, model, timeoutMs }), cwd: dir, timeoutMs, onLine });
+    let res = await run(found.subSkills);
+    // SkillSpector refuses --max-skills when it detects no sub-skills; Vault's count can differ from its own, so try once without
+    if (res.code === 2 && /--max-skills requires/i.test(`${res.stderr}\n${res.stdout}`)) res = await run(0);
+    if (res.timedOut) throw new Error(`The scan took longer than ${Math.round(timeoutMs / 60000)} minutes (the limit for ${skillsGuess} skill${skillsGuess === 1 ? '' : 's'}) and was stopped.`);
     let raw = null;
     try { raw = JSON.parse(fs.readFileSync(outFile, 'utf8')); } catch { /* no report written */ }
     if (!raw) {
       if (res.code === -1) throw new Error('SkillSpector is not installed on this server yet (it arrives with the next base image).');
       throw new Error(`SkillSpector could not scan that: ${lastLines(res.stderr) || lastLines(res.stdout) || `exit code ${res.code}`}`);
     }
-    return { exitCode: res.code, report: normalizeReport(raw), raw };
+    const normalized = normalizeReport(raw);
+    const stats = {
+      durationMs: Date.now() - scanStart,
+      skillCount: normalized.multi ? normalized.skills.length : 1,
+      fileCount: found.files,
+    };
+    return { exitCode: res.code, report: normalized, raw, stats };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
 module.exports = {
-  BIN, STATIC_TIMEOUT_MS, DEEP_TIMEOUT_MS, EACH_SKILL_TIMEOUT_MS, MAX_SKILLS, GITHUB_URL_RE, timeoutFor,
+  BIN, LIMITS, MAX_SKILLS, DEFAULT_SKILL_LIMIT, GITHUB_URL_RE, timeoutFor, countFolder, parseProgressLine,
   parseGithubUrl, scanEnv, buildArgs, runProcess, isInstalled, normIssue, normSkill, normalizeReport, runScan,
   githubArchive, extractZip, prepareFolder,
 };

@@ -10,7 +10,7 @@ export const SKILL_SCAN_GOALS = [
     blurb: 'Paste its link, then read the verdict and what the findings mean.',
     icon: 'shield',
     steps: [
-      { tool: 'scan', note: 'Paste the github.com link. Tick "Scan each skill separately" if it holds several skills.' },
+      { tool: 'scan', note: 'Paste the github.com link and press Scan. Every skill in it is checked separately; the progress bar shows which one it is on.' },
       { tool: 'report', note: 'Read the explanation first: it says which findings are normal for what the skill does.' },
     ],
   },

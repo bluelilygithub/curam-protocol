@@ -63,7 +63,7 @@ export function startSkillScanTour(goTool = () => {}) {
   tour.addStep({
     id: 'skill-scan-scan',
     title: 'Scan a skill',
-    text: 'Paste a public github.com link, or upload a zip of a plugin folder from your computer. Tick "Scan each skill separately" for a repository with several skills, and Deep scan to have an AI model read the files too (slower, and the files go to Anthropic).',
+    text: 'Paste a public github.com link, or upload a zip of a plugin folder from your computer. Every skill in it is scanned separately, with a progress bar. Tick Deep scan to have an AI model read the files too (slower, and the files go to Anthropic).',
     attachTo: { element: '[data-tour="skill-scan-scan"]', on: 'bottom' },
     beforeShowPromise: check('skill-scan-scan', '[data-tour="skill-scan-scan"]', 'scan'),
     when: { show() { injectStepCounter(2); } },
