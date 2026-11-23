@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "75037a18",
+   "fullHash": "75037a1801a35e76da8918c99d45f030b713e540",
+   "committedAt": "2026-11-24T07:35:33+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner, Settings",
+   "subject": "Skill Scanner: choose its model in Settings -> AI & Chat (Anthropic recommended)",
+   "filesChanged": 12,
+   "insertions": 292,
+   "deletions": 14,
+   "goal": "Let the owner pick the model Skill Scanner uses, separately from the workspace default (DeepSeek), and steer them towards an Anthropic model for this security job.",
+   "whatChanged": "New server/services/skillScan/modelResolver.js following Email Follow-Up's modelResolver: setting skill_scan_model resolved as the person's own choice, else the first admin's, else the workspace standard model (via pickTextModel); a saved model no longer in vault_models falls back; saving accepts only a connected model and an empty value deletes the setting; isAnthropicModel decides by stored provider, else a claude id; getModelConfig also returns effectiveIsAnthropic and the connected Claude models. services/skillScan/index.js uses it for config (the deep scan is available only when the resolved model is Anthropic and ANTHROPIC_API_KEY is set, and the reason names Settings -> AI & Chat -> Skill Scanner model) and passes the same model to the explanation; it exposes getModelConfig and saveModel. Routes GET/POST /api/skill-scan/model-config (admin; added to the route manifest). New SkillScanModelCard.jsx rendered at the bottom of SettingsPage's AI & Chat tab for admins: the default option plus connected text models, Claude models marked recommended, a boxed note that an Anthropic foundation model is best suited (strict output format, resisting text written to mislead it) and needed for Deep scan, and an amber warning naming a Claude model to choose when the effective model is not Anthropic. The scan page now names the model in use, says the findings go to its provider, and warns when it is not Claude; the help text, the Skill Scanner guide and the Settings guide's AI & Chat entry describe the setting. Tests cover the resolver (default, chosen, stale, inherited, saving) and the deep-scan rule.",
+   "filesImpacted": [
+    "server/services/skillScan/modelResolver.js",
+    "server/services/skillScan/index.js",
+    "server/services/skillScan/skillScan.test.js",
+    "server/routes/skillScan.js",
+    "server/testing/routeManifest.json",
+    "server/services/skillScanTutor.js",
+    "server/services/settingsTutor.js",
+    "client/src/pages/skillScan/SkillScanModelCard.jsx",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/SkillScanPage.jsx",
+    "client/src/pages/skillScan/skillScanTools.mjs",
+    "docs/skill-scan.md"
+   ],
+   "benefit": "Skill Scanner can run on a Claude model (and offer Deep scan) while the rest of Vault keeps DeepSeek as its default.",
+   "concerns": "Nothing changes until a model is chosen: with no choice it still follows the workspace default (DeepSeek), with Deep scan greyed out. The card was checked by build and JSX parse, not clicked through. server/services/settingsTutor.test.js was already failing before this commit because the Settings guide has no entry for the PDF Tools settings tab; this commit does not fix that."
+  },
+  {
    "commit": "26e9b433",
    "fullHash": "26e9b433bcc03b8ea4697581237bdf6d31444c5e",
    "committedAt": "2026-11-24T07:26:03+10:00",

@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-model)
+
+### Skill Scanner — its own model choice in Settings → AI & Chat
+Skill Scanner used the workspace default model (DeepSeek here), so explanations ran on DeepSeek and Deep scan was greyed out. A **Skill Scanner model** card now sits at the bottom of AI & Chat (admins only). It recommends an Anthropic (Claude) model, explains why, and warns when another model is in use. The choice drives both the explanation and Deep scan; Deep scan needs a Claude model.
+
+---
+
 ## 2026-11-24 (skill-scanner-each-skill)
 
 ### Skill Scanner — "Scan each skill separately" failed on GitHub links
