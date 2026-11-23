@@ -62,6 +62,8 @@ function buildDocument(deps, profile) {
       ['Business name', 'businessName'], ['Legal name on website', 'legalNameOnWebsite'], ['ABN', 'abn'], ['Entity type', 'entityType'], ['GST status', 'gstStatus'],
       ['Trading names', 'tradingNames'], ['Domain', 'domain'], ['Domain age (years)', 'domainAgeYears'],
       ['Registered', 'registrationDate'], ['Expires', 'expiryDate'], ['Status', 'companyStatus'], ['Registrar', 'registrar'],
+      ['ACN', 'acn'], ['ABN status', 'abnStatus'], ['Main business location (ABN Lookup)', 'mainBusinessLocation'],
+      ['Former names', 'formerNames'], ['Location history', 'locationHistory'],
     ])),
     section('People', list(cards.people, (x) => `${x.name || 'Unknown'} — ${x.role || 'role not stated'} (${x.source || 'source not stated'})`)),
     section('Locations', list(cards.locations, (x) => `${x.value} — ${x.source || 'source not stated'} ${conf(x)}`)),

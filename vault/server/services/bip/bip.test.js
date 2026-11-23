@@ -845,3 +845,59 @@ test('website.extractAddresses() ignores sentences that only look like addresses
   assert.deepStrictEqual(website.extractAddresses('This Privacy Policy replaces the policy previously published (last updated July 2020)\nIt applied until 15 November 2026'), []);
   assert.deepStrictEqual(website.extractAddresses('Shop 4, 12 King Street\nNewcastle NSW 2300\nAustralia'), ['Shop 4, 12 King Street, Newcastle NSW 2300']);
 });
+
+// ── abrPublic.js: the public ABN Lookup history page (no key) ───────────────────────────
+const abrPublic = require('./abrPublic');
+const ABN_HISTORY_HTML = require('fs').readFileSync(require('path').join(__dirname, 'fixtures', 'abnHistory-69161409132.html'), 'utf8');
+
+test('abrPublic.parseAbnHistory() reads names, status, GST, location history and ACN from the real page', () => {
+  const r = abrPublic.parseAbnHistory(ABN_HISTORY_HTML, '69161409132');
+  assert.equal(r.entityName, 'SALESLOGS PTY LTD');
+  assert.deepStrictEqual(r.nameHistory, [
+    { value: 'SALESLOGS PTY LTD', from: '2012-12-11', to: null },
+    { value: 'SALESLOG PTY LTD', from: '2012-12-10', to: '2012-12-11' },
+  ]);
+  assert.equal(r.entityType, 'Australian Private Company');
+  assert.equal(r.abnStatus, 'Active from 10 Dec 2012');
+  assert.equal(r.registrationDate, '2012-12-10');
+  assert.equal(r.gstStatus, 'Registered from 10 Dec 2012');
+  assert.equal(`${r.state} ${r.postcode}`, 'NSW 2284');
+  assert.deepStrictEqual(r.locationHistory.map((l) => l.value), ['NSW 2284', 'NSW 2769', 'NSW 2000', 'NSW 2000', 'NSW 2000', 'NSW 2326']);
+  assert.equal(r.acn, '161 409 132');
+  assert.equal(r.lookupUrl, 'https://abr.business.gov.au/ABN/View?abn=69161409132');
+  assert.equal(abrPublic.parseAbnHistory('<html>No record</html>', '1'), null);
+});
+
+test('sources abr: without ABR_GUID, an ABN from the website is looked up on the public page; without an ABN it is skipped', async () => {
+  const saved = process.env.ABR_GUID;
+  delete process.env.ABR_GUID;
+  try {
+    const seen = [];
+    const deps = { fetchHtml: async (url) => { seen.push(url); return { statusCode: 200, body: ABN_HISTORY_HTML }; } };
+    const found = await sources.runModule('abr', { domain: 'saleslogs.com', website: { abns: ['69 161 409 132'] } }, { deps });
+    assert.equal(found.status, 'success');
+    assert.equal(found.data.entityName, 'SALESLOGS PTY LTD');
+    assert.deepStrictEqual(seen, ['https://abr.business.gov.au/AbnHistory/View?id=69161409132']);
+    const none = await sources.runModule('abr', { domain: 'x.test', website: { abns: [] } }, { deps });
+    assert.equal(none.status, 'skipped');
+    assert.match(none.reason, /No ABN was found on the website/);
+  } finally { if (saved !== undefined) process.env.ABR_GUID = saved; }
+});
+
+test('ABN Lookup data: names and ABN confirmed with the website, NSW location disagrees with a Docklands address, years from the ABN', () => {
+  const abr = abrPublic.parseAbnHistory(ABN_HISTORY_HTML, '69161409132');
+  const results = {
+    abr: { data: abr },
+    website: { data: { legalName: 'SalesLogs Pty Ltd', siteName: 'SalesLogs', abns: ['69 161 409 132'], addresses: ['Level 10, 637 Flinders Street, Docklands VIC 3008'] } },
+  };
+  const r = reconcile.reconcile({ domain: 'saleslogs.com' }, results);
+  assert.equal(r.fields.businessName.confidence.level, 'confirmed');
+  assert.equal(r.fields.abn.confidence.level, 'confirmed');
+  assert.equal(r.fields.address.confidence.level, 'conflicting');
+  assert.ok(r.fields.address.values.some((v) => v.value === 'NSW 2284' && /main business location/.test(v.source)));
+  const cards = buildCards({ domain: 'saleslogs.com' }, { ...results, registration: { data: { domainAgeYears: 13.6 } } }, r);
+  assert.equal(cards.entity.acn, '161 409 132');
+  assert.deepStrictEqual(cards.entity.formerNames, ['SALESLOG PTY LTD (2012-12-10 to 2012-12-11)']);
+  assert.match(cards.financial.yearsInBusinessBasis, /ABN registered 2012-12-10/);
+  assert.ok(cards.financial.yearsInBusiness > 13);
+});

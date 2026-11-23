@@ -37,7 +37,7 @@ function collectFields(seed = {}, results = {}) {
 
   add(out.businessName, data.registration?.organisation, 'RDAP / WHOIS', data.registration?.lookupUrl);
   add(out.businessName, data.registration?.registrantName, 'RDAP / WHOIS', data.registration?.lookupUrl);
-  add(out.businessName, data.abr?.entityName, 'ABN Lookup (ABR)', 'https://abr.business.gov.au');
+  add(out.businessName, data.abr?.entityName, 'ABN Lookup (ABR)', data.abr?.lookupUrl || 'https://abr.business.gov.au');
   add(out.businessName, data.places?.name, 'Google Places', data.places?.mapsUrl);
   add(out.businessName, seed.registration?.organisation, 'RDAP / WHOIS');
   add(out.businessName, seed.domainsTool?.name, 'Domain tool');
@@ -46,12 +46,14 @@ function collectFields(seed = {}, results = {}) {
   add(out.businessName, data.website?.legalName, 'Website scrape', homeUrl);
   add(out.businessName, data.website?.siteName, 'Website scrape', homeUrl);
 
-  addAbn(out.abn, data.abr?.abn, 'ABN Lookup (ABR)', 'https://abr.business.gov.au');
+  addAbn(out.abn, data.abr?.abn, 'ABN Lookup (ABR)', data.abr?.lookupUrl || 'https://abr.business.gov.au');
   for (const match of [data.registration?.organisation, data.registration?.registrantName, data.domainsTool?.abn]) addAbn(out.abn, match, 'Public website / registry');
   for (const match of data.website?.abns || []) addAbn(out.abn, match, 'Website scrape', homeUrl);
 
   add(out.address, data.registration?.address, 'RDAP / WHOIS', data.registration?.lookupUrl);
   add(out.address, data.places?.address, 'Google Places', data.places?.mapsUrl);
+  // the registered main business location (state and postcode only): a website address in another state shows as a disagreement
+  if (data.abr?.state) add(out.address, `${data.abr.state} ${data.abr.postcode || ''}`.trim(), 'ABN Lookup (main business location)', data.abr.lookupUrl || null);
   for (const a of data.website?.addresses || []) add(out.address, a, 'Website scrape', (seed.website?.pages || []).find((p) => /contact|about/i.test(p.url || ''))?.url || null);
 
   add(out.phone, data.places?.phone, 'Google Places', data.places?.mapsUrl);

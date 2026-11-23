@@ -12,6 +12,7 @@ const { detectTech } = require('./techStack');
 const { getProviders } = require('../domainNaming/providers');
 const fetchLib = require('../htmlFetch');
 const { abnDigits, abnPretty, cleanText, domainLabel } = require('./normalise');
+const { lookupAbnPublic } = require('./abrPublic');
 
 const success = (data, extra = {}) => ({ status: 'success', data, ...extra });
 const skipped = (reason, data = null) => ({ status: 'skipped', reason, data });
@@ -30,12 +31,30 @@ function businessName(seed) {
   return cleanText(seed?.abr?.entityName || seed?.registration?.organisation || seed?.registration?.registrantName || seed?.website?.legalName || seed?.domainsTool?.name || seed?.website?.siteName || domainLabel(seed?.domain), 200) || domainLabel(seed?.domain);
 }
 
-/** ABR's JSON API returns JSONP. Search by the ABN found in Stage 1, then by entity name when there is no ABN. */
+/**
+ * ABN Lookup. With ABR_GUID: the JSON API (JSONP), by the ABN found in Stage 1, else by entity name. Without it: the public history
+ * page for the ABN found on the website (no key; it cannot search by name). Either way the public page adds the name and
+ * main-business-location history and the ACN when an ABN is known.
+ */
 async function abrLookup(seed, ctx) {
   const guid = process.env.ABR_GUID;
-  if (!guid) return skipped('ABR_GUID is not set on this server.');
-  const base = 'https://abr.business.gov.au/json';
   const abn = findAbn(seed);
+  const withHistory = async (data) => {
+    if (!data?.abn) return data;
+    try {
+      const hist = await lookupAbnPublic(data.abn, ctx.deps || {});
+      if (hist) return { ...hist, ...Object.fromEntries(Object.entries(data).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length))) };
+    } catch (_) { /* the history is extra; the JSON result stands */ }
+    return data;
+  };
+  if (!guid) {
+    if (!abn) return skipped('No ABN was found on the website, and ABR_GUID is not set, so ABN Lookup cannot search by name.');
+    try {
+      const data = await lookupAbnPublic(abn, ctx.deps || {});
+      return data ? success(data) : skipped(`ABN Lookup has no record for ABN ${abnPretty(abn)}.`);
+    } catch (err) { return failed(err); }
+  }
+  const base = 'https://abr.business.gov.au/json';
   let json;
   try {
     json = abn
@@ -47,7 +66,7 @@ async function abrLookup(seed, ctx) {
   const row = Array.isArray(json) ? json[0] : (json?.results?.[0] || json);
   if (!row || (!row.Abn && !row.abn)) return skipped('ABR has no matching entity for this name.');
   const tradingNames = (Array.isArray(row.TradingNames) ? row.TradingNames : []).map((t) => cleanText(t.Name, 200)).filter(Boolean);
-  return success({
+  return success(await withHistory({
     abn: abnPretty(row.Abn || row.abn),
     entityName: cleanText(row.EntityName || row.entityName, 200),
     entityType: cleanText(row.EntityTypeName || row.EntityTypeCode || row.entityType, 100),
@@ -59,7 +78,7 @@ async function abrLookup(seed, ctx) {
     state: cleanText(row.AddressState || row.state, 40),
     postcode: cleanText(row.AddressPostcode || row.postcode, 12),
     raw: row,
-  });
+  }));
 }
 
 /** ASIC does not offer a free public API. Try the public register, then say plainly that the details need a manual lookup. */
@@ -211,7 +230,7 @@ async function runModule(name, seed, ctx = {}) {
 /** Credential state for the /config endpoint. Never returns the keys themselves. */
 function configured() {
   return {
-    abr: !!process.env.ABR_GUID,
+    abr: !!process.env.ABR_GUID, // without it, an ABN found on the site is still looked up on the public ABN Lookup page
     places: !!process.env.GOOGLE_PLACES_API_KEY,
     googleSearch: !!(process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_CX),
     asic: false,

@@ -390,7 +390,7 @@ export default function BipPage() {
   const c = profile?.cards || {};
   const sources = profile?.sources || [];
   const missingKeys = config ? [
-    !config.configured?.abr && 'ABN Lookup (ABR_GUID)',
+    !config.configured?.abr && 'ABN Lookup by name (ABR_GUID; an ABN printed on the website is still looked up)',
     !config.configured?.places && 'Google Places (GOOGLE_PLACES_API_KEY)',
     !config.configured?.googleSearch && 'Google search (GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX)',
   ].filter(Boolean) : [];
@@ -462,6 +462,12 @@ export default function BipPage() {
         <Field label="Registered" value={c.entity?.registrationDate} />
         <Field label="Expires" value={c.entity?.expiryDate} />
         <Field label="Company status" value={c.entity?.companyStatus} />
+        <Field label="ACN" value={c.entity?.acn} />
+        <Field label="ABN status" value={c.entity?.abnStatus} />
+        <Field label="Main business location (ABN Lookup)" value={c.entity?.mainBusinessLocation} />
+        {c.entity?.formerNames?.length > 0 && <Field label="Former names" value={c.entity.formerNames.join('; ')} />}
+        {c.entity?.locationHistory?.length > 1 && <Field label="Location history" value={c.entity.locationHistory.join('; ')} />}
+        {c.entity?.abnLookupUrl && <a href={c.entity.abnLookupUrl} target="_blank" rel="noreferrer" className="inline-block text-xs underline mt-2" style={{ color: 'var(--color-primary)' }}>Open on ABN Lookup</a>}
       </Card>
 
       <Card title="People" icon="user" refreshModule={['asic']} onRefresh={rescan} refreshing={!!refreshing}>

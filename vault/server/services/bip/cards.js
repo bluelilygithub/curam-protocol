@@ -38,6 +38,14 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
 
   entity.legalNameOnWebsite = val(w.legalName);
   entity.siteName = val(w.siteName);
+  // from ABN Lookup (JSON API or the public history page)
+  entity.acn = val(a.acn);
+  entity.abnStatus = val(a.abnStatus);
+  entity.abnRegistered = a.registrationDate || null;
+  entity.mainBusinessLocation = a.state ? val(`${a.state} ${a.postcode || ''}`.trim()) : null;
+  entity.formerNames = (a.nameHistory || []).filter((n) => n.to).map((n) => `${n.value} (${n.from || '?'} to ${n.to})`);
+  entity.locationHistory = (a.locationHistory || []).map((l) => `${l.value} (${l.from || '?'} to ${l.to || 'now'})`);
+  entity.abnLookupUrl = a.lookupUrl || null;
 
   const people = [
     ...(Array.isArray(w.people) ? w.people.map((x) => ({ ...x, source: 'Website scrape' })) : []),
@@ -74,14 +82,21 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
     mentions: Array.isArray(g.results) ? g.results.slice(0, 10) : [],
   };
 
+  const abnYears = entity.abnRegistered && !Number.isNaN(Date.parse(entity.abnRegistered))
+    ? Math.round(((Date.now() - Date.parse(entity.abnRegistered)) / (365.25 * 24 * 3600 * 1000)) * 10) / 10
+    : null;
   const financial = {
     label: 'estimates from public sources',
     revenueEstimate: null,
     employeeCount: w.employeeCount ?? null,
     fundingStatus: null,
-    yearsInBusiness: w.foundedYear ? Math.max(0, new Date().getFullYear() - Number(w.foundedYear)) : (entity.domainAgeYears ?? null),
-    // say what the figure is: a stated founding year, or only the domain's age (which is not when the business started)
-    yearsInBusinessBasis: w.foundedYear ? `founded ${w.foundedYear}, as stated on the website` : (entity.domainAgeYears != null ? 'domain age only; no founding year found' : null),
+    // say what the figure is: a stated founding year, the ABN's registration (the entity, not necessarily the product), or only
+    // the domain's age (which is not when the business started)
+    yearsInBusiness: w.foundedYear ? Math.max(0, new Date().getFullYear() - Number(w.foundedYear))
+      : abnYears != null ? abnYears : (entity.domainAgeYears ?? null),
+    yearsInBusinessBasis: w.foundedYear ? `founded ${w.foundedYear}, as stated on the website`
+      : abnYears != null ? `ABN registered ${entity.abnRegistered} (ABN Lookup)`
+        : (entity.domainAgeYears != null ? 'domain age only; no founding year found' : null),
     note: 'Revenue and funding are not published by the sources BIP reads. Only the figures below were found; blanks are not estimates.',
   };
 

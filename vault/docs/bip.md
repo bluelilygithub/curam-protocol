@@ -24,6 +24,7 @@ The seed (name, ABN if found, domain) is passed to each module. A module returns
 | Module | Source | What it adds | When it is off |
 | --- | --- | --- | --- |
 | `abr` | ABR JSON API (`abr.business.gov.au/json`) | ABN lookup by the ABN found in Stage 1, or by entity name when there is none: exact entity name, formatted ABN, entity type, GST status and start date, ABN status, registration date, trading names, state and postcode. The JSONP wrapper is unwrapped by the shared HTTP helper. | No `ABR_GUID` |
+| `abr` without a key | ABN Lookup public history page (`abr.business.gov.au/AbnHistory/View?id=<ABN>`, `abrPublic.js`) | When `ABR_GUID` is not set but an ABN was found on the website: current and former entity names with dates, ABN status and start, entity type, GST, main business location (state and postcode) with its history, and the ACN. It cannot search by name. With `ABR_GUID` set, the same page is read after the JSON lookup to add the name and location history and the ACN. Fixture of the real page: `server/services/bip/fixtures/abnHistory-69161409132.html`. | No ABN on the website and no `ABR_GUID` |
 | `asic` | ASIC Connect public register | Deliberately graceful: there is no free public API. If the public pages expose no directors, the module records `status: 'unavailable'` with a **manual link to `https://connectonline.asic.gov.au/`** and says to check there. It never guesses directors or share structure. | Unavailable by design; always shows the manual link |
 | `places` | Google Places (Text Search) | Verified listing name, formatted address, phone, website, Maps URL, rating and review count, queried from the business name and domain. | No `GOOGLE_PLACES_API_KEY` |
 | `googleSearch` | Google Custom Search JSON API | Two de-duplicated searches (quoted entity name and quoted domain), **top 10 results with title, snippet, URL and date** (date from the result's page metadata when present). | No `GOOGLE_SEARCH_API_KEY` or `GOOGLE_SEARCH_CX` |
@@ -45,6 +46,8 @@ Each module owns its timeout, small retry and minimum gap between calls; one slo
 - **Cards and PDF:** a skipped Google Places no longer shows an empty rating line; "Years in business" says whether it is a stated founding year or only the domain's age; the PDF prints the confidence labels as words, since its built-in fonts cannot draw the ✅ ⚠️ ❌ icons.
 
 ### Stage 3 — reconciliation
+
+The ABN Lookup main business location ("NSW 2284") is added as an `address` value, so a website address in another state shows as ❌ for the person to judge. Years in business uses, in order: a founding year stated on the website, the ABN's registration date, then only the domain's age, and says which.
 
 `businessName`, `abn`, `address` and `phone` are cross-referenced from all modules that supplied them. **Every value is kept** with its source name and, where there is one, the source URL. Values are normalised only for comparison (case, spacing, punctuation and ABN digits), never to pick a winner.
 
