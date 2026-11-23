@@ -8,6 +8,7 @@ const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString, PDFRawStre
 const fontkit = require('fontkit');
 const sharp = require('sharp');
 const path = require('path');
+const crypto = require('crypto');
 const { google } = require('googleapis');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { libreConvert } = require('../services/officeConvert');
@@ -21,6 +22,8 @@ const pdfTools = require('../services/pdfTools');
 const pdfToHtml = require('../services/pdfToHtml');
 const pdfToHtmlModel = require('../services/pdfToHtmlModel');
 const pdfToHtmlJobs = require('../services/pdfToHtmlJobs');
+
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -1019,11 +1022,44 @@ router.post('/sign', async (req, res) => {
       }
     }
 
+    if (!placed) return res.status(400).json({ error: 'No signature could be placed' });
+
+    // Hidden signing stamp: the PDF carries the ID, signer and time; Vault keeps the record with hashes of both files.
+    const signingId = crypto.randomUUID();
+    const signedAt = new Date();
+    const info = doc.getInfoDict();
+    info.set(PDFName.of('VaultSigningId'), PDFString.of(signingId));
+    info.set(PDFName.of('VaultSignedBy'), PDFString.of(req.user.email));
+    info.set(PDFName.of('VaultSignedAt'), PDFString.of(signedAt.toISOString()));
     const bytes = await doc.save();
-    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), placed });
+
+    await pool.query(
+      `INSERT INTO pdf_signatures ("signingId", "userId", "signerEmail", "fileName", "originalSha256", "signedSha256", "signedAt", "ipAddress", "userAgent", placements)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [signingId, req.user.id, req.user.email, String(req.body?.fileName || '').slice(0, 255) || null,
+        sha256(buf), sha256(bytes), signedAt, req.ip || null, String(req.get('user-agent') || '').slice(0, 500) || null, placed]
+    );
+    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), placed, signingId });
   } catch (err) {
     console.error('PDF sign:', err);
     res.status(500).json({ error: err.message || 'Sign failed' });
+  }
+});
+
+// The signing record behind a PDF's hidden VaultSigningId — only the signer's own records are visible.
+router.get('/signatures/:signingId', async (req, res) => {
+  try {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.signingId)) return res.status(404).json({ error: 'No signing record' });
+    const { rows } = await pool.query(
+      `SELECT "signingId", "signerEmail", "fileName", "originalSha256", "signedSha256", "signedAt", "ipAddress", "userAgent", placements
+       FROM pdf_signatures WHERE "signingId"=$1 AND "userId"=$2`,
+      [req.params.signingId, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'No signing record' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('PDF signature lookup:', err);
+    res.status(500).json({ error: 'Could not load the signing record' });
   }
 });
 

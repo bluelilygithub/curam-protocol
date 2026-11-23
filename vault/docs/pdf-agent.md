@@ -1,6 +1,6 @@
 # PDF Tools
 
-The PDF Tools page is a PDF toolkit mounted in Vault at **`/pdf`**. Stateless — every tool takes a `dataUrl` (base64 PDF/image) in and returns a `dataUrl` out; nothing is persisted server-side and there is no dedicated DB table.
+The PDF Tools page is a PDF toolkit mounted in Vault at **`/pdf`**. Stateless — every tool takes a `dataUrl` (base64 PDF/image) in and returns a `dataUrl` out; nothing is persisted server-side. The one exception is Fill & Sign, which saves a signing record in `pdf_signatures` (see **Signing record** below).
 
 **Frontend:** `vault/client/src/pages/PdfPage.jsx`
 **Backend:** `vault/server/routes/pdf.js` (mounted at `/api/pdf`)
@@ -92,6 +92,18 @@ Request body:
 ## Fill & Sign (`sign`)
 
 Distinct from `/fill` (AcroForm field values only) and `addfields`/field designer (empty fields for someone else to fill later): **Fill & Sign** stamps a signature directly into a PDF's page content, on any PDF, form or not. Client renders the current page to a canvas (same field-designer technique — drag a box to place, drag an existing placement to move it, Delete key to remove the selected one, canvas-pixel → PDF-point conversion via `renderScale`).
+
+### Save group: Save to Notes / Save to Client
+
+Two sidebar tools in the **Save** group, `client/src/pages/pdf/PdfSaveTools.jsx`. No new server code. **Save to Notes** creates a note (`POST /api/notes`, title defaults to the file name) and then attaches the PDF (`POST /api/notes/:id/attachments`). If the attach step fails, the note is kept and linked. **Save to Client** lists `GET /api/clients` and attaches to `POST /api/clients/:id/attachments`. Both upload the PDF unchanged, so a signed PDF keeps its signing stamp and still matches its record, and both appear under "Continue with…" in the result window.
+
+### Signing record (hidden stamp)
+
+Every successful `/sign` writes three custom keys into the PDF's Info dictionary: `VaultSigningId` (UUID), `VaultSignedBy` (the account email) and `VaultSignedAt` (ISO time). Nothing is drawn on the page. It also inserts a `pdf_signatures` row: user, email, file name, SHA-256 of the uploaded and the signed file, time, IP (`req.ip`, behind `trust proxy`), user agent, number of placements. If the insert fails, the request fails, so no signed PDF is handed out without its record. A request where nothing could be placed now returns 400 and stores nothing.
+
+`GET /api/pdf/signatures/:signingId` returns the record, scoped to the caller's own rows (404 otherwise). `client/src/components/PdfSigningRecord.jsx` reads `VaultSigningId` through pdfjs (`getMetadata().info.Custom`), hashes the open file in the browser, and shows a "Signing record" box. The box says whether the file is byte-for-byte what was signed or has changed since (any re-save changes the hash, even without edits). It appears under every PDF Tools preview (`PdfPagePreview`) and at the top of a PDF in the Files preview drawer, and only when the PDF has the stamp. Test: `npm run test:pdf-sign` (needs a local Postgres).
+
+The time comes from Vault's own server clock and record. There is no independent (RFC 3161) timestamp.
 
 Three signature sources, picked before dragging a placement box:
 - **Draw** — a small HTML5 canvas signature pad (plain mouse/touch strokes, no library), captured as a PNG data URL when a box is placed.

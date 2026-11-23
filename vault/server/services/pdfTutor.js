@@ -78,11 +78,16 @@ const CATALOG = [
     does: 'Shows file name, size, page count and type. Runs in the browser.', notes: '' },
   { id: 'compare', label: 'Compare', group: 'Analyse',
     does: 'Compares two PDFs page by page: a picture comparison that highlights changed areas, and a line-by-line text comparison.', notes: '' },
+  { id: 'savetonote', label: 'Save to Notes', group: 'Save',
+    does: 'Makes a new note with the PDF attached. The title starts as the file name.', notes: 'Often used straight after Fill & Sign via Continue with…; the file is stored unchanged.' },
+  { id: 'savetoclient', label: 'Save to Client', group: 'Save',
+    does: "Adds the PDF to a client's files in the CRM, picked from a list.", notes: 'The file is stored unchanged.' },
 ];
 
 // Rules of the tools that the guide may explain. Taken from how PDF Tools actually behaves (docs/pdf-agent.md).
 const RULES = [
-  'Every tool is stateless: one file goes in and a result comes back to preview and download. Nothing is stored on the server, so keep the downloaded result; the original file is never changed. The result window has a "Continue with…" menu that sends the result straight into another tool, with no download and re-upload.',
+  'Save to Notes and Save to Client are the only tools that keep the PDF in Vault (as a note attachment or a CRM client file); Fill & Sign keeps a signing record but not the file.',
+  'Every other tool is stateless: one file goes in and a result comes back to preview and download. Nothing is stored on the server, so keep the downloaded result; the original file is never changed. The result window has a "Continue with…" menu that sends the result straight into another tool, with no download and re-upload.',
   'Page ranges are typed like 1-3,5,7-9, or "all".',
   'Tools work on one file at a time, so a job with several steps is done one tool after another: run a tool, then use "Continue with…" in its result window (or download the result and upload it to the next tool).',
   'A sensible order for a multi-step job: OCR a scan first (so later steps and searching work), then reorder, crop and clean up pages, then add watermark, page numbers or header and footer, then compress, and set a password last.',

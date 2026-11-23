@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect } f
 import { useSearchParams } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+import PdfSigningRecord from '../components/PdfSigningRecord';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
@@ -9,6 +10,7 @@ import PdfTutorChat from './pdf/PdfTutorChat';
 import { PdfVoiceContext, VoiceCommandBar } from './pdf/PdfVoice';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool, HeaderFooterTool, NupTool } from './pdf/PdfExtraTools';
+import { SaveToNoteTool, SaveToClientTool } from './pdf/PdfSaveTools';
 import PdfToHtmlTool from './pdf/PdfToHtml';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
@@ -426,6 +428,24 @@ const TOOL_HELP = {
       'Each page is scaled to fit, keeping its proportions',
     ],
   },
+  savetonote: {
+    title: 'Save to Notes',
+    what: 'Keep a PDF in Notes as a new note with the PDF attached.',
+    features: [
+      'Upload a PDF, or send a result here with Continue with… (for example straight after Fill & Sign)',
+      'Choose the note title; it starts as the file name',
+      'Files the PDF exactly as it is, so a signed PDF keeps its signing record',
+    ],
+  },
+  savetoclient: {
+    title: 'Save to Client',
+    what: "Add a PDF to a client's files in the CRM.",
+    features: [
+      'Upload a PDF, or send a result here with Continue with…',
+      'Pick the client from your CRM list',
+      'Files the PDF exactly as it is, so a signed PDF keeps its signing record',
+    ],
+  },
   compress: {
     title: 'Compress PDF',
     what: "Shrink a PDF's file size with a safe structural pass, plus an optional deeper image recompression.",
@@ -471,6 +491,8 @@ const MODES = [
   { id: 'crop',         label: 'Crop Pages',       icon: 'crop'        },
   { id: 'headerfooter', label: 'Header & Footer',  icon: 'panel-top'   },
   { id: 'nup',          label: 'Pages per Sheet',  icon: 'grid-2x2'    },
+  { id: 'savetonote',   label: 'Save to Notes',    icon: 'sticky-note' },
+  { id: 'savetoclient', label: 'Save to Client',   icon: 'briefcase'   },
 ];
 
 // Hover text for every item in the left-hand list: what the tool does, in plain words. The PDF guide's test
@@ -508,6 +530,8 @@ const TOOL_TIPS = {
   metadata: "See and change a PDF's title, author, subject and keywords.",
   fileinfo: "Show a PDF's size, page count and type. Runs in your browser.",
   compare: 'Put two PDFs side by side and highlight what changed, by picture or by text.',
+  savetonote: 'Keep a PDF in Notes: makes a new note with the PDF attached.',
+  savetoclient: "Add a PDF to a client's files in the CRM.",
 };
 
 const GROUP_TIPS = {
@@ -516,6 +540,7 @@ const GROUP_TIPS = {
   Edit: 'Change how every page looks: watermark, numbers, header and footer, crop, file size, and passwords.',
   Forms: 'Fill, sign, mark up and build forms.',
   Analyse: 'Look inside a PDF: its details, or what differs between two versions.',
+  Save: 'Keep a PDF in Vault: as a new note, or on a client in the CRM.',
 };
 
 const MODE_GROUPS = [
@@ -524,6 +549,7 @@ const MODE_GROUPS = [
   { label: 'Edit',     ids: ['watermark', 'pagenumbers', 'headerfooter', 'crop', 'compress', 'protect', 'unprotect'] },
   { label: 'Forms',    ids: ['inspect', 'fill', 'sign', 'annotate', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo', 'compare']     },
+  { label: 'Save',     ids: ['savetonote', 'savetoclient']           },
 ];
 
 // "Open on the tool I used last" instead of the job screen: off unless ticked on the job screen (same as Video Tools).
@@ -717,6 +743,7 @@ export function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState('idle'); // 'idle'|'loading'|'ready'|'error'|'locked'
   const [errMsg, setErrMsg] = useState('');
+  const [signCheck, setSignCheck] = useState(null); // { doc, bytes } for the hidden signing stamp
 
   // Render a single page to the canvas.
   // Defined as a plain async function (not useCallback) so it always closes over
@@ -734,6 +761,7 @@ export function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
   }
 
   useEffect(() => {
+    setSignCheck(null);
     if (!dataUrl) {
       pdfDocRef.current = null;
       setTotal(0); setPg(1);
@@ -749,6 +777,7 @@ export function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
         const doc = await lib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
         if (cancelled) return;
         pdfDocRef.current = doc;
+        setSignCheck({ doc, bytes: dataUrlToUint8Array(dataUrl) });
         setTotal(doc.numPages);
         setPg(1);
         await drawPage(doc, 1);
@@ -819,6 +848,7 @@ export function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
           <button onClick={() => goTo(pg + 1)} disabled={pg >= total} className="px-2 py-0.5 rounded disabled:opacity-30 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>▶</button>
         </div>
       )}
+      {signCheck && <div className="px-3 pb-3"><PdfSigningRecord doc={signCheck.doc} bytes={signCheck.bytes} /></div>}
     </div>
   );
 }
@@ -2996,7 +3026,7 @@ export default function PdfPage() {
         page: s.page, x: s.x, y: s.y, width: s.width, height: s.height,
         type: s.type, dataUrl: s.dataUrl, text: s.text, fontFamily: s.fontFamily,
       }));
-      const res = await api.post('/api/pdf/sign', { dataUrl: signFile.dataUrl, signatures });
+      const res = await api.post('/api/pdf/sign', { dataUrl: signFile.dataUrl, signatures, fileName: signFile.name });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Sign failed.');
       setSignResult({ dataUrl: data.dataUrl, placed: data.placed });
@@ -3245,6 +3275,8 @@ export default function PdfPage() {
 
           {mode === 'pdf2img' && <PageToImageTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'extractimages' && <ExtractImagesTool getIcon={getIcon} onHelp={setHelpTool} />}
+          {mode === 'savetonote' && <SaveToNoteTool getIcon={getIcon} onHelp={setHelpTool} />}
+          {mode === 'savetoclient' && <SaveToClientTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'pdftohtml' && <PdfToHtmlTool getIcon={getIcon} onHelp={setHelpTool} />}
           {mode === 'ocr' && <OcrTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
           {mode === 'removeblank' && <RemoveBlankTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}

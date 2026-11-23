@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
+import PdfSigningRecord from './PdfSigningRecord';
 
 function classifyFile(file) {
   if (!file) return 'text';
@@ -122,6 +123,7 @@ export default function FilePreviewDrawer({ file, onClose, onAttach }) {
   const prevFocusRef = useRef(null);
 
   const [pdfDoc, setPdfDoc] = useState(null);
+  const [pdfBytes, setPdfBytes] = useState(null);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [pdfRendered, setPdfRendered] = useState(3);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -133,6 +135,7 @@ export default function FilePreviewDrawer({ file, onClose, onAttach }) {
   // Reset all view state whenever the file changes — prevents stale content
   useEffect(() => {
     setPdfDoc(null);
+    setPdfBytes(null);
     setPdfTotalPages(0);
     setPdfRendered(3);
     setPdfError('');
@@ -174,8 +177,10 @@ export default function FilePreviewDrawer({ file, onClose, onAttach }) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buffer = await res.arrayBuffer();
         if (cancelled) return;
+        const bytes = new Uint8Array(buffer.slice(0)); // pdfjs may detach the buffer it is given; keep a copy for the signing check
         const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
         if (cancelled) return;
+        setPdfBytes(bytes);
         setPdfDoc(doc);
         setPdfTotalPages(doc.numPages);
       } catch (err) {
@@ -300,6 +305,7 @@ export default function FilePreviewDrawer({ file, onClose, onAttach }) {
               </p>
             ) : pdfDoc ? (
               <div>
+                <PdfSigningRecord doc={pdfDoc} bytes={pdfBytes} />
                 {Array.from({ length: Math.min(pdfRendered, pdfTotalPages) }, (_, i) => i + 1).map(pageNum => (
                   <PdfPageCanvas key={pageNum} pdfDoc={pdfDoc} pageNum={pageNum} />
                 ))}

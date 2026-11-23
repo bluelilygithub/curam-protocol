@@ -5756,6 +5756,24 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_events_contract ON contract_events ("contractId", "occurredAt" DESC)`);
 
+  // PDF Tools → Fill & Sign: one row per signing. The PDF carries only signingId (hidden in its Info dictionary);
+  // the hashes here let the preview say whether the file is still byte-for-byte what was signed.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pdf_signatures (
+      id               SERIAL PRIMARY KEY,
+      "signingId"      UUID NOT NULL UNIQUE,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "signerEmail"    TEXT NOT NULL,
+      "fileName"       TEXT,
+      "originalSha256" CHAR(64) NOT NULL,
+      "signedSha256"   CHAR(64) NOT NULL,
+      "signedAt"       TIMESTAMPTZ NOT NULL,
+      "ipAddress"      TEXT,
+      "userAgent"      TEXT,
+      placements       INTEGER NOT NULL
+    )
+  `);
+
   // Clause taxonomy seed (v1) — idempotent, matches docs/contract-review-spec.md
   const clauseTypeSeed = [
     ['indemnity', 'Indemnity'],

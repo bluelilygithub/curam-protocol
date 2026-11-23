@@ -309,8 +309,16 @@ app.use('/api/guitar',    requireFeature('guitar'),    require('./routes/guitar'
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');
-  app.use(express.static(distPath));
+  // Hashed assets never change; index.html must always be re-fetched so a deploy is picked up.
+  app.use(express.static(distPath, {
+    setHeaders(res, file) {
+      res.set('Cache-Control', path.basename(file) === 'index.html' ? 'no-cache' : 'public, max-age=31536000, immutable');
+    },
+  }));
+  // A chunk from an older build is gone after a deploy: answer 404, not index.html served as text/html.
+  app.use('/assets', (req, res) => res.status(404).end());
   app.get('*', (req, res) => {
+    res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }

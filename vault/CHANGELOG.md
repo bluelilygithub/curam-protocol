@@ -4,6 +4,19 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (pdf-signing-record-save-tools)
+
+### PDF Tools — "Failed to fetch dynamically imported module" after a deploy
+A tab left open across a deploy asked for a code chunk the new build had deleted. The server's catch-all answered with `index.html` as `text/html`, and the PDF page failed to load. Missing `/assets/*` files now get a 404. `index.html` is sent `no-cache` and hashed assets are cached as immutable. On `vite:preloadError` the client reloads once, guarded against a reload loop for 10 seconds.
+
+### PDF Tools — hidden signing record for Fill & Sign
+Each signing now writes `VaultSigningId`, `VaultSignedBy` and `VaultSignedAt` into the PDF's hidden properties, with nothing drawn on the page. It also saves a `pdf_signatures` row: account, file name, SHA-256 of the original and signed file, time, IP address, browser, and number of placements. If the record can't be saved, signing fails. A request where nothing could be placed now returns an error instead of "0 signatures applied". A **Signing record** box appears under any PDF Tools preview and in the Files preview drawer when a PDF carries the stamp. It says whether the file is byte-for-byte what was signed. Lookups are limited to your own records (`GET /api/pdf/signatures/:id`). New test: `npm run test:pdf-sign`.
+
+### PDF Tools — Save to Notes / Save to Client
+A new **Save** group in the sidebar. **Save to Notes** makes a new note with the PDF attached. **Save to Client** adds the PDF to a CRM client's files. Both reuse the existing attachment routes and accept results from "Continue with…", for example straight after signing. The guide chat, tooltips, help text and docs/pdf-agent.md are updated.
+
+---
+
 ## 2026-11-23 (presentations-design-pass)
 
 ### Presentations — automatic composition instead of dropped-in pictures
