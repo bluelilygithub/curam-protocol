@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "001f611f",
+   "fullHash": "001f611fae7e61ccaac53c62efcb72c1658cd615",
+   "committedAt": "2026-11-24T08:23:31+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: move nested skills up so SkillSpector scans each one",
+   "filesChanged": 5,
+   "insertions": 81,
+   "deletions": 5,
+   "goal": "Make skill-by-skill scans actually split by skill for repositories that keep their skills in a subfolder.",
+   "whatChanged": "The first skill-by-skill scan of claude-trading-skills reached 98% coverage but still gave one score and no per-skill sections. SkillSpector's detect_skills (multi_skill.py at the pinned commit) only counts folders directly inside the scanned folder that hold SKILL.md; that repository keeps its 68 skills in skills/<name>/, so it refused --max-skills and Vault's retry without it scanned one bundle. runner.js gains flattenSkills: when the top has no SKILL.md and fewer than 2 skills directly in it but 2 or more deeper (depth 10, 20,000 entries, skipping .git, node_modules, .venv and __pycache__), it moves each skill folder (nested skills travel with their parent) into <temp>/flat, named by the folder or, on a clash, by its whole path joined with __, shallower skills first so names do not depend on disk order. runScan scans that folder and stores the count of files left outside every skill as report.leftOutFiles, which the report page and the Markdown export show. Tests cover moving, nesting, name clashes, skipped folders and the cases left alone; the runScan tests expect the flat layout. Run on the real repository: 68 skills moved, all 68 directly in the scanned folder, 10 files left out.",
+   "filesImpacted": [
+    "server/services/skillScan/runner.js",
+    "server/services/skillScan/skillScan.test.js",
+    "client/src/pages/SkillScanPage.jsx",
+    "client/src/pages/skillScan/exportReport.mjs",
+    "docs/skill-scan.md"
+   ],
+   "benefit": "Repositories like claude-trading-skills get a verdict and score per skill instead of one capped score for everything.",
+   "concerns": "Files outside the skill folders (README, tests, shared scripts) are no longer scanned; a skill that runs a shared script from outside its own folder would have that script missed. The report states how many files were left out. Not yet run end to end on Railway."
+  },
+  {
    "commit": "687c9e44",
    "fullHash": "687c9e448317f09b420ef0d3a845ac1df34fd48b",
    "committedAt": "2026-11-24T07:59:06+10:00",

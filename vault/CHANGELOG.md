@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-nested)
+
+### Skill Scanner — skills in a subfolder are scanned one by one
+The first skill-by-skill scan of claude-trading-skills read 98% of the code but still gave one score for the whole repository. SkillSpector only counts skills that sit directly in the folder it is given, and that repository keeps them in `skills/<name>/`. Vault now moves each skill folder up before the scan, so every skill gets its own verdict. Files outside the skills (README, tests: 10 in that repository) are not scanned, and the report says how many.
+
+### Settings guide — PDF Tools
+The Settings guide now knows the PDF Tools section (the model PDF → HTML uses), so its test passes again.
+
+---
+
 ## 2026-11-24 (skill-scanner-progress)
 
 ### Skill Scanner — every scan skill by skill, a time limit that fits, a progress bar
