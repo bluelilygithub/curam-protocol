@@ -21,3 +21,4 @@ require('./plans'); // Plans (with their steps, dependencies and links)
 require('./presentations'); // Presentations decks and saved themes
 require('./translate'); // Translate: translations (with their files) and glossaries
 require('./ponytailTasks'); // Ponytail report tasks (admin)
+require('./pdfSignatures'); // PDF Tools → Signed PDFs (signing record + kept copy)

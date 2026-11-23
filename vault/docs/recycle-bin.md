@@ -85,6 +85,8 @@ If the thing has files (or anything else outside the snapshot), register `discar
 
 - **Translate**: `translate-job` and `translate-glossary` (`adapters/translate.js`). A translation keeps its files in its own row (BYTEA), so here the files ARE in the payload, as base64, and this kind may be up to 40 MB; a bigger one is refused (413 `tooLarge`) and the page asks whether to delete it for good. Its versions (`translate_job_passes`) travel in the payload too and come back with it (a pass that was running comes back as stopped). A learned glossary restored after a new one was started for the same language comes back as an ordinary glossary. Undo toast on My translations and Glossaries. Also `translate-style-set` (a house style with its examples; workspace-wide, so it lands in the deleting admin's bin). See `docs/translate-agent.md` ("The page").
 
+- **PDF Tools → Signed PDFs**: `pdf-signature` (`adapters/pdfSignatures.js`): the signing record (`pdf_signatures` row, restored with `insertRow`) plus the id of its kept copy. The copy stays on disk and in `attachments` while it waits, but can't be opened because its owner check goes through the deleted row. `discard` removes the file. While it's in the bin, the PDF's hidden stamp shows "no matching record". `DELETE /api/pdf/signatures/:signingId`; Undo toast in `PdfSaveTools.jsx`. Test: `server/routes/pdfSign.test.js`.
+
 Candidates to adopt next (not done): saved CSS pages, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
 
 Chats are in the bin since 2026-10-24 (see Used by).

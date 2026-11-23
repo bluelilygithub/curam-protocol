@@ -79,7 +79,7 @@ const CATALOG = [
   { id: 'compare', label: 'Compare', group: 'Analyse',
     does: 'Compares two PDFs page by page: a picture comparison that highlights changed areas, and a line-by-line text comparison.', notes: '' },
   { id: 'signedpdfs', label: 'Signed PDFs', group: 'Save',
-    does: 'Lists every PDF signed in Fill & Sign (a copy is kept automatically). Open one to view it with its signing record, download it, or send it on with Continue with….', notes: 'Signings made before copies were kept show "No copy kept". If the storage quota is full, signing still works but no copy is kept.' },
+    does: 'Lists every PDF signed in Fill & Sign (a copy is kept automatically). Open one to view it with its signing record, download it, or send it on with Continue with….', notes: 'Delete moves an entry (record and copy) to the 30-day recycle bin, with Undo. While it is there, the PDF shows no matching record. Signings made before copies were kept show "No copy kept". If the storage quota is full, signing still works but no copy is kept.' },
   { id: 'savetonote', label: 'Save to Notes', group: 'Save',
     does: 'Makes a new note with the PDF attached, optionally filed under one of your projects. The title starts as the file name.', notes: 'Often used straight after Fill & Sign via Continue with…; the file is stored unchanged.' },
   { id: 'savetoclient', label: 'Save to Client', group: 'Save',

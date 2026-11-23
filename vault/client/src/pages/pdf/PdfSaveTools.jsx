@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/apiClient';
 import Tooltip from '../../components/Tooltip';
+import { offerUndo } from '../../utils/binUndo';
 import { ToolHeader, PdfUpload, RunBtn, ErrMsg, PdfPagePreview, readFileAsDataUrl, dataUrlToUint8Array, getPdfPageCount } from '../PdfPage';
 
 const lbl = 'block text-xs font-medium mb-1';
@@ -114,12 +115,26 @@ export function SignedPdfsTool({ getIcon, onHelp, setResultModal }) {
   const [rows, setRows] = useState(null); // null = loading
   const [error, setError] = useState('');
   const [opening, setOpening] = useState(null); // signingId being fetched
+  const [confirming, setConfirming] = useState(null); // signingId showing "Delete? Yes / No"
 
-  useEffect(() => {
-    api.get('/api/pdf/signatures')
-      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Could not load your signed PDFs.'); setRows(d.signatures || []); })
-      .catch(err => { setError(err.message); setRows([]); });
-  }, []);
+  const load = () => api.get('/api/pdf/signatures')
+    .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Could not load your signed PDFs.'); setRows(d.signatures || []); })
+    .catch(err => { setError(err.message); setRows(rows => rows || []); });
+  useEffect(() => { load(); }, []);
+
+  // Goes to the shared 30-day recycle bin, with Undo (Vault's delete rule, docs/recycle-bin.md).
+  const remove = async (row) => {
+    setConfirming(null); setError('');
+    try {
+      const res = await api.delete(`/api/pdf/signatures/${row.signingId}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Could not delete that signed PDF.');
+      setRows(rs => rs.filter(r => r.signingId !== row.signingId));
+      offerUndo({ message: `Moved "${row.fileName || 'Signed PDF'}" to the recycle bin (${d.retentionDays} days).`, binIds: d.binId, after: load });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const open = async (row) => {
     setOpening(row.signingId); setError('');
@@ -149,15 +164,33 @@ export function SignedPdfsTool({ getIcon, onHelp, setResultModal }) {
                 <p className="truncate" style={{ color: 'var(--color-text)' }}>{r.fileName || 'Untitled PDF'}</p>
                 <p className="text-xs" style={muted}>{new Date(r.signedAt).toLocaleString()} · {r.signerEmail}</p>
               </div>
-              {r.attachmentId ? (
-                <button type="button" onClick={() => open(r)} disabled={!!opening}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-40"
-                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                  {opening === r.signingId ? 'Opening…' : 'Open'}
-                </button>
-              ) : (
-                <span className="flex-shrink-0 text-xs" style={muted}>No copy kept</span>
-              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {confirming === r.signingId ? (
+                  <>
+                    <span className="text-xs" style={{ color: 'var(--color-text)' }}>Delete?</span>
+                    <button type="button" onClick={() => remove(r)} className="px-2 py-1 rounded text-xs font-medium" style={{ background: '#ef4444', color: '#fff' }}>Yes</button>
+                    <button type="button" onClick={() => setConfirming(null)} className="px-2 py-1 rounded text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>No</button>
+                  </>
+                ) : (
+                  <>
+                    {r.attachmentId ? (
+                      <button type="button" onClick={() => open(r)} disabled={!!opening}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-40"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        {opening === r.signingId ? 'Opening…' : 'Open'}
+                      </button>
+                    ) : (
+                      <span className="text-xs" style={muted}>No copy kept</span>
+                    )}
+                    <Tooltip text="Move to the recycle bin. You can undo, or restore it from Settings → Recycle bin for 30 days.">
+                      <button type="button" onClick={() => setConfirming(r.signingId)} aria-label={`Delete ${r.fileName || 'signed PDF'}`}
+                        className="p-1.5 rounded hover:opacity-60 transition-opacity" style={muted}>
+                        {getIcon('trash', { size: 14 })}
+                      </button>
+                    </Tooltip>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>

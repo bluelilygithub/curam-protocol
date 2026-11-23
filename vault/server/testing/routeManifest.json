@@ -2671,6 +2671,15 @@
   "POST /api/pdf/sign": {
    "class": "authed"
   },
+  "GET /api/pdf/signatures": {
+   "class": "authed"
+  },
+  "GET /api/pdf/signatures/:signingId": {
+   "class": "authed"
+  },
+  "DELETE /api/pdf/signatures/:signingId": {
+   "class": "authed"
+  },
   "POST /api/pdf/split": {
    "class": "authed"
   },

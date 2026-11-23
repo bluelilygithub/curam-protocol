@@ -435,6 +435,7 @@ const TOOL_HELP = {
       'Open one to view it with its signing record (signer, time, IP, browser, and whether the file still matches)',
       'Download it again, or send it on with Continue with…, for example to Save to Notes',
       'Signings from before copies were kept show the record only',
+      'Delete moves an entry to the recycle bin, with Undo; restore it from Settings → Recycle bin within 30 days',
     ],
   },
   savetonote: {

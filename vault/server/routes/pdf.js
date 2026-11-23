@@ -20,11 +20,13 @@ const { generateTextPdf } = require('../services/textToPdf');
 const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 const pdfTools = require('../services/pdfTools');
 const { saveBufferAttachment } = require('../utils/attachments');
+const bin = require('../services/recycleBin');
 const pdfToHtml = require('../services/pdfToHtml');
 const pdfToHtmlModel = require('../services/pdfToHtmlModel');
 const pdfToHtmlJobs = require('../services/pdfToHtmlJobs');
 
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -1078,10 +1080,37 @@ router.get('/signatures', async (req, res) => {
   }
 });
 
+// Delete one entry from Signed PDFs: the record goes to the shared 30-day recycle bin (adapter: recycleBin/adapters/pdfSignatures.js);
+// the kept copy stays on disk until the item leaves the bin. Until it is restored, the PDF's stamp shows "no matching record".
+router.delete('/signatures/:signingId', async (req, res) => {
+  if (!UUID_RE.test(req.params.signingId)) return res.status(404).json({ error: 'Not found' });
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows: [s] } = await db.query('SELECT * FROM pdf_signatures WHERE "signingId"=$1 AND "userId"=$2 FOR UPDATE', [req.params.signingId, req.user.id]);
+    if (!s) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const files = await db.query(`SELECT id FROM attachments WHERE "entityType"='pdf_signature' AND "entityId"=$1`, [s.id]);
+    const binId = await bin.moveToBin(db, {
+      userId: req.user.id, type: 'pdf-signature', id: s.id, title: s.fileName || 'Signed PDF',
+      detail: `Signed ${new Date(s.signedAt).toISOString().slice(0, 10)}`,
+      payload: { signature: s, attachmentIds: files.rows.map((r) => r.id) },
+    });
+    await db.query('DELETE FROM pdf_signatures WHERE id=$1', [s.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('PDF signature delete:', err);
+    res.status(500).json({ error: 'Could not delete that signed PDF' });
+  } finally {
+    db.release();
+  }
+});
+
 // The signing record behind a PDF's hidden VaultSigningId — only the signer's own records are visible.
 router.get('/signatures/:signingId', async (req, res) => {
   try {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.signingId)) return res.status(404).json({ error: 'No signing record' });
+    if (!UUID_RE.test(req.params.signingId)) return res.status(404).json({ error: 'No signing record' });
     const { rows } = await pool.query(
       `SELECT "signingId", "signerEmail", "fileName", "originalSha256", "signedSha256", "signedAt", "ipAddress", "userAgent", placements
        FROM pdf_signatures WHERE "signingId"=$1 AND "userId"=$2`,

@@ -31,6 +31,7 @@ let USER = {}; let OTHER = {}; let actAs;
 app.use((req, _res, next) => { req.user = { id: actAs.id, email: actAs.email, isAdmin: false }; next(); });
 app.use('/api/pdf', require('./pdf'));
 app.use('/api/attachments', require('./attachments'));
+app.use('/api/recycle-bin', require('./recycleBin'));
 
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const SIG_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -98,6 +99,34 @@ test('signed PDFs: a copy of the signed file is kept, listed and downloadable by
   actAs = OTHER;
   assert.strictEqual((await fetch(`${base}/api/attachments/${row.attachmentId}/download`)).status, 404);
   assert.strictEqual((await (await fetch(`${base}/api/pdf/signatures`)).json()).signatures.length, 0, 'another user lists nothing');
+});
+
+test('delete: goes to the recycle bin, Undo restores record and copy, Delete forever removes the file', async () => {
+  actAs = OTHER;
+  assert.strictEqual((await fetch(`${base}/api/pdf/signatures/${signed.id}`, { method: 'DELETE' })).status, 404, 'another user cannot delete it');
+
+  actAs = USER;
+  const row = (await (await fetch(`${base}/api/pdf/signatures`)).json()).signatures.find((s) => s.signingId === signed.id);
+  const del = await fetch(`${base}/api/pdf/signatures/${signed.id}`, { method: 'DELETE' });
+  const { binId } = await del.json();
+  assert.strictEqual(del.status, 200);
+  assert.ok(binId);
+  assert.strictEqual((await fetch(`${base}/api/pdf/signatures/${signed.id}`)).status, 404, 'record gone from lookups');
+  assert.ok(!(await (await fetch(`${base}/api/pdf/signatures`)).json()).signatures.some((s) => s.signingId === signed.id), 'gone from the list');
+  assert.strictEqual((await fetch(`${base}/api/attachments/${row.attachmentId}/download`)).status, 404, 'copy cannot be opened while in the bin');
+  const { rows: [file] } = await pool.query('SELECT "storedPath" FROM attachments WHERE id=$1', [row.attachmentId]);
+  assert.ok(fs.existsSync(file.storedPath), 'file stays on disk while in the bin');
+
+  assert.strictEqual((await fetch(`${base}/api/recycle-bin/${binId}/restore`, { method: 'POST' })).status, 200);
+  const back = await fetch(`${base}/api/attachments/${row.attachmentId}/download`);
+  assert.strictEqual(back.status, 200, 'copy opens again after restore');
+  assert.strictEqual(sha(Buffer.from(await back.arrayBuffer())), sha(signed));
+  assert.strictEqual((await (await fetch(`${base}/api/pdf/signatures/${signed.id}`)).json()).signedSha256, sha(signed), 'record back');
+
+  const again = await (await fetch(`${base}/api/pdf/signatures/${signed.id}`, { method: 'DELETE' })).json();
+  assert.strictEqual((await fetch(`${base}/api/recycle-bin/${again.binId}`, { method: 'DELETE' })).status, 200);
+  assert.ok(!fs.existsSync(file.storedPath), 'Delete forever removes the file');
+  assert.strictEqual((await pool.query('SELECT 1 FROM attachments WHERE id=$1', [row.attachmentId])).rows.length, 0);
 });
 
 test('sign: nothing placed means no record and an error', async () => {
