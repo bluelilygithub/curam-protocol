@@ -214,6 +214,8 @@ const MODULES = [
   { name: 'productReview', label: 'ProductReview.com.au', group: 'Stage 2 — enrichment', run: (seed, ctx) => reviewScrape('productReview', seed, ctx) },
   { name: 'trustpilot', label: 'Trustpilot', group: 'Stage 2 — enrichment', run: (seed, ctx) => reviewScrape('trustpilot', seed, ctx) },
   { name: 'techStack', label: 'Tech stack detection', group: 'Stage 2 — enrichment', run: (seed) => techFromSeed(seed) },
+  // runs after the others (run.js RESEARCH) so it can search by the ABN Lookup entity name
+  { name: 'webResearch', label: 'Web research', group: 'Stage 2b — research', run: (seed, ctx) => require('./research').webResearch(seed, ctx) },
 ];
 
 const BY_NAME = Object.fromEntries(MODULES.map((m) => [m.name, m]));

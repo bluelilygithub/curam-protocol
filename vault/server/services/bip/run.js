@@ -10,6 +10,9 @@ const store = require('./store');
 
 const SEED = ['registration', 'dns', 'website', 'domainsTool'];
 const ENRICHMENT = ['abr', 'asic', 'places', 'googleSearch', 'socialLinks', 'productReview', 'trustpilot', 'techStack'];
+// after ENRICHMENT, with the ABN Lookup result in the seed so research can search by the registered name
+const RESEARCH = ['webResearch'];
+const withAbr = (seed, results) => ({ ...seed, abr: results.abr?.data || seed?.abr || null });
 const ALL_MODULES = MODULES.map((m) => m.name);
 
 function summarise(results) {
@@ -45,6 +48,7 @@ async function runProfile({ profileId, userId, domain, modules = null, decisions
       let done = 0;
       const seedNames = refresh.filter((name) => SEED.includes(name));
       const enrichNames = refresh.filter((name) => ENRICHMENT.includes(name));
+      const researchNames = refresh.filter((name) => RESEARCH.includes(name));
       // Seed sources run first: enrichment modules read the seed, so a website refresh must land before social links or tech stack.
       for (const name of seedNames) {
         const result = await runModule(name, seed, ctx);
@@ -62,6 +66,13 @@ async function runProfile({ profileId, userId, domain, modules = null, decisions
         done += 1;
         onProgress({ phase: 'refresh', current: done, total: refresh.length, module: name });
       }));
+      for (const name of researchNames) {
+        onProgress({ phase: 'refresh', current: done, total: refresh.length, module: name });
+        const result = await runModule(name, withAbr(seed, results), ctx);
+        results[name] = result;
+        await store.saveModule(profileId, userId, name, result);
+        done += 1;
+      }
     } else {
       onProgress({ phase: 'seed', current: 0, total: ENRICHMENT.length, module: null });
       const seeded = await seedAll(domain, ctx);
@@ -71,13 +82,21 @@ async function runProfile({ profileId, userId, domain, modules = null, decisions
       onProgress({ phase: 'seed', current: 4, total: ENRICHMENT.length, module: null });
 
       let done = 0;
+      const total = ENRICHMENT.length + RESEARCH.length;
       await Promise.all(ENRICHMENT.map(async (name) => {
         const result = await runModule(name, seed, ctx);
         results[name] = result;
         await store.saveModule(profileId, userId, name, result);
         done += 1;
-        onProgress({ phase: 'enrich', current: done, total: ENRICHMENT.length, module: name });
+        onProgress({ phase: 'enrich', current: done, total, module: name });
       }));
+      for (const name of RESEARCH) {
+        onProgress({ phase: 'enrich', current: done, total, module: name });
+        const result = await runModule(name, withAbr(seed, results), ctx);
+        results[name] = result;
+        await store.saveModule(profileId, userId, name, result);
+        done += 1;
+      }
     }
 
     const reconciliation = reconcile(seed, results, decisions);

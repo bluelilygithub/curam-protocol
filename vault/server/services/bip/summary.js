@@ -15,7 +15,9 @@ Rules:
 - Use only the data given. Never add facts from your own knowledge, and never guess revenue, staff numbers, ownership, directors or founding dates.
 - Say plainly when something rests on one source or is not confirmed by a business register (for example a copyright year, or a domain registration date, which is not when the business started).
 - Say what was not found when it matters (no ABN confirmed, no named staff, no reviews).
-- Write exactly three paragraphs, separated by a blank line, about 220 to 300 words in all: (1) what the business is and what it sells, to whom; (2) where it is, how to reach it, and how long it appears to have operated, with the basis for that; (3) its online presence, technology and reputation, and the main gaps.
+- webResearch facts carry a sourceType: say "the company says" for company_claim, name it as an estimate for estimate, and name the site for independent reports. A founder or COO named in the press is not a confirmed director; directors need an ASIC extract.
+- Where sources disagree (for example a website address in one state and a registered business location in another), say so plainly without choosing.
+- Write three or four paragraphs, separated by a blank line, about 250 to 380 words in all: (1) what the business is and what it sells, to whom; (2) who runs it and its history, with the basis for each; (3) where it is, how to reach it, and its registration; (4) online presence, customers, scale claims and reputation, and the main gaps. Merge (2) and (3) when there is little to say.
 - Plain prose. No headings, no bullet points, no markdown, no recommendations, no marketing tone.`;
 
 const list = (v, n = 12) => (Array.isArray(v) ? v.filter(Boolean).slice(0, n) : []);
@@ -40,7 +42,7 @@ function profileFacts(profile) {
       mainBusinessLocationOnAbnLookup: c.entity?.mainBusinessLocation || null, formerNames: list(c.entity?.formerNames),
       locationHistoryOnAbnLookup: list(c.entity?.locationHistory),
     },
-    people: list(c.people).map((p) => ({ name: p.name, role: p.role, source: p.source })),
+    people: list(c.people).map((p) => ({ name: p.name, role: p.role, source: p.source, sourceType: p.sourceType || null })),
     products: { description: c.products?.description || null, industryHints: list(c.products?.industryHints), keywords: list(c.products?.keywords, 15) },
     digital: {
       emailProvider: list(c.digital?.emailProvider), hosting: list(c.digital?.hosting), analytics: list(c.digital?.analytics),
@@ -51,6 +53,9 @@ function profileFacts(profile) {
       searchMentions: list(c.reputation?.mentions, 5).map((m) => m.title),
     },
     financial: { employeeCount: c.financial?.employeeCount ?? null, yearsInBusiness: c.financial?.yearsInBusiness ?? null, basis: c.financial?.yearsInBusinessBasis || null },
+    // what other sites say, each with who says it: register / independent (press, podcast) / company_claim / estimate
+    webResearch: ['history', 'customers', 'scale', 'partnerships', 'reviews', 'other'].flatMap((k) => (c.research?.[k] || []))
+      .slice(0, 30).map((f) => ({ fact: f.fact, year: f.year, sourceType: f.sourceType, site: f.host })),
     sourcesNotUsed: (profile?.sources || []).filter((s) => s.status !== 'success').map((s) => `${s.name}: ${s.reason || s.error || s.status}`),
   };
 }

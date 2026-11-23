@@ -34,7 +34,7 @@ const labelFor = (id) => BIP_TOOLS.find((t) => t.id === id)?.label || id;
 const MODULE_LABELS = {
   registration: 'Domain registration (RDAP / WHOIS)', dns: 'DNS records', website: 'Website pages', domainsTool: 'Domain tool overview',
   abr: 'ABN Lookup (ABR)', asic: 'ASIC Connect', places: 'Google Places', googleSearch: 'Google search', socialLinks: 'Social links',
-  productReview: 'ProductReview.com.au', trustpilot: 'Trustpilot', techStack: 'Tech stack',
+  productReview: 'ProductReview.com.au', trustpilot: 'Trustpilot', techStack: 'Tech stack', webResearch: 'Web research',
 };
 
 async function json(res) {
@@ -110,6 +110,23 @@ function Card({ title, icon, refreshModule, onRefresh, refreshing, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+// Who says a researched fact. Status colours are deliberately outside the theme (see client/DESIGN.md).
+const SOURCE_TYPES = {
+  register: { label: 'Register', color: '#16a34a', tip: 'A government register.' },
+  independent: { label: 'Independent', color: '#2563eb', tip: 'Press, a podcast or a site not run by the business.' },
+  company_claim: { label: 'Company says', color: '#f59e0b', tip: 'The business or its staff saying it about themselves, including in interviews.' },
+  estimate: { label: 'Estimate', color: '#9333ea', tip: 'A modelled figure (such as a data broker’s revenue band), not a filing.' },
+};
+function SourceTypeBadge({ type }) {
+  const t = SOURCE_TYPES[type];
+  if (!t) return null;
+  return (
+    <Tooltip text={t.tip}>
+      <span className="text-[10px] px-1 py-0.5 rounded border not-italic" style={{ color: t.color, borderColor: t.color }}>{t.label}</span>
+    </Tooltip>
   );
 }
 
@@ -427,6 +444,7 @@ export default function BipPage() {
   );
 
   const summary = profile?.summary;
+  const researchCount = ['history', 'customers', 'scale', 'partnerships', 'reviews', 'other'].reduce((n, k) => n + (c.research?.[k]?.length || 0), 0);
   const profileTool = profile && (
     <div className="grid lg:grid-cols-2 gap-5" data-tour="bip-cards">
       <section className="lg:col-span-2 rounded-2xl border p-5 space-y-3" style={panel}>
@@ -470,11 +488,15 @@ export default function BipPage() {
         {c.entity?.abnLookupUrl && <a href={c.entity.abnLookupUrl} target="_blank" rel="noreferrer" className="inline-block text-xs underline mt-2" style={{ color: 'var(--color-primary)' }}>Open on ABN Lookup</a>}
       </Card>
 
-      <Card title="People" icon="user" refreshModule={['asic']} onRefresh={rescan} refreshing={!!refreshing}>
+      <Card title="People" icon="user" refreshModule={['webResearch']} onRefresh={rescan} refreshing={!!refreshing}>
         {c.people?.length ? c.people.map((p, i) => <div key={i} className="py-2 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>{text(p.name)} <span className="text-xs" style={muted}>— {text(p.role)}</span></p>
-          <p className="text-xs" style={muted}>{p.source}</p>
+          <p className="text-xs" style={muted}>
+            {p.sourceType && <SourceTypeBadge type={p.sourceType} />} {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--color-primary)' }}>{p.source}</a> : p.source}
+          </p>
+          {p.quote && <p className="text-xs italic" style={muted}>“{p.quote}”</p>}
         </div>) : <p className="text-sm" style={muted}>No people were named in the public sources checked.</p>}
+        <p className="text-xs mt-2" style={muted}>People named by the press or the company are not confirmed directors; that needs an ASIC company extract.</p>
       </Card>
 
       <Card title="Locations" icon="globe" refreshModule={['places']} onRefresh={rescan} refreshing={!!refreshing}>
@@ -524,6 +546,34 @@ export default function BipPage() {
           <a key={i} href={m.url} target="_blank" rel="noreferrer" className="block text-xs py-1 underline" style={{ color: 'var(--color-primary)' }}>{text(m.title)}</a>
         )) : <p className="text-xs" style={muted}>No search mentions found.</p>}
       </Card>
+
+      <section className="lg:col-span-2">
+        <Card title="History & research" icon="search" refreshModule={['webResearch']} onRefresh={rescan} refreshing={!!refreshing}>
+          {researchCount ? (
+            <div className="space-y-3">
+              {[['history', 'History'], ['customers', 'Customers'], ['scale', 'Scale'], ['partnerships', 'Partnerships'], ['reviews', 'Review sites'], ['other', 'Other']].map(([key, label]) => (
+                c.research?.[key]?.length > 0 && (
+                  <div key={key}>
+                    <p className="text-xs font-medium mb-1" style={muted}>{label}</p>
+                    {c.research[key].map((f, i) => (
+                      <div key={i} className="py-1.5 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+                        <p className="text-sm" style={{ color: 'var(--color-text)' }}>{f.year ? `${f.year} · ` : ''}{f.fact}</p>
+                        <p className="text-xs" style={muted}>
+                          <SourceTypeBadge type={f.sourceType} /> <a href={f.url} target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--color-primary)' }}>{f.host}</a>
+                          {f.quote && <span className="italic"> — “{f.quote}”</span>}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm" style={muted}>{c.research?.reason || 'No web research yet. Refresh this card to search the web for press, interviews and review sites about this business.'}</p>
+          )}
+          <p className="text-xs mt-2" style={muted}>From other websites, each fact with its page and its exact words. “Company says” means the business said it about itself; estimates are modelled figures, not filings.</p>
+        </Card>
+      </section>
 
       <Card title="Financial Indicators" icon="line-chart">
         <p className="text-xs mb-2" style={{ color: 'var(--color-primary)' }}>estimates from public sources</p>

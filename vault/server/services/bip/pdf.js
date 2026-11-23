@@ -65,7 +65,7 @@ function buildDocument(deps, profile) {
       ['ACN', 'acn'], ['ABN status', 'abnStatus'], ['Main business location (ABN Lookup)', 'mainBusinessLocation'],
       ['Former names', 'formerNames'], ['Location history', 'locationHistory'],
     ])),
-    section('People', list(cards.people, (x) => `${x.name || 'Unknown'} — ${x.role || 'role not stated'} (${x.source || 'source not stated'})`)),
+    section('People', list(cards.people, (x) => `${x.name || 'Unknown'} — ${x.role || 'role not stated'} (${x.source || 'source not stated'}${x.sourceType === 'company_claim' ? ', company says' : ''})`)),
     section('Locations', list(cards.locations, (x) => `${x.value} — ${x.source || 'source not stated'} ${conf(x)}`)),
     section('Products & services', [
       ...rows(cards.products || {}, [['Description', 'description'], ['Industry hints', 'industryHints'], ['Keywords', 'keywords']]),
@@ -81,6 +81,17 @@ function buildDocument(deps, profile) {
       ...rows(rep, [['Google Places', 'googlePlaces'], ['ProductReview', 'productReview'], ['Trustpilot', 'trustpilot']]).map((el) => el),
       ...list(rep.mentions, (x) => `${x.title || '(no title)'} — ${x.url || ''}`),
     ]),
+    ...(() => {
+      const r = cards.research || {};
+      const TYPE = { register: 'Register', independent: 'Independent', company_claim: 'Company says', estimate: 'Estimate' };
+      const groups = [['history', 'History'], ['customers', 'Customers'], ['scale', 'Scale'], ['partnerships', 'Partnerships'], ['reviews', 'Review sites'], ['other', 'Other']]
+        .filter(([k]) => (r[k] || []).length);
+      if (!groups.length) return [];
+      return [section('History & research (from other websites)', groups.flatMap(([k, label]) => [
+        React.createElement(Text, { key: `${k}-h`, style: { ...s.muted, marginTop: 4 } }, safe(label)),
+        ...list(r[k], (f) => `${f.year ? `${f.year} · ` : ''}${f.fact} [${TYPE[f.sourceType] || f.sourceType}, ${f.host}]`),
+      ]))];
+    })(),
     section('Financial indicators — estimates from public sources', rows(financial, [
       ['Employee count', 'employeeCount'], ['Years in business', 'yearsInBusiness'], ['Based on', 'yearsInBusinessBasis'], ['Revenue estimate', 'revenueEstimate'], ['Funding status', 'fundingStatus'],
     ]).concat(React.createElement(Text, { key: 'note', style: s.muted }, safe(financial.note || '')))),

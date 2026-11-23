@@ -36,6 +36,7 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
     registrantOrganisation: val(r.organisation || r.registrantName),
   };
 
+  const researchFacts = Array.isArray(d.webResearch?.facts) ? d.webResearch.facts : [];
   entity.legalNameOnWebsite = val(w.legalName);
   entity.siteName = val(w.siteName);
   // from ABN Lookup (JSON API or the public history page)
@@ -50,7 +51,22 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
   const people = [
     ...(Array.isArray(w.people) ? w.people.map((x) => ({ ...x, source: 'Website scrape' })) : []),
     ...(Array.isArray(d.asic?.directors) ? d.asic.directors.map((x) => ({ ...x, source: 'ASIC Connect' })) : []),
+    // people named by other sites (press, podcasts), with the page and its wording; a founder or COO is not a director
+    ...researchFacts.filter((f) => f.kind === 'person' && f.name).map((f) => ({ name: f.name, role: f.role || null, source: `Web: ${f.host}`, url: f.url, sourceType: f.sourceType, quote: f.quote })),
   ];
+
+  // web research grouped for the History & research card (people are in People above)
+  const research = {
+    history: researchFacts.filter((f) => f.kind === 'history'),
+    customers: researchFacts.filter((f) => f.kind === 'customer'),
+    scale: researchFacts.filter((f) => f.kind === 'scale'),
+    partnerships: researchFacts.filter((f) => f.kind === 'partnership'),
+    reviews: researchFacts.filter((f) => f.kind === 'review'),
+    other: researchFacts.filter((f) => f.kind === 'other'),
+    pages: Array.isArray(d.webResearch?.pages) ? d.webResearch.pages : [],
+    status: results.webResearch?.status || null,
+    reason: results.webResearch?.reason || null,
+  };
 
   const locations = (f.address?.values || []).map((v) => ({ ...v, confidence: f.address.confidence }));
 
@@ -108,6 +124,7 @@ function buildCards(seed = {}, results = {}, reconciliation = {}) {
     digital,
     reputation,
     financial,
+    research,
   };
 }
 

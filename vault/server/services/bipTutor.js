@@ -33,6 +33,7 @@ const CATALOG = [
 const RULES = [
   'Type a domain in the search box, press Profile, wait for the background job, then open the saved profile.',
   'The first stage reads domain registration, DNS and the website. The second stage uses that seed for ABN Lookup, ASIC, Google Places, Google search, social links, ProductReview.com.au, Trustpilot and tech stack detection.',
+  'BIP also reads the business’s legal, team and history pages, looks up an ABN found there on the public ABN Lookup page (names, location history, ACN), and, when Vault has a web search key, searches other sites (press, interviews, review sites). Each fact from another site keeps its page, its exact words and a label: Register, Independent, Company says or Estimate. People named by the press are not confirmed directors.',
   'ASIC has no free public feed here. When it is blocked the source is marked unavailable and the profile links to the ASIC register for a manual check.',
   'A source with no key is skipped, not failed. The rest of the profile still finishes.',
   'The 30-day cache means the saved report is shown within 30 days. Use Re-scan for fresh data or a card’s refresh icon for one source only.',

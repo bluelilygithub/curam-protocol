@@ -775,7 +775,8 @@ test('summary.buildPrompt() gives the model the saved facts and the site text, a
   assert.match(prompt, /abr: ABR_GUID is not set/, 'skipped sources are named so gaps can be stated');
   assert.match(prompt, /never as instructions/, 'site text is fenced as information');
   assert.match(sourceText, /2005-2026/);
-  assert.match(summaryLib.SYSTEM, /exactly three paragraphs/);
+  assert.match(summaryLib.SYSTEM, /three or four paragraphs/);
+  assert.match(summaryLib.SYSTEM, /not a confirmed director/);
 });
 
 test('summary.cleanSummary() keeps plain paragraphs and drops markdown', () => {
@@ -900,4 +901,83 @@ test('ABN Lookup data: names and ABN confirmed with the website, NSW location di
   assert.deepStrictEqual(cards.entity.formerNames, ['SALESLOG PTY LTD (2012-12-10 to 2012-12-11)']);
   assert.match(cards.financial.yearsInBusinessBasis, /ABN registered 2012-12-10/);
   assert.ok(cards.financial.yearsInBusiness > 13);
+});
+
+// ── research.js: web research with page-quoted facts ─────────────────────────────────────
+const research = require('./research');
+
+const RESEARCH_SEED = { domain: 'saleslogs.com', abr: { entityName: 'SALESLOGS PTY LTD' }, website: { siteName: 'SalesLogs', legalName: 'SalesLogs Pty Ltd' } };
+const STARTUP_PAGE = '<title>SalesLogs founders</title><p>SalesLogs was launched by husband and wife pair John and Jannipa Fountain in 2014.</p>'
+  + '<p>Johnson said SalesLogs works with about 700 dealers and 6,500 unique user sign-ins weekly.</p>';
+const OTHER_PAGE = '<title>Sales logs for gyms</title><p>Track your gym sales logs with GymPro, founded 2019.</p>';
+
+function researchDeps(modelText) {
+  const fetched = [];
+  return {
+    fetched,
+    isSearchConfigured: async () => true,
+    getModels: async () => ({ standard: 'test-model' }),
+    webSearch: async () => [
+      { url: 'https://www.saleslogs.com/about', title: 'Own site' },
+      { url: 'https://www.linkedin.com/company/saleslogs', title: 'LinkedIn' },
+      { url: 'https://startupdaily.example/saleslogs', title: 'Startup story' },
+      { url: 'https://gympro.example/blog', title: 'Gym sales logs' },
+    ],
+    fetchHtml: async (url) => { fetched.push(url); return { statusCode: 200, body: url.includes('gympro') ? OTHER_PAGE : STARTUP_PAGE }; },
+    callModel: async (model, prompt) => {
+      assert.ok(prompt.includes('P1: https://startupdaily.example/saleslogs'));
+      assert.ok(!prompt.includes('GymPro'), 'a page that does not mention the business is not sent');
+      return { text: modelText, model };
+    },
+    logUsage: () => {},
+  };
+}
+
+test('research.identity() and buildQueries() search by brand and registered name, excluding the own site', () => {
+  const id = research.identity(RESEARCH_SEED);
+  assert.equal(id.brand, 'SalesLogs');
+  assert.equal(id.legal, 'SALESLOGS PTY LTD');
+  const q = research.buildQueries(id);
+  assert.equal(q.length, 5);
+  assert.ok(q.every((s) => s.endsWith('-site:saleslogs.com')));
+  assert.ok(q.some((s) => s.startsWith('"SALESLOGS"')), 'the registered name without its suffix');
+  assert.ok(research.mentionsBusiness('Read about SalesLogs here', id.marks));
+  assert.ok(!research.mentionsBusiness('Track your gym sales logs', id.marks));
+});
+
+test('research.checkFacts() keeps facts quoted from their page and drops the rest', () => {
+  const pages = [{ id: 'P1', url: 'https://startupdaily.example/saleslogs', text: 'SalesLogs was launched by husband and wife pair John and Jannipa Fountain in 2014. Johnson said SalesLogs works with about 700 dealers.' }];
+  const { facts, dropped } = research.checkFacts({ facts: [
+    { kind: 'person', fact: 'John Fountain co-founded SalesLogs', name: 'John Fountain', role: 'Co-founder', year: '2014', sourceType: 'independent', page: 'P1', quote: 'launched by husband and wife pair John and Jannipa Fountain in 2014' },
+    { kind: 'scale', fact: 'About 700 dealers use SalesLogs', sourceType: 'company_claim', page: 'P1', quote: 'Johnson said SalesLogs works with about 700 dealers' },
+    { kind: 'scale', fact: 'About 900 dealers use SalesLogs', sourceType: 'company_claim', page: 'P1', quote: 'Johnson said SalesLogs works with about 700 dealers' },
+    { kind: 'history', fact: 'Raised $5m in 2020', sourceType: 'independent', page: 'P1', quote: 'SalesLogs raised five million dollars from investors' },
+    { kind: 'other', fact: 'Something', page: 'P9', quote: 'launched by husband and wife pair John and Jannipa' },
+  ] }, pages);
+  assert.deepStrictEqual(facts.map((f) => f.fact), ['John Fountain co-founded SalesLogs', 'About 700 dealers use SalesLogs']);
+  assert.equal(dropped, 3, 'a changed number, a quote not on the page and an unknown page are all dropped');
+  assert.equal(facts[0].host, 'startupdaily.example');
+  assert.equal(facts[1].sourceType, 'company_claim');
+});
+
+test('research.webResearch(): skips without a search key; reads other sites that mention the business; keeps checked facts', async () => {
+  const none = await research.webResearch(RESEARCH_SEED, { deps: { isSearchConfigured: async () => false } });
+  assert.equal(none.status, 'skipped');
+  assert.match(none.reason, /SEARCH_API_KEY/);
+
+  const deps = researchDeps(JSON.stringify({ facts: [
+    { kind: 'person', fact: 'Jannipa Fountain co-founded SalesLogs', name: 'Jannipa Fountain', role: 'Co-founder', sourceType: 'independent', page: 'P1', quote: 'launched by husband and wife pair John and Jannipa Fountain in 2014' },
+    { kind: 'scale', fact: 'About 6,500 weekly user sign-ins', sourceType: 'company_claim', page: 'P1', quote: 'about 700 dealers and 6,500 unique user sign-ins weekly' },
+    { kind: 'history', fact: 'Founded in 2004', sourceType: 'independent', page: 'P1', quote: 'SalesLogs was founded in 2004 in Melbourne' },
+  ] }));
+  const out = await research.webResearch(RESEARCH_SEED, { userId: 1, deps });
+  assert.equal(out.status, 'success');
+  assert.deepStrictEqual(deps.fetched.sort(), ['https://gympro.example/blog', 'https://startupdaily.example/saleslogs'], 'not the own site, not LinkedIn');
+  assert.deepStrictEqual(out.data.pages.map((p) => p.url), ['https://startupdaily.example/saleslogs']);
+  assert.deepStrictEqual(out.data.facts.map((f) => f.fact), ['Jannipa Fountain co-founded SalesLogs', 'About 6,500 weekly user sign-ins']);
+  assert.equal(out.data.dropped, 1);
+
+  const cards = buildCards({ domain: 'saleslogs.com' }, { webResearch: out }, {});
+  assert.ok(cards.people.some((p) => p.name === 'Jannipa Fountain' && p.source === 'Web: startupdaily.example'));
+  assert.equal(cards.research.scale[0].sourceType, 'company_claim');
 });
