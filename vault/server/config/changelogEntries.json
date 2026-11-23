@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d174e41f",
+   "fullHash": "d174e41f11551fbcf40b54b79b6b2876cd03ffd8",
+   "committedAt": "2026-11-23T20:40:46+10:00",
+   "author": "mrb",
+   "area": "PDF Tools",
+   "subject": "PDF Tools: delete Signed PDFs to the recycle bin, with Undo",
+   "filesChanged": 10,
+   "insertions": 154,
+   "deletions": 17,
+   "goal": "Let a person remove entries from PDF Tools → Signed PDFs without losing them outright, following Vault's recycle-bin rule for deletes.",
+   "whatChanged": "New DELETE /api/pdf/signatures/:signingId in server/routes/pdf.js: checks the id is a UUID, then in one transaction locks the caller's pdf_signatures row (404 for another user), collects the ids of its kept-copy attachments, calls moveToBin with kind pdf-signature and the record plus attachment ids as payload, and deletes the row; answers { ok, binId, retentionDays }. The UUID check is now a shared UUID_RE also used by GET /signatures/:signingId. New recycleBin/adapters/pdfSignatures.js (registered in adapters/index.js): restore re-inserts the record with insertRow and re-points the kept attachments to the new id; discard (deleted forever, expiry, bin emptied) unlinks the files and deletes their attachment rows. While in the bin the copy stays on disk but cannot be opened, because the attachment owner check goes through the deleted pdf_signatures row, and the PDF's hidden stamp reports no matching record. PdfSaveTools.jsx: each Signed PDFs row has a trash button (Tooltip) that switches to an inline 'Delete? Yes / No', then offers Undo through utils/binUndo and reloads the list after a restore. Help text in PdfPage.jsx and the PDF guide catalogue mention it; docs/pdf-agent.md and docs/recycle-bin.md describe it. routeManifest.json gains the DELETE route plus GET /api/pdf/signatures and GET /api/pdf/signatures/:signingId, which earlier commits had not listed. New case in server/routes/pdfSign.test.js: another user gets 404, the record and copy disappear, the file stays on disk, restore brings both back with the same hash, and delete forever removes the file and row.",
+   "filesImpacted": [
+    "server/routes/pdf.js",
+    "server/services/recycleBin/adapters/pdfSignatures.js",
+    "server/services/recycleBin/adapters/index.js",
+    "server/routes/pdfSign.test.js",
+    "server/testing/routeManifest.json",
+    "server/services/pdfTutor.js",
+    "client/src/pages/pdf/PdfSaveTools.jsx",
+    "client/src/pages/PdfPage.jsx",
+    "docs/pdf-agent.md",
+    "docs/recycle-bin.md"
+   ],
+   "benefit": "Old or mistaken signings can be cleared from Signed PDFs, with Undo and 30 days to restore, and the kept copy is only removed once the deletion is final.",
+   "concerns": "This work was written in an earlier session and committed later; in this session it was checked by reading the diff, a JSX parse, loading the server modules and the PDF guide test, not by running pdfSign.test.js or the cross-user tests (both need the local test database). While a signing is in the bin, anyone checking that PDF's stamp sees 'no matching record', which could look like tampering. The route manifest previously lacked the two signature GET routes, so crossUser.test.js would have failed its inventory check before this commit."
+  },
+  {
    "commit": "38fe39f1",
    "fullHash": "38fe39f16c98a04e01791d194382e22345e3d484",
    "committedAt": "2026-11-23T20:27:34+10:00",

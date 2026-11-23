@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (pdf-signed-delete)
+
+### PDF Tools — delete a Signed PDF, with Undo
+Each row in Signed PDFs has a delete button with an inline "Delete? Yes / No". `DELETE /api/pdf/signatures/:signingId` moves the signing record to the 30-day recycle bin, and an Undo toast follows. The kept copy stays on disk but can't be opened while it's in the bin, and it's removed when the item leaves the bin. While deleted, the PDF's hidden stamp shows "no matching record". The two existing signature GET routes, which were missing from `routeManifest.json`, are now listed too.
+
+---
+
 ## 2026-11-23 (bip-ask)
 
 ### Business Profiler — ask questions about a profile
