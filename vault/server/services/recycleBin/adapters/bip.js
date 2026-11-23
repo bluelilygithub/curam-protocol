@@ -37,6 +37,13 @@ register('bip-profile', {
         },
       });
     }
+    // saved questions and answers (snapshots from before 2026-11-23 have none)
+    for (const qa of payload?.qa || []) {
+      await insertRow(db, 'bip_qa', qa, {
+        userId,
+        override: { profileId: entityId, unverifiedFigures: JSON.stringify(qa.unverifiedFigures || []) },
+      });
+    }
     return { entityId };
   },
 });

@@ -5858,6 +5858,20 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS bip_profiles_client_idx ON bip_profiles ("userId", "clientId")`);
   // The written summary (services/bip/summary.js): { text, model, generatedAt, unverifiedFigures }; null until written.
   await pool.query(`ALTER TABLE bip_profiles ADD COLUMN IF NOT EXISTS summary JSONB`);
+  // Questions asked about a profile and their answers, kept only when the person presses Save (services/bip/ask.js).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bip_qa (
+      id                  SERIAL PRIMARY KEY,
+      "userId"            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "profileId"         INTEGER NOT NULL REFERENCES bip_profiles(id) ON DELETE CASCADE,
+      question            TEXT NOT NULL,
+      answer              TEXT NOT NULL,
+      model               TEXT,
+      "unverifiedFigures" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "createdAt"         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS bip_qa_profile_idx ON bip_qa ("userId", "profileId", "createdAt" DESC)`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bip_sources (
       id                      SERIAL PRIMARY KEY,

@@ -175,6 +175,18 @@
   "GET /api/bip/profiles/:id": {
    "class": "authed"
   },
+  "POST /api/bip/profiles/:id/ask": {
+   "class": "authed"
+  },
+  "GET /api/bip/profiles/:id/qa": {
+   "class": "authed"
+  },
+  "POST /api/bip/profiles/:id/qa": {
+   "class": "authed"
+  },
+  "DELETE /api/bip/profiles/:id/qa/:qaId": {
+   "class": "authed"
+  },
   "POST /api/bip/profiles/:id/summary": {
    "class": "authed"
   },

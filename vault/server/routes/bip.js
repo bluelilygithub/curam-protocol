@@ -12,6 +12,7 @@ const { MODULES } = require('../services/bip/sources');
 const jobs = require('../services/bip/jobs');
 const { buildBipPdfBuffer } = require('../services/bip/pdf');
 const { generateSummary } = require('../services/bip/summary');
+const { askProfile } = require('../services/bip/ask');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { moveToBin } = require('../services/recycleBin');
 require('../services/recycleBin/adapters/bip');
@@ -73,6 +74,50 @@ router.get('/profiles/:id', async (req, res) => {
     const profile = await store.getProfile(req.user.id, req.params.id);
     if (!profile) return res.status(404).json({ error: 'Profile not found.' });
     res.json({ profile });
+  } catch (err) { fail(res, err); }
+});
+
+// ── Questions about a profile ──────────────────────────────────────────────
+// Ask: answered from the saved profile only, nothing stored (AI rate limit). Save keeps a Q&A; Delete removes one.
+router.post('/profiles/:id/ask', aiLimiter, async (req, res) => {
+  try {
+    const row = await store.getRow(req.user.id, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Profile not found.' });
+    res.json(await askProfile(req.user.id, row.id, req.body?.question));
+  } catch (err) { fail(res, err); }
+});
+
+router.get('/profiles/:id/qa', async (req, res) => {
+  try {
+    const row = await store.getRow(req.user.id, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Profile not found.' });
+    res.json({ qa: await store.listQa(req.user.id, row.id) });
+  } catch (err) { fail(res, err); }
+});
+
+router.post('/profiles/:id/qa', async (req, res) => {
+  try {
+    const row = await store.getRow(req.user.id, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Profile not found.' });
+    const { question, answer, model, unverifiedFigures } = req.body || {};
+    if (typeof question !== 'string' || typeof answer !== 'string' || !question.trim() || !answer.trim()) {
+      return res.status(400).json({ error: 'A question and its answer are needed to save.' });
+    }
+    const figures = Array.isArray(unverifiedFigures) ? unverifiedFigures.filter((f) => typeof f === 'string').slice(0, 50).map((f) => f.slice(0, 60)) : [];
+    const saved = await store.saveQa(req.user.id, row.id, {
+      question: question.trim().slice(0, 1000), answer: answer.trim().slice(0, 6000),
+      model: typeof model === 'string' ? model.slice(0, 200) : null, unverifiedFigures: figures,
+    });
+    res.status(201).json({ qa: saved });
+  } catch (err) { fail(res, err); }
+});
+
+router.delete('/profiles/:id/qa/:qaId', async (req, res) => {
+  try {
+    const row = await store.getRow(req.user.id, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Profile not found.' });
+    if (!(await store.deleteQa(req.user.id, row.id, req.params.qaId))) return res.status(404).json({ error: 'That question was not found.' });
+    res.json({ deleted: true });
   } catch (err) { fail(res, err); }
 });
 
@@ -156,11 +201,12 @@ router.delete('/profiles/:id', async (req, res) => {
     const profile = rows[0];
     if (!profile) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Profile not found.' }); }
     const src = await client.query('SELECT * FROM bip_sources WHERE "profileId" = $1 AND "userId" = $2', [profile.id, req.user.id]);
+    const qa = await client.query('SELECT * FROM bip_qa WHERE "profileId" = $1 AND "userId" = $2', [profile.id, req.user.id]);
     await moveToBin(client, {
       userId: req.user.id, type: 'bip-profile', id: profile.id,
       title: profile.businessName || profile.domain,
       detail: `Business Profiler profile for ${profile.domain}`,
-      payload: { profile, sources: src.rows },
+      payload: { profile, sources: src.rows, qa: qa.rows },
       maxBytes: 20 * 1024 * 1024,
     });
     await client.query('DELETE FROM bip_profiles WHERE id = $1 AND "userId" = $2', [profile.id, req.user.id]);

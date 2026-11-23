@@ -169,6 +169,30 @@ async function linkedNotes(userId, id) {
   return rows;
 }
 
+/** Saved questions and answers for one profile, newest first. */
+async function listQa(userId, profileId) {
+  const { rows } = await pool.query(
+    `SELECT id, question, answer, model, "unverifiedFigures", "createdAt" FROM bip_qa
+      WHERE "userId" = $1 AND "profileId" = $2 ORDER BY "createdAt" DESC, id DESC LIMIT 200`,
+    [userId, profileId]
+  );
+  return rows.map((r) => ({ ...r, unverifiedFigures: parse(r.unverifiedFigures, []) }));
+}
+
+async function saveQa(userId, profileId, { question, answer, model, unverifiedFigures }) {
+  const { rows } = await pool.query(
+    `INSERT INTO bip_qa ("userId", "profileId", question, answer, model, "unverifiedFigures")
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id, question, answer, model, "unverifiedFigures", "createdAt"`,
+    [userId, profileId, question, answer, model || null, JSON.stringify(unverifiedFigures || [])]
+  );
+  return { ...rows[0], unverifiedFigures: parse(rows[0].unverifiedFigures, []) };
+}
+
+async function deleteQa(userId, profileId, qaId) {
+  const { rowCount } = await pool.query('DELETE FROM bip_qa WHERE id = $1 AND "userId" = $2 AND "profileId" = $3', [Number(qaId) || 0, userId, profileId]);
+  return rowCount > 0;
+}
+
 /** The written summary (services/bip/summary.js): { text, model, generatedAt, unverifiedFigures }. */
 async function saveSummary(profileId, userId, summary) {
   await pool.query('UPDATE bip_profiles SET summary = $3::jsonb, "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2', [profileId, userId, JSON.stringify(summary)]);
@@ -207,5 +231,5 @@ async function deleteProfile(userId, id) {
 module.exports = {
   CACHE_DAYS, createProfile, cachedProfile, listProfiles, getProfile, getRow,
   saveModule, saveSeed, saveSeedData, finishProfile, failProfile, saveDecisions, deleteProfile, parse,
-  linkedNotes, setClient, profilesForClient, saveSummary,
+  linkedNotes, setClient, profilesForClient, saveSummary, listQa, saveQa, deleteQa,
 };

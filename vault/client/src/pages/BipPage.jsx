@@ -13,6 +13,7 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import { startBipTour, TOUR_KEY as BIP_TOUR_KEY } from '../utils/tours/bipTour';
 import BipTutorChat from './bip/BipTutorChat';
 import BipLinks from './bip/BipLinks';
+import BipAsk from './bip/BipAsk';
 import { BIP_GOALS } from './bip/bipGoals.mjs';
 import { HOW_IT_WORKS, TOOL_TIPS, TOOL_BLURBS, GROUPS, GROUP_TIPS, BIP_TOOLS, GUIDE_TOOLS } from './bip/bipTools.mjs';
 
@@ -645,7 +646,8 @@ export default function BipPage() {
 
   const saveTool = profile && <BipLinks profile={profile} onClientChanged={(clientId, clientName) => setProfile((p) => ({ ...p, clientId, clientName }))} />;
 
-  const TOOLS = { search: searchTool, profiles: profilesTool, profile: profileTool, conflicts: conflictsTool, refresh: refreshTool, export: exportTool, save: saveTool };
+  const askTool = profile && <BipAsk profile={profile} />;
+  const TOOLS = { search: searchTool, profiles: profilesTool, profile: profileTool, conflicts: conflictsTool, ask: askTool, refresh: refreshTool, export: exportTool, save: saveTool };
 
   // the open profile, above every tool that works on it
   const profileBar = profile && needsProfile(tool) && (

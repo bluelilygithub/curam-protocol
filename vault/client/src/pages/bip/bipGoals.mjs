@@ -11,7 +11,8 @@ export const BIP_GOALS = [
     icon: 'search',
     steps: [
       { tool: 'search', note: 'Type their domain, for example saleslogs.com, and press Profile.' },
-      { tool: 'profile', note: 'Read the cards: entity, people, locations, products and reputation.' },
+      { tool: 'profile', note: 'Read the summary and the cards: entity, people, locations, products and reputation.' },
+      { tool: 'ask', note: 'Ask anything the cards do not make clear, by typing or speaking. Save the answers worth keeping.' },
       { tool: 'conflicts', note: 'Look at any ❌: sources disagree and you decide which value is right.' },
     ],
   },

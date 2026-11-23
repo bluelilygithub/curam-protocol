@@ -91,6 +91,12 @@ The Financial card is labelled *estimates from public sources*, but BIP does not
 
 A re-scan of one source now rebuilds the cards with the saved website, registration and DNS data (they are stored in `seedData`, while `enrichmentData` holds only their status); before, refreshing any one source emptied the website-based fields.
 
+## Ask about this profile
+
+The **Ask about this profile** tool (Report group; `client/src/pages/bip/BipAsk.jsx`, `server/services/bip/ask.js`). A question box with the shared microphone (`VoiceInput type="textarea" append`), four suggested questions, and **Ask**. The standard model answers from the same data as the summary (reconciled fields, cards, skipped sources, page text) plus the web-research facts with their quotes and the summary itself, names the source of each claim in brackets, keeps research labels (company claims said as such, estimates named, founders not called directors), gives both values where sources disagree, and says plainly when the data does not answer (and which source would). Figures not found in that data are listed in amber (`checkFigures`). Usage is logged as `bip_ask`; the ask route is behind `aiLimiter`.
+
+Nothing is stored until **Save**: the pending answer has Save and Discard. Saved Q&As (table `bip_qa`: question, answer, model, `unverifiedFigures`, `createdAt`; cascade with the profile) are listed newest first, each with **Delete** (asks first; deleted for good). Deleting the profile puts its saved Q&As in the recycle bin with it, and a restore brings them back.
+
 ## Cache, refresh and storage
 
 - **30-day cache.** A profile is saved with the day it was checked. Opening `/bip/:id` shows the saved cards and the source rows, not a fresh set of calls. **Re-scan** re-runs every module and replaces the run; the refresh icon on a card re-runs just that module, then rebuilds reconciliation and cards from the current set of rows. Each refresh records its own checked-at time.
@@ -128,6 +134,11 @@ Mounted at `/api/bip` behind `requireFeature('bip')`; `bip` is in **preview**, s
 | `GET` | `/profiles/:id/notes` | Notes that link to this profile (text contains `](/bip/:id)`), newest first, at most 20 |
 | `PUT` | `/profiles/:id/client` | `{ clientId }` (one of the person's clients, else 400) or `{ clientId: null }` to unlink |
 | `GET` | `/linked?clientId=` | The profiles filed under that client, for the client page's Business profiles tab |
+| `POST` | `/profiles/:id/ask` | `{ question }` — answer from the saved profile (`aiLimiter`); returns `{ question, answer, model, unverifiedFigures }`, stores nothing |
+| `GET` | `/profiles/:id/qa` | Saved questions and answers, newest first |
+| `POST` | `/profiles/:id/qa` | `{ question, answer, model, unverifiedFigures }` — save one |
+| `DELETE` | `/profiles/:id/qa/:qaId` | Delete one saved Q&A |
+| `POST` | `/profiles/:id/summary` | Write the summary again (`aiLimiter`) |
 | `GET` | `/jobs/:jobId` | Current status, progress and result of a background run; the page polls every 2.5s |
 
 Named routes stay before `/profiles/:id` in the route file.

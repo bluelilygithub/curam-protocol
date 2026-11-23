@@ -981,3 +981,44 @@ test('research.webResearch(): skips without a search key; reads other sites that
   assert.ok(cards.people.some((p) => p.name === 'Jannipa Fountain' && p.source === 'Web: startupdaily.example'));
   assert.equal(cards.research.scale[0].sourceType, 'company_claim');
 });
+
+// ── ask.js: questions about a profile ────────────────────────────────────────────────────
+const askLib = require('./ask');
+
+const ASK_PROFILE = {
+  ...SUMMARY_PROFILE,
+  summary: { text: 'SalesLogs Pty Ltd sells dealership software.' },
+  cards: {
+    ...SUMMARY_PROFILE.cards,
+    research: { history: [{ kind: 'history', fact: 'Launched in 2014', year: '2014', sourceType: 'independent', host: 'startupdaily.net', quote: 'launched by husband and wife pair John and Jannipa Fountain in 2014' }] },
+  },
+};
+
+test('ask.buildAskPrompt() carries the profile data, research quotes, the summary and the question', () => {
+  const { prompt, sourceText } = askLib.buildAskPrompt(ASK_PROFILE, 'Who founded it?');
+  assert.match(prompt, /launched by husband and wife pair John and Jannipa Fountain in 2014/, 'research quotes are given so answers can be traced');
+  assert.match(prompt, /SUMMARY ALREADY WRITTEN FROM THIS DATA:\nSalesLogs Pty Ltd sells dealership software\./);
+  assert.match(prompt, /QUESTION \(from the person using Vault\):\nWho founded it\?/);
+  assert.match(prompt, /never instructions/);
+  assert.match(sourceText, /2014/);
+  assert.match(askLib.SYSTEM, /name its source in brackets/);
+});
+
+test('ask.askProfile() answers from the profile, flags figures not in it, and refuses empty, unfinished or model-less asks', async () => {
+  const usage = [];
+  const deps = {
+    getProfile: async () => ASK_PROFILE,
+    getModels: async () => ({ standard: 'test-model' }),
+    callModel: async () => ({ text: '## Answer\nIt was launched in 2014 by **John and Jannipa Fountain** [startupdaily.net]. It has 40 staff.', model: 'test-model' }),
+    logUsage: (u) => usage.push(u),
+  };
+  const r = await askLib.askProfile(1, 7, '  Who   founded it? ', deps);
+  assert.equal(r.question, 'Who founded it?');
+  assert.equal(r.answer, 'It was launched in 2014 by John and Jannipa Fountain [startupdaily.net]. It has 40 staff.');
+  assert.deepStrictEqual(r.unverifiedFigures, ['40']);
+  assert.equal(usage[0].feature, 'bip_ask');
+  await assert.rejects(askLib.askProfile(1, 7, ' ? ', deps), (e) => e.status === 400);
+  await assert.rejects(askLib.askProfile(1, 7, 'Who?', { ...deps, getProfile: async () => ({ ...ASK_PROFILE, status: 'running' }) }), (e) => e.status === 409);
+  await assert.rejects(askLib.askProfile(1, 7, 'Who?', { ...deps, getModels: async () => ({}) }), (e) => e.status === 503);
+  await assert.rejects(askLib.askProfile(1, 7, 'Who?', { ...deps, getProfile: async () => null }), (e) => e.status === 404);
+});
