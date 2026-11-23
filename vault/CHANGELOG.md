@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner)
+
+### Skill Scanner — new admin tool
+Checks an AI agent skill or plugin for security risks before installing it, with NVIDIA SkillSpector (pinned in `Dockerfile.base`, so this deploy rebuilds the base image). It takes a public github.com link or a zip, and returns a verdict, a score and findings. Static scans make no model call; a deep scan uses the standard Claude model. The scanner process gets no Vault secrets. See `docs/skill-scan.md`.
+
+---
+
 ## 2026-11-23 (pdf-signed-delete)
 
 ### PDF Tools — delete a Signed PDF, with Undo
