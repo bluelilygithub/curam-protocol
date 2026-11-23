@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0eb4787c",
+   "fullHash": "0eb4787c3f435e9ee1f7e340f796f6940168330c",
+   "committedAt": "2026-11-23T16:47:53+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares: keep daily benchmark closes (QQQ, SOXX, STW) permanently",
+   "filesChanged": 7,
+   "insertions": 143,
+   "deletions": 4,
+   "goal": "Build up a permanent daily price history for the three index proxies, so the Portfolio Note can later use beta-adjusted moves, volatility and multi-day vs-index comparisons instead of the raw stock-minus-index difference. This is step 1 of the plan to improve daily reporting and trade what-if analysis.",
+   "whatChanged": "New global table share_benchmark_closes (symbol, tradingDay primary key; currency, closeNative, prevCloseNative, usdAud, closeAud, recordedAt), never pruned. The index moves were previously stored only inside the type='observation' share_news_briefings rows, which are deleted after 45 days. New service sharesBenchmarks.js with recordBenchmarkCloses(keys) and a pure toCloseRow helper; the env overrides OBS_INDEX_* match INDEX_PROXIES elsewhere. marketData.getQuote now also returns tradingDay, taken from the quote itself (Finnhub t converted to New York date; Alpha Vantage '07. latest trading day'), and an undated quote is skipped rather than stored under a guessed day. sharesCron upserts QQQ and SOXX after every hourly US poll (the last poll of the session, 16:00 ET, wins) and records STW in a new Tue-Sat 5:05 AM task (one extra Alpha Vantage call a day). Failures are logged per symbol and never stop the poll. Docs: schema-notes.md, features.md.",
+   "filesImpacted": [
+    "server/db.js",
+    "server/services/sharesBenchmarks.js",
+    "server/services/sharesBenchmarks.test.js",
+    "server/services/marketData.js",
+    "server/cron/sharesCron.js",
+    "docs/schema-notes.md",
+    "docs/features.md"
+   ],
+   "benefit": "From deploy onwards, every trading day's benchmark close is kept, so after roughly 60 trading days (about 3 months) beta and correlation per holding can be computed. Nothing is shown to the user yet.",
+   "concerns": "Not run against a live database or the real Finnhub / Alpha Vantage feeds; only the pure toCloseRow helper is unit tested. The STW call adds 1 a day to the 25/day Alpha Vantage cap, which ASX holding polls already use at 2 calls per holding a day, so 12 or more ASX holdings would exceed it. closeAud uses the USD/AUD rate at record time (Frankfurter latest), not the rate at the US close. US market holidays still trigger polls; the upsert keys on the quote's own trading day, so they overwrite the previous session's row with the same close rather than adding a false day. Verify after deploy: QQQ and SOXX rows for the next US session, STW the next morning."
+  },
+  {
    "commit": "36e1e887",
    "fullHash": "36e1e8875056b7323361e73991e89e0a1e9eaf49",
    "committedAt": "2026-11-23T16:31:22+10:00",

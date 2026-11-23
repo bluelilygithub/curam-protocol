@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-23 (shares-benchmark-closes)
+
+### Shares — benchmark index history was deleted after 45 days
+The daily QQQ / SOXX / STW moves only lived inside the 7 AM Portfolio Note rows, which are pruned at 45 days, so beta, volatility and multi-day vs-index comparisons could never be computed. New table `share_benchmark_closes` keeps one close per index proxy per trading day, permanently. The trading day comes from the quote itself (Finnhub `t` in New York time, Alpha Vantage `07. latest trading day`), never the server clock. QQQ and SOXX are upserted on every hourly US poll (the 16:00 ET close wins); STW once Tue–Sat 5:05 AM (one Alpha Vantage call a day). `marketData.getQuote` now also returns `tradingDay`. New test: `node server/services/sharesBenchmarks.test.js`.
+
+---
+
 ## 2026-11-23 (pdf-signed-copies-note-projects)
 
 ### PDF Tools — Signed PDFs: every signed PDF is kept for review
