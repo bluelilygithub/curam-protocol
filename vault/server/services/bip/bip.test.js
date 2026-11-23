@@ -677,3 +677,22 @@ test('case study: SalesLogs profile assembles entity, industry, Victoria, ~2004 
   assert.ok(cards.digital.analytics.includes('Google Analytics'));
   assert.equal(cards.people[0].name, 'Jane Smith');
 });
+
+// Postgres refuses a parameter whose uses imply two types ("inconsistent types deduced for parameter $3"):
+// finishProfile once used $3 as status = $3 (VARCHAR) and $3 = 'done' (text), so every run failed at the last step.
+// The store has no database in these tests, so read each SQL string and require every reused $N to carry one explicit cast at each use.
+test('store SQL: a reused parameter has one explicit cast at every use', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'store.js'), 'utf8');
+  // the text inside each pair of backticks (store.js has no backtick in a comment), keeping those that hold a $N parameter
+  const sqls = src.split('`').filter((part, i) => i % 2 === 1 && /\$\d/.test(part));
+  assert.ok(sqls.length > 5);
+  for (const sql of sqls) {
+    const casts = {};
+    for (const [, n, cast] of sql.matchAll(/\$(\d+)(::[a-z\[\]]+)?/g)) (casts[n] ||= []).push(cast || '');
+    for (const [n, uses] of Object.entries(casts)) {
+      if (uses.length < 2) continue;
+      // reused: every use needs the same explicit cast, or Postgres deduces a type per use and may disagree
+      assert.ok(uses[0] && uses.every((u) => u === uses[0]), `$${n} is reused without one explicit cast (${uses.join(' / ') || 'none'}) in: ${sql.slice(0, 80)}`);
+    }
+  }
+});

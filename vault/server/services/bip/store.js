@@ -131,8 +131,8 @@ async function saveSeedData(profileId, userId, seed) {
 async function finishProfile(profileId, userId, { businessName, reconciliation, cards, error = null }) {
   const { rows } = await pool.query(
     `UPDATE bip_profiles
-        SET status = $3, "businessName" = $4, "reconciliation" = $5::jsonb, "cards" = $6::jsonb,
-            error = $7, "scannedAt" = CASE WHEN $3 = 'done' THEN NOW() ELSE "scannedAt" END,
+        SET status = $3::text, "businessName" = $4, "reconciliation" = $5::jsonb, "cards" = $6::jsonb,
+            error = $7, "scannedAt" = CASE WHEN $3::text = 'done' THEN NOW() ELSE "scannedAt" END,
             "updatedAt" = NOW()
       WHERE id = $1 AND "userId" = $2 RETURNING id, status`,
     [profileId, userId, error ? 'failed' : 'done', businessName || null, j(reconciliation), j(cards), error]
