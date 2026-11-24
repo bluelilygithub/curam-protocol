@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-stage-2)
+
+### Tickets — Make a ticket, a morning email, a menu badge, guide and tour
+Make a ticket buttons in an open note and an Email Follow-Up case open a new ticket already filled in and linked back. Client pages get a Tickets tab and client project pages a Tickets section. Each morning at 7, everyone with Tickets gets an email of their tickets that are overdue, due today or newly assigned, when there are any; a log stops it sending twice. The Tickets item in the Apps menu shows how many are assigned to you, red when some are overdue. Tickets also gets the round guide chat and a 6-step tour (Tour button, Settings → Tours).
+
+---
+
 ## 2026-11-24 (tickets-stage-1)
 
 ### Tickets — a new internal tickets app
