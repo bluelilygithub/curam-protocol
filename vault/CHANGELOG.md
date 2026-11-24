@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-type-client)
+
+### Tickets — type filter, and links to the client
+Every Tickets list now has a type drop-down beside priority, so you can see, for example, every bug including finished ones. A ticket filed under one of your clients now has links to the client page, opening straight on its Tickets tab, and to the client project page.
+
+---
+
 ## 2026-11-24 (tickets-sidebar)
 
 ### Tickets — a left-hand menu like PDF Tools and Skill Scanner

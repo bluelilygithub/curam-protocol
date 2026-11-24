@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8958149d",
+   "fullHash": "8958149d9d5546613926bc5710dd5f25c23a8f3a",
+   "committedAt": "2026-11-24T14:01:42+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Type drop-down on the lists; a ticket links to its client pages",
+   "filesChanged": 7,
+   "insertions": 27,
+   "deletions": 13,
+   "goal": "Filter any list by type, and get from a ticket to the client it is filed under.",
+   "whatChanged": "Each Tickets list gets a type drop-down beside priority; it overrides a By type list, so All tickets plus Bug shows every bug. On a ticket filed under one of your clients, links under the client boxes open the client page on its Tickets tab (new ?tab= support on /clients/:id) and the client project page. The links show only to the client owner, since clients belong to each person CRM; the ticket reply now includes clientOwnerId. Guide, tour and docs updated.",
+   "filesImpacted": [
+    "client/src/pages/TicketsPage.jsx",
+    "client/src/pages/tickets/TicketDetail.jsx",
+    "client/src/pages/ClientDetailPage.jsx",
+    "client/src/utils/tours/ticketsTour.js",
+    "server/services/tickets.js",
+    "server/services/ticketsTutor.js",
+    "docs/tickets.md"
+   ],
+   "benefit": "Combinations like done bugs are back, and a ticket and its client page link both ways.",
+   "concerns": "Not yet tried in a browser. People who do not own the client see its name but no link."
+  },
+  {
    "commit": "5de24043",
    "fullHash": "5de24043189018f17ea6f5608546ca86c3ff21f9",
    "committedAt": "2026-11-24T13:49:55+10:00",
