@@ -141,7 +141,7 @@ async function generateAiSummary(text, filename, userId) {
       `Summarize the following document "${filename}" in 2-3 sentences:\n\n${text.substring(0, 4000)}`,
       { maxTokens: 500, returnUsage: true }
     );
-    logUsage({ userId, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'files' });
+    logUsage({ userId, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'files' });
     return result.text || '';
   } catch (err) {
     console.error('AI summary error:', err);

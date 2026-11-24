@@ -66,7 +66,7 @@ function createAiTranscripts({ pool, ytGet, getKey, getModelsForUser, logUsage, 
         apiKey: apiKey(), model: p.model, url: `https://www.youtube.com/watch?v=${videoId}`, prompt: T.TRANSCRIBE_PROMPT,
         maxOutputTokens: Math.min(60000, Math.max(4000, p.tokensOut * 2)),
       });
-      logUsage({ userId, model: p.model, inputTokens: out.inputTokens, outputTokens: out.outputTokens, feature: 'youtube-transcript' });
+      logUsage({ userId, model: p.model, inputTokens: out.inputTokens, outputTokens: out.outputTokens, latencyMs: out.latencyMs, feature: 'youtube-transcript' });
       const parsed = T.normalizeTranscript(out.text, { durationSec: p.durationSec });
       if (!parsed) throw new Error('Gemini listened but did not find any speech to write down.');
       const { calculateCost } = require('./costCalculator');

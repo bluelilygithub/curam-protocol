@@ -92,7 +92,7 @@ async function generateRound(args, deps) {
     if (!model) throw Object.assign(new Error('No AI model is set up in Settings → AI & Chat.'), { status: 400 });
     const calls = await Promise.allSettled(Array.from({ length: WIDE_CALLS }, async (_, i) => {
       const result = await deps.callModel(model, widePrompt(brief, { count: WIDE_EACH, feedback, seen, part: { index: i, of: WIDE_CALLS } }), { maxTokens: 2500, returnUsage: true, timeoutMs: WIDE_TIMEOUT_MS });
-      deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'domains_generate' });
+      deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'domains_generate' });
       return parseWide(result.text);
     }));
     // one part failing is fine, the other's names are used; only both failing is an error
@@ -160,7 +160,7 @@ async function generateRound(args, deps) {
     try {
       const names = finalists.map((x) => x.c.name);
       const result = await deps.callModel(model, explainPrompt(brief, finalists.map((x) => ({ name: x.c.name, label: x.c.label, style: x.c.style, notes: [...(x.c.spell.score >= 25 ? x.c.spell.notes.slice(0, 1) : []), ...(x.c.brandNotes || [])] }))), { maxTokens: 3000, returnUsage: true, timeoutMs: EXPLAIN_TIMEOUT_MS });
-      deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'domains_explain' });
+      deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'domains_explain' });
       explain = parseExplain(result.text, names);
     } catch (e) { explainError = e.message; }
   }

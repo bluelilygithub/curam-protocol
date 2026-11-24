@@ -96,7 +96,7 @@ Respond with the JSON only.`;
 
   if (!light) throw new Error('No text model configured — add a chat model in Settings → AI & Chat');
   const result = await callModel(light, userMsg, { system: FEEDBACK_SYSTEM, maxTokens: 300, returnUsage: true });
-  logUsage({ userId, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'recipes-grocery-correction' });
+  logUsage({ userId, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'recipes-grocery-correction' });
 
   const parsed = parseModelJson(result.text);
   if (!parsed) throw new Error('Could not parse a correction from that note — try rephrasing more plainly.');

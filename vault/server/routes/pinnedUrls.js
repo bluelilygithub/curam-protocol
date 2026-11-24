@@ -27,7 +27,7 @@ async function summariseTranscript(rawTranscript, userId) {
       rawTranscript,
       { maxTokens: 4096, system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.', returnUsage: true }
     );
-    logUsage({ userId, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'pinned_urls' });
+    logUsage({ userId, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'pinned_urls' });
     return result.text || rawTranscript;
   } catch (err) {
     console.warn('[pinnedUrls] summariseTranscript failed:', err.message);

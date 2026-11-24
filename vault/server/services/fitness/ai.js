@@ -95,7 +95,7 @@ async function runJson({ userId, kind, input, system, prompt, validate, fallback
     // One retry with a bigger budget if the reply was cut off (a truncated JSON object has no closing brace).
     for (const budget of [maxTokens, maxTokens * 2]) {
       const res = await callModel(modelId, prompt, { system, maxTokens: budget, returnUsage: true, timeoutMs });
-      logUsage({ userId, model: modelId, inputTokens: res.inputTokens, outputTokens: res.outputTokens, feature: 'fitness' });
+      logUsage({ userId, model: modelId, inputTokens: res.inputTokens, outputTokens: res.outputTokens, latencyMs: res.latencyMs, feature: 'fitness' });
       last = res;
       const json = extractJsonObject(res.text);
       if (!json) {

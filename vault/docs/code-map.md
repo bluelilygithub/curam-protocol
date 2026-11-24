@@ -36,6 +36,7 @@ node client/src/pages/codeMap/exportRun.test.mjs
 node server/services/codeMap/aiReview.test.js
 node server/services/codeMap/security.test.js
 node server/services/codeMap/liveCheck.test.js
+node server/services/codeMap/models/inventory.test.js
 ```
 
 The accuracy test runs today's analyzer on Vault exactly as it was at commit 40bf883 (read from git into a temp folder, `vault-codemap-40bf8834`, once) and compares it with the Python prototype's output from that commit. The input never changes, so new Vault code cannot make it drift: any difference it prints means the analyzer itself changed. Explain such a difference; do not tune the analyzer to hit the old numbers. It needs git and the repo history, so it skips (and passes) where there is none.
@@ -223,6 +224,21 @@ The **Knowledge graph** tab shows the graph [Understand-Anything](https://github
 ## Guide chat
 
 The round button at the bottom right is the Code Map guide (`guideId` `code-map`, `POST /api/code-map-tutor`, `requireAdmin` and `aiLimiter`, `server/services/codeMapTutor.js` on `guideCore.js`, `server/routes/codeMapTutor.js` on `guideRouter.js`, wrapper `client/src/pages/codeMap/CodeMapTutorChat.jsx`). It explains how to read the page and what each rule means, and its Open buttons switch tab and scroll to the part. It sees no code, run, finding or score. `client/src/pages/codeMap/codeMapTools.mjs` is the list the page and the guide share (the tabs, their tips, the (i) box text and the controls the guide can point at); `node server/services/codeMapTutor.test.js` fails if it and the catalogue drift, or if a rule in `rules.js` is not explained in the guide's RULES. When a tab, control or rule changes, update `codeMapTools.mjs`, `CATALOG` and `RULES` together.
+
+## Models (model advisor, in progress)
+
+Reviews which model every tool uses and, from milestone 2, how each is doing from real usage, then recommends changes. It only recommends; it never changes Settings. Brief: the pasted "Models check in Code Map" brief (2026-11-24). Decisions: backup means a real backup setting only (today just News digest's `news_digest_fallback_model`; there is no general backup model); `aiLimiter` goes on the one route that calls a model, not the mount; reports are stored like `code_map_runs` with findings inside the result.
+
+**Milestone 1, built 2026-11-24: the inventory** (`server/services/codeMap/models/inventory.js`, no route or UI yet). `loadInventory()` runs as the first admin and lists, for every tool that calls a model: each model it uses with its role (`default` tier, `backup`, `dedicated`), how it was resolved, its provider, whether it is in the model list, whether the provider's key is set, and its capabilities. How it knows:
+
+- **Tiers and setting keys are read from the code**, not declared: the tool's own server files from the latest Code Map run, plus the local files they `require` (so a resolver reached through a shared file counts). The walk stops at another tool's own files, and leaves out files reached by more than 3 tools (modelResolver, guideCore, callModel mention every tier). Guide chats count by `createGuide({ tier })` (no tier = standard). A key another tool reaches only in passing is claimed with `ownsKeys` in `modelNeeds.js` (Tasks requires Contract Review's service to sync obligations). A dedicated key resolves like the per-tool resolvers: the admin's setting if that model is still in the list, otherwise the workspace default.
+- **Needs are declared** in `server/config/modelNeeds.js`: vision, minContext, json, mode (interactive/background) and the `usage_logs.feature` names each tool logs under (`toolForFeature`). They are a judgement; correct them there.
+- **Capabilities** are in `server/services/costCalculator.js` next to the prices (`modelInfo`, `modelFamily`): vision, context and JSON by family, with per-id corrections. `capabilitySource` says `table`, `family` (a guess from the family; the 5.x values are not checked against provider docs) or `unknown` (Ollama, unrecognised ids: never guessed).
+- **Known gaps**: 7 tools that declare needs show no model in their own code (talk, expenseReview, finance, mood, wellbeing, goals, student pick theirs in shared code); milestone 2's usage stats still cover them through their feature names. DeepSeek and Ollama have no prices in either price table.
+
+**Usage timing** (for milestone 2): `usage_logs.latency_ms` (added 2026-11-24). `callModel` adds `latencyMs` to its result when `returnUsage` is set, and 34 `logUsage` calls that take their figures from a callModel result pass it on. Rows from the other calls (multi-line `logUsage`, chat, graphics, Gmail, direct SDK calls) have NULL latency until milestone 2 wires them, together with the `error` and `fallback` columns.
+
+Test: `node server/services/codeMap/models/inventory.test.js` (no database). It also fails when a tool that calls a model has no needs entry, a needs entry names no tool, or a feature name logged in server code maps to no tool.
 
 ## Weekly run
 

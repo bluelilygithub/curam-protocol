@@ -3326,6 +3326,8 @@ async function initSchema() {
   `);
   await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_creation_tokens INTEGER NOT NULL DEFAULT 0`);
+  // How long the model call took (callModel times it; NULL for rows from callers that do not pass it). Code Map → Models (docs/code-map.md).
+  await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS latency_ms INTEGER`);
 
   // Which parts of Vault get opened (Admin -> Which tools get used). Counts only: a section key (the nav id, e.g. 'notes'), a day and a number.
   // Nothing about what was on the page. Used to decide which tools earn their place in the menu.

@@ -86,7 +86,7 @@ router.post('/parse-query', async (req, res) => {
       system: PARSE_SYSTEM,
       returnUsage: true,
     });
-    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'youtube' });
     const raw = result.text;
 
     const jsonStr = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
@@ -345,7 +345,7 @@ router.post('/transcript', async (req, res) => {
       system: SUMMARY_SYSTEM,
       returnUsage: true,
     });
-    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'youtube' });
 
     res.json({ title, transcript: content, segments: timed, summary: result.text, source });
   } catch (err) {
@@ -858,7 +858,7 @@ async function writeInsights(userId, videoId, languageCode) {
   const durationSec = insightsLib.coveredSeconds(t.segments);
   const { light } = await getModelsForUser(userId);
   const result = await callModel(light, view.text, { maxTokens: 1800, system: insightsLib.INSIGHTS_SYSTEM, returnUsage: true });
-  logUsage({ userId, model: light, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+  logUsage({ userId, model: light, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'youtube' });
   const insights = insightsLib.normalizeInsights(result.text, { durationSec });
   if (!insights) throw new Error('The AI did not return usable notes. Try again.');
   const lang = t.languageCode || '';
@@ -931,7 +931,7 @@ router.post('/main-points', aiLimiter, async (req, res) => {
     const model = models.gemini || models.light;
     if (!model) return res.status(400).json({ error: 'No Gemini model is set up in Settings.' });
     const result = await callModel(model, mainPointsLib.buildPrompt(t.title, view.text), { maxTokens: 2500, system: mainPointsLib.MAIN_POINTS_SYSTEM, returnUsage: true });
-    logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'youtube' });
     const points = mainPointsLib.normalizePoints(result.text);
     if (!points) throw new Error('The AI did not return usable points. Try again.');
     await pool.query(
@@ -973,7 +973,7 @@ router.post('/ask', aiLimiter, async (req, res) => {
     const prompt = `TRANSCRIPT${picked.partial ? ' (only the parts most likely to matter for the question)' : ''}:\n${picked.text}\n\n${earlier ? `EARLIER QUESTIONS:\n${earlier}\n\n` : ''}QUESTION: ${q}`;
     const { standard } = await getModelsForUser(req.user.id);
     const result = await callModel(standard, prompt, { maxTokens: 700, system: insightsLib.ASK_SYSTEM, returnUsage: true });
-    logUsage({ userId: req.user.id, model: standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    logUsage({ userId: req.user.id, model: standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'youtube' });
     const out = insightsLib.normalizeAnswer(result.text, { durationSec });
     if (!out) return res.status(502).json({ error: 'The AI did not give an answer. Try asking again.' });
     res.json({ ...out, partial: picked.partial });

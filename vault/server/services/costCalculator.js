@@ -100,4 +100,49 @@ function hasPricing(modelId) {
   return PRICING[modelId] != null;
 }
 
-module.exports = { hasPricing, calculateCost, calculateVideoCost, hasVideoPricing };
+// ---- Capabilities, for the Code Map Models check (docs/code-map.md "Models") ----
+// vision = takes images; context = input tokens it accepts; json = reliable structured/JSON output. null = not known.
+// Family rules first, then per-id corrections. A guess from the family is marked source 'family' so a finding can say so.
+// shortcut: the family values (especially for the 5.x models) are not checked against provider docs; correct a model here when it is.
+const FAMILY_CAPABILITIES = [
+  [/^claude-/, { vision: true, context: 200000, json: true }],
+  [/^gemini-/, { vision: true, context: 1000000, json: true }],
+  [/^deepseek-/, { vision: false, context: 64000, json: true }], // callModel refuses images for DeepSeek and Ollama
+];
+const CAPABILITY_OVERRIDES = {
+  'claude-3-5-haiku-20241022': { vision: false },
+  'gemini-1.5-pro': { context: 2000000 },
+};
+
+/** Family and version from an id, so "a newer model of the same family" can be worked out. null when the id is not recognised. */
+function modelFamily(modelId) {
+  const id = String(modelId || '').toLowerCase();
+  let m = id.match(/^claude-(fable|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/);
+  if (m) return { provider: 'anthropic', family: m[1], version: [Number(m[2]), Number(m[3] || 0)] };
+  m = id.match(/^claude-(\d+)-(\d+)-(opus|sonnet|haiku)(?:-\d{8})?$/); // the older claude-3-5-sonnet-20241022 form
+  if (m) return { provider: 'anthropic', family: m[3], version: [Number(m[1]), Number(m[2])] };
+  m = id.match(/^gemini-(\d+)\.(\d+)-(flash|pro)/);
+  if (m) return { provider: 'gemini', family: m[3], version: [Number(m[1]), Number(m[2])] };
+  return null;
+}
+
+/** Price, capabilities and family for one model id. `priced` / capability `source` say how much of it is real. */
+function modelInfo(modelId) {
+  const id = String(modelId || '');
+  const fam = FAMILY_CAPABILITIES.find(([rx]) => rx.test(id));
+  const over = CAPABILITY_OVERRIDES[id];
+  const caps = { vision: null, context: null, json: null, ...(fam ? fam[1] : {}), ...(over || {}) };
+  return {
+    id,
+    price: PRICING[id] || lookupBySubstring(id),
+    priced: PRICING[id] != null,
+    ...caps,
+    capabilitySource: over ? 'table' : fam ? 'family' : 'unknown',
+    familyInfo: modelFamily(id),
+  };
+}
+
+/** Every model with a real price (the list "newer / cheaper" findings may suggest from). */
+const knownModelIds = () => Object.keys(PRICING);
+
+module.exports = { hasPricing, calculateCost, calculateVideoCost, hasVideoPricing, modelInfo, modelFamily, knownModelIds };

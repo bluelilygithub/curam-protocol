@@ -3,16 +3,17 @@
 const { pool } = require('../db');
 const { calculateCost } = require('../services/costCalculator');
 
-async function logUsage({ userId, sessionId = null, model, inputTokens = 0, outputTokens = 0, feature }) {
+async function logUsage({ userId, sessionId = null, model, inputTokens = 0, outputTokens = 0, feature, latencyMs = null }) {
   const inTokens = Number(inputTokens) || 0;
   const outTokens = Number(outputTokens) || 0;
   if (!userId || !model || (!inTokens && !outTokens)) return;
 
   const cost = calculateCost(model, inTokens, outTokens);
+  const latency = Number.isFinite(Number(latencyMs)) && latencyMs !== null ? Math.round(Number(latencyMs)) : null;
   pool.query(
-    `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [userId, sessionId, model, inTokens, outTokens, cost, feature || 'unknown']
+    `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature, latency_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [userId, sessionId, model, inTokens, outTokens, cost, feature || 'unknown', latency]
   ).catch((err) => console.error('[usage] log error:', err.message));
 }
 

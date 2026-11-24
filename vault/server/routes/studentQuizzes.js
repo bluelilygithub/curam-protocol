@@ -105,7 +105,7 @@ For multiple_select, use type "multiple_select" OR multiple_choice with allow_mu
 Return a JSON array only, no other text.`;
 
   const result = await callModel(model, prompt, { maxTokens: 16000, returnUsage: true });
-  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'student_quiz' });
+  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'student_quiz' });
   const raw = result.text;
   const parsed = parseModelJson(raw);
   if (!Array.isArray(parsed) || !parsed.length) {
@@ -295,7 +295,7 @@ Write a brief, encouraging performance summary (2–4 sentences) and list 2–4 
 Return JSON only: { "summary": "...", "focusAreas": ["...", "..."] }`;
 
     const result = await callModel(model, prompt, { maxTokens: 800, returnUsage: true });
-    logUsage({ userId: req.user?.id, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'student_quiz' });
+    logUsage({ userId: req.user?.id, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'student_quiz' });
     const raw = result.text;
     const parsed = parseModelJson(raw);
     if (!parsed || typeof parsed !== 'object') {
@@ -422,7 +422,7 @@ Mark this out of 10 and return JSON: { "score" (0-10), "correct" (bool, true if 
 Return JSON only.`;
 
     const result = await callModel(model, prompt, { maxTokens: 400, returnUsage: true });
-    logUsage({ userId: req.user?.id, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'student_quiz' });
+    logUsage({ userId: req.user?.id, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'student_quiz' });
     const raw = result.text;
     const parsed = parseModelJson(raw);
     if (!parsed || typeof parsed !== 'object') {

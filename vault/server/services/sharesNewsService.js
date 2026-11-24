@@ -1773,7 +1773,7 @@ async function generateObservation(userId) {
       system: OBSERVATION_SYSTEM_PROMPT,
       returnUsage: true,
     });
-    logUsage({ userId, model: primaryModel, inputTokens: draftRes.inputTokens, outputTokens: draftRes.outputTokens, feature: 'shares_observation' });
+    logUsage({ userId, model: primaryModel, inputTokens: draftRes.inputTokens, outputTokens: draftRes.outputTokens, latencyMs: draftRes.latencyMs, feature: 'shares_observation' });
     draft = (draftRes.text || '').trim();
   } catch (err) {
     console.error(`[sharesNews] observation primary draft failed for user ${userId}:`, err.message);
@@ -1808,7 +1808,7 @@ async function generateObservation(userId) {
         system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
         returnUsage: true,
       });
-      logUsage({ userId, model: secondaryModel, inputTokens: revRes.inputTokens, outputTokens: revRes.outputTokens, feature: 'shares_observation_review' });
+      logUsage({ userId, model: secondaryModel, inputTokens: revRes.inputTokens, outputTokens: revRes.outputTokens, latencyMs: revRes.latencyMs, feature: 'shares_observation_review' });
       const t = (revRes.text || '').trim();
       if (t) revised = t;
     } catch (err) {
@@ -1822,7 +1822,7 @@ async function generateObservation(userId) {
         system: OBSERVATION_FINAL_SYSTEM_PROMPT,
         returnUsage: true,
       });
-      logUsage({ userId, model: primaryModel, inputTokens: finRes.inputTokens, outputTokens: finRes.outputTokens, feature: 'shares_observation_final' });
+      logUsage({ userId, model: primaryModel, inputTokens: finRes.inputTokens, outputTokens: finRes.outputTokens, latencyMs: finRes.latencyMs, feature: 'shares_observation_final' });
       const t = (finRes.text || '').trim();
       if (t) text = t;
     } catch (err) {

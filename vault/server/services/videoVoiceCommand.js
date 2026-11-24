@@ -450,7 +450,7 @@ async function interpretVoiceCommand(userId, { tool, transcript, context = {} })
     returnUsage: true,
     timeoutMs: 25000,
   });
-  logUsage({ userId, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'videos' });
+  logUsage({ userId, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'videos' });
   const parsed = parseModelJson(String(result.text || '').trim());
   const values = normalizeVoiceValues(tool, parsed?.values && typeof parsed.values === 'object' ? parsed.values : parsed);
   return { values, heard, applied: describeValues(tool, values), source: 'model' };

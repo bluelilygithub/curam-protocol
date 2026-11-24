@@ -42,7 +42,13 @@ function summarizeAnthropicContent(content) {
 async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0, images = null, stream = false, onText = null, signal = null } = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
 
-  const run = () => callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage, images, stream, onText, signal });
+  // With returnUsage the result is an object; it also carries latencyMs so the caller can pass it to logUsage (Code Map → Models).
+  const run = async () => {
+    const t0 = Date.now();
+    const result = await callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage, images, stream, onText, signal });
+    if (result && typeof result === 'object') result.latencyMs = Date.now() - t0;
+    return result;
+  };
 
   if (!timeoutMs || timeoutMs <= 0) return run();
 

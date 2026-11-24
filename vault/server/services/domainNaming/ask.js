@@ -21,7 +21,7 @@ async function askAboutNames({ userId, brief, cards, history, question }, deps) 
     const msg = String((e && e.message) || '');
     throw Object.assign(new Error(/timed out/i.test(msg) ? 'The AI took too long to answer. Try again, or choose a faster model in Settings → AI & Chat.' : `The AI could not answer just now: ${msg || 'no answer'}`), { status: /timed out/i.test(msg) ? 504 : 502 });
   }
-  deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'domains_ask' });
+  deps.logUsage({ userId, model: result.model || model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'domains_ask' });
   const answer = String(result.text || '').replace(/\r\n/g, '\n').trim().slice(0, 1500);
   if (!answer) throw Object.assign(new Error('The AI did not answer. Please try again.'), { status: 502 });
   return { answer, model: result.model || model };

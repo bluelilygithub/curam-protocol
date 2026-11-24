@@ -108,7 +108,7 @@ async function extractLinesFromPdf(userId, filePath) {
     maxTokens: 12000,
     returnUsage: true,
   });
-  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'sharesStatementImport' });
+  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'sharesStatementImport' });
 
   let parsed;
   let truncated = false;

@@ -14,7 +14,7 @@ const anthropic = new Anthropic();
 
 async function callModelWithUsage(req, modelId, prompt, options = {}) {
   const result = await callModel(modelId, prompt, { ...options, returnUsage: true });
-  logUsage({ userId: req.user?.id, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'goals' });
+  logUsage({ userId: req.user?.id, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'goals' });
   return result.text;
 }
 
@@ -22,7 +22,7 @@ async function streamModelSSE(res, { userId, modelId, system, userContent, maxTo
   if (!modelId.startsWith('claude-')) {
     try {
       const result = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}), returnUsage: true });
-      logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'goals' });
+      logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'goals' });
       res.write(`data: ${JSON.stringify(result.text || '')}\n\n`);
     } catch (err) {
       if (onError) onError(err);

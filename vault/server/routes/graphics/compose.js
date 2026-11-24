@@ -491,7 +491,7 @@ No duplicates, no made-up names.`;
     const modelId = light || standard;
     if (!modelId) throw new Error('No AI model is configured for this workspace yet.');
     const out = await callModel(modelId, prompt, { maxTokens: 600, system, returnUsage: true });
-    logUsage({ userId: req.user.id, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, feature: 'graphics_icons' });
+    logUsage({ userId: req.user.id, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, latencyMs: out.latencyMs, feature: 'graphics_icons' });
     const parsed = safeJsonParse(typeof out === 'string' ? out : out.text) || {};
     const clean = (arr) => (Array.isArray(arr) ? arr.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim().toLowerCase().replace(/^fa-/, '')) : []);
     res.json({
@@ -569,7 +569,7 @@ Names must be unique, lowercase, kebab-case, and describe the icon.`;
     const { standard } = await getModelsForUser(req.user.id);
     if (!standard) throw new Error('No AI model is configured for this workspace yet.');
     const result = await callModel(standard, prompt, { maxTokens, system, returnUsage: true });
-    logUsage({ userId: req.user.id, model: result.model || standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'graphics_icons' });
+    logUsage({ userId: req.user.id, model: result.model || standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'graphics_icons' });
     const raw = typeof result === 'string' ? result : result.text;
     const arr = safeJsonParse(raw);
     if (!Array.isArray(arr)) throw new Error('The model did not return an icon set — try again');

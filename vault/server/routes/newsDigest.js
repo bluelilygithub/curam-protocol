@@ -330,7 +330,7 @@ router.post('/topics/:topicId/chat', async (req, res) => {
         const result = await callModel(primaryModelId, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
         if (result.text) {
           aiText = result.text;
-          logUsage({ userId: req.user?.id, model: primaryModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'news_digest' });
+          logUsage({ userId: req.user?.id, model: primaryModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'news_digest' });
         }
       } catch (err) {
         console.warn(`[news-chat] Primary model (${primaryModelId}) failed, falling back to ${fallbackModelId}:`, err.message);
@@ -339,7 +339,7 @@ router.post('/topics/:topicId/chat', async (req, res) => {
 
     if (!aiText) {
       const result = await callModel(fallbackModelId, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
-      logUsage({ userId: req.user?.id, model: fallbackModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'news_digest' });
+      logUsage({ userId: req.user?.id, model: fallbackModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'news_digest' });
       aiText = result.text
         || 'Sorry, I could not generate a response.';
     }

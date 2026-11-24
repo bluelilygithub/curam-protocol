@@ -374,7 +374,7 @@ async function runCheck(userId, thesisId) {
     revisions, portfolio: dash, market,
   });
   const result = await callModel(modelId, prompt, { maxTokens: 4000, system: SYSTEM_PROMPT, returnUsage: true });
-  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_thesis_check' });
+  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'shares_thesis_check' });
 
   const parsed = parseCheckReply(result.text, thesis);
   if (!previous) parsed.drift = []; // nothing to compare with on a first check

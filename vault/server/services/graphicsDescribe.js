@@ -108,7 +108,7 @@ async function describeImage(userId, imageDataUrl, { context = '' } = {}, deps =
     returnUsage: true,
     images: [image],
   });
-  logUsage({ userId, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, feature: 'graphics_describe' });
+  logUsage({ userId, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, latencyMs: out.latencyMs, feature: 'graphics_describe' });
   const parsed = parseDescription(typeof out === 'string' ? out : out.text);
   if (!parsed) throw Object.assign(new Error('The AI could not describe that picture. Try again, or write it yourself.'), { status: 502 });
   return { ...parsed, model: out.model || modelId };

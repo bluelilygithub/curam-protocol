@@ -47,7 +47,7 @@ async function readVendorDocument(userId, buffer) {
   }
   const { light: model } = await getModelsForUser(userId);
   const result = await callModel(model, text.slice(0, 30000), { system: SYSTEM, maxTokens: 1500, returnUsage: true });
-  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'vendorDocumentRead' });
+  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'vendorDocumentRead' });
   const raw = parseModelJson(result.text);
   if (!raw) {
     const err = new Error('The reader did not return a usable answer — try again');

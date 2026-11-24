@@ -411,7 +411,7 @@ function createAiReview(deps = {}) {
         onProgress: (done, total) => active.set(id, { done, total, kind: kind.id }),
         call: async (prompt) => {
           const r = await d.callModel(modelId, prompt, { system: kind.system, maxTokens: 3000, returnUsage: true, timeoutMs: 120000 });
-          d.logUsage({ userId, model: r.model || modelId, inputTokens: r.inputTokens, outputTokens: r.outputTokens, feature: kind.feature });
+          d.logUsage({ userId, model: r.model || modelId, inputTokens: r.inputTokens, outputTokens: r.outputTokens, latencyMs: r.latencyMs, feature: kind.feature });
           return r;
         },
       });

@@ -660,7 +660,7 @@ ${source.slice(0, 1000)}`;
     const modelId = light || standard;
     if (!modelId) return unchanged;
     const out = await callModel(modelId, instruction, { maxTokens: 300, system: REFINE_SYSTEM, returnUsage: true, timeoutMs: 20000 });
-    logUsage({ userId, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, feature: 'graphics_refine' });
+    logUsage({ userId, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, latencyMs: out.latencyMs, feature: 'graphics_refine' });
     const prompt = cleanRefinedPrompt(typeof out === 'string' ? out : out.text);
     return prompt ? { prompt, model: out.model || modelId, refined: true } : { ...unchanged, model: out.model || modelId };
   } catch (err) {
