@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { KEY: HOME_TILES_KEY, cleanHomeTiles } = require('../utils/homeTiles');
 const router = express.Router();
 const { pool } = require('../db');
 const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides, accountantFlags } = require('../config/featureAccess');
@@ -345,6 +346,40 @@ router.post('/nav-layout', async (req, res) => {
       [JSON.stringify(navLayout)]
     );
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/home-tiles — the Home page tiles and groups (server/utils/homeTiles.js); null when not set up.
+router.get('/home-tiles', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1', [HOME_TILES_KEY]);
+    let parsed = null;
+    try { parsed = rows[0] ? cleanHomeTiles(JSON.parse(rows[0].value)) : null; } catch { parsed = null; }
+    res.json({ homeTiles: parsed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/home-tiles — body: { homeTiles: {...} | null } (admin; null removes them)
+router.post('/home-tiles', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  const { homeTiles } = req.body || {};
+  try {
+    if (homeTiles === null || homeTiles === undefined) {
+      await pool.query('DELETE FROM workspace_settings WHERE key=$1', [HOME_TILES_KEY]);
+      return res.json({ ok: true, homeTiles: null });
+    }
+    const clean = cleanHomeTiles(homeTiles);
+    if (!clean) return res.status(400).json({ error: 'That is not a valid tile layout' });
+    await pool.query(
+      `INSERT INTO workspace_settings (key, value, "updatedAt") VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [HOME_TILES_KEY, JSON.stringify(clean)]
+    );
+    res.json({ ok: true, homeTiles: clean });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

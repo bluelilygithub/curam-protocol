@@ -3184,6 +3184,12 @@
   "POST /api/settings/mobile": {
    "class": "authed"
   },
+  "GET /api/settings/home-tiles": {
+   "class": "authed"
+  },
+  "POST /api/settings/home-tiles": {
+   "class": "authed"
+  },
   "GET /api/settings/nav-layout": {
    "class": "authed"
   },

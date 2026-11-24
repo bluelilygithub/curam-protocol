@@ -8,6 +8,7 @@ import ProjectList from './pages/ProjectList';
 import ProjectDetail from './pages/ProjectDetail';
 import ChatPage from './pages/ChatPage';
 import SettingsPage from './pages/SettingsPage';
+import HomePage from './pages/HomePage';
 import MemoryPage from './pages/MemoryPage';
 import SuggestionsPage from './pages/SuggestionsPage';
 import UserGuidePage from './pages/UserGuidePage';
@@ -219,6 +220,7 @@ function App() {
               <Route path="/sketchbook/:id" element={<SketchbookPage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/plans/:id" element={<PlansPage />} />
+              <Route path="/home" element={<HomePage />} />
               <Route path="/tickets" element={<TicketsPage />} />
               <Route path="/tickets/:id" element={<TicketsPage />} />
               <Route path="/music" element={<MusicPage />} />

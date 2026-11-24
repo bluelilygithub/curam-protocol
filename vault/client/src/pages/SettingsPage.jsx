@@ -63,6 +63,7 @@ import UsersAdminPanel from '../components/UsersAdminPanel';
 import AccountantAccessPanel from '../components/AccountantAccessPanel';
 import RecycleBinPanel from '../components/RecycleBinPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
+import HomeTilesSettings from '../components/settings/HomeTilesSettings';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS, FEATURE_LIFECYCLE, LIFECYCLE_LABELS } from '../utils/featureAccess';
 import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
@@ -2844,6 +2845,10 @@ function SettingsPage() {
           Navigation
         </h2>
         <NavLayoutEditor />
+        <h2 className="text-sm font-semibold uppercase tracking-widest mt-10 mb-1" style={{ color: 'var(--color-muted)' }}>
+          Home page tiles
+        </h2>
+        <HomeTilesSettings />
       </section>
       )}
 
