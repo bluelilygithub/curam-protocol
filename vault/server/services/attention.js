@@ -53,4 +53,47 @@ function buildAttentionItems(raw = {}) {
   return out.sort((a, b) => order[a.severity] - order[b.severity]); // sort is stable: within a severity the order above is kept
 }
 
-module.exports = { buildAttentionItems };
+/**
+ * The Home page sidebar: the same counts, one box per area (Tasks, Notes, Plans, Invoices, Tickets, Emails), in that order. An area whose
+ * raw keys are all missing is off for this person and left out; an area with nothing waiting is kept with no lines ("Nothing waiting").
+ * Extra raw keys: plansOverdue { count, sample[] }, ticketsMine { count }, ticketsOverdue { count, sample[] }, inboxNeeds { count, sample[] },
+ * followUpDrafts { count }.
+ * Returns [{ id, label, icon, to, total, lines: [{ id, severity, text, detail, to }] }].
+ */
+function buildAttentionSummary(raw = {}) {
+  const line = (id, severity, count, text, detail, to) => (count > 0 ? { id, severity, text, detail: detail || '', to, count } : null);
+  const inv = raw.invoicesOverdue || {};
+  const areas = [
+    { id: 'tasks', label: 'Tasks', icon: 'check-square', to: '/tasks', keys: ['tasksOverdue', 'tasksToday'], lines: [
+      line('tasks-overdue', 'high', raw.tasksOverdue?.count, `${plural(raw.tasksOverdue?.count, 'task', 'tasks')} overdue`, names(raw.tasksOverdue?.sample, raw.tasksOverdue?.count), '/tasks'),
+      line('tasks-today', 'normal', raw.tasksToday?.count, `${plural(raw.tasksToday?.count, 'task', 'tasks')} due today`, names(raw.tasksToday?.sample, raw.tasksToday?.count), '/tasks'),
+    ] },
+    { id: 'notes', label: 'Notes', icon: 'pen-line', to: '/notes', keys: ['remindersDue'], lines: [
+      line('reminders-due', 'normal', raw.remindersDue?.count, `${plural(raw.remindersDue?.count, 'reminder', 'reminders')} due`, names(raw.remindersDue?.sample, raw.remindersDue?.count), '/notes'),
+    ] },
+    { id: 'plans', label: 'Plans', icon: 'gantt-chart', to: '/plans', keys: ['plansOverdue'], lines: [
+      line('plans-overdue', 'high', raw.plansOverdue?.count, `${plural(raw.plansOverdue?.count, 'step', 'steps')} past ${raw.plansOverdue?.count === 1 ? 'its' : 'their'} end date`, names(raw.plansOverdue?.sample, raw.plansOverdue?.count), '/plans'),
+    ] },
+    { id: 'invoices', label: 'Invoices', icon: 'receipt', to: '/finance', keys: ['invoicesOverdue', 'expensePending'], lines: [
+      line('invoices-overdue', 'high', inv.count, `${plural(inv.count, 'invoice', 'invoices')} overdue`,
+        inv.total ? `${money(inv.total)} unpaid. ${names(inv.sample, inv.count)}`.trim() : names(inv.sample, inv.count), '/finance'),
+      line('expense-review', 'normal', raw.expensePending?.count, `${plural(raw.expensePending?.count, 'bill', 'bills')} from email to review`, '', '/expense-review'),
+    ] },
+    { id: 'tickets', label: 'Tickets', icon: 'ticket', to: '/tickets?view=mine', keys: ['ticketsMine', 'ticketsOverdue'], lines: [
+      line('tickets-overdue', 'high', raw.ticketsOverdue?.count, `${plural(raw.ticketsOverdue?.count, 'ticket', 'tickets')} of yours overdue`, names(raw.ticketsOverdue?.sample, raw.ticketsOverdue?.count), '/tickets?view=overdue'),
+      line('tickets-mine', 'normal', raw.ticketsMine?.count, `${plural(raw.ticketsMine?.count, 'ticket', 'tickets')} assigned to you`, '', '/tickets?view=mine'),
+    ] },
+    { id: 'emails', label: 'Emails', icon: 'mail', to: '/gmail-intel', keys: ['inboxNeeds', 'followUpDrafts'], lines: [
+      line('inbox-needs', 'normal', raw.inboxNeeds?.count, `${plural(raw.inboxNeeds?.count, 'email', 'emails')} urgent or waiting on you`, names(raw.inboxNeeds?.sample, raw.inboxNeeds?.count), '/gmail-intel'),
+      line('follow-up-drafts', 'normal', raw.followUpDrafts?.count, `${plural(raw.followUpDrafts?.count, 'follow-up draft', 'follow-up drafts')} to approve`, '', '/email-follow-up'),
+    ] },
+  ];
+  return areas
+    .filter((a) => a.keys.some((k) => raw[k]))
+    .map(({ keys, lines, ...a }) => {
+      const kept = lines.filter(Boolean);
+      return { ...a, total: kept.reduce((n, l) => n + l.count, 0), lines: kept };
+    });
+}
+
+module.exports = { buildAttentionItems, buildAttentionSummary };

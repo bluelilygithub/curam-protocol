@@ -6,6 +6,7 @@ import { useIcon } from '../providers/IconProvider';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { getAppsNavGroups } from '../config/appNavigation';
 import { homeGroupsFor } from '../utils/homeTiles.mjs';
+import AttentionSidebar from '../components/AttentionSidebar';
 
 const TILE = 'flex items-center gap-3 rounded-2xl border p-4 transition-opacity hover:opacity-70';
 const TILE_STYLE = { borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' };
@@ -49,7 +50,10 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-8">
+      {/* the attention sidebar comes first so a phone shows it above the tiles; on a wide screen it sits on the right */}
+      <div className="max-w-[1600px] mx-auto p-4 sm:p-6 flex flex-col lg:flex-row-reverse gap-6 lg:gap-8">
+      <div className="lg:w-80 lg:flex-none"><AttentionSidebar /></div>
+      <div className="flex-1 min-w-0 space-y-8">
         {(homeTiles === undefined || (homeTiles && !flags)) && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
         {homeTiles !== undefined && flags && groups.length === 0 && (
           <div className="py-16 text-center space-y-3">
@@ -70,6 +74,7 @@ export default function HomePage() {
             <Link to="/settings?tab=Navigation" className="underline">Change these tiles</Link> (only admins see this link).
           </p>
         )}
+      </div>
       </div>
     </div>
   );

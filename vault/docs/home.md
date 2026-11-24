@@ -1,6 +1,7 @@
 # Home page tiles
 
-`/home` is a page of app tiles in named groups, arranged by an admin for the whole workspace. It is meant as the page Vault opens on.
+`/home` is a page of app tiles in named groups, arranged by an admin for the whole workspace. Vault opens on it: a one-time step at boot (server/db.js, marker home_landing_2026_11_24) set the workspace start page to /home and
+cleared admins' own start page where it was Shares. Members with their own start page keep it; change any of it under Members.
 
 ## Arranging it (admin)
 
@@ -21,6 +22,16 @@ own start page keep it.
 Tiles come from the nav catalogue (`config/appNavigation.js`), so a tile has the app's own name, icon and link. Each person sees only the
 apps they can use (feature switches, admin-only apps), via `getAppsNavGroups`; a group with none of them is hidden
 (`utils/homeTiles.mjs`). An app is in at most one group. Admins get a "Change these tiles" link at the bottom.
+
+## Needs attention sidebar
+
+`components/AttentionSidebar.jsx`, on the right (above the tiles on a phone): one box each for Tasks (overdue, due today), Notes
+(reminders due), Plans (steps of active plans past their end date), Invoices (overdue invoices, bills from email to review), Tickets
+(yours overdue, assigned to you) and Emails (Inbox Intel threads marked urgent or waiting on you in the last 14 days and not yet actioned,
+Email Follow-Up drafts to approve). An app the person cannot use has no box; a box with nothing waiting says so. Data: `GET
+/api/attention/summary` (routes/attention.js, the same counts as the Needs attention list plus plans, tickets and emails), worded by
+`buildAttentionSummary` in services/attention.js. Refreshes when the tab comes back into view and every five minutes. Tests:
+`services/attention.test.js` and `routes/attentionSummary.db.test.js` (real database: every source query runs, and counts).
 
 ## Storage
 

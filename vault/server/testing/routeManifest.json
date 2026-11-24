@@ -4507,6 +4507,9 @@
   "POST /api/app-visits": {
    "class": "authed"
   },
+  "GET /api/attention/summary": {
+   "class": "authed"
+  },
   "GET /api/attention": {
    "class": "authed"
   },

@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { loadFeatureAccess } = require('../middleware/auth');
-const { buildAttentionItems } = require('../services/attention');
+const { buildAttentionItems, buildAttentionSummary } = require('../services/attention');
 const { unseenSummary: youtubeUnseen } = require('../services/youtubeFollows');
 
 // GET /api/attention — the short "needs attention" list for the signed-in person (see services/attention.js for ranking and wording).
@@ -23,7 +23,8 @@ async function workspaceToday() {
   try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()); } catch (_) { return new Date().toISOString().slice(0, 10); }
 }
 
-router.get('/', async (req, res) => {
+// The counts for one person; `extra` adds the sources only the Home sidebar shows (plans, tickets, emails).
+async function collect(req, extra = false) {
   const userId = req.user.id;
   let flags = null; // null = admin, everything on
   if (!req.user.isAdmin) {
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
   const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch((err) => { console.error('[attention]', err.message); return null; });
   const taskBase = `FROM tasks WHERE "userId" = $1 AND "parentTaskId" IS NULL AND status IN ('todo','in-progress') AND "dueDate" IS NOT NULL`;
 
-  const [overdue, dueToday, reminders, invoices, expense, suggestions, youtube, pdfHtml] = await Promise.all([
+  const [overdue, dueToday, reminders, invoices, expense, suggestions, youtube, pdfHtml, plansLate, ticketRows, inbox, drafts] = await Promise.all([
     q(`SELECT title, COUNT(*) OVER () AS n ${taskBase} AND LEFT("dueDate", 10) < $2
         ORDER BY "dueDate" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 3`, [userId, today]),
     q(`SELECT title, COUNT(*) OVER () AS n ${taskBase} AND LEFT("dueDate", 10) = $2
@@ -51,6 +52,19 @@ router.get('/', async (req, res) => {
     // PDF Tools → PDF → HTML pages that finished in the background and have not been opened yet (PDF Tools has no feature switch)
     q(`SELECT filename, COUNT(*) OVER () AS n FROM pdf_html_jobs WHERE "userId" = $1 AND status = 'done' AND "seenAt" IS NULL
         ORDER BY "finishedAt" DESC LIMIT 3`, [userId]),
+    // steps of active plans that should have finished by today (a step ends startDate + durationDays)
+    extra && can('plans') ? q(`SELECT s.title || ' (' || p.title || ')' AS title, COUNT(*) OVER () AS n FROM plan_steps s JOIN plans p ON p.id = s."planId"
+        WHERE p."userId" = $1 AND p.status = 'active' AND s.status <> 'done' AND s."startDate" IS NOT NULL AND s."startDate" + s."durationDays" < $2::date
+        ORDER BY s."startDate" ASC LIMIT 3`, [userId, today]) : null,
+    // tickets are shared; these are the ones assigned to this person
+    extra && can('tickets') ? q(`SELECT title, "dueDate" < $2::date AS late, COUNT(*) OVER () AS n FROM tickets
+        WHERE "assigneeId" = $1 AND status <> 'done' ORDER BY "dueDate" ASC NULLS LAST LIMIT 200`, [userId, today]) : null,
+    // Inbox Intel: threads classified urgent or waiting on me in the last fortnight, not yet actioned or acknowledged
+    extra && can('gmailIntel') ? q(`SELECT "oneLine" AS title, COUNT(*) OVER () AS n FROM gmail_classifications
+        WHERE "userId" = $1::text AND category IN ('urgent','waiting') AND NOT COALESCE(actioned, FALSE) AND NOT COALESCE(acknowledged, FALSE)
+          AND "classifiedAt" > NOW() - INTERVAL '14 days' ORDER BY (category = 'urgent') DESC, "classifiedAt" DESC LIMIT 3`, [userId]) : null,
+    extra && can('emailFollowUp') ? q(`SELECT COUNT(*)::int AS n FROM ef_drafts d JOIN ef_cases c ON c.id = d."caseId"
+        WHERE c."userId" = $1 AND c.status = 'active' AND d.status = 'pending'`, [userId]) : null,
   ]);
 
   const list = (rows, field) => (rows ? { count: Number(rows[0]?.n || 0), sample: rows.map((r) => r[field]) } : null);
@@ -64,8 +78,27 @@ router.get('/', async (req, res) => {
     youtubeNew: youtube && youtube.count > 0 ? youtube : null,
     pdfHtmlReady: list(pdfHtml, 'filename'),
   };
+  if (extra) {
+    raw.plansOverdue = list(plansLate, 'title');
+    if (ticketRows) {
+      const late = ticketRows.filter((t) => t.late);
+      raw.ticketsMine = { count: Number(ticketRows[0]?.n || 0) };
+      raw.ticketsOverdue = { count: late.length, sample: late.slice(0, 3).map((t) => t.title) };
+    }
+    raw.inboxNeeds = list(inbox, 'title');
+    raw.followUpDrafts = drafts ? { count: Number(drafts[0]?.n || 0) } : null;
+  }
   Object.keys(raw).forEach((k) => { if (!raw[k]) delete raw[k]; });
-  res.json({ items: buildAttentionItems(raw) });
+  return raw;
+}
+
+router.get('/', async (req, res) => {
+  res.json({ items: buildAttentionItems(await collect(req)) });
+});
+
+// GET /api/attention/summary — the Home page sidebar: one box per area (services/attention.js buildAttentionSummary)
+router.get('/summary', async (req, res) => {
+  res.json({ areas: buildAttentionSummary(await collect(req, true)) });
 });
 
 module.exports = router;

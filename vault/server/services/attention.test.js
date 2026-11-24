@@ -45,3 +45,21 @@ assert.equal(web.to, '/pdf?tool=pdftohtml');
 assert.equal(buildAttentionItems({ pdfHtmlReady: { count: 0, sample: [] } }).length, 0);
 
 console.log('attention: ok');
+
+// ---- the Home sidebar: one box per area ----
+const { buildAttentionSummary } = require('./attention');
+assert.deepEqual(buildAttentionSummary(), [], 'every source off: no boxes');
+const areas = buildAttentionSummary({
+  tasksOverdue: { count: 2, sample: ['A', 'B'] }, tasksToday: { count: 0 },
+  remindersDue: { count: 0 },
+  ticketsMine: { count: 3 }, ticketsOverdue: { count: 1, sample: ['Fix login'] },
+  inboxNeeds: { count: 0 }, followUpDrafts: { count: 2 },
+});
+assert.deepEqual(areas.map((a) => a.id), ['tasks', 'notes', 'tickets', 'emails'], 'fixed order; plans and invoices are off for this person');
+const area = Object.fromEntries(areas.map((a) => [a.id, a]));
+assert.equal(area.tasks.total, 2);
+assert.deepEqual(area.tasks.lines.map((l) => l.text), ['2 tasks overdue'], 'nothing due today: that line is left out');
+assert.deepEqual(area.notes.lines, [], 'on but nothing waiting: kept, with no lines');
+assert.deepEqual(area.tickets.lines.map((l) => [l.text, l.to]), [['1 ticket of yours overdue', '/tickets?view=overdue'], ['3 tickets assigned to you', '/tickets?view=mine']]);
+assert.equal(area.emails.lines[0].text, '2 follow-up drafts to approve');
+console.log('attention summary: ok');

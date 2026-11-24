@@ -3147,6 +3147,14 @@ async function initSchema() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "accessExpiresAt" TIMESTAMPTZ`);
   // Where Vault opens for this member (in-app path or https link). NULL = use the workspace default. See server/utils/landing.js.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "landingPath" TEXT`);
+  // One time (2026-11-24): Vault opens on Home (/home, docs/home.md) instead of Shares. The workspace start page becomes /home, and admins
+  // whose own start page was Shares follow it; members keep theirs. The marker row makes this run once, so a later change under Members stays.
+  const homeLanding = await pool.query(`INSERT INTO workspace_settings (key, value) VALUES ('home_landing_2026_11_24', 'done') ON CONFLICT (key) DO NOTHING RETURNING key`);
+  if (homeLanding.rows.length) {
+    await pool.query(`INSERT INTO workspace_settings (key, value, "updatedAt") VALUES ('default_landing', '/home', NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`);
+    await pool.query(`UPDATE users SET "landingPath" = NULL WHERE "isAdmin" = TRUE AND "landingPath" = '/shares'`);
+  }
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "disabledAt" TIMESTAMPTZ`);
   // Append-only record of everything an accountant does (logins, views, exports, refused attempts).
   await pool.query(`
