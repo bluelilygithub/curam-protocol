@@ -120,6 +120,7 @@ function HomeRoute() {
     if (!landing.startsWith('/')) window.location.replace(landing);
   }, [pending, landing, token]);
   if (isAccountant) return <Navigate to="/finance" replace />; // accountant logins only see Finance
+  if (landing === '/home') return <Navigate to="/home" replace />; // Home is the home page: the address and the logo always open it
   if (pending) return landing.startsWith('/') ? <Navigate to={landing} replace /> : null;
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   return isMobile ? <Navigate to="/mobile-dashboard" replace /> : <ProjectList />;
