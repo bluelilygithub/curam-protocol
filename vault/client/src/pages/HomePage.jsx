@@ -8,8 +8,9 @@ import { getAppsNavGroups } from '../config/appNavigation';
 import { homeGroupsFor } from '../utils/homeTiles.mjs';
 import AttentionSidebar from '../components/AttentionSidebar';
 
-const TILE = 'flex items-center gap-3 rounded-2xl border p-4 transition-opacity hover:opacity-70';
-const TILE_STYLE = { borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' };
+// hover darkens the tile (mixed with black, so it reads as darker in light and dark themes alike); background is a class so hover can win
+const TILE = 'flex items-center gap-3 rounded-2xl border p-4 transition-colors bg-[var(--color-surface)] hover:bg-[color-mix(in_srgb,var(--color-surface),black_12%)]';
+const TILE_STYLE = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
 /**
  * Home (/home): the tiles an admin arranged under Settings → Navigation → Home page tiles, in their groups and order. Each person sees only
@@ -37,7 +38,7 @@ export default function HomePage() {
   const tile = (item) => {
     const inner = (
       <>
-        <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-none" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
+        <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-none" style={{ color: 'var(--color-primary)' }}>
           {getIcon(item.icon, { size: 18 })}
         </span>
         <span className="text-sm font-semibold">{item.label}</span>
