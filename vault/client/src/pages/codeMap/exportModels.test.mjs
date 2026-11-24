@@ -39,6 +39,10 @@ assert.match(acts[1].action, /change pdf_html_model for PDF Tools: old-model is 
 assert.strictEqual(acts[1].via, 'setting:pdf_html_model');
 assert.match(acts[2].action, /Trial m-2 in place of m-1/);
 assert.strictEqual(acts[3].action, 'Fallback title', 'unknown kinds fall back to the title');
+const tested = (label) => modelActions({ findings: [{ severity: 'low', kind: 'newerModel', label: 'Workspace', evidence: { current: 'm-1', candidate: 'm-2', test: { label } } }] })[0].action;
+assert.match(tested('same'), /^Swap m-1 for m-2 in Settings: a test set found the same quality/);
+assert.match(tested('worse'), /^Keep m-1: a test set found m-2 worse/);
+assert.match(tested('notEnough'), /^Trial m-2/, 'not enough evidence keeps the trial wording');
 assert.match(modelsMd(rep), /## What to do\n- \*\*Do now\*\* · Set a light model/);
 const html = modelsHtml({ ...rep, tools: [{ ...tool, label: 'A <b>' }] });
 assert.match(html, /<h2>What to do<\/h2>/);

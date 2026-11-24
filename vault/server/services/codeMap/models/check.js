@@ -53,6 +53,30 @@ function buildReport({ inventory, usage, aggregate, thresholds = THRESHOLDS, kno
   };
 }
 
+const TOOL_LABEL = { newsDigest: 'News digest' };
+
+/**
+ * Attach model test results (testSet.js recent()) to the report, in place. Pure. Each tool row gets its newest test (row.test); a
+ * "worth trialling the light model" or "newer model" finding for the same pair of models gets the result in its evidence and detail, so
+ * the inbox, the summary (its figure check reads the evidence) and What to do can say "same quality" only when a test found it.
+ */
+function attachTests(report, tests = []) {
+  const slim = (t) => ({ id: t.id, tool: t.tool, current: t.current, candidate: t.candidate, label: t.summary?.label, text: t.summary?.text, date: String(t.finishedAt instanceof Date ? t.finishedAt.toISOString() : t.finishedAt || '').slice(0, 10) });
+  const newest = new Map();
+  for (const t of tests) if (!newest.has(t.tool) || t.id > newest.get(t.tool).id) newest.set(t.tool, t);
+  for (const row of report.tools || []) row.test = newest.has(row.tool) ? slim(newest.get(row.tool)) : null;
+  for (const f of report.findings || []) {
+    const e = f.evidence || {};
+    const t = tests.filter((x) => (f.kind === 'cheaperTier' && x.tool === f.tool && x.current === e.standard && x.candidate === e.light)
+      || (f.kind === 'newerModel' && x.current === e.current && x.candidate === e.candidate)).sort((a, b) => b.id - a.id)[0];
+    if (!t || !t.summary) continue;
+    const s = slim(t);
+    f.evidence = { ...e, test: s };
+    f.detail = `${f.detail} Test set on ${TOOL_LABEL[t.tool] || t.tool} (${s.date}): ${s.text}`;
+  }
+  return report;
+}
+
 /** Run the check now and store it. Returns { id, report }. Injectable for tests. */
 async function runModelsCheck({
   userId = null,
@@ -63,6 +87,7 @@ async function runModelsCheck({
   captureIf = (cond, p) => require('../../SuggestionService').captureIf(cond, p),
   makeFingerprint = (...a) => require('../../SuggestionService').makeFingerprint(...a),
   summarize = (...a) => require('./summary').summarize(...a),
+  loadTests = (opts) => require('./testSet').createModelTests(opts).recent(), // with the same pool, so a test's stand-in pool is used
   summaryWithModel = false, // the button asks for the light model's write-up; the weekly cron makes no model call
   log = getLogger(),
 } = {}) {
@@ -71,6 +96,11 @@ async function runModelsCheck({
   const owner = userId || inventory.adminId;
   const usage = await loadUsage({ pool, days: THRESHOLDS.days });
   const report = buildReport({ inventory, usage, aggregate });
+  try {
+    attachTests(report, await loadTests({ pool }));
+  } catch (err) {
+    log.error({ err }, '[codeMapModels] loading model test results failed'); // the check goes on without them
+  }
   try {
     report.summary = await summarize(report, { userId: owner, useModel: summaryWithModel });
   } catch (err) {
@@ -131,4 +161,4 @@ async function runNow(userId, deps = {}) {
   try { return await running; } finally { running = null; }
 }
 
-module.exports = { buildReport, runModelsCheck, latestReport, runNow, KEEP_REPORTS, INBOX_SEVERITIES };
+module.exports = { buildReport, attachTests, runModelsCheck, latestReport, runNow, KEEP_REPORTS, INBOX_SEVERITIES };

@@ -5234,6 +5234,30 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_code_map_model_reports_created ON code_map_model_reports ("createdAt" DESC)`);
+  // Code Map Models test sets (services/codeMap/models/testSet.js): News digest topics replayed through the current and a candidate model,
+  // scored by code checks and a judge model. Started only by the admin's button; the last 10 kept, older ones deleted outright.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS code_map_model_tests (
+      id             SERIAL PRIMARY KEY,
+      "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tool           TEXT NOT NULL,
+      status         TEXT NOT NULL DEFAULT 'running',
+      current        TEXT,
+      candidate      TEXT,
+      judge          TEXT,
+      summary        JSONB,
+      result         JSONB,
+      error          TEXT,
+      "inputTokens"  INTEGER,
+      "outputTokens" INTEGER,
+      "costUsd"      NUMERIC(10,4),
+      "durationMs"   INTEGER,
+      "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finishedAt"   TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`UPDATE code_map_model_tests SET status = 'failed', error = 'Stopped by a restart', "finishedAt" = NOW()
+                      WHERE status = 'running' AND "createdAt" < $1`, [schemaStartedAt]);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (

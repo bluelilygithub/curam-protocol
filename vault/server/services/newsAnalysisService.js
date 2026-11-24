@@ -127,6 +127,9 @@ function parseJSON(text) {
   return JSON.parse(cleaned);
 }
 
+// "digest" asks for 2 sections, "perspectives" for 4 (see the note in analyseTopicArticles). Also used by Code Map's model test set.
+const maxTokensFor = (template) => (template === 'digest' ? 3000 : 6000);
+
 function emptyAnalysis(template) {
   const base = {
     unbiased: { summary: 'No articles found for this topic.', keyFacts: [], sources: [] },
@@ -173,7 +176,7 @@ async function analyseTopicArticles(topicTitle, articles, context, primaryModelI
   // "perspectives" response off mid-string on the fallback model (confirmed: recurring
   // "Unterminated string in JSON" failures in the suggestions log whenever the primary model's
   // quota forced a fallback) and silently failing that topic for the day.
-  const maxTokens = template === 'digest' ? 3000 : 6000;
+  const maxTokens = maxTokensFor(template);
   let raw;
   let usage = { inputTokens: 0, outputTokens: 0, model: null };
 
@@ -210,4 +213,4 @@ async function analyseTopicArticles(topicTitle, articles, context, primaryModelI
   return { analysis: resolveSourceIndices(raw, articles), usage };
 }
 
-module.exports = { analyseTopicArticles };
+module.exports = { analyseTopicArticles, buildPrompt, parseJSON, maxTokensFor };

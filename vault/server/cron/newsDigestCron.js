@@ -336,4 +336,4 @@ function startNewsDigestCron() {
   scheduleDigestCron().catch(err => console.error('[news-cron] Schedule error:', err.message));
 }
 
-module.exports = { startNewsDigestCron, generateDigestForUser, runDailyDigest, scheduleDigestCron, getActiveSources, getSourceGroupsSetting, getConfiguredModels };
+module.exports = { startNewsDigestCron, generateDigestForUser, runDailyDigest, scheduleDigestCron, getActiveSources, getSourceGroupsSetting, getConfiguredModels, fetchTopicContext };

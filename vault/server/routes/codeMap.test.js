@@ -100,7 +100,17 @@ async function serve(jobs) {
       return { id: 4, createdAt: '2026-11-24T00:00:00.000Z', durationMs: 900, result: { counts: { high: 1, medium: 0, low: 0 }, tools: [] } };
     },
   };
-  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph, models }));
+  const modelTests = {
+    async estimate(userId, opts) { serve.testEstimate = [userId, opts]; return { current: 'a', candidate: opts.candidate || 'b', cases: 10 }; },
+    async start(userId, opts) {
+      if (opts.candidate === 'a') throw Object.assign(new Error('Pick a candidate model from the model list (not the current one).'), { status: 400 });
+      serve.testStarted = [userId, opts];
+      return 9;
+    },
+    async list() { return [{ id: 9, status: 'running' }]; },
+    async get(id) { return id === 9 ? { id: 9, status: 'done' } : null; },
+  };
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph, models, modelTests }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -135,6 +145,25 @@ async function serve(jobs) {
       serve.modelsNoRun = true;
       assert.match((await s.call('POST', '/api/code-map/models/run')).body.error, /Run the Code Map analysis first/);
       serve.modelsNoRun = false;
+    });
+
+    await t('Model tests: estimate passes candidate and cases; start is 202 behind aiLimiter; 400 passes its message; list; get and bad ids', async () => {
+      const e = await s.call('GET', '/api/code-map/models/tests/estimate?candidate=b&cases=5');
+      assert.strictEqual(e.status, 200);
+      assert.deepStrictEqual(serve.testEstimate, [3, { candidate: 'b', cases: '5' }]);
+      const before = limited.length;
+      const r = await s.call('POST', '/api/code-map/models/tests', { candidate: 'b', cases: 10 });
+      assert.strictEqual(r.status, 202);
+      assert.strictEqual(r.body.id, 9);
+      assert.deepStrictEqual(serve.testStarted, [3, { candidate: 'b', cases: 10 }]);
+      assert.strictEqual(limited.length, before + 1, 'starting a test makes model calls, so it is rate limited');
+      const bad = await s.call('POST', '/api/code-map/models/tests', { candidate: 'a' });
+      assert.strictEqual(bad.status, 400);
+      assert.match(bad.body.error, /not the current one/);
+      assert.strictEqual((await s.call('GET', '/api/code-map/models/tests')).body.tests[0].id, 9);
+      assert.strictEqual((await s.call('GET', '/api/code-map/models/tests/9')).body.test.status, 'done');
+      assert.strictEqual((await s.call('GET', '/api/code-map/models/tests/8')).status, 404);
+      assert.strictEqual((await s.call('GET', '/api/code-map/models/tests/x')).status, 400);
     });
 
     await t('live checks: run against the app\'s own address (APP_URL), never one from the request body; latest', async () => {

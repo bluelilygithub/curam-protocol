@@ -59,8 +59,14 @@ function actionFor(f) {
     case 'hardcodedModel': return `Move ${f.label}'s hardcoded model id into Settings (a code change).`;
     case 'backupOften': return `Find out why ${f.label}'s main model keeps failing: the backup answered ${pctOf(e.rate)} of calls.`;
     case 'highErrorRate': return `Find out why ${f.label}'s calls fail: ${pctOf(e.rate)} failed (${e.errors} of ${e.attempts}).`;
-    case 'cheaperTier': return `Trial ${e.light} on ${f.label} and compare the results before switching it from ${e.standard}.`;
-    case 'newerModel': return `Trial ${e.candidate} in place of ${e.current} on one tool, then swap it in Settings if it does as well.`;
+    case 'cheaperTier':
+      if (e.test?.label === 'same') return `Switch ${f.label} from ${e.standard} to ${e.light} in Settings: a test set found the same quality.`;
+      if (e.test?.label === 'worse') return `Keep ${e.standard} for ${f.label}: a test set found ${e.light} worse.`;
+      return `Trial ${e.light} on ${f.label} and compare the results before switching it from ${e.standard}.`;
+    case 'newerModel':
+      if (e.test?.label === 'same') return `Swap ${e.current} for ${e.candidate} in Settings: a test set found the same quality.`;
+      if (e.test?.label === 'worse') return `Keep ${e.current}: a test set found ${e.candidate} worse.`;
+      return `Trial ${e.candidate} in place of ${e.current} on one tool, then swap it in Settings if it does as well.`;
     default: break;
   }
   return f.title;

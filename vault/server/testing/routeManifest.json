@@ -4630,6 +4630,18 @@
   "POST /api/code-map/models/run": {
    "class": "admin"
   },
+  "GET /api/code-map/models/tests/estimate": {
+   "class": "admin"
+  },
+  "POST /api/code-map/models/tests": {
+   "class": "admin"
+  },
+  "GET /api/code-map/models/tests": {
+   "class": "admin"
+  },
+  "GET /api/code-map/models/tests/:id": {
+   "class": "admin"
+  },
   "GET /api/code-map/ai-reviews/estimate": {
    "class": "admin"
   },

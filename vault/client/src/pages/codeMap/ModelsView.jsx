@@ -9,6 +9,7 @@ import EmptyState from '../../components/EmptyState';
 import { ExportButton, Pill, SEV_COLOR, card, fmt, fmtSecs, fmtWhen } from './shared';
 import { datedName } from './exportRun.mjs';
 import { modelActions, modelsByRole, modelsCsv, modelsHtml, modelsMd, modelsSheets } from './exportModels.mjs';
+import ModelTestPanel from './ModelTestPanel';
 
 // Code Map "Models" tab: which model each tool uses (default tier, backup, dedicated), how its calls went in the last 30 days, and what to
 // change. Recommendations only; the admin swaps a model in Settings. Server: server/services/codeMap/models/ (GET /api/code-map/models,
@@ -113,6 +114,7 @@ function ToolDetailRow({ t, colSpan, summary }) {
           </div>
           <div className="space-y-2">
             <SummaryText part={summary} />
+            {t.test && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Test set ({t.test.date}): {t.test.text}</p>}
             <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Last 30 days</p>
             {s ? (
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
@@ -151,7 +153,7 @@ function printHtml(html) {
 // What to do: one plain action per finding, built in code (exportModels.mjs modelActions), most urgent first.
 function ActionList({ actions }) {
   return (
-    <section className="rounded-2xl border p-5 space-y-2" style={card} data-guide="models-actions">
+    <section className="rounded-2xl border p-5 space-y-2" style={card}>
       <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What to do</h3>
       {!actions.length ? <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing to do: no findings.</p> : (
         <ol className="space-y-1.5 list-decimal pl-5">
@@ -335,6 +337,8 @@ export default function ModelsView() {
           )}
         </>
       )}
+
+      <ModelTestPanel />
     </div>
   );
 }

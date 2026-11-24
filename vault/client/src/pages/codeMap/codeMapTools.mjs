@@ -97,4 +97,5 @@ export const GUIDE_TOOLS = [
   { id: 'run-ai-review', label: 'Run review', tool: 'ai-review' },
   { id: 'models', label: 'Models', tool: 'models' },
   { id: 'run-models-check', label: 'Run check (Models)', tool: 'models' },
+  { id: 'run-model-test', label: 'Run test (Models test set)', tool: 'models' },
 ];

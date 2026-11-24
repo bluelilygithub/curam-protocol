@@ -11,10 +11,11 @@ const { getLogger } = require('../middleware/requestContext');
 const { compareRuns } = require('../services/codeMap/compare');
 const { getAppUrl } = require('../utils/appUrl');
 
-function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph, models } = {}) {
+function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph, models, modelTests } = {}) {
   const router = express.Router();
   const J = () => jobs || require('../services/codeMap/jobs');
   const M = () => models || require('../services/codeMap/models/check');
+  const T = () => modelTests || require('../services/codeMap/models/testSet');
   const R = () => aiReview || require('../services/codeMap/aiReview');
   const L = () => liveChecks || require('../services/codeMap/liveCheck');
   let briefingService = briefing || null;
@@ -94,6 +95,30 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
 
   router.post('/models/run', ai, async (req, res) => {
     try { res.status(201).json({ report: await M().runNow(req.user.id) }); } catch (err) { fail(res, err, 'models run'); }
+  });
+
+  // Test sets (models/testSet.js): News digest topics replayed through the current and a candidate model and judged. A background job
+  // started only by the button; POST makes model calls (about 3 a case), so it is behind aiLimiter. Named routes before /:id.
+  const testOpts = (src) => ({ candidate: src.candidate === undefined ? undefined : String(src.candidate).slice(0, 200), cases: src.cases });
+  router.get('/models/tests/estimate', async (req, res) => {
+    try { res.json(await T().estimate(req.user.id, testOpts(req.query))); } catch (err) { fail(res, err, 'model test estimate'); }
+  });
+
+  router.post('/models/tests', ai, async (req, res) => {
+    try { res.status(202).json({ id: await T().start(req.user.id, testOpts(req.body || {})) }); } catch (err) { fail(res, err, 'model test start'); }
+  });
+
+  router.get('/models/tests', async (req, res) => {
+    try { res.json({ tests: await T().list() }); } catch (err) { fail(res, err, 'model test list'); }
+  });
+
+  router.get('/models/tests/:id', async (req, res) => {
+    if (!/^\d{1,9}$/.test(req.params.id)) return res.status(400).json({ error: 'Test id must be a number.' });
+    try {
+      const t = await T().get(Number(req.params.id));
+      if (!t) return res.status(404).json({ error: 'That test is no longer here (the last 10 are kept).' });
+      res.json({ test: t });
+    } catch (err) { fail(res, err, 'model test get'); }
   });
 
   // ── AI reviews (server/services/codeMap/aiReview.js): ?kind=plainCode (default, the AI review tab: model calls plain code could do)
