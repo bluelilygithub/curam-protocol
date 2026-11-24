@@ -11,9 +11,10 @@ const { getLogger } = require('../middleware/requestContext');
 const { compareRuns } = require('../services/codeMap/compare');
 const { getAppUrl } = require('../utils/appUrl');
 
-function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph } = {}) {
+function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph, models } = {}) {
   const router = express.Router();
   const J = () => jobs || require('../services/codeMap/jobs');
+  const M = () => models || require('../services/codeMap/models/check');
   const R = () => aiReview || require('../services/codeMap/aiReview');
   const L = () => liveChecks || require('../services/codeMap/liveCheck');
   let briefingService = briefing || null;
@@ -82,6 +83,16 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
 
   router.get('/live-checks/latest', async (req, res) => {
     try { res.json({ check: await L().latest() }); } catch (err) { fail(res, err, 'live check latest'); }
+  });
+
+  // ── Models tab (server/services/codeMap/models/): which model each tool uses, how its calls went in 30 days, recommendations.
+  // Plain code, no model call (so no aiLimiter yet; milestone 4's summary will add one). Runs in the request, a few seconds, one at a time.
+  router.get('/models', async (req, res) => {
+    try { res.json({ report: await M().latestReport() }); } catch (err) { fail(res, err, 'models latest'); }
+  });
+
+  router.post('/models/run', async (req, res) => {
+    try { res.status(201).json({ report: await M().runNow(req.user.id) }); } catch (err) { fail(res, err, 'models run'); }
   });
 
   // ── AI reviews (server/services/codeMap/aiReview.js): ?kind=plainCode (default, the AI review tab: model calls plain code could do)

@@ -91,7 +91,16 @@ async function serve(jobs) {
     if (serve.kg === 'broken') throw Object.assign(new Error('.ua/knowledge-graph.json is not valid JSON. Run /understand again.'), { status: 422 });
     return serve.kg || null;
   };
-  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph }));
+  const models = {
+    async latestReport() { return serve.modelsReport || null; },
+    async runNow(userId) {
+      if (serve.modelsBusy) throw Object.assign(new Error('A models check is already running. It takes a few seconds.'), { status: 409 });
+      if (serve.modelsNoRun) throw Object.assign(new Error('Run the Code Map analysis first: the Models check reads tool ownership from the latest run.'), { status: 409 });
+      serve.modelsRanBy = userId;
+      return { id: 4, createdAt: '2026-11-24T00:00:00.000Z', durationMs: 900, result: { counts: { high: 1, medium: 0, low: 0 }, tools: [] } };
+    },
+  };
+  app.use('/api/code-map', createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveChecks, knowledgeGraph, models }));
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -106,6 +115,26 @@ async function serve(jobs) {
   const jobs = fakeJobs();
   const s = await serve(jobs);
   try {
+    await t('Models: null before the first check, then the report; run as the signed-in admin; 409s pass their message; no aiLimiter yet', async () => {
+      assert.deepStrictEqual((await s.call('GET', '/api/code-map/models')).body, { report: null });
+      const before = limited.length;
+      const r = await s.call('POST', '/api/code-map/models/run');
+      assert.strictEqual(r.status, 201);
+      assert.strictEqual(r.body.report.id, 4);
+      assert.strictEqual(serve.modelsRanBy, 3);
+      assert.strictEqual(limited.length, before, 'plain code, no model call: not behind the AI rate limit');
+      serve.modelsReport = { id: 4, result: { tools: [] } };
+      assert.strictEqual((await s.call('GET', '/api/code-map/models')).body.report.id, 4);
+      serve.modelsBusy = true;
+      const busy = await s.call('POST', '/api/code-map/models/run');
+      assert.strictEqual(busy.status, 409);
+      assert.match(busy.body.error, /already running/);
+      serve.modelsBusy = false;
+      serve.modelsNoRun = true;
+      assert.match((await s.call('POST', '/api/code-map/models/run')).body.error, /Run the Code Map analysis first/);
+      serve.modelsNoRun = false;
+    });
+
     await t('live checks: run against the app\'s own address (APP_URL), never one from the request body; latest', async () => {
       const prev = process.env.APP_URL;
       process.env.APP_URL = 'https://vault.example.com/';

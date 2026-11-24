@@ -51,12 +51,11 @@ function toolFindings({ row, stats, tiers, range, t = THRESHOLDS }) {
     add('hardcodedModel', 'high', `${row.label}: hardcoded model id`, `${row.hardcoded.note} Ids should come from Settings.`, { lines: row.hardcoded.evidence });
   }
 
-  // Unavailable model (high). A missing gemini/deepseek/ollama tier is not a finding: tools use those as optional extras when one is set.
-  // A missing provider key is raised once per model for the workspace (missingKeyFindings), not once per tool.
+  // Unavailable model (high). A workspace standard/light model that is not set, and a missing provider key, are one problem each, raised
+  // once for the workspace (workspaceUnavailableFindings), not once per tool. A missing gemini/deepseek/ollama tier is not a finding:
+  // tools use those as optional extras when one is set.
   for (const m of row.models) {
-    if (!m.modelId && (m.via === 'tier:standard' || m.via === 'tier:light')) {
-      add('unavailableModel', 'high', `${row.label}: no ${m.via.replace('tier:', '')} model is set`, `${row.label} uses the workspace ${m.via.replace('tier:', '')} model, and none is set up in Settings.`, { via: m.via });
-    } else if (m.savedId && m.savedInList === false) {
+    if (m.savedId && m.savedInList === false) {
       // a dedicated/backup setting names a model that is no longer in the list; the tool quietly uses the default instead
       add('unavailableModel', 'high', `${row.label}: ${m.savedId} is not in the model list`, `Settings ${m.via.replace('setting:', '')} names ${m.savedId}, which is no longer connected, so ${row.label} falls back to ${m.modelId || 'nothing'}.`, { via: m.via, saved: m.savedId, usedInstead: m.modelId }, m.savedId);
     }
@@ -124,22 +123,40 @@ function newerModelFindings(rows, range, known) {
   return out;
 }
 
-/** "Unavailable model" (high) for a model whose provider key is not set on this server: once per model, listing the tools that use it. */
-function missingKeyFindings(rows, range) {
+/**
+ * Workspace-wide "Unavailable model" (high): a standard or light model that is not set (once per tier), and a model whose provider key is
+ * not set on this server (once per model). Each lists the tools affected.
+ */
+function workspaceUnavailableFindings(rows, range) {
+  const tiersMissing = new Map();
   const byModel = new Map();
-  for (const r of rows) for (const m of r.models) if (m.modelId && m.providerKey === false) {
-    if (!byModel.has(m.modelId)) byModel.set(m.modelId, { provider: m.provider, tools: new Set() });
-    byModel.get(m.modelId).tools.add(r.label);
+  for (const r of rows) for (const m of r.models) {
+    if (!m.modelId && (m.via === 'tier:standard' || m.via === 'tier:light')) {
+      const tier = m.via.replace('tier:', '');
+      if (!tiersMissing.has(tier)) tiersMissing.set(tier, new Set());
+      tiersMissing.get(tier).add(r.label);
+    }
+    if (m.modelId && m.providerKey === false) {
+      if (!byModel.has(m.modelId)) byModel.set(m.modelId, { provider: m.provider, tools: new Set() });
+      byModel.get(m.modelId).tools.add(r.label);
+    }
   }
-  return [...byModel].map(([modelId, { provider, tools }]) => ({
+  const noTier = [...tiersMissing].map(([tier, tools]) => ({
+    tool: '(workspace)', label: 'Workspace', kind: 'unavailableModel', severity: 'high', modelId: null,
+    title: `No ${tier} model is set`,
+    detail: `${tools.size} tool${tools.size === 1 ? '' : 's'} use the workspace ${tier} model and none is set up, so their AI features cannot run. Add a model in Settings → Models. Tools: ${[...tools].sort().join(', ')}.`,
+    evidence: { tier, tools: [...tools].sort(), range },
+    fingerprintKey: `workspace:noTier:${tier}`,
+  }));
+  return [...noTier, ...[...byModel].map(([modelId, { provider, tools }]) => ({
     tool: '(workspace)', label: 'Workspace', kind: 'unavailableModel', severity: 'high', modelId,
     title: `No ${provider} key for ${modelId}`,
     detail: `${modelId} is in the model list but the ${provider} key is not set on this server, so calls to it fail. Used by ${tools.size} tool${tools.size === 1 ? '' : 's'}: ${[...tools].sort().join(', ')}.`,
     evidence: { model: modelId, provider, tools: [...tools].sort(), range },
     fingerprintKey: `workspace:missingKey:${modelId}`,
-  }));
+  }))];
 }
 
 const sortFindings = (list) => list.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.tool.localeCompare(b.tool));
 
-module.exports = { THRESHOLDS, toolFindings, newerSameFamily, newerModelFindings, missingKeyFindings, sortFindings };
+module.exports = { THRESHOLDS, toolFindings, newerSameFamily, newerModelFindings, workspaceUnavailableFindings, sortFindings };

@@ -16,6 +16,7 @@ import StructureView from './codeMap/StructureView';
 import ChangesView from './codeMap/ChangesView';
 import ContextView from './codeMap/ContextView';
 import AiReviewView from './codeMap/AiReviewView';
+import ModelsView from './codeMap/ModelsView';
 import SecurityView from './codeMap/SecurityView';
 import ToolDetail from './codeMap/ToolDetail';
 import CodeMapTutorChat from './codeMap/CodeMapTutorChat';
@@ -265,6 +266,9 @@ export default function CodeMapPage() {
           <Suspense fallback={<Skeleton className="h-[70vh]" label="Loading the knowledge graph" />}>
             <KnowledgeGraphView />
           </Suspense>
+        ) : view === 'models' ? (
+          // loads its own report; before the first analysis its Run check button says to run one first
+          <ModelsView />
         ) : view === 'ai-review' ? (
           // reads the code itself, so it works before the first analysis run (tools then show as "no single tool")
           <AiReviewView byId={byId} onOpenTool={setDetailId} />

@@ -4,10 +4,10 @@
 // code_map_model_reports (last 30 kept), with high and medium findings raised in the suggestions inbox, fingerprinted so a finding that is
 // still there next week refreshes its inbox item instead of adding another. Low findings stay on the report only (a "newer model" or
 // "trial light" line every week would bury the inbox). It recommends only; it never changes Settings. Plain code: no model call here.
-// Run weekly from cron/codeMapCron.js after the analysis; the button and API come in milestone 3. See docs/code-map.md "Models".
+// Run weekly from cron/codeMapCron.js after the analysis, and from the Models tab (routes/codeMap.js /models). See docs/code-map.md "Models".
 
 const { getLogger } = require('../../../middleware/requestContext');
-const { THRESHOLDS, toolFindings, newerModelFindings, missingKeyFindings, sortFindings } = require('./findings');
+const { THRESHOLDS, toolFindings, newerModelFindings, workspaceUnavailableFindings, sortFindings } = require('./findings');
 
 const KEEP_REPORTS = 30;
 const KEEP_ERROR_DAYS = 90;
@@ -33,7 +33,7 @@ function buildReport({ inventory, usage, aggregate, thresholds = THRESHOLDS, kno
       models: row.models.map(slimModel), hardcoded: row.hardcoded, stats: stats || null, notEnoughData, findings: sortFindings(findings),
     };
   });
-  const workspace = [...missingKeyFindings(inventory.tools, range), ...newerModelFindings(inventory.tools, range, known)];
+  const workspace = [...workspaceUnavailableFindings(inventory.tools, range), ...newerModelFindings(inventory.tools, range, known)];
   const all = sortFindings([...rows.flatMap((r) => r.findings), ...workspace]);
   const counts = { high: 0, medium: 0, low: 0 };
   for (const f of all) counts[f.severity] += 1;
@@ -100,4 +100,26 @@ async function runModelsCheck({
   return { id, report };
 }
 
-module.exports = { buildReport, runModelsCheck, KEEP_REPORTS, INBOX_SEVERITIES };
+/** The newest stored report: { id, createdAt, durationMs, result } or null. */
+async function latestReport({ pool = require('../../../db').pool } = {}) {
+  const { rows } = await pool.query(`SELECT id, "createdAt", "durationMs", result FROM code_map_model_reports ORDER BY "createdAt" DESC, id DESC LIMIT 1`);
+  if (!rows[0]) return null;
+  const r = rows[0];
+  return { ...r, result: typeof r.result === 'string' ? JSON.parse(r.result) : r.result };
+}
+
+// shortcut: one check at a time per server process; two servers during a rolling deploy could each run one (two reports, same findings,
+// the inbox de-duplicates). Move to a database lock if it ever matters.
+let running = null;
+/** The Models tab's Run check button: 409 while one is going. Returns the report in the same shape as latestReport. */
+async function runNow(userId, deps = {}) {
+  if (running) throw Object.assign(new Error('A models check is already running. It takes a few seconds.'), { status: 409 });
+  running = (async () => {
+    const t0 = Date.now();
+    const { id, report } = await runModelsCheck({ userId, ...deps });
+    return { id, createdAt: report.generatedAt, durationMs: Date.now() - t0, result: report };
+  })();
+  try { return await running; } finally { running = null; }
+}
+
+module.exports = { buildReport, runModelsCheck, latestReport, runNow, KEEP_REPORTS, INBOX_SEVERITIES };

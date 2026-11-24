@@ -5,7 +5,7 @@
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://x@127.0.0.1:1/x';
 const assert = require('assert');
 const { percentile, attributeCallers, aggregate } = require('./usage');
-const { THRESHOLDS, toolFindings, newerSameFamily, newerModelFindings, missingKeyFindings } = require('./findings');
+const { THRESHOLDS, toolFindings, newerSameFamily, newerModelFindings, workspaceUnavailableFindings } = require('./findings');
 const { buildReport, runModelsCheck } = require('./check');
 const { appCallers } = require('../../callModel');
 const { MODEL_NEEDS } = require('../../../config/modelNeeds');
@@ -81,17 +81,17 @@ const unav = toolFindings({
   ] },
   stats: stats(), tiers, range,
 });
-assert.deepStrictEqual(kinds(unav), ['hardcodedModel:high', 'unavailableModel:high', 'unavailableModel:high']);
-assert.match(unav.findings[1].title, /no light model is set/);
-assert.match(unav.findings[2].detail, /gone-1, which is no longer connected/);
-// a missing provider key: once per model for the workspace, listing the tools
-const keyless = missingKeyFindings([
-  { label: 'CRM', models: [model({ modelId: 'gemini-2.5-flash', provider: 'gemini', providerKey: false })] },
-  { label: 'YouTube', models: [model({ modelId: 'gemini-2.5-flash', provider: 'gemini', providerKey: false })] },
+assert.deepStrictEqual(kinds(unav), ['hardcodedModel:high', 'unavailableModel:high'], 'a tier not set is a workspace finding, not one per tool');
+assert.match(unav.findings[1].detail, /gone-1, which is no longer connected/);
+// a missing provider key, and a workspace model that is not set: once each for the workspace, listing the tools
+const ws = workspaceUnavailableFindings([
+  { label: 'CRM', models: [model({ modelId: 'gemini-2.5-flash', provider: 'gemini', providerKey: false }), model({ via: 'tier:standard', modelId: null })] },
+  { label: 'YouTube', models: [model({ modelId: 'gemini-2.5-flash', provider: 'gemini', providerKey: false }), model({ via: 'tier:standard', modelId: null }), model({ via: 'tier:deepseek', modelId: null })] },
 ], range);
-assert.strictEqual(keyless.length, 1);
-assert.strictEqual(keyless[0].severity, 'high');
-assert.deepStrictEqual(keyless[0].evidence.tools, ['CRM', 'YouTube']);
+assert.deepStrictEqual(ws.map((f) => f.title), ['No standard model is set', 'No gemini key for gemini-2.5-flash'], 'no workspace models at all is one finding, not one per tool; an unset deepseek tier is none');
+assert.ok(ws.every((f) => f.severity === 'high'));
+assert.deepStrictEqual(ws[0].evidence.tools, ['CRM', 'YouTube']);
+assert.deepStrictEqual(ws[1].evidence.tools, ['CRM', 'YouTube']);
 
 // backup used often, high error rate
 const busy = toolFindings({ row: { tool: 'newsDigest', label: 'News digest', needs: MODEL_NEEDS.newsDigest, models: [] }, stats: stats({ calls: 40, fallbacks: 6, backupRate: 0.15, errors: 4, attempts: 44, errorRate: 0.0909 }), tiers, range });
@@ -101,7 +101,7 @@ assert.strictEqual(busy.findings.find((f) => f.kind === 'backupOften').evidence.
 // under 20 calls: no quality or cost findings, but "not enough data" — capability findings still apply
 const thin = toolFindings({ row: { tool: 'newsDigest', label: 'News digest', needs: MODEL_NEEDS.newsDigest, models: [model({ modelId: null })] }, stats: stats({ calls: 10, attempts: 12, fallbacks: 9, backupRate: 0.9, errors: 2, errorRate: 0.17 }), tiers, range });
 assert.strictEqual(thin.notEnoughData, true);
-assert.deepStrictEqual(kinds(thin), ['unavailableModel:high'], 'no backup/error findings on 12 calls');
+assert.deepStrictEqual(kinds(thin), [], 'no backup/error findings on 12 calls (and an unset tier is a workspace finding)');
 assert.strictEqual(toolFindings({ row: { tool: 'a', label: 'A', needs: {}, models: [] }, stats: undefined, tiers, range }).notEnoughData, true, 'no usage at all is not enough data');
 
 // cheaper tier: background + standard + small calls, worded as a trial

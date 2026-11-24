@@ -4624,6 +4624,12 @@
   "GET /api/code-map/live-checks/latest": {
    "class": "admin"
   },
+  "GET /api/code-map/models": {
+   "class": "admin"
+  },
+  "POST /api/code-map/models/run": {
+   "class": "admin"
+  },
   "GET /api/code-map/ai-reviews/estimate": {
    "class": "admin"
   },
