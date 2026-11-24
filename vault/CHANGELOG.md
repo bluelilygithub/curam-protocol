@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-token-cost)
+
+### Skill Scanner — token cost per scan, and an estimate for the next
+Saved scans and the report now show what each scan cost in tokens: the AI explanation, every Regenerate, and for deep scans SkillSpector's own AI calls. While a scan runs, the progress panel shows an estimate based on your last 10 scans of the same kind, priced at the model chosen now. A first deep scan shows a minimum worked out from file size. Deep-scan usage was never being logged before (Vault read a field SkillSpector doesn't write); it is now.
+
+---
+
 ## 2026-11-24 (skill-scanner-delete-dialog)
 
 ### Skill Scanner — deleting a scan asks in Vault's own dialog

@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4ffc3de2",
+   "fullHash": "4ffc3de225baba5c4b452c6ccc5321c9ffd3a5a4",
+   "committedAt": "2026-11-24T08:52:18+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: record each scan's token cost and estimate it for the next",
+   "filesChanged": 6,
+   "insertions": 78,
+   "deletions": 17,
+   "goal": "Show what a scan costs in tokens, and estimate the cost of the next scan before and during it.",
+   "whatChanged": "runner.js gains tokenUsage, which sums prompt_tokens and completion_tokens over SkillSpector's metadata.inference_usage records, at the top and in each skill of a --recursive report (inference_usage.py at the pinned commit), and returns them in stats.tokens. The old deep-scan usage logging read metadata.inference_usage.input_tokens, which SkillSpector never writes, so deep usage was never logged; it now logs the summed tokens as skill_scan_deep. explainScan returns its own usage, and summarise adds each explanation (Regenerate included) to the scan. New skill_scans columns tokensIn, tokensOut (BIGINT) and costUsd (REAL), priced with costCalculator.calculateCost. The estimate is the median tokens per skill of the person's last 10 finished scans of the same kind, priced at the model chosen now, times the skills counted (estimateCost in the progress). A first deep scan with no history shows a floor: every file read once at about 4 bytes a token, output not counted (costFloor). The page shows the estimate in the progress panel, and the cost on saved scans and in the report header. A test covers tokenUsage.",
+   "filesImpacted": [
+    "server/services/skillScan/runner.js",
+    "server/services/skillScan/index.js",
+    "server/services/skillScan/summary.js",
+    "server/services/skillScan/skillScan.test.js",
+    "server/db.js",
+    "client/src/pages/SkillScanPage.jsx"
+   ],
+   "benefit": "Each scan shows what it cost, and the next one shows an estimate before it runs up a bill, which matters most for deep scans.",
+   "concerns": "Costs use costCalculator's list prices (no cache or batch discounts), so they are estimates. Scans from before this change show no cost. The deep-scan figures depend on SkillSpector reporting usage, which has not yet been seen in a real deep run. The first-deep-scan floor can be well below the real cost, because SkillSpector's analysers may read files more than once."
+  },
+  {
    "commit": "c09e1084",
    "fullHash": "c09e10847037398d3ba7a280897b7525fe31a54e",
    "committedAt": "2026-11-24T10:51:06+10:00",
