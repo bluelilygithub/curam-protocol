@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-stage-1)
+
+### Tickets — a new internal tickets app
+A ticket tracker inside Vault for client work, bugs, admin and ideas, styled like the CRM. Everyone with the new Tickets feature sees and works on every ticket; admins always have it. A ticket has a T-number, type, status, priority, due date, optional client and project, who raised it and who it's assigned to, plus comments and an automatic history of changes. New tickets can be filled in by AI from pasted or dictated text. A ticket can make a linked task in your Tasks, and Delete goes to the recycle bin with Undo. Stage 2 (Make a ticket buttons in other tools, a daily digest, guide and tour) comes next.
+
+---
+
 ## 2026-11-24 (skill-scanner-too-big)
 
 ### Skill Scanner — clear "too big" and "not a skill" refusals
