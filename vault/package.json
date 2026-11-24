@@ -52,6 +52,7 @@
     "test:pdf-extract": "node server/routes/pdfExtract.test.js",
     "test:put-ownership": "node server/routes/putOwnership.test.js",
     "test:finance-tutor": "node server/services/financeTutor.test.js",
+    "test:finance-compliance": "node server/services/financeCompliance/sources.test.js && node server/services/financeCompliance/prompt.test.js && node server/services/financeCompliance/fetchSources.test.js && node server/services/financeCompliance/report.test.js && node server/services/financeCompliance/spend.test.js && node server/services/financeCompliance/service.test.js && node server/services/financeCompliance/integration.test.js",
     "test:pdf-tools": "node server/services/pdfTools.test.js",
     "test:pdf-sign": "node server/routes/pdfSign.test.js",
     "test:pdf-voice": "node server/services/pdfVoiceCommand.test.js",

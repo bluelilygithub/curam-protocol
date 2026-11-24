@@ -6,7 +6,7 @@ export const TOUR_KEY = 'vault_tour_finance_completed';
 
 const TOTAL_STEPS = 9;
 
-function injectStepCounter(stepIndex) {
+function injectStepCounter(stepIndex, totalSteps = TOTAL_STEPS) {
   requestAnimationFrame(() => {
     const el = document.querySelector('.shepherd-element.vault-tour');
     if (!el) return;
@@ -17,7 +17,7 @@ function injectStepCounter(stepIndex) {
       const footer = el.querySelector('.shepherd-footer');
       if (footer) footer.parentNode.insertBefore(counter, footer);
     }
-    counter.textContent = `Step ${stepIndex} of ${TOTAL_STEPS}`;
+    counter.textContent = `Step ${stepIndex} of ${totalSteps}`;
   });
 }
 
@@ -38,12 +38,15 @@ function safeBeforeShow(tour, stepId, selector) {
 /**
  * Start the Finance product tour.
  * @param {Function} navigate - React Router navigate function
+ * @param {Object} options - pass isAdmin to include the admin-only Compliance step
  * @returns {Shepherd.Tour}
  */
-export function startFinanceTour(navigate) {
+export function startFinanceTour(navigate, { isAdmin = false } = {}) {
   if (Shepherd.activeTour) {
     Shepherd.activeTour.cancel();
   }
+  const totalSteps = isAdmin ? TOTAL_STEPS + 1 : TOTAL_STEPS;
+  const showCount = (n) => injectStepCounter(n, totalSteps);
 
   const tour = new Shepherd.Tour({
     useModalOverlay: true,
@@ -70,7 +73,7 @@ export function startFinanceTour(navigate) {
     id: 'finance-welcome',
     title: 'Curam Finance — Quick Tour',
     text: "This tour covers the Finance module: invoices, quotes, expenses, wages, the double-entry journal, BAS, and automated reminders. Built for a small Australian business — no spreadsheet required.",
-    when: { show() { injectStepCounter(1); } },
+    when: { show() { showCount(1); } },
     buttons: [
       btnSecondary('Skip Tour', () => tour.cancel()),
       { text: 'Start Tour →', action: () => tour.next() },
@@ -80,8 +83,8 @@ export function startFinanceTour(navigate) {
   // ── Step 2: Tab navigation ────────────────────────────────────────────────
   tour.addStep({
     id: 'finance-tabs',
-    title: '16 Tabs — One Module',
-    text: "Dashboard · Invoices · Quotes · Clients · Suppliers · Expenses · Recurring · Wages · Interest · Journal · Accounts · Codes · BAS · Position · Balances · Settings. The Journal and BAS tabs update automatically as you record transactions.",
+    title: 'Tabs — One Module',
+    text: "Dashboard · Invoices · Quotes · Suppliers · Expenses · Documents · Drawings · Vehicle/Home Office · Assets · Recurring · Wages · Interest · Journal · Accounts · Codes · BAS · Position · Balances · Reports · Settings. Admins also see a Compliance tab. The Journal and BAS tabs update automatically as you record transactions.",
     attachTo: { element: '[data-tour="finance-tabs"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise((resolve) => {
@@ -92,7 +95,7 @@ export function startFinanceTour(navigate) {
         }, 600);
       });
     },
-    when: { show() { injectStepCounter(2); } },
+    when: { show() { showCount(2); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -111,7 +114,7 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(3); } },
+    when: { show() { showCount(3); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -130,7 +133,7 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(4); } },
+    when: { show() { showCount(4); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -149,7 +152,7 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { showCount(5); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -168,7 +171,7 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { showCount(6); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -187,7 +190,7 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(7); } },
+    when: { show() { showCount(7); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -206,11 +209,32 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(8); } },
+    when: { show() { showCount(8); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 9: Exports & Reminders ───────────────────────────────────────────
+  if (isAdmin) {
+    // ── Admin step: Compliance Advisory ───────────────────────────────────────
+    tour.addStep({
+      id: 'finance-compliance',
+      title: 'Compliance (admins only)',
+      text: "A monthly check of a fixed ATO page list writes an in-app note on changes that may matter for personal and small-business finance records, with source links and an action to consider. It has its own history, separate from Shares. General information only, not tax or legal advice: check the ATO page and your accountant.",
+      attachTo: { element: '[data-finance-tab="Compliance"]', on: 'bottom' },
+      beforeShowPromise() {
+        return new Promise((resolve) => {
+          clickFinanceTab('Compliance');
+          setTimeout(() => {
+            safeBeforeShow(tour, 'finance-compliance', '[data-finance-tab="Compliance"]');
+            resolve();
+          }, 400);
+        });
+      },
+      when: { show() { showCount(9); } },
+      buttons: [btnBack(), btnNext],
+    });
+  }
+
+  // ── Final step: Exports & Reminders ───────────────────────────────────────
   tour.addStep({
     id: 'finance-exports',
     title: 'Exports & Reminders',
@@ -221,7 +245,7 @@ export function startFinanceTour(navigate) {
         setTimeout(resolve, 400);
       });
     },
-    when: { show() { injectStepCounter(9); } },
+    when: { show() { showCount(isAdmin ? 10 : 9); } },
     buttons: [
       btnBack(),
       {

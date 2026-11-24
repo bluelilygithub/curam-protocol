@@ -187,6 +187,8 @@ app.use('/api/notes-tutor', aiLimiter, require('./routes/notesTutor')); // the N
 app.use('/api/session-files', require('./routes/sessionFiles'));
 app.use('/api/bookmarks', require('./routes/bookmarks'));
 app.use('/api/backup', require('./routes/backup'));
+// Finance Compliance Advisory (docs/finance-compliance.md): admin-only, before /api/finance. aiLimiter is inside, on POST only.
+app.use('/api/finance/compliance', requireFeature('finance'), requireAdmin, require('./routes/financeCompliance'));
 app.use('/api/finance', requireFeature('finance'), require('./routes/finance'));
 app.use('/api/finance-tutor', requireFeature('finance'), aiLimiter, require('./routes/financeTutor'));
 app.use('/api/expense-review', requireFeature('gmailIntel'), require('./routes/expenseReview'));
@@ -358,6 +360,7 @@ process.on('uncaughtException', (err) => {
 const { startNewsDigestCron } = require('./cron/newsDigestCron');
 const { startSharesCron } = require('./cron/sharesCron');
 const { startSharesComplianceCron } = require('./cron/sharesComplianceCron');
+const { startFinanceComplianceCron } = require('./cron/financeComplianceCron');
 const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 const { startRecurringCron }        = require('./cron/recurringCron');
 const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
@@ -410,6 +413,7 @@ async function start() {
     startNewsDigestCron();
     startSharesCron();
     startSharesComplianceCron(); // monthly ATO update note for admins; one report per admin, no email
+    startFinanceComplianceCron(); // monthly ATO update note for Finance admins; separate history, no email
     startFinanceRemindersCron();
     startRecurringCron();
     startExpenseReviewCron();

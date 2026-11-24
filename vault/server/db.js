@@ -4321,6 +4321,51 @@ async function initSchema() {
       ON shares_compliance_sources ("reportId", id)
   `);
 
+  // Finance Compliance Advisory (docs/finance-compliance.md). Separate history from Shares: same fixed ATO
+  // watch list and safe fetch, but its own report rows, snapshots, usage feature and spend cap.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS finance_compliance_reports (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status          TEXT NOT NULL DEFAULT 'running',
+      "trigger"       TEXT NOT NULL DEFAULT 'manual',
+      "modelId"       TEXT NOT NULL DEFAULT '',
+      summary         TEXT NOT NULL DEFAULT '',
+      report          JSONB NOT NULL DEFAULT '{}',
+      markdown        TEXT NOT NULL DEFAULT '',
+      "contentHash"   TEXT NOT NULL DEFAULT '',
+      error           TEXT NOT NULL DEFAULT '',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS finance_compliance_sources (
+      id              SERIAL PRIMARY KEY,
+      "reportId"      INTEGER NOT NULL REFERENCES finance_compliance_reports(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "sourceId"      TEXT NOT NULL,
+      label           TEXT NOT NULL DEFAULT '',
+      url             TEXT NOT NULL DEFAULT '',
+      "finalUrl"      TEXT NOT NULL DEFAULT '',
+      status          TEXT NOT NULL DEFAULT 'unavailable',
+      reason          TEXT NOT NULL DEFAULT '',
+      hash            TEXT NOT NULL DEFAULT '',
+      title           TEXT NOT NULL DEFAULT '',
+      excerpt         TEXT NOT NULL DEFAULT '',
+      "fetchedAt"     TIMESTAMPTZ,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_finance_compliance_reports_user_created
+      ON finance_compliance_reports ("userId", "createdAt" DESC)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_finance_compliance_sources_report
+      ON finance_compliance_sources ("reportId", id)
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gsc_tokens (
       id             SERIAL PRIMARY KEY,

@@ -2,6 +2,8 @@
 
 Shares → **Compliance** is an admin-only, in-app note that watches a fixed list of Australian Taxation Office pages and says what may need a fresh look in a personal share portfolio. It runs once a month and can be forced with **Check now**. It is **general information only, not tax or legal advice**; every report tells the person to check the linked ATO page and their accountant before acting.
 
+The behaviour lives in `server/services/complianceAdvisory/` so the Finance version cannot drift; the files under `server/services/sharesCompliance/` are thin Shares-flavoured wrappers around that core. See `docs/finance-compliance.md` for the separate Finance history and spend cap.
+
 ## What it does
 
 1. Reads a fixed allow-list of seven ATO pages (source registry: `server/services/sharesCompliance/sources.js`). No URL typed by a person, taken from a model answer or found in scraped text is ever fetched. The final URL after redirects is checked again against the two allowed hosts (`www.ato.gov.au`, `ato.gov.au`).

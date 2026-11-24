@@ -4564,6 +4564,24 @@
   "GET /api/shares/compliance/reports/:id/pdf": {
    "class": "admin"
   },
+  "GET /api/finance/compliance/reports": {
+   "class": "admin"
+  },
+  "POST /api/finance/compliance/reports": {
+   "class": "admin"
+  },
+  "GET /api/finance/compliance/reports/:id": {
+   "class": "admin"
+  },
+  "DELETE /api/finance/compliance/reports/:id": {
+   "class": "admin"
+  },
+  "GET /api/finance/compliance/reports/:id/markdown": {
+   "class": "admin"
+  },
+  "GET /api/finance/compliance/reports/:id/pdf": {
+   "class": "admin"
+  },
   "GET /api/changelog": {
    "class": "admin"
   },

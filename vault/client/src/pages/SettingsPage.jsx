@@ -1801,14 +1801,14 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Finance Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                9-step walkthrough of invoices, quotes, expenses, recurring schedules, BAS, double-entry journal, exports, and Monday reminders
+                9-step walkthrough of invoices, quotes, expenses, recurring schedules, BAS, double-entry journal, exports, and Monday reminders (10 steps for admins, with Compliance)
               </p>
             </div>
             <button
               onClick={() => {
                 localStorage.removeItem(FINANCE_TOUR_KEY);
                 navigate('/finance');
-                setTimeout(() => startFinanceTour(navigate), 800);
+                setTimeout(() => startFinanceTour(navigate, { isAdmin: !!user?.isAdmin }), 800);
               }}
               className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}

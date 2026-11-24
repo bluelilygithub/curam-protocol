@@ -65,6 +65,9 @@ const CATALOG = [
   { id: 'Reports', group: 'Reporting',
     does: 'The formal reports an accountant needs, each with a CSV export: Profit & Loss, Balance Sheet, Trial Balance, Cash Flow, General Ledger, aged receivables and payables, GST summary and BAS worksheet, depreciation schedule, Tax Time Summary, Cash Book, Income Received, Expense Listing, and more. "Things to Review" is a checklist of items worth fixing before the year is handed over. "Export FY pack" builds a PDF, an Excel workbook and a zip of the supporting documents for a financial year.',
     notes: 'These show what has been recorded. They do not tell the person whether the treatment of something is right for tax.' },
+  { id: 'Compliance', group: 'Admin',
+    does: 'Admin only. A monthly, in-app note from a fixed ATO page list about changes that may matter for personal and small-business finance records, with the source links, fetch time and a short excerpt behind each report. Check now forces one; copy the note as Markdown or download a PDF.',
+    notes: 'Separate history from Shares. General information only, not tax or legal advice: check the ATO page and ask your accountant. Non-admins do not see this tab, and the server refuses them.' },
   { id: 'Settings', group: 'Setup',
     does: 'Business name, ABN, address and bank details printed on invoices; default payment terms; GST registration and GST basis (cash or accrual); the real GST cancellation date; vehicle and home-office methods and rates for each financial year; weekly reminder email; and the accountant label mapping that the reports show beside your account names.',
     notes: 'Un-ticking "Registered for GST" stops GST on invoices and purchase credits from that date. Nothing already created is rewritten, and lodged quarters stay locked.' },
@@ -84,6 +87,7 @@ const RULES = [
   'The financial year runs 1 July to 30 June, for example 2025-26 is 1 July 2025 to 30 June 2026.',
   'The owner can give their accountant a login in Admin, under Accountant access. It is read-only and limited to Finance: the accountant can look at every tab and report and download exports, but cannot add, change or delete anything and cannot open any other part of the app (the owner can also switch on a read-only view of their private Shares for that accountant). The panel gives a direct link that signs the accountant in and opens Finance, an optional end date, and a Disable now button that ends their access straight away.',
   'Everything the accountant does is recorded in an activity log in the same Admin panel: each sign-in, each page they look at, each download or export, and each attempt that was refused, with the time and their IP address. The log cannot be edited or deleted. Separately, the Audit Trail report shows every change made to the books themselves.',
+  'The Compliance tab is admin-only: a monthly general-information note from a fixed ATO page list, with its own history separate from Shares. It never states a rate or rule of its own and tells the person to check the ATO page and their accountant.',
 ];
 
 // Things people commonly ask for that Finance does NOT do.
@@ -96,6 +100,7 @@ const NOT_POSSIBLE = [
   'Foreign currency: amounts are in Australian dollars only.',
   'An accountant login that can edit or post entries: accountant access is read-only. An accountant who needs a change made asks the owner. A login that is limited to some tabs only is not available either: it is all of Finance, read-only.',
   'Looking at the person\'s own figures to answer a question. This tutor explains how Finance works but cannot see the books.',
+  'Opening the Compliance tab or its reports as a non-admin: only an admin sees it, and the server refuses the API calls. It is general information, not tax advice.',
 ];
 
 const VERDICTS = ['doable', 'partly', 'missing', 'beyond', 'accountant', 'question'];

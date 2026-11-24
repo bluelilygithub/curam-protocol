@@ -13,6 +13,7 @@ import useProcessingStore from '../store/processingStore';
 import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
 import StatementReview from './finance/StatementReview';
 import Dialog from '../components/Dialog';
+import FinanceComplianceTab from '../components/finance/FinanceComplianceTab';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -198,6 +199,16 @@ const TOOL_HELP = {
       'GST Summary — GST collected vs GST paid, broken down by code; use this each BAS quarter',
       'Trial Balance — every account\'s balance as of a date; mainly a bookkeeping-integrity check',
       'Charts — income vs expenses, bank balance trend, and GST per quarter, all theme-aware inline SVG',
+    ],
+  },
+  Compliance: {
+    title: 'Compliance advisory',
+    description: 'Admin only. A monthly, in-app note from a fixed list of ATO pages, with an AI-written summary of changes that may matter for personal and small-business finance records. A separate history from Shares.',
+    features: [
+      'Reads only a fixed ATO allow-list; it never fetches a URL you type or one found in page text',
+      'Runs on the 2nd of each month, or use Check now to force one',
+      'Shows the source, fetch time, hash and a short excerpt behind every saved report',
+      'Copy the report as Markdown or download it as a PDF; general information only, not tax or legal advice',
     ],
   },
   Settings: {
@@ -7017,7 +7028,9 @@ function DocumentLinkModal({ doc, fy, onClose, onSaved }) {
   );
 }
 
-const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Documents', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Documents', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Compliance', 'Settings'];
+// Compliance is kept in the static tab list (the guide and tour describe it) but is only shown to admins.
+const ADMIN_ONLY_TABS = new Set(['Compliance']);
 // The same tabs, grouped so the bar fits the page: a row of groups, then the active group's tabs.
 // Every entry of TABS must appear in exactly one group (a test checks it).
 const TAB_GROUPS = [
@@ -7026,18 +7039,23 @@ const TAB_GROUPS = [
   { name: 'Purchases', tabs: ['Expenses', 'Suppliers', 'Documents', 'Recurring'] },
   { name: 'Owner & assets', tabs: ['Assets', 'Vehicle/Home Office', 'Drawings', 'Wages', 'Interest'] },
   { name: 'Accounting', tabs: ['Journal', 'Accounts', 'Codes'] },
-  { name: 'Tax & reports', tabs: ['BAS', 'Reports'] },
+  { name: 'Tax & reports', tabs: ['BAS', 'Reports', 'Compliance'] },
   { name: 'Settings',  tabs: ['Settings'] },
 ];
 const groupOfTab = (t) => TAB_GROUPS.find(g => g.tabs.includes(t)) || TAB_GROUPS[0];
 
-const NO_DATE_FILTER_TABS = new Set(['Documents', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
+const NO_DATE_FILTER_TABS = new Set(['Documents', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports', 'Compliance']);
 
 function FinancePageInner() {
   const isAccountant = useAuthStore((s) => s.user?.isAccountant); // read-only login: no AI guide (it is refused server side)
+  const isAdmin = useAuthStore((s) => s.user?.isAdmin);
   const [searchParams, setSearchParams] = useSearchParams();
   const clientFilter = searchParams.get('clientId') || null;
-  const [tab, setTab] = useState(() => searchParams.get('tab') || 'Dashboard');
+  const canOpenTab = useCallback((t) => TABS.includes(t) && (isAdmin || !ADMIN_ONLY_TABS.has(t)), [isAdmin]);
+  const [tab, setTab] = useState(() => {
+    const requested = searchParams.get('tab') || 'Dashboard';
+    return TABS.includes(requested) && (isAdmin || !ADMIN_ONLY_TABS.has(requested)) ? requested : 'Dashboard';
+  });
   const [dateRange, setDateRange] = useState(() => (isAccountant ? { preset: 'fy', ...getPresetRange('fy') } : { preset: 'month', ...getPresetRange('month') }));
   const [showHelp, setShowHelp] = useState(false);
   const ownerEmail = useAuthStore((s) => s.user?.ownerEmail);
@@ -7069,6 +7087,11 @@ function FinancePageInner() {
     setTab('Settings');
   };
 
+  const selectTab = useCallback((next) => { if (canOpenTab(next)) setTab(next); }, [canOpenTab]);
+
+  // A non-admin who had Compliance open (or follows an old link) lands somewhere safe.
+  useEffect(() => { if (!canOpenTab(tab)) setTab('Dashboard'); }, [canOpenTab, tab]);
+
   useEffect(() => {
     api.get('/api/finance/settings')
       .then(r => r.json())
@@ -7079,14 +7102,18 @@ function FinancePageInner() {
 
   // the tour (and anything else) can ask for a tab that is not on screen because its group is closed
   useEffect(() => {
-    const open = (e) => { if (TABS.includes(e.detail)) setTab(e.detail); };
+    const open = (e) => { if (canOpenTab(e.detail)) setTab(e.detail); };
     window.addEventListener('vault:finance-tab', open);
     return () => window.removeEventListener('vault:finance-tab', open);
-  }, []);
+  }, [canOpenTab]);
 
   const showDatePicker = !NO_DATE_FILTER_TABS.has(tab);
   const { from, to } = dateRange;
-  const activeGroup = groupOfTab(tab);
+  const visibleTabs = TABS.filter(canOpenTab);
+  const visibleGroups = TAB_GROUPS
+    .map((g) => ({ ...g, tabs: g.tabs.filter(canOpenTab) }))
+    .filter((g) => g.tabs.length > 0);
+  const activeGroup = visibleGroups.find((g) => g.tabs.includes(tab)) || visibleGroups[0];
 
   return (
     <div className="flex flex-col h-full">
@@ -7123,13 +7150,13 @@ function FinancePageInner() {
           </div>
           <div data-tour="finance-tabs">
             <div className="flex gap-0 overflow-x-auto scroll-x-obvious">
-              {TAB_GROUPS.map(g => {
+              {visibleGroups.map(g => {
                 const on = g === activeGroup;
                 return (
                   <button
                     key={g.name}
                     data-finance-group={g.name}
-                    onClick={() => { if (!on) setTab(g.tabs[0]); }}
+                    onClick={() => { if (!on) selectTab(g.tabs[0]); }}
                     className="flex-shrink-0 text-sm px-4 py-2 border-b-2 transition-colors"
                     style={{
                       background:        'transparent',
@@ -7149,7 +7176,7 @@ function FinancePageInner() {
                   <Tooltip key={t} text={TOOL_HELP[t]?.description || `Switch to the ${t} tab.`}>
                     <button
                       data-finance-tab={t}
-                      onClick={() => setTab(t)}
+                      onClick={() => selectTab(t)}
                       className="text-xs px-3 py-1 rounded-full border transition-colors"
                       style={{
                         background:  tab === t ? 'var(--color-primary)' : 'transparent',
@@ -7193,12 +7220,13 @@ function FinancePageInner() {
         {tab === 'Position'  && <PositionTab />}
         {tab === 'Balances'  && <BalancesTab />}
         {tab === 'Reports'   && <ReportsTab />}
+        {tab === 'Compliance' && isAdmin && <FinanceComplianceTab />}
         {tab === 'Settings'  && <SettingsTab focusSection={settingsFocusSection} onFocusHandled={() => setSettingsFocusSection(null)} />}
       </div>
 
       {showWelcome && <AccountantWelcome onClose={closeWelcome} onOpenTab={setTab} ownerEmail={ownerEmail} />}
       {showHelp && <FinanceHelpModal tab={tab} onClose={() => setShowHelp(false)} />}
-      <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />
+      <FinanceTutorChat currentTab={tab} onOpenTab={selectTab} />
     </div>
   );
 }
