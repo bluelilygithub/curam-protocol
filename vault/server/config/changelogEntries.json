@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d0b70b73",
+   "fullHash": "d0b70b730e9cab03db47142b88df5aeaf3c59d11",
+   "committedAt": "2026-11-25T08:57:25+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Models tab: What to do action list and more download formats",
+   "filesChanged": 6,
+   "insertions": 140,
+   "deletions": 10,
+   "goal": "Turn the Models report into a clear list of actions and let the admin take it away in the format they need.",
+   "whatChanged": "New modelActions in client/src/pages/codeMap/exportModels.mjs turns each finding into one plain action (Do now = high, Soon = medium, Worth testing = low) from its kind and evidence; unknown kinds fall back to the title. ModelsView shows a What to do list under In short with the evidence on hover and Open in Settings where a setting is named. New exports: Markdown file, Excel workbook (sheets What to do, Findings, Tools via modelsSheets; the xlsx package is loaded only on click), HTML page (modelsHtml, escaped), Print / PDF (the same HTML in a print window), alongside CSV and .json; the Markdown copy includes What to do. ExportButton in shared.jsx takes an optional onClick. Tests, docs/code-map.md and the Code Map tutor text updated.",
+   "filesImpacted": [
+    "client/src/pages/codeMap/exportModels.mjs",
+    "client/src/pages/codeMap/exportModels.test.mjs",
+    "client/src/pages/codeMap/ModelsView.jsx",
+    "client/src/pages/codeMap/shared.jsx",
+    "docs/code-map.md",
+    "server/services/codeMapTutor.js"
+   ],
+   "benefit": "The admin sees exactly what to do next, in priority order, and can share the report as Markdown, Excel, HTML or PDF.",
+   "concerns": "The buttons have not been clicked in a browser; Excel depends on the lazily loaded xlsx chunk (it built as a separate chunk) and Print / PDF needs pop-ups allowed. The action text is fixed wording per finding kind, so a new kind shows only its title until a line is added."
+  },
+  {
    "commit": "e1656438",
    "fullHash": "e1656438c1a00fe78abeee282fa113087eac53d5",
    "committedAt": "2026-11-24T18:50:40+10:00",
