@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "eb06dd9a",
+   "fullHash": "eb06dd9ace499bf161f868f172d88c1ec0e63f17",
+   "committedAt": "2026-11-24T17:43:35+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Thesis revisions, Check & review feedback, and a left tool menu for Shares",
+   "filesChanged": 11,
+   "insertions": 330,
+   "deletions": 100,
+   "goal": "Let a thesis be revised over time and reviewed, get AI feedback on the latest revision in the context of earlier revisions, the portfolio and the market, and give Shares the same left-menu layout as Graphics and PDF with a wider body.",
+   "whatChanged": "New table share_thesis_revisions plus columns share_theses.revision/\"revisionNote\" and share_thesis_checks.feedback/revision (idempotent DDL in db.js). Revise defaults to \"Save as revision N+1\", which archives the current wording with its note in one transaction; unticked it edits in place. GET /api/shares/thesis/:id/revisions lists earlier revisions, shown as an expandable \"Earlier revisions\" card. The check (now \"Check & review\") adds earlier revisions, portfolio weight and largest holdings, and portfolio-level market briefings (symbol NULL, plus monthly summary) to the prompt, and returns a multi-paragraph feedback field that cites revisions, flags goalpost-moving and still never says buy/sell; maxTokens 2500 to 4000. Delete moves revisions to the recycle bin and restore brings them back. SharesPage swaps the top tab row for ToolSidebar (Holdings / Insight / Tax & records groups, Refresh quotes and market status in the menu) and widens the body from max-w-5xl to 1700px; the thesis list moved to the right column. Tour steps now point right at the menu, help step targets shares-menu; tutor catalog, docs and tests updated.",
+   "filesImpacted": [
+    "server/db.js",
+    "server/services/sharesThesis.js",
+    "server/services/sharesThesis.test.js",
+    "server/routes/sharesThesis.js",
+    "server/services/recycleBin/adapters/sharesThesis.js",
+    "server/services/sharesTutor.js",
+    "server/testing/routeManifest.json",
+    "client/src/pages/SharesPage.jsx",
+    "client/src/components/shares/SharesThesisTab.jsx",
+    "client/src/utils/tours/sharesTour.js",
+    "docs/shares-thesis.md"
+   ],
+   "benefit": "Earlier thinking is kept and can be compared, the check now reviews the thesis itself (not just the evidence), and Shares is easier to navigate and uses the width of a large screen.",
+   "concerns": "Not tried in a browser and no real check run against a model; revision save, revision restore from the recycle bin and the tour on the new menu are untested against a database. Each check costs more (bigger prompt, up to 4000 output tokens). Every other Shares section now renders up to 1700px wide, which may stretch some forms or tables."
+  },
+  {
    "commit": "d4498059",
    "fullHash": "d449805940986c070b9da2453ad8c13f07495dd9",
    "committedAt": "2026-11-24T16:26:02+10:00",
