@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "e1656438",
+   "fullHash": "e1656438c1a00fe78abeee282fa113087eac53d5",
+   "committedAt": "2026-11-24T18:50:40+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Models check, milestone 4: plain-English summary with a figure check",
+   "filesChanged": 15,
+   "insertions": 353,
+   "deletions": 30,
+   "goal": "Give each Models report a short plain-English summary, written by the light model when the admin presses Run check, without ever showing a number the model made up.",
+   "whatChanged": "New server/services/codeMap/models/summary.js: codeSummary builds the app's own text (counts, range, most urgent findings, tools with too few calls, \"Nothing was changed\"; one line per tool with findings). On Run check (runNow passes summaryWithModel) one call to the light model (pickTextModel light) sees only buildEvidence(report) and returns JSON {overall, tools}; each part is checked with checkFigures (minDigits 1) and a part with any number not in the evidence falls back to the app text and is kept under rejected. No model, a failed call or an unreadable reply give the app text with a reason; a summary that throws is logged and the app text stored. The weekly cron makes no model call. Logged as code_map_models_summary. New server/utils/checkFigures.js lifted from services/bip/summary.js (which now imports it, behaviour unchanged) with a minDigits option. POST /api/code-map/models/run is now behind aiLimiter. ModelsView shows an In short box with who wrote it and each tool's line in its detail; Copy findings includes it; help text, guide catalogue and docs updated.",
+   "filesImpacted": [
+    "server/services/codeMap/models/summary.js",
+    "server/services/codeMap/models/summary.test.js",
+    "server/services/codeMap/models/check.js",
+    "server/services/codeMap/models/check.test.js",
+    "server/utils/checkFigures.js",
+    "server/services/bip/summary.js",
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/codeMap/ModelsView.jsx",
+    "client/src/pages/codeMap/exportModels.mjs",
+    "client/src/pages/codeMap/exportModels.test.mjs",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "A readable summary of the Models report that cannot show an invented figure, with a clear note of who wrote it, and the check still completes if the model fails.",
+   "concerns": "No real model call has been made: the summary was tested with a stand-in model only, so the first real Run check is the first real write-up. The figure check reads digits only; a made-up name or claim with no number passes. A stored rate written as a percentage passes by design. The Models tab has not been opened in a browser. Each Run check now costs one light-model call and counts towards the AI rate limit."
+  },
+  {
    "commit": "82812c13",
    "fullHash": "82812c13f38ddf5427a7ff3d448b39186aa0556a",
    "committedAt": "2026-11-24T18:42:43+10:00",
