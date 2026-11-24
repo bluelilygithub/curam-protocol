@@ -138,9 +138,9 @@ export function download(text, name, type = 'text/markdown') {
 }
 
 /** A small Copy or Download button. `getText` runs on click, so big exports are only built when asked for. */
-export function ExportButton({ kind = 'copy', label, tip, getText, name, type, what }) {
+export function ExportButton({ kind = 'copy', label, tip, getText, name, type, what, onClick }) {
   const getIcon = useIcon();
-  const go = () => (kind === 'copy' ? copyText(getText(), what || label) : download(getText(), name, type));
+  const go = onClick || (() => (kind === 'copy' ? copyText(getText(), what || label) : download(getText(), name, type)));
   return (
     <Tooltip text={tip}>
       <button

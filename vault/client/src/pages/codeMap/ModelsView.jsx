@@ -8,7 +8,7 @@ import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { ExportButton, Pill, SEV_COLOR, card, fmt, fmtSecs, fmtWhen } from './shared';
 import { datedName } from './exportRun.mjs';
-import { modelsByRole, modelsCsv, modelsMd } from './exportModels.mjs';
+import { modelActions, modelsByRole, modelsCsv, modelsHtml, modelsMd, modelsSheets } from './exportModels.mjs';
 
 // Code Map "Models" tab: which model each tool uses (default tier, backup, dedicated), how its calls went in the last 30 days, and what to
 // change. Recommendations only; the admin swaps a model in Settings. Server: server/services/codeMap/models/ (GET /api/code-map/models,
@@ -129,6 +129,46 @@ function ToolDetailRow({ t, colSpan, summary }) {
   );
 }
 
+// Excel: the xlsx package is loaded only when this button is pressed, so it stays out of the page bundle.
+async function downloadXlsx(data, tools, name) {
+  try {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    for (const [sheet, rows] of Object.entries(modelsSheets(data, tools))) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), sheet);
+    XLSX.writeFile(wb, name);
+  } catch (err) {
+    toast(err.message || 'The Excel file could not be built.');
+  }
+}
+
+function printHtml(html) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('Pop-ups are blocked. Allow pop-ups to print or save as PDF.'); return; }
+  w.document.write(html); w.document.close(); w.focus(); w.print();
+}
+
+
+// What to do: one plain action per finding, built in code (exportModels.mjs modelActions), most urgent first.
+function ActionList({ actions }) {
+  return (
+    <section className="rounded-2xl border p-5 space-y-2" style={card} data-guide="models-actions">
+      <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What to do</h3>
+      {!actions.length ? <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing to do: no findings.</p> : (
+        <ol className="space-y-1.5 list-decimal pl-5">
+          {actions.map((a, i) => (
+            <li key={i} className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+              <Pill color={SEV_COLOR[a.severity]} tip={a.why}>{a.priority}</Pill>{' '}
+              {a.action}
+              {a.via && <> <Link to={settingsPath(a.via)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Open in Settings</Link></>}
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Built from the findings by the app, not the AI. Hover a priority for the evidence. Nothing has been changed.</p>
+    </section>
+  );
+}
+
 export default function ModelsView() {
   const getIcon = useIcon();
   const [report, setReport] = useState(undefined); // undefined while loading, null before the first check
@@ -168,6 +208,7 @@ export default function ModelsView() {
     return onlyFindings || sev !== 'all' ? f.length > 0 : true;
   }).sort((a, b) => b.findings.length - a.findings.length || (b.stats?.calls || 0) - (a.stats?.calls || 0)), [data, onlyFindings, sev]);
   const workspace = (data?.workspaceFindings || []).filter((f) => sev === 'all' || f.severity === sev);
+  const actions = useMemo(() => (data ? modelActions(data) : []), [data]);
 
   if (report === undefined) return <Skeleton lines={6} className="h-10" label="Loading the Models report" />;
 
@@ -203,6 +244,8 @@ export default function ModelsView() {
         </section>
       )}
 
+      {data && <ActionList actions={actions} />}
+
       {!data ? (
         <EmptyState icon="code-map" title="No models check yet" body="Run check reads which model each tool uses and how its calls went. It needs a Code Map analysis run first." />
       ) : (
@@ -222,9 +265,13 @@ export default function ModelsView() {
               </Tooltip>
             </div>
             <div className="flex flex-wrap gap-2">
-              <ExportButton label="Copy findings" what="Models report" getText={() => modelsMd(data, tools)} tip="Copy the findings and the tools shown as Markdown." />
-              <ExportButton kind="download" label="Download CSV" name={datedName('vault-models', 'csv', report.createdAt)} type="text/csv" getText={() => modelsCsv(data, tools)} tip="The tools shown, one row each, as a spreadsheet file." />
-              <ExportButton kind="download" label="Download .json" name={datedName('vault-models', 'json', report.createdAt)} type="application/json" getText={() => JSON.stringify(data, null, 1)} tip="The whole report exactly as stored." />
+              <ExportButton label="Copy findings" what="Models report" getText={() => modelsMd(data, tools)} tip="Copy the summary, what to do, the findings and the tools shown as Markdown." />
+              <ExportButton kind="download" label="Markdown" name={datedName('vault-models', 'md', report.createdAt)} getText={() => modelsMd(data, tools)} tip="The summary, what to do, the findings and the tools shown, as a .md file." />
+              <ExportButton kind="download" label="Excel" onClick={() => downloadXlsx(data, tools, datedName('vault-models', 'xlsx', report.createdAt))} tip="An Excel workbook with three sheets: What to do, Findings, and the tools shown." />
+              <ExportButton kind="download" label="CSV" name={datedName('vault-models', 'csv', report.createdAt)} type="text/csv" getText={() => modelsCsv(data, tools)} tip="The tools shown, one row each, as a spreadsheet file." />
+              <ExportButton kind="download" label="HTML" name={datedName('vault-models', 'html', report.createdAt)} type="text/html" getText={() => modelsHtml(data, tools)} tip="A web page of the summary, what to do and the tools shown. Opens in a browser or Word." />
+              <ExportButton kind="download" label="Print / PDF" onClick={() => printHtml(modelsHtml(data, tools))} tip="Open a printable copy. Choose Save as PDF in the print dialog to keep a PDF." />
+              <ExportButton kind="download" label=".json" name={datedName('vault-models', 'json', report.createdAt)} type="application/json" getText={() => JSON.stringify(data, null, 1)} tip="The whole report exactly as stored." />
             </div>
           </div>
 
