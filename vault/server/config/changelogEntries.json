@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7b47a19b",
+   "fullHash": "7b47a19b9aa2aa4c1dc2dac6d13479f0825c9601",
+   "committedAt": "2026-11-25T09:29:48+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Related emails: find, attach or dismiss Gmail threads on a ticket",
+   "filesChanged": 14,
+   "insertions": 571,
+   "deletions": 8,
+   "goal": "When raising or working a ticket, find the email conversation about it without leaving Tickets, keep the threads that matter and dismiss the noise, without exposing anyone's private mail to the rest of the team.",
+   "whatChanged": "New Related emails box in New ticket and on the ticket page (client/src/pages/tickets/TicketEmails.jsx). Find emails / Regrab emails searches the person's own connected Gmail with a plain query (up to six title words, plus the client's contact addresses and email domains when the client is in their own CRM, last year only, client mail with a title word first, falling back to any recent client mail; without a client a thread must mention two title words). Up to 15 threads, ranked by words matched then date; only headers and Gmail's snippet are read. Each thread can be attached, dismissed (excluded: never suggested again on that ticket), detached or restored, and the button shows when the search last ran. New service server/services/ticketEmails.js; new tables ticket_emails (ticketId, userId, threadId PK; status suggested/attached/excluded) and ticket_email_runs (last run per person per ticket), both cascading on ticket delete. Routes POST /api/tickets/emails/find, GET /:id/emails, POST /:id/emails/regrab (20/min limiter; Gmail search runs before the write transaction), PUT /:id/emails/:threadId; POST /api/tickets saves the form's emails and run time in the same transaction as the ticket. Guide catalogue (new emails entry, rules, not-possible), tools list, How it works, tour, route manifest and docs/tickets.md updated.",
+   "filesImpacted": [
+    "server/services/ticketEmails.js",
+    "server/services/ticketEmails.test.js",
+    "server/services/ticketEmails.db.test.js",
+    "server/routes/tickets.js",
+    "server/db.js",
+    "server/testing/routeManifest.json",
+    "server/services/ticketsTutor.js",
+    "server/services/ticketsTutor.test.js",
+    "client/src/pages/tickets/TicketEmails.jsx",
+    "client/src/pages/tickets/NewTicketModal.jsx",
+    "client/src/pages/tickets/TicketDetail.jsx",
+    "client/src/pages/tickets/ticketsTools.mjs",
+    "client/src/utils/tours/ticketsTour.js",
+    "docs/tickets.md"
+   ],
+   "benefit": "Email context sits next to the ticket, with one click to open the thread in Gmail. Dismissals stick per ticket, so repeat searches stay clean, and privacy holds because every row is keyed to the person whose Gmail it came from.",
+   "concerns": "Not tried in a browser, and the new database test (ticketEmails.db.test.js) has not been run: the local Postgres role in .env is missing. The pure test and the tickets guide test pass, and the JSX compiles. Matching on title words is basic, so tickets with a vague title and no client will find little. Restoring a deleted ticket from the recycle bin does not bring back its email rows. The Gmail link uses /mail/u/0, so with several Google accounts signed in it may open the wrong one. Each search makes up to 17 Gmail API calls (counted against the user's Gmail quota, no AI cost)."
+  },
+  {
    "commit": "b71971b6",
    "fullHash": "b71971b6d48da569528231d13a14444f82a4ba55",
    "committedAt": "2026-11-25T09:10:08+10:00",

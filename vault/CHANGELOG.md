@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-25 (tickets-related-emails)
+
+### Tickets — find related emails, attach or dismiss them
+New ticket and each ticket's page now have a Related emails box. Find emails (Regrab emails after the first run, with the time it last ran beside it) searches your own Gmail for threads about the ticket, using the title words and the client's contacts and email domains. Attach the threads that matter, or press ✕ to dismiss one: a dismissed thread is not suggested again on that ticket, and Show dismissed can bring it back. Only you see your emails, even though the ticket itself is shared.
+
+---
+
 ## 2026-11-24 (home-tile-style)
 
 ### Home — cleaner tiles
