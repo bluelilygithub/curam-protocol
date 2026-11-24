@@ -251,7 +251,7 @@ test('extractZip(): unpacks files, refuses "..", stops at the size cap while str
     assert.ok(!fs.existsSync(path.join(evilDir, 'evil.txt')) && !fs.existsSync(path.join(evilDir, '..', 'evil.txt')), 'nothing written');
     assert.ok(!fs.existsSync(path.join(d, '..', 'evil.txt')));
 
-    await assert.rejects(runner.extractZip(await zipOf({ 'big.txt': 'x'.repeat(5000) }), tmp(), { maxBytes: 1000 }), /unpacks to more than/);
+    await assert.rejects(runner.extractZip(await zipOf({ 'big.txt': 'x'.repeat(5000) }), tmp(), { maxBytes: 1000 }), (e) => e.code === 'too_large' && /MB unpacked/.test(e.message));
 
     const link = tmp();
     await runner.extractZip(await zipOf({ 'skill/SKILL.md': '# S', 'skill/link': '/etc/passwd' }, { 'skill/link': { unixPermissions: 0o120777 } }), link);
@@ -275,6 +275,47 @@ test('prepareFolder(): downloads the GitHub archive, steps into its top folder a
   await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo/tree/main/skills/nope', dir: tmp() }, deps), /is not in that repository/);
   await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo', dir: tmp() }, { fetchFile: async () => { throw new Error('HTTP 404'); } }), /could not be downloaded from GitHub \(HTTP 404\)/);
   fs.rmSync(d1, { recursive: true, force: true });
+});
+
+test('prepareFolder(): a /tree/ link unpacks only that folder, so the limits apply to it; size refusals explain what to do', async () => {
+  const files = { 'repo-z/app/a.rb': 'x', 'repo-z/app/b.rb': 'x', 'repo-z/app/c.rb': 'x', 'repo-z/skills/s/SKILL.md': '# s' };
+  const deps = { fetchFile: async () => ({ buffer: await zipOf(files) }), limits: { maxEntries: 2 } };
+  const sub = await runner.prepareFolder({ url: 'https://github.com/o/repo/tree/main/skills', dir: tmp() }, deps);
+  assert.ok(fs.existsSync(path.join(sub, 's/SKILL.md')));
+  assert.ok(!fs.existsSync(path.join(sub, '..', 'app')), 'the rest of the repository is not unpacked');
+  await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo', dir: tmp() }, deps),
+    (e) => e.status === 400 && /That repository has more than 2 files/.test(e.message) && /not whole applications/.test(e.message) && /\/tree\/<branch>\/<folder>/.test(e.message));
+  await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo/tree/main/app', dir: tmp() }, { ...deps, limits: { maxEntries: 1 } }),
+    /The folder "app" has more than 1 files.*smaller folder/s);
+  await assert.rejects(runner.prepareFolder({ zipBuffer: await zipOf(files), dir: tmp() }, { limits: { maxEntries: 2 } }), /That zip has more than 2 files.*Zip just the skill/s);
+  await assert.rejects(runner.prepareFolder({ url: 'https://github.com/o/repo', dir: tmp() }, { fetchFile: async () => { throw new Error('File is too large (max 100MB)'); } }),
+    (e) => e.status === 400 && /over 100 MB to download/.test(e.message) && /Upload a zip/.test(e.message));
+});
+
+test('skillMarker(): finds a SKILL.md, plugin or MCP manifest, or an MCP SDK dependency; null for a plain app', () => {
+  const d = tmp();
+  const put = (f, s = 'x') => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), s); };
+  put('app/models/user.rb'); put('package.json', '{"dependencies":{"vue":"3"}}'); put('node_modules/x/SKILL.md'); put('CLAUDE.md'); put('AGENTS.md');
+  assert.equal(runner.skillMarker(d), null, 'CLAUDE.md, AGENTS.md and node_modules do not count');
+  put('tools/server/package.json', '{"dependencies":{"@modelcontextprotocol/sdk":"1"}}');
+  assert.equal(runner.skillMarker(d), path.join('tools', 'server', 'package.json'));
+  for (const [f, s] of [['.claude-plugin/plugin.json', '{}'], ['.mcp.json', '{}'], ['deep/x/SKILL.md', '# x'], ['requirements.txt', 'mcp>=1.2\n'], ['pyproject.toml', 'dependencies = ["fastmcp"]']]) {
+    const e = tmp(); fs.mkdirSync(path.dirname(path.join(e, f)), { recursive: true }); fs.writeFileSync(path.join(e, f), s);
+    assert.ok(runner.skillMarker(e), f);
+  }
+});
+
+test('runScan(): a big folder with no skill, plugin or MCP marker is refused before SkillSpector runs', async () => {
+  const app = {};
+  for (let i = 0; i <= runner.NON_SKILL_MAX_FILES; i += 1) app[`r/app/f${i}.rb`] = 'x';
+  let ran = false;
+  await assert.rejects(runner.runScan({ zipBuffer: await zipOf(app) }, { run: async () => { ran = true; return {}; } }),
+    (e) => e.status === 400 && /does not look like an AI skill or plugin/.test(e.message) && /301 files/.test(e.message));
+  assert.equal(ran, false);
+  const small = { 'r/a.py': 'x', 'r/b.py': 'y' };
+  const f = fakeRun(SINGLE);
+  await runner.runScan({ zipBuffer: await zipOf(small) }, { run: f.run });
+  assert.equal(f.calls.length, 1, 'a small folder with no marker is still scanned');
 });
 
 // ── modelResolver.js: the Skill Scanner model chosen in Settings -> AI & Chat ───────────

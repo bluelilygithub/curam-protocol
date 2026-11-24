@@ -147,6 +147,38 @@ function flattenSkills(root, dir) {
 }
 
 /**
+ * The first file that marks a folder as a skill, plugin or MCP server (relative path), or null: a SKILL.md, a plugin.json
+ * (.claude-plugin/), an MCP manifest (.mcp.json, mcp.json, server.json), a gemini-extension.json, or a package.json / pyproject.toml /
+ * requirements.txt that depends on an MCP SDK. Bounded like countFolder (depth 8, 20,000 entries); .git, node_modules etc. skipped.
+ */
+function skillMarker(root) {
+  const NAMES = /^(skill\.md|plugin\.json|\.mcp\.json|mcp\.json|server\.json|gemini-extension\.json)$/i;
+  const DEPS = /^(package\.json|pyproject\.toml|requirements\.txt)$/i;
+  const MCP_DEP = /@modelcontextprotocol\/|fastmcp|^\s*mcp\b|["']mcp["'\[>=<~ ]/im;
+  let seen = 0;
+  const walk = (dir, depth) => {
+    if (depth > 8 || seen > 20000) return null;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) {
+      seen += 1;
+      const p = path.join(dir, e.name);
+      if (e.isFile() && NAMES.test(e.name)) return path.relative(root, p);
+      if (e.isFile() && DEPS.test(e.name)) {
+        try { if (fs.statSync(p).size < 262144 && MCP_DEP.test(fs.readFileSync(p, 'utf8'))) return path.relative(root, p); } catch { /* unreadable */ }
+      }
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.isSymbolicLink() || SKIP_DIRS.has(e.name)) continue;
+      const hit = walk(path.join(dir, e.name), depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return walk(root, 0);
+}
+
+/**
  * One line of SkillSpector's output -> progress. With -o and JSON it prints, for a multi-skill folder:
  *   "Multi-skill directory detected: 68 skills found"   then for each skill   "  [12/68] Scanning helius-api"
  * (read from its cli.py at the pinned commit). Anything else -> null. Pure.
@@ -162,6 +194,9 @@ function parseProgressLine(line) {
 
 const MAX_UNPACKED_BYTES = 100 * 1024 * 1024; // the same caps SkillSpector applies to its own downloads and zips
 const MAX_ENTRIES = 10000;
+// a folder with more files than this and no skill, plugin or MCP marker is refused as "not a skill" (whole applications: noise, time, tokens)
+const NON_SKILL_MAX_FILES = 300;
+const SCOPE = 'Skill Scanner checks AI skills and plugins (a SKILL.md and its scripts, a Claude Code plugin, an MCP server), not whole applications.';
 
 /** A github.com link -> the archive to download and the folder inside it ("/tree/main/skills/pdf" -> ref main, folder skills/pdf). */
 function githubArchive(url) {
@@ -178,12 +213,16 @@ function githubArchive(url) {
  * MAX_UNPACKED_BYTES unpacked (counted while streaming, so a zip bomb is stopped part-way, not after inflating in memory). Symlinks are
  * skipped, never created. Every path is checked to stay inside `dest`.
  */
-async function extractZip(buffer, dest, { maxBytes = MAX_UNPACKED_BYTES, maxEntries = MAX_ENTRIES } = {}) {
+// only (a /tree/ folder): unpack just that folder under the archive's top folder, so the limits apply to it; every path is still checked.
+// Size refusals carry code too_many_files or too_large so the caller can explain them.
+async function extractZip(buffer, dest, { maxBytes = MAX_UNPACKED_BYTES, maxEntries = MAX_ENTRIES, only = '' } = {}) {
   const JSZip = require('jszip');
   let zip;
   try { zip = await JSZip.loadAsync(buffer); } catch (err) { throw Object.assign(new Error(`That zip could not be opened (${err.message}).`), { status: 400 }); }
   const entries = Object.values(zip.files);
-  if (entries.length > maxEntries) throw Object.assign(new Error(`The zip has more than ${maxEntries} files.`), { status: 400 });
+  const folder = String(only || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const wanted = (e) => !folder || String(e.name || '').replace(/\\/g, '/').split('/').slice(1).join('/').startsWith(`${folder}/`);
+  if (entries.filter((e) => !e.dir && wanted(e)).length > maxEntries) throw Object.assign(new Error(`more than ${maxEntries} files`), { status: 400, code: 'too_many_files' });
   const root = path.resolve(dest);
   let total = 0;
   for (const e of entries) {
@@ -196,7 +235,7 @@ async function extractZip(buffer, dest, { maxBytes = MAX_UNPACKED_BYTES, maxEntr
     if (!name || name.startsWith('/') || /^[A-Za-z]:/.test(name) || name.split('/').includes('..')) {
       throw Object.assign(new Error('The zip contains an unsafe path, so it was not scanned.'), { status: 400 });
     }
-    if (e.dir) continue;
+    if (e.dir || !wanted(e)) continue;
     const mode = Number(e.unixPermissions) || 0;
     if ((mode & 0o170000) === 0o120000) continue; // a symlink: never created
     const out = path.resolve(root, name);
@@ -210,7 +249,7 @@ async function extractZip(buffer, dest, { maxBytes = MAX_UNPACKED_BYTES, maxEntr
         if (total > maxBytes) {
           st.pause();
           ws.destroy();
-          reject(Object.assign(new Error(`The zip unpacks to more than ${Math.round(maxBytes / 1048576)} MB, so it was not scanned.`), { status: 400 }));
+          reject(Object.assign(new Error(`more than ${Math.round(maxBytes / 1048576)} MB unpacked`), { status: 400, code: 'too_large' }));
         }
       });
       st.on('error', reject);
@@ -232,13 +271,26 @@ async function prepareFolder({ zipBuffer, url, dir }, deps = {}) {
     try {
       buffer = (await (deps.fetchFile || require('../../utils/safeFetch').fetchPublicFile)(gh.archiveUrl, { maxBytes: MAX_UNPACKED_BYTES, timeoutMs: 60000, accept: 'application/zip' })).buffer;
     } catch (err) {
+      if (/too large/i.test(err.message)) {
+        // GitHub only offers the whole repository as a zip, so a folder link cannot get round this one
+        throw Object.assign(new Error(`The repository is over ${Math.round(MAX_UNPACKED_BYTES / 1048576)} MB to download, so it cannot be fetched, even for one folder (GitHub only offers the whole repository as a zip). ${SCOPE} To check one skill or plugin inside it, download that folder, zip it and use Upload a zip.`), { status: 400 });
+      }
       throw new Error(`The repository could not be downloaded from GitHub (${err.message}). Check the link is public and the branch name is right.`);
     }
   }
   const src = path.join(dir, 'src');
   fs.mkdirSync(src);
   if (deps.onUnpack) deps.onUnpack();
-  await extractZip(buffer, src, deps.limits);
+  try {
+    await extractZip(buffer, src, { ...deps.limits, only: subPath });
+  } catch (err) {
+    if (err.code !== 'too_many_files' && err.code !== 'too_large') throw err;
+    const what = zipBuffer ? 'That zip has' : subPath ? `The folder "${subPath}" has` : 'That repository has';
+    const next = zipBuffer ? 'Zip just the skill or plugin folder and upload that.'
+      : subPath ? 'Link to a smaller folder: the one holding the skill or plugin.'
+        : 'Paste a link to just the skill or plugin folder: https://github.com/<owner>/<repo>/tree/<branch>/<folder>.';
+    throw Object.assign(new Error(`${what} ${err.message}, so it was not scanned. ${SCOPE} ${next}`), { status: 400 });
+  }
   let root = src;
   const top = fs.readdirSync(root, { withFileTypes: true });
   if (top.length === 1 && top[0].isDirectory()) root = path.join(root, top[0].name);
@@ -399,6 +451,9 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
     const flat = flattenSkills(unpacked, dir);
     const target = flat.target;
     const found = countFolder(target);
+    if (found.files > NON_SKILL_MAX_FILES && !skillMarker(target)) {
+      throw Object.assign(new Error(`This does not look like an AI skill or plugin: none of its ${found.files} files is a SKILL.md, a plugin.json or an MCP server manifest, so it was not scanned. ${SCOPE} Its rules would flag ordinary application code everywhere. Link to the skill or plugin folder inside it (https://github.com/<owner>/<repo>/tree/<branch>/<folder>), or zip just that folder.`), { status: 400 });
+    }
     const skillsGuess = Math.max(1, found.subSkills);
     const outFile = path.join(dir, 'report.json');
     const home = path.join(dir, 'home');
@@ -453,7 +508,7 @@ async function runScan({ url = null, zipBuffer = null, deep = false, model = nul
 }
 
 module.exports = {
-  BIN, LIMITS, MAX_SKILLS, DEFAULT_SKILL_LIMIT, GITHUB_URL_RE, timeoutFor, countFolder, flattenSkills, parseProgressLine,
+  BIN, LIMITS, MAX_SKILLS, DEFAULT_SKILL_LIMIT, GITHUB_URL_RE, timeoutFor, countFolder, flattenSkills, skillMarker, NON_SKILL_MAX_FILES, parseProgressLine,
   parseGithubUrl, scanEnv, buildArgs, runProcess, isInstalled, normIssue, normSkill, normalizeReport, tokenUsage, runScan,
   githubArchive, extractZip, prepareFolder,
 };

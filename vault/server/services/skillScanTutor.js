@@ -25,6 +25,8 @@ const RULES = [
   'The scanner is NVIDIA’s open-source SkillSpector. It checks AI agent skills and plugins (Claude Code, Codex, MCP and similar) for prompt injection, data exfiltration, credential access, privilege escalation, dangerous code, supply-chain problems, tool misuse and persistence.',
   'It never runs the skill’s code or installs its packages, and works on a copy that is deleted after the scan.',
   'Only public github.com links or uploaded zips (up to 20 MB) can be scanned. At most two scans run at once.',
+  'Size limits: a repository must download in under 100 MB, and what is scanned must be at most 10,000 files and 100 MB unpacked. A /tree/<branch>/<folder> link unpacks only that folder, so a big repository can still be checked one folder at a time, as long as the whole repository downloads in under 100 MB (GitHub only offers whole repositories); otherwise download the folder, zip it and upload it.',
+  'Skill Scanner is for AI skills and plugins, not whole applications. A folder of more than 300 files with no SKILL.md, plugin.json or MCP server manifest (or MCP SDK dependency) is refused before scanning, because the rules would flag ordinary application code everywhere. The fix is to link to, or zip, just the skill or plugin folder.',
   'The risk score bands are: 0 to 20 Safe, 21 to 50 Caution, 51 and over Do not install.',
   'Skill Scanner is for admins only.',
   'The page opens on "What do you want to do?": job tiles (check from GitHub, check a plugin on my computer, get a deeper AI check, keep or share a report) and the latest scans. The list on the left has every tool.',
@@ -34,6 +36,7 @@ const RULES = [
 const NOT_POSSIBLE = [
   'Scanning the plugins installed on someone’s own computer directly: zip the folder and upload it instead.',
   'Scanning private repositories, or links outside github.com.',
+  'Checking a whole application (for example a web app you want to self-host) for security: tools such as GitHub Dependabot or CodeQL, Semgrep or OSV-Scanner are built for that.',
   'Guaranteeing a skill is safe: a Safe verdict means no known risky pattern was found, not that the skill is harmless.',
   'Fixing, editing or installing a skill.',
   'Watching a skill for changes or scanning on a schedule.',
