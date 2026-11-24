@@ -14,7 +14,7 @@ import { GUIDE_TOOLS, HOW_IT_WORKS } from './tickets/ticketsTools.mjs';
 import { TICKET_GOALS } from './tickets/ticketGoals.mjs';
 import { startTicketsTour, TOUR_KEY as TICKETS_TOUR_KEY } from '../utils/tours/ticketsTour';
 import { Btn, Chip, StatusBadge, TypeTag, PriorityDot, MUTED } from './tickets/ticketUi';
-import { PRIORITIES, TICKET_VIEWS, VIEW_GROUPS, viewOf, LAST_VIEW_KEY, listQuery, isOverdue, dueText, ticketNo, shortName, localToday, prefillFrom } from './tickets/ticketLogic.mjs';
+import { TYPES, PRIORITIES, TICKET_VIEWS, VIEW_GROUPS, viewOf, LAST_VIEW_KEY, listQuery, isOverdue, dueText, ticketNo, shortName, localToday, prefillFrom } from './tickets/ticketLogic.mjs';
 
 const OPEN_ON_LAST_KEY = 'vault_tickets_open_on_last';
 const read = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
@@ -144,14 +144,14 @@ function TicketList({ view, people, onNew }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [extra, setExtra] = useState(() => ({
-    q: '', priority: '', assigneeId: '',
+    q: '', type: '', priority: '', assigneeId: '',
     clientId: params.get('new') === '1' ? '' : params.get('clientId') || '', clientProjectId: params.get('new') === '1' ? '' : params.get('clientProjectId') || '',
   }));
   const today = localToday();
   const set = (k) => (v) => setExtra((f) => ({ ...f, [k]: v }));
 
-  // the drop-down's choice of person wins over Mine
-  const query = useMemo(() => listQuery({ ...view.filters, ...extra, assigneeId: extra.assigneeId || view.filters.assigneeId || '' }), [view, extra]);
+  // a drop-down's choice wins over the list's own (a person over Mine, a type over a By type list)
+  const query = useMemo(() => listQuery({ ...view.filters, ...extra, type: extra.type || view.filters.type || '', assigneeId: extra.assigneeId || view.filters.assigneeId || '' }), [view, extra]);
   const load = useCallback(async () => {
     try {
       const r = await api.get(`/api/tickets${query ? `?${query}` : ''}`);
@@ -163,7 +163,7 @@ function TicketList({ view, people, onNew }) {
   // typing in the search waits a moment before asking the server
   useEffect(() => { const t = setTimeout(load, extra.q ? 250 : 0); return () => clearTimeout(t); }, [load, extra.q]);
 
-  const narrowed = !!(extra.q || extra.priority || extra.assigneeId || extra.clientId || extra.clientProjectId);
+  const narrowed = !!(extra.q || extra.type || extra.priority || extra.assigneeId || extra.clientId || extra.clientProjectId);
   const scopeName = (extra.clientId || extra.clientProjectId) && tickets[0] ? (extra.clientProjectId ? tickets[0].clientProjectName : tickets[0].clientName) : '';
   const fieldStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
@@ -180,6 +180,10 @@ function TicketList({ view, people, onNew }) {
       <div className="flex flex-col sm:flex-row gap-2 mb-5" data-tour="tickets-filters">
         <input type="text" value={extra.q} onChange={(e) => set('q')(e.target.value)} placeholder="Search titles and details, or T-12…" aria-label="Search tickets"
           className="text-sm px-3 py-1.5 rounded-lg border outline-none sm:min-w-[260px]" style={fieldStyle} />
+        <select value={extra.type} onChange={(e) => set('type')(e.target.value)} aria-label="Type filter" className="text-sm px-3 py-1.5 rounded-lg border" style={fieldStyle}>
+          <option value="">{view.filters.type ? TYPES.find((t) => t.value === view.filters.type).label : 'Any type'}</option>
+          {TYPES.filter((t) => t.value !== view.filters.type).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
         <select value={extra.priority} onChange={(e) => set('priority')(e.target.value)} aria-label="Priority filter" className="text-sm px-3 py-1.5 rounded-lg border" style={fieldStyle}>
           <option value="">Any priority</option>
           {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}

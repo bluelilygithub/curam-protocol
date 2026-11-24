@@ -90,7 +90,7 @@ export function startTicketsTour() {
   tour.addStep({
     id: 'tickets-filters',
     title: 'Find tickets',
-    text: 'Above any list: search finds words, or a number such as T-12, and the drop-downs narrow it by priority and by who has it.',
+    text: 'Above any list: search finds words, or a number such as T-12, and the drop-downs narrow it by type, priority and who has it.',
     attachTo: { element: '[data-tour="tickets-filters"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('tickets-filters', '[data-tour="tickets-filters"]')()),
     when: { show() { injectStepCounter(5); } },

@@ -340,7 +340,8 @@ export default function ClientDetailPage() {
   };
 
   // The main column is tabs (Activity first); Info, Contacts and Outstanding sit in the side panel.
-  const [tab, setTab] = useState('activity');
+  // ?tab=tickets (from a ticket) opens that tab; an unknown or hidden tab falls back to Activity below
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'activity');
   const [sections, setSections] = useState({
     info:        true,
     outstanding: true,

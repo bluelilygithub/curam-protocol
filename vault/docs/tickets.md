@@ -59,7 +59,9 @@ the same number when free. A client, project or person that has gone since is em
 ## Page (`/tickets`, `/tickets/:id`)
 
 Looks like the CRM page (`pages/tickets/ticketUi.jsx` copies its buttons, fields, chips and badges). The lists are in the left-hand menu (see Layout
-below); search, priority and assignee filters sit above each list. The ticket page saves each field as it changes, has the
+below); search, type, priority and assignee filters sit above each list. A ticket filed under one of your clients links to
+that client's page (`/clients/:id?tab=tickets`, which opens the Tickets tab) and project page; the links show only to the client's owner,
+as clients live in each person's own CRM. The ticket page saves each field as it changes, has the
 description, the activity thread with comments (the shared microphone everywhere text is typed), tasks made from it, Make a task and Delete
 (with Undo). `/tickets?new=1&title=&clientId=&clientProjectId=&type=&sourceKind=&sourceId=&sourceLabel=` opens New ticket filled in: stage 2's
 "Make a ticket" buttons will use it.
@@ -95,7 +97,7 @@ Layout (like Skill Scanner and PDF Tools): the shared `components/ToolSidebar.js
 (`TICKET_VIEWS` in `ticketLogic.mjs`: Active, Mine, Overdue, In progress, Waiting, Done, All tickets, and one per type), and "What do you
 want to do?" job tiles (`pages/tickets/ticketGoals.mjs`, shared `components/JobStart.jsx`) as the start screen. A list is
 `/tickets?view=<id>`; a link from another tool opens Active. "Next time, open on the tool I used last" skips the tiles (this browser
-only), and Back to the list from a ticket returns to the last list. Search, priority and assignee narrow any list.
+only), and Back to the list from a ticket returns to the last list. Search, type, priority and assignee narrow any list.
 `ticketGoals.test.mjs` and `ticketLogic.test.mjs` check the tiles and lists.
 
 ## Not built

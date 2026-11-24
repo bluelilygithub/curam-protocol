@@ -43,7 +43,7 @@ function cleanDate(v) {
 
 const COLS = `t.id, t.title, t.description, t.type, t.status, t.priority, t."dueDate"::text AS "dueDate", t."clientId", t."clientProjectId",
   t."createdBy", t."assigneeId", t."sourceKind", t."sourceId", t."sourceLabel", t."createdAt", t."updatedAt", t."closedAt",
-  c.name AS "clientName", p.name AS "clientProjectName", cu.email AS "createdByEmail", au.email AS "assigneeEmail"`;
+  c.name AS "clientName", c."userId" AS "clientOwnerId", p.name AS "clientProjectName", cu.email AS "createdByEmail", au.email AS "assigneeEmail"`;
 const FROM = `tickets t
   LEFT JOIN clients c ON c.id = t."clientId"
   LEFT JOIN projects p ON p.id = t."clientProjectId"

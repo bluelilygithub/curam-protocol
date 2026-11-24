@@ -182,6 +182,13 @@ export default function TicketDetail({ id, people }) {
               <div className="flex flex-col gap-3">
                 <PlanClientPicker what="ticket" clientId={t.clientId} clientProjectId={t.clientProjectId} clientName={t.clientName}
                   clientProjectName={t.clientProjectName} disabled={busy} onChange={(ch) => save(ch)} />
+                {/* clients are in each person's own CRM, so only the client's owner can open its page */}
+                {t.clientId && t.clientOwnerId === me?.id && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <Link to={`/clients/${t.clientId}?tab=tickets`} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Open {t.clientName || 'the client'} →</Link>
+                    {t.clientProjectId && <Link to={`/client-projects/${t.clientProjectId}`} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Open {t.clientProjectName || 'the project'} →</Link>}
+                  </div>
+                )}
               </div>
             </section>
 
