@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (home-root)
+
+### Home — the address always opens Home
+Going to vault.curam-ai.com.au, or clicking the logo, now always opens Home. Before, Vault only sent you to the start page once per browser tab, so a tab that had already opened Shares kept showing the old projects page.
+
+---
+
 ## 2026-11-24 (home-attention)
 
 ### Home — opens first, with what needs your attention

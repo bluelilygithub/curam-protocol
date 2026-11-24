@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "fa6ce1b2",
+   "fullHash": "fa6ce1b2272bbf6996156ab54094c86ccc92f20e",
+   "committedAt": "2026-11-24T15:38:12+10:00",
+   "author": "mrb",
+   "area": "Home",
+   "subject": "The address and logo always open Home when it is the start page",
+   "filesChanged": 1,
+   "insertions": 1,
+   "deletions": 0,
+   "goal": "Make vault.curam-ai.com.au open Home every time, not only on the first visit in a tab.",
+   "whatChanged": "The start page redirect in App.jsx (HomeRoute) only fires once per tab per sign-in, so a tab already sent to Shares kept showing the old projects page at /. When the start page is /home, / now always opens Home.",
+   "filesImpacted": [
+    "client/src/App.jsx"
+   ],
+   "benefit": "Typing the address or clicking the logo always lands on Home.",
+   "concerns": "Other start pages keep the once-per-tab behaviour."
+  },
+  {
    "commit": "f2bdc0d8",
    "fullHash": "f2bdc0d841e347546168fbcfe4b59aeece8a881d",
    "committedAt": "2026-11-24T15:31:11+10:00",
