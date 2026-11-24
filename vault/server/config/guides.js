@@ -23,6 +23,7 @@ const GUIDES = {
   drawings: { name: 'Diagrams guide', endpoint: '/api/drawings-tutor' },
   sketchbook: { name: 'Sketchbook guide', endpoint: '/api/sketchbook-tutor' },
   plans: { name: 'Plans guide', endpoint: '/api/plans-tutor' },
+  tickets: { name: 'Tickets guide', endpoint: '/api/tickets-tutor' },
   css: { name: 'Style editor guide', endpoint: '/api/restyle-tutor' },
   youtube: { name: 'YouTube guide', endpoint: '/api/youtube-tutor' },
   'device-preview': { name: 'Device preview guide', endpoint: '/api/device-preview-tutor' },

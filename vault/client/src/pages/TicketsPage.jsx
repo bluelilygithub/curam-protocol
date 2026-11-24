@@ -4,6 +4,9 @@ import api from '../utils/apiClient';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import NewTicketModal from './tickets/NewTicketModal';
 import TicketDetail from './tickets/TicketDetail';
+import TicketsTutorChat from './tickets/TicketsTutorChat';
+import { GUIDE_TOOLS } from './tickets/ticketsTools.mjs';
+import { startTicketsTour, TOUR_KEY as TICKETS_TOUR_KEY } from '../utils/tours/ticketsTour';
 import { Btn, Chip, StatusBadge, TypeTag, PriorityDot, MUTED } from './tickets/ticketUi';
 import { TYPES, PRIORITIES, STATUS_FILTERS, listQuery, isOverdue, dueText, ticketNo, shortName, localToday, prefillFrom } from './tickets/ticketLogic.mjs';
 
@@ -17,9 +20,16 @@ export default function TicketsPage() {
   useEffect(() => {
     api.get('/api/tickets/people').then((r) => (r.ok ? r.json() : null)).then((d) => setPeople(d?.people || [])).catch(() => {});
   }, []);
+  const navigate = useNavigate();
+  // the guide's Open buttons: a control on the list goes back to the list; one inside a ticket needs a ticket open, so it stays put
+  const openToolById = (toolId) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === toolId);
+    if (target && target.tool === 'list' && id) navigate('/tickets');
+  };
   return (
     <VoiceInputProvider lang="en-AU">
       {id ? <TicketDetail id={id} people={people} /> : <TicketList people={people} />}
+      <TicketsTutorChat currentTool={id ? 'ticket' : 'list'} onOpenTool={openToolById} />
     </VoiceInputProvider>
   );
 }
@@ -39,8 +49,12 @@ function TicketList({ people }) {
   const today = localToday();
   const set = (k) => (v) => setFilters((f) => ({ ...f, [k]: v }));
 
-  // a "new ticket" link from another tool is read once, then removed from the address so a reload does not open it again
-  useEffect(() => { if (params.get('new') === '1') setParams({}, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // a "new ticket" link from another tool is read once, then removed from the address so a reload does not open it again;
+  // Settings -> Tours opens /tickets?tour=1
+  useEffect(() => {
+    if (params.get('new') === '1') setParams({}, { replace: true });
+    if (params.get('tour')) { setParams({}, { replace: true }); setTimeout(() => startTicketsTour(), 300); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const query = useMemo(() => listQuery(filters), [filters]);
   const load = useCallback(async () => {
@@ -61,10 +75,13 @@ function TicketList({ people }) {
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Tickets</h1>
-        <Btn onClick={() => { setPrefill(null); setShowNew(true); }}>+ New ticket</Btn>
+        <div className="flex items-center gap-2">
+          <Btn variant="secondary" title="Take the Tickets tour" onClick={() => { try { localStorage.removeItem(TICKETS_TOUR_KEY); } catch (_) { /* ignore */ } startTicketsTour(); }}>Tour</Btn>
+          <span data-tour="tickets-new"><Btn onClick={() => { setPrefill(null); setShowNew(true); }}>+ New ticket</Btn></span>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2 mb-5">
+      <div className="flex flex-col gap-2 mb-5" data-tour="tickets-filters">
         <div className="flex gap-1 flex-wrap">
           {STATUS_FILTERS.map((f) => <Chip key={f.value || 'all'} on={filters.status === f.value} onClick={() => set('status')(f.value)}>{f.label}</Chip>)}
         </div>
@@ -107,7 +124,7 @@ function TicketList({ people }) {
       )}
 
       {!loading && tickets.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" data-tour="tickets-list">
           {tickets.map((t) => <TicketRow key={t.id} t={t} today={today} onOpen={() => navigate(`/tickets/${t.id}`)} />)}
           {tickets.length >= 500 && <p className="text-xs" style={MUTED}>Showing the 500 most recently changed. Narrow the filters to see others.</p>}
         </div>

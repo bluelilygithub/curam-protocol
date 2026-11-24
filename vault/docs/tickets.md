@@ -1,7 +1,7 @@
 # Tickets
 
 Internal work items for running the business: client work, bugs in Vault or the sites and apps we build, admin, and ideas. **Not** a
-client-facing helpdesk: nobody outside Vault raises or sees a ticket. Built 2026-11-24 (stage 1 of 2).
+client-facing helpdesk: nobody outside Vault raises or sees a ticket. Built 2026-11-24 in two stages.
 
 ## Who sees what
 
@@ -84,13 +84,24 @@ gives the day back. There is no per-person opt-out yet.
 The Tickets item in the Apps menu shows the number of open tickets assigned to you (`GET /api/tickets/counts`; red when any are overdue), and
 the Apps button gets a dot when something is overdue. It refreshes every 5 minutes and after a change on the Tickets pages.
 
-## Still to come
+## Guide and tour (stage 2)
 
-The guide chat, tour and job tiles (stage 2, next).
+The round guide button on both views is the shared guide chat (`pages/tickets/TicketsTutorChat.jsx`, `services/ticketsTutor.js`, mounted at
+`/api/tickets-tutor` behind the feature and `aiLimiter`, registered in `server/config/guides.js`). Its catalogue is
+`pages/tickets/ticketsTools.mjs`; `ticketsTutor.test.js` keeps the two in step. It sees no tickets. The 6-step tour
+(`utils/tours/ticketsTour.js`) starts from the Tour button, Settings → Tours, or `/tickets?tour=1`.
+
+Job tiles ("What do you want to do?") were left out on purpose: the page follows the CRM layout, which has none.
+
+## Not built
+
+A client-facing form or portal, email-to-ticket, a board view, custom statuses or fields, time tracking, recurring tickets, attachments,
+private tickets, and a per-person switch for the morning email.
 
 ## Tests
 
 - `server/routes/tickets.db.test.js` (real database): make, refuse, share, assign, history, done/reopen, filters, comments, tasks, delete and restore.
 - `server/services/ticketDraft.test.js`: the AI answer checks, the fence, and the call.
+- `server/services/ticketsTutor.test.js`: the guide catalogue matches the page, and its facts, gaps and rules.
 - `server/services/ticketDigest.db.test.js` (real database): who gets what, once a day, a retry after a failed send, the time zone.
 - `client/src/pages/tickets/ticketLogic.test.mjs`: dates, filters, the prefill link and its round trip, labels.

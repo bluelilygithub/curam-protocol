@@ -254,6 +254,7 @@ app.use('/api/sketchbook-tutor', requireFeature('sketchbook'), aiLimiter, requir
 app.use('/api/sketchbook', requireFeature('sketchbook'), require('./routes/sketchbook')); // cartoon pictures drawn from a description (docs/sketchbook.md); paid: the Graphics image limits apply
 app.use('/api/plans-tutor', requireFeature('plans'), aiLimiter, require('./routes/plansTutor')); // the Plans guide chat (sees no plans); before /api/plans
 app.use('/api/plans', requireFeature('plans'), require('./routes/plans')); // plans with dated steps, dependencies and a Gantt (docs/plans.md)
+app.use('/api/tickets-tutor', requireFeature('tickets'), aiLimiter, require('./routes/ticketsTutor')); // the Tickets guide chat (sees no tickets); before /api/tickets
 app.use('/api/tickets', requireFeature('tickets'), require('./routes/tickets')); // internal tickets shared by everyone with the feature (docs/tickets.md); AI draft hits aiLimiter in the route file
 // aiLimiter is applied inside music.js to POST /jobs only — the client polls GET /jobs/:id every 2s,
 // which alone would exhaust the 30/min per-user limit.

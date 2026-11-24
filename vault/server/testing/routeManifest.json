@@ -4872,6 +4872,9 @@
   },
   "POST /api/tickets/:id/task": {
    "class": "authed"
+  },
+  "POST /api/tickets-tutor": {
+   "class": "authed"
   }
  }
 }

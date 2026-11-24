@@ -28,6 +28,7 @@ import { TOUR_KEY as DOC_COMPARE_TOUR_KEY } from '../utils/tours/docCompareTour'
 import { TOUR_KEY as DRAWINGS_TOUR_KEY } from '../utils/tours/drawingsTour';
 import { TOUR_KEY as SKETCHBOOK_TOUR_KEY } from '../utils/tours/sketchbookTour';
 import { TOUR_KEY as PLANS_TOUR_KEY } from '../utils/tours/plansTour';
+import { TOUR_KEY as TICKETS_TOUR_KEY } from '../utils/tours/ticketsTour';
 import { TOUR_KEY as BURNER_MAIL_TOUR_KEY } from '../utils/tours/burnerMailTour';
 import { TOUR_KEY as DNS_LOOKUP_TOUR_KEY } from '../utils/tours/dnsLookupTour';
 import { TOUR_KEY as LIVE_TV_TOUR_KEY } from '../utils/tours/liveTvTour';
@@ -2069,6 +2070,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(PLANS_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Tickets Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step tour — a new ticket and Fill in with AI, finding tickets, one ticket, making tickets from other tools, and reminders
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(TICKETS_TOUR_KEY);
+                navigate('/tickets?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(TICKETS_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
