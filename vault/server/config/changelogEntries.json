@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4da0b135",
+   "fullHash": "4da0b135476fdcb6d38a05482cf2fcf2eacc5125",
+   "committedAt": "2026-11-24T14:20:21+10:00",
+   "author": "mrb",
+   "area": "Testing",
+   "subject": "Ticket test checks the client link and the client Tickets tab",
+   "filesChanged": 1,
+   "insertions": 5,
+   "deletions": 0,
+   "goal": "Prove the ticket-to-client link and the client page Tickets tab get the data they need.",
+   "whatChanged": "server/routes/tickets.db.test.js now checks a ticket reports whose CRM its client is in (clientOwnerId, which decides who sees the link to the client page), and that the list the client page Tickets tab asks for (clientId with every status) includes done tickets.",
+   "filesImpacted": [
+    "server/routes/tickets.db.test.js"
+   ],
+   "benefit": "A change that breaks either way between a ticket and its client fails the test.",
+   "concerns": "None noted."
+  },
+  {
    "commit": "b109f681",
    "fullHash": "b109f68146b974fbc82e37408166ce6c49f1fc2c",
    "committedAt": "2026-11-24T14:04:16+10:00",

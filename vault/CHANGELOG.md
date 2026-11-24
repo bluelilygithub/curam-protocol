@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-client-test)
+
+### Testing — tickets and their client
+The tickets test now checks both ways between a ticket and its client: the ticket says whose CRM the client is in (so that person gets the link to the client page), and the client page's Tickets tab gets every ticket for the client, finished ones included.
+
+---
+
 ## 2026-11-24 (tickets-wide)
 
 ### Tickets — wider description and activity
