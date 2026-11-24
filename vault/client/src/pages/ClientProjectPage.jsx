@@ -5,6 +5,7 @@ import useToastStore from '../store/toastStore';
 import AttachmentChip from '../components/AttachmentChip';
 import { StatusSelect } from './ClientProjectsPage';
 import { useClientPlans, ClientPlansBody } from '../components/ClientPlans';
+import { useClientTickets, ClientTicketsBody } from '../components/ClientTickets';
 import Tooltip from '../components/Tooltip';
 
 // Everything for one piece of client work, in one place: brief, activity log, notes, files and
@@ -554,7 +555,7 @@ function Finance({ project }) {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-const NAV = [['brief', 'Brief'], ['activity', 'Activity'], ['notes', 'Notes'], ['files', 'Files'], ['tasks', 'Tasks'], ['plans', 'Plans'], ['chats', 'Chats'], ['finance', 'Quotes & invoices']];
+const NAV = [['brief', 'Brief'], ['activity', 'Activity'], ['notes', 'Notes'], ['files', 'Files'], ['tasks', 'Tasks'], ['plans', 'Plans'], ['tickets', 'Tickets'], ['chats', 'Chats'], ['finance', 'Quotes & invoices']];
 
 // ── Plans ──────────────────────────────────────────────────
 // The dated plans filed under this client project (docs/plans.md "Clients"). Left out when Plans is off for this person.
@@ -567,12 +568,25 @@ function PlansSection({ cp, project }) {
   );
 }
 
+// ── Tickets ──────────────────────────────────────────────────
+// Internal tickets linked to this client project (docs/tickets.md). Left out when Tickets is off for this person.
+function TicketsSection({ ct, project }) {
+  if (!ct.available) return null;
+  const open = (ct.tickets || []).filter((t) => t.status !== 'done').length;
+  return (
+    <Section id="tickets" title={`Tickets${open ? ` (${open} open)` : ''}`} hint="Internal tickets for this project: client requests, bugs and to-dos, shared with everyone who uses Tickets.">
+      <ClientTicketsBody tickets={ct.tickets} clientId={project.clientId} clientProjectId={project.id} name={project.name} />
+    </Section>
+  );
+}
+
 export default function ClientProjectPage() {
   const { id } = useParams();
   const addToast = useToastStore(s => s.addToast);
   const [overview, setOverview] = useState(null);
   const [missing, setMissing] = useState(false);
   const cp = useClientPlans({ clientProjectId: id });
+  const ct = useClientTickets({ clientProjectId: id });
 
   const load = useCallback(() => {
     api.get(`/api/client-projects/${id}`)
@@ -631,6 +645,7 @@ export default function ClientProjectPage() {
         <FilesAndLinks project={project} />
         <Tasks project={project} onChanged={load} />
         <PlansSection cp={cp} project={project} />
+        <TicketsSection ct={ct} project={project} />
         <Chats project={project} />
         <Finance project={project} />
       </div>

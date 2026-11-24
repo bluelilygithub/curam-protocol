@@ -30,7 +30,10 @@ function TicketList({ people }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState({ q: '', status: 'active', type: '', priority: '', assigneeId: '', overdue: false });
+  const [filters, setFilters] = useState(() => ({
+    q: '', status: 'active', type: '', priority: '', assigneeId: '', overdue: false,
+    clientId: params.get('new') === '1' ? '' : params.get('clientId') || '', clientProjectId: params.get('new') === '1' ? '' : params.get('clientProjectId') || '',
+  }));
   const [prefill, setPrefill] = useState(() => prefillFrom(params));
   const [showNew, setShowNew] = useState(() => !!prefillFrom(params));
   const today = localToday();
@@ -51,7 +54,8 @@ function TicketList({ people }) {
   // typing in the search waits a moment before asking the server
   useEffect(() => { const t = setTimeout(load, filters.q ? 250 : 0); return () => clearTimeout(t); }, [load, filters.q]);
 
-  const filtered = !!(filters.q || filters.type || filters.priority || filters.assigneeId || filters.overdue || filters.status !== 'active');
+  const filtered = !!(filters.q || filters.type || filters.priority || filters.assigneeId || filters.overdue || filters.clientId || filters.clientProjectId || filters.status !== 'active');
+  const scopeName = (filters.clientId || filters.clientProjectId) && tickets[0] ? (filters.clientProjectId ? tickets[0].clientProjectName : tickets[0].clientName) : '';
 
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
@@ -86,6 +90,12 @@ function TicketList({ people }) {
         </div>
       </div>
 
+      {(filters.clientId || filters.clientProjectId) && (
+        <div className="flex items-center gap-2 mb-3 text-xs" style={MUTED}>
+          <span>Only tickets for {scopeName || (filters.clientProjectId ? 'one client project' : 'one client')}</span>
+          <Chip on onClick={() => { setFilters((f) => ({ ...f, clientId: '', clientProjectId: '' })); setParams({}, { replace: true }); }} tip="Show tickets for every client.">Show all ✕</Chip>
+        </div>
+      )}
       {loading && <p className="text-sm" style={MUTED}>Loading…</p>}
       {error && <p className="text-sm" role="alert" style={{ color: '#ef4444' }}>{error}</p>}
 

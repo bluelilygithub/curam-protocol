@@ -55,7 +55,7 @@ export function dueText(t, today) {
 /** The list's query string from the filters (empty values left out). */
 export function listQuery(f) {
   const p = new URLSearchParams();
-  for (const k of ['q', 'status', 'type', 'priority', 'assigneeId']) if (f[k]) p.set(k, f[k]);
+  for (const k of ['q', 'status', 'type', 'priority', 'assigneeId', 'clientId', 'clientProjectId']) if (f[k]) p.set(k, f[k]);
   if (f.overdue) p.set('overdue', 'true');
   return p.toString();
 }
@@ -84,5 +84,5 @@ export function prefillFrom(params) {
 /** Where a ticket's source lives in Vault, for the "From" link. */
 export function sourceHref(t) {
   if (!t.sourceKind || !t.sourceId) return null;
-  return { note: `/notes?note=${t.sourceId}`, client: `/clients/${t.sourceId}`, client_project: `/client-projects/${t.sourceId}`, ef_case: '/email-follow-up' }[t.sourceKind] || null;
+  return { note: `/notes?note=${t.sourceId}`, client: `/clients/${t.sourceId}`, client_project: `/client-projects/${t.sourceId}`, ef_case: `/email-follow-up?case=${t.sourceId}` }[t.sourceKind] || null;
 }

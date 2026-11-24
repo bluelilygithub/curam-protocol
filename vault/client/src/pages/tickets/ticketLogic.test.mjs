@@ -32,5 +32,17 @@ assert.equal(ticketNo({ id: 12 }), 'T-12');
 assert.equal(localToday(new Date(2026, 0, 5)), '2026-01-05');
 assert.equal(sourceHref({ sourceKind: 'note', sourceId: '4' }), '/notes?note=4');
 assert.equal(sourceHref({ sourceKind: null }), null);
+assert.equal(sourceHref({ sourceKind: 'ef_case', sourceId: '9' }), '/email-follow-up?case=9');
+
+const { newTicketHref } = await import('./makeTicket.mjs');
+const href = newTicketHref({ title: 'Fix it', description: 'x'.repeat(3000), clientId: 7, clientProjectId: null, sourceKind: 'note', sourceId: 4, sourceLabel: 'Meeting' });
+const back = prefillFrom(new URL(href, 'http://x').searchParams);
+assert.equal(back.title, 'Fix it');
+assert.equal(back.description.length, 1500, 'a long note is cut so the link stays short');
+assert.equal(back.clientId, 7);
+assert.equal(back.clientProjectId, null);
+assert.deepEqual([back.sourceKind, back.sourceId, back.sourceLabel], ['note', 4, 'Meeting']);
+assert.equal(newTicketHref({ sourceKind: 'note' }), '/tickets?new=1', 'a source without an id is left out');
+assert.equal(listQuery({ status: 'active', clientId: '7' }), 'status=active&clientId=7');
 assert.equal(statusOf('nope').value, 'open');
 console.log('ticketLogic tests passed');

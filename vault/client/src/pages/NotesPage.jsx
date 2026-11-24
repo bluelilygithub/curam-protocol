@@ -10,6 +10,7 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startNotesTour, TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
 import NotePlanButton from './notes/NotePlanButton';
+import MakeTicketButton from './tickets/MakeTicketButton';
 import VoiceTodosPanel from './notes/VoiceTodosPanel';
 import NoteVersionsPanel from './notes/NoteVersionsPanel';
 import VoiceRewritePanel from './notes/VoiceRewritePanel';
@@ -1109,6 +1110,9 @@ export default function NotesPage() {
                 </button>
               </Tooltip>
               <NotePlanButton noteId={selected.id} noteTitle={title} beforeOpen={runSave} />
+              <MakeTicketButton beforeOpen={runSave} iconOnly={viewportMobile} style={{ ...toolBtn, minHeight: viewportMobile ? 40 : undefined }}
+                tip="Open a new ticket from this note (its title, text and client), to check and create. The ticket links back to the note."
+                ticket={() => ({ title: title === 'Untitled' ? '' : title, description: stripMarkers(body || ''), clientId: selected.client_id || null, sourceKind: 'note', sourceId: selected.id, sourceLabel: title === 'Untitled' ? 'a note' : title })} />
 
               <div className="relative">
                 <Tooltip text={NOTE_TIPS.takeToChat} side="bottom">

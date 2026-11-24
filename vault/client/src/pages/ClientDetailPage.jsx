@@ -13,6 +13,7 @@ import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
 import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
 import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
 import { useClientPlans, ClientPlansBody } from '../components/ClientPlans';
+import { useClientTickets, ClientTicketsBody } from '../components/ClientTickets';
 import { useLinkedEmailFollowUp, EmailFollowUpList } from '../components/LinkedEmailFollowUp';
 import { useLinkedProfiles, BusinessProfileList } from '../components/LinkedBusinessProfiles';
 import CrmTutorChat from './crm/CrmTutorChat';
@@ -355,6 +356,7 @@ export default function ClientDetailPage() {
 
   const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
   const clientPlans = useClientPlans({ clientId: Number(id) }); // available is false when Plans is off for this person: no section
+  const clientTickets = useClientTickets({ clientId: Number(id) }); // the same for Tickets (docs/tickets.md)
   const clientResearch = useLinkedResearch({ clientId: Number(id) }); // null when Topic Research is off for this person: no section
   const clientEmailCases = useLinkedEmailFollowUp(Number(id)); // null when Email Follow-Up is off for this person: no section
   const clientProfiles = useLinkedProfiles(Number(id)); // null when Business Profiler is off for this person: no tab
@@ -459,6 +461,7 @@ export default function ClientDetailPage() {
     { key: 'deals', label: 'Deals', count: deals?.length },
     { key: 'projects', label: 'Projects', count: projects?.length },
     ...(clientPlans.available ? [{ key: 'plans', label: 'Plans', count: clientPlans.plans?.length }] : []),
+    ...(clientTickets.available ? [{ key: 'tickets', label: 'Tickets', count: clientTickets.tickets?.filter((t) => t.status !== 'done').length }] : []),
     { key: 'tasks', label: 'Tasks', count: tasks?.length },
     ...(clientResearch !== null ? [{ key: 'research', label: 'Research', count: clientResearch.length }] : []),
     ...(clientEmailCases !== null ? [{ key: 'emailFollowUp', label: 'Email follow-up', count: clientEmailCases.length }] : []),
@@ -636,6 +639,8 @@ export default function ClientDetailPage() {
                 )}
                 {/* Plans: the dated plans filed under this client (docs/plans.md "Clients"); the tab is left out when Plans is off */}
                 {activeTab === 'plans' && <ClientPlansBody plans={clientPlans.plans} clientId={id} name={client.name} />}
+                {/* Tickets: internal tickets linked to this client (docs/tickets.md); the tab is left out when Tickets is off */}
+                {activeTab === 'tickets' && <ClientTicketsBody tickets={clientTickets.tickets} clientId={Number(id)} name={client.name} />}
                 {/* Tasks: every open task linked to this client, via a project or directly (tasks.clientId, e.g. a follow-up) */}
                 {activeTab === 'tasks' && <ClientTasksSection clientId={id} tasks={tasks || []} onRefresh={load} />}
                 {/* Research and Email follow-up are quiet (no tab) when the tool is off */}

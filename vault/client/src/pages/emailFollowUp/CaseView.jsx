@@ -9,6 +9,7 @@ import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { offerUndo } from '../../utils/binUndo';
 import { dueLabel, directionLabel, statusLabel } from './labels.mjs';
 import { EF_TIPS } from './efTips.mjs';
+import MakeTicketButton from '../tickets/MakeTicketButton';
 
 const FIELD = 'px-3 py-2 rounded-xl border text-sm outline-none';
 const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -689,6 +690,8 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         </div>
         <Badge>{c.profile === 'professional' ? 'strict' : 'relaxed'}</Badge>
         <Badge color={c.status === 'active' ? GOOD : undefined}>{c.status}</Badge>
+        <MakeTicketButton tip="Open a new ticket from this case (its name, what is owed and its client), to check and create. The ticket links back to the case."
+          ticket={{ title: c.title, description: c.obligation || '', clientId: c.clientId || null, sourceKind: 'ef_case', sourceId: caseId, sourceLabel: c.title }} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs" data-guide="relationship">
