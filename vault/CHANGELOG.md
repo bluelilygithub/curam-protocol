@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (home-tiles)
+
+### Home — a page of app tiles you arrange
+Vault has a new Home page of app tiles in groups. Admins arrange it under Settings → Navigation → Home page tiles: add groups, drag apps into them, and drag tiles and groups into the order you want. Everyone sees the same page, but only the apps they can use. One click makes Home the page Vault opens on, instead of Shares.
+
+---
+
 ## 2026-11-24 (tickets-mic)
 
 ### Tickets — the microphone no longer cuts off or wipes your text

@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "918fc6b7",
+   "fullHash": "918fc6b70562a4e626d48ebd9c92e03505f01f79",
+   "committedAt": "2026-11-24T15:04:25+10:00",
+   "author": "mrb",
+   "area": "Home",
+   "subject": "Admin-arranged Home page of app tiles in groups",
+   "filesChanged": 12,
+   "insertions": 318,
+   "deletions": 21,
+   "goal": "Replace Shares as the opening app with a Home page of tiles the admin chooses, groups and orders by drag and drop.",
+   "whatChanged": "New /home page (HomePage.jsx) shows app tiles in named groups. Admins arrange it under Settings > Navigation > Home page tiles (HomeTilesSettings.jsx) with the same drag-and-drop editor as the Apps menu split; NavLayoutEditor now takes an endpoint, field and set count. Everyone sees the same page but only the apps they can use, and empty groups are hidden (utils/homeTiles.mjs). A button sets the workspace start page to /home. Stored in workspace_settings home_tiles via GET/POST /api/settings/home-tiles (POST admin only), cleaned by server/utils/homeTiles.js. Tests for both helpers; route manifest updated; docs/home.md.",
+   "filesImpacted": [
+    "client/src/pages/HomePage.jsx",
+    "client/src/components/settings/HomeTilesSettings.jsx",
+    "client/src/components/settings/NavLayoutEditor.jsx",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/App.jsx",
+    "client/src/utils/homeTiles.mjs",
+    "client/src/utils/homeTiles.test.mjs",
+    "server/routes/settings.js",
+    "server/utils/homeTiles.js",
+    "server/utils/homeTiles.test.js",
+    "server/testing/routeManifest.json",
+    "docs/home.md"
+   ],
+   "benefit": "Vault can open on a page laid out the way the admin wants, with every app one click away.",
+   "concerns": "Not yet tried in a browser. Tiles are Vault apps only (no custom links). Members with their own start page keep it."
+  },
+  {
    "commit": "7f6ae86e",
    "fullHash": "7f6ae86eac48384e5e1f9d28067b86eb89311c30",
    "committedAt": "2026-11-24T14:47:50+10:00",
