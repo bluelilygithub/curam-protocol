@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d4498059",
+   "fullHash": "d449805940986c070b9da2453ad8c13f07495dd9",
+   "committedAt": "2026-11-24T16:26:02+10:00",
+   "author": "mrb",
+   "area": "Home",
+   "subject": "Tile icons on a transparent background; tiles darken on hover",
+   "filesChanged": 1,
+   "insertions": 4,
+   "deletions": 3,
+   "goal": "Cleaner Home tiles with a clearer hover.",
+   "whatChanged": "HomePage.jsx: the icon square on each tile no longer has its own background. Hover used to fade the tile (opacity 70%); it now darkens it, mixing the surface colour with 12% black, so it reads as darker in light and dark themes. The tile background moved from an inline style to a class so the hover colour can apply.",
+   "filesImpacted": [
+    "client/src/pages/HomePage.jsx"
+   ],
+   "benefit": "Tiles look lighter and the one under the pointer stands out.",
+   "concerns": "Not yet tried in a browser."
+  },
+  {
    "commit": "fa6ce1b2",
    "fullHash": "fa6ce1b2272bbf6996156ab54094c86ccc92f20e",
    "committedAt": "2026-11-24T15:38:12+10:00",

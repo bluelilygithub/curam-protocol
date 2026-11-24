@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (home-tile-style)
+
+### Home — cleaner tiles
+The icons on the Home tiles no longer sit on a coloured square, and a tile now turns darker when you point at it instead of fading.
+
+---
+
 ## 2026-11-24 (home-root)
 
 ### Home — the address always opens Home
