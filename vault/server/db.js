@@ -4276,6 +4276,51 @@ async function initSchema() {
      WHERE status='running'
   `);
 
+  // Shares Compliance Advisory (docs/shares-compliance.md). One report per admin per run; source snapshots are
+  // kept with it so a saved report can be read, exported and restored from the recycle bin without refetching.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS shares_compliance_reports (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status          TEXT NOT NULL DEFAULT 'running',
+      "trigger"       TEXT NOT NULL DEFAULT 'manual',
+      "modelId"       TEXT NOT NULL DEFAULT '',
+      summary         TEXT NOT NULL DEFAULT '',
+      report          JSONB NOT NULL DEFAULT '{}',
+      markdown        TEXT NOT NULL DEFAULT '',
+      "contentHash"   TEXT NOT NULL DEFAULT '',
+      error           TEXT NOT NULL DEFAULT '',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS shares_compliance_sources (
+      id              SERIAL PRIMARY KEY,
+      "reportId"      INTEGER NOT NULL REFERENCES shares_compliance_reports(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "sourceId"      TEXT NOT NULL,
+      label           TEXT NOT NULL DEFAULT '',
+      url             TEXT NOT NULL DEFAULT '',
+      "finalUrl"      TEXT NOT NULL DEFAULT '',
+      status          TEXT NOT NULL DEFAULT 'unavailable',
+      reason          TEXT NOT NULL DEFAULT '',
+      hash            TEXT NOT NULL DEFAULT '',
+      title           TEXT NOT NULL DEFAULT '',
+      excerpt         TEXT NOT NULL DEFAULT '',
+      "fetchedAt"     TIMESTAMPTZ,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_shares_compliance_reports_user_created
+      ON shares_compliance_reports ("userId", "createdAt" DESC)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_shares_compliance_sources_report
+      ON shares_compliance_sources ("reportId", id)
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gsc_tokens (
       id             SERIAL PRIMARY KEY,

@@ -40,6 +40,9 @@ const CATALOG = [
   { id: 'thesis', label: 'Thesis', group: 'Insight',
     does: 'A journal of why you own each share. For a holding you write a short thesis, 3 to 7 assumptions that must stay true (each with how you would verify it), red lines that would prove you wrong, and optional value anchors and a five-sentence "mirror test". Check now asks a model whether your stored trades, news briefings and the previous check still support the thesis. It rates each assumption intact, weakening, impaired, broken or not enough evidence, flags any red line hit, gives a health score out of 10 and, from the second check on, says what changed since the last one. Past checks are kept.',
     notes: 'It tests your own thesis; it never says whether to buy, sell or hold and never predicts a price. It cannot read company filings, so many ratings will be "not enough evidence". A share price move alone does not count against an assumption. A thesis for a share you do not hold is allowed. Deleting a thesis keeps it 30 days in the recycle bin.' },
+  { id: 'compliance', label: 'Compliance', group: 'Insight',
+    does: 'Admin only. A monthly (or forced) check of a fixed list of ATO pages. Vault keeps each in-app report with the updates a model found, why they may matter for share records, an action to consider and a link to the ATO page. Reports can be copied as Markdown, saved as a PDF and deleted to the recycle bin; a deleted report can be restored.',
+    notes: 'General information only, not tax or legal advice. It never states a rate or tax rule of its own, never fetches a URL typed by a person or taken from a page, and says "source unavailable — verify manually" when a page cannot be read. Only an admin sees this tab.' },
   { id: 'metals', label: 'Metals', group: 'Insight',
     does: 'A separate book for physical gold purchases: total ounces, cost, current spot value and unrealised profit, with the gold price history and a drop alert.',
     notes: 'Kept apart from share holdings.' },
@@ -54,6 +57,7 @@ const RULES = [
   'Dividend amounts in the Cash ledger are the net cash received; gross and tax withheld sit alongside.',
   'Quotes come from Finnhub (NYSE/NASDAQ) and Alpha Vantage (ASX) and are cached for about 15 minutes; Refresh quotes asks again.',
   'Daily drop alert emails are set up by the admin in Settings, Shares. The News briefings, the 7 AM Portfolio Note and the snapshots run on a schedule by themselves.',
+  'Compliance is an admin-only tab: a monthly general-information note from a fixed ATO page list, not tax or legal advice. It never states a rate or rule of its own and tells the person to check the ATO page and their accountant.',
   'The Open buttons in this chat only switch to a tab; they never add, change or delete anything.',
 ];
 
@@ -67,6 +71,7 @@ const NOT_POSSIBLE = [
   'Looking at the person\'s holdings, prices or figures: this chat cannot see them; the Questions tab can answer about them.',
   'Reading company filings or earnings reports: the Thesis check uses only the person\'s own trades and the stored news briefings, so it cannot confirm results or management changes by itself.',
   'Judging whether a thesis is right, or whether to act on it: the Thesis tab only reports whether the evidence still supports what the person wrote.',
+  'Opening the Compliance tab as a non-admin: only an admin sees it. In either case it is general information, not tax advice.',
   'Currencies other than Australian dollars on new trades.',
 ];
 

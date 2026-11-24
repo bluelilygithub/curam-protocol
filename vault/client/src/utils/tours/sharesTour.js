@@ -6,7 +6,7 @@ export const TOUR_KEY = 'vault_tour_shares_completed';
 
 const TOTAL_STEPS = 9;
 
-function injectStepCounter(stepIndex) {
+function injectStepCounter(stepIndex, totalSteps = TOTAL_STEPS) {
   requestAnimationFrame(() => {
     const el = document.querySelector('.shepherd-element.vault-tour');
     if (!el) return;
@@ -17,7 +17,7 @@ function injectStepCounter(stepIndex) {
       const footer = el.querySelector('.shepherd-footer');
       if (footer) footer.parentNode.insertBefore(counter, footer);
     }
-    counter.textContent = `Step ${stepIndex} of ${TOTAL_STEPS}`;
+    counter.textContent = `Step ${stepIndex} of ${totalSteps}`;
   });
 }
 
@@ -30,8 +30,10 @@ function safeBeforeShow(tour, stepId, selector) {
 }
 
 // setTab switches the Shares page to a tab so the content behind the highlight matches what the step says.
-export function startSharesTour(setTab) {
+export function startSharesTour(setTab, { isAdmin = false } = {}) {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
+  const totalSteps = isAdmin ? TOTAL_STEPS + 1 : TOTAL_STEPS;
+  const showCount = (n) => injectStepCounter(n, totalSteps);
 
   const tour = new Shepherd.Tour({
     useModalOverlay: true,
@@ -57,7 +59,7 @@ export function startSharesTour(setTab) {
     id, title, text,
     attachTo: { element: selector, on },
     beforeShowPromise: before(id, selector, tab),
-    when: { show() { injectStepCounter(n); } },
+    when: { show() { showCount(n); } },
     buttons: last
       ? [btnBack(), { text: 'Finish Tour ✓', action() { done(); tour.complete(); } }]
       : [btnBack(), btnNext],
@@ -67,7 +69,7 @@ export function startSharesTour(setTab) {
     id: 'shares-welcome',
     title: 'Shares — Quick Tour',
     text: 'Shares is your private share portfolio: every buy, sell and dividend you record becomes your holdings, profit and loss, capital gains working and a pack for your accountant. It also keeps AI news briefings, answers questions about your own data and tests your reasons for owning each share. This tour visits each part. Nothing is bought or sold, and nothing here is advice.',
-    when: { show() { injectStepCounter(1); } },
+    when: { show() { showCount(1); } },
     buttons: [btnSecondary('Skip Tour', () => { done(); tour.cancel(); }), { text: 'Start Tour →', action: () => tour.next() }],
   });
 
@@ -95,11 +97,19 @@ export function startSharesTour(setTab) {
     'Write why you own a share, the assumptions that must stay true and the red lines that would prove you wrong. Check now tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It cannot read company filings, so thin evidence shows as "not enough evidence". Past checks are kept so you can see drift.',
     '[data-tour="shares-tab-thesis"]', 'bottom', 'thesis');
 
-  step(8, 'shares-metals', 'Metals',
+  if (isAdmin) {
+    step(8, 'shares-compliance', 'Compliance (admins only)',
+      'A monthly check of a fixed ATO page list writes an in-app note on changes that may matter for your share records, with source links and an action to consider. It is general information, not tax or legal advice: check the ATO page and your accountant. Reports are kept until you delete them, and deleted reports can be restored from the recycle bin.',
+      '[data-tour="shares-tab-compliance"]', 'bottom', 'compliance');
+  }
+
+  const metalsStep = isAdmin ? 9 : 8;
+  const helpStep = isAdmin ? 10 : 9;
+  step(metalsStep, 'shares-metals', 'Metals',
     'A separate book for physical gold: ounces, cost, current spot value and unrealised profit, with a price history and a drop alert. It is kept apart from your share holdings.',
     '[data-tour="shares-tab-metals"]', 'bottom', 'metals');
 
-  step(9, 'shares-help', 'Help is one tap away',
+  step(helpStep, 'shares-help', 'Help is one tap away',
     'The (i) beside the title explains how Shares works, and the round guide button at the bottom right answers questions like "how do I add a share I bought?" or "what do I give my accountant?" and points at the right tab. Take this tour again any time from the link beside the title or from Settings → Tours.',
     '[data-tour="shares-info"]', 'bottom', 'portfolio', true);
 

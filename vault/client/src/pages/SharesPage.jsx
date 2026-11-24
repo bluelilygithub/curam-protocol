@@ -10,6 +10,7 @@ import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 import SharesPackTab from '../components/shares/SharesPackTab';
 import SharesThesisTab from '../components/shares/SharesThesisTab';
+import SharesComplianceTab from '../components/shares/SharesComplianceTab';
 import Tooltip from '../components/Tooltip';
 import { startSharesTour, TOUR_KEY as SHARES_TOUR_KEY } from '../utils/tours/sharesTour';
 import SharesTutorChat from './shares/SharesTutorChat';
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'news', label: 'News' },
   { id: 'questions', label: 'Questions' },
   { id: 'thesis', label: 'Thesis' },
+  { id: 'compliance', label: 'Compliance' },
   { id: 'metals', label: 'Metals' },
 ];
 
@@ -355,7 +357,7 @@ export default function SharesPage() {
   const startTour = () => {
     try { localStorage.removeItem(SHARES_TOUR_KEY); } catch (_) { /* ignore */ }
     sharesInfo.close(); // the first-visit (i) box would sit behind the tour
-    startSharesTour(setTab);
+    startSharesTour(setTab, { isAdmin });
   };
   const [dashboard, setDashboard] = useState(null);
   const [charts, setCharts] = useState(null);
@@ -811,14 +813,14 @@ export default function SharesPage() {
               >
                 {getIcon('info', { size: 14 })}
               </button>
-              <Tooltip text="Take the guided tour of Shares: the records, tax tabs, news, questions, thesis journal and where to get help (9 steps).">
+              <Tooltip text={`Take the guided tour of Shares: the records, tax tabs, news, questions, thesis journal${isAdmin ? ', the admin compliance check' : ''} and where to get help (${isAdmin ? 10 : 9} steps).`}>
                 <button type="button" onClick={startTour} className="ml-2 text-xs font-normal underline hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>Take the tour</button>
               </Tooltip>
             </h1>
             {sharesInfo.show && (
               <ToolInfoModal title="How Shares Works" onClose={sharesInfo.close}>
                 <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                  Eleven tabs, covering holdings tracking, tax records and AI-assisted portfolio Q&amp;A and thesis checks:
+                  Twelve tabs, covering holdings tracking, tax records and AI-assisted portfolio Q&amp;A and thesis checks:
                 </p>
                 <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                   <p style={{ color: 'var(--color-text)' }}><strong>Portfolio</strong> shows current holdings, live quotes, and unrealized P&amp;L. <strong>Trades</strong> and <strong>Cash</strong> are the underlying ledgers — every buy/sell and every cash movement, avg-cost method for realized P&amp;L.</p>
@@ -827,6 +829,7 @@ export default function SharesPage() {
                   <p style={{ color: 'var(--color-text)' }}><strong>News</strong> — daily AI-generated briefings per holding (bullish/bearish/watch/neutral signals) plus End of month trend summaries. Auto-generates at 4 AM; "Send Portfolio Note" triggers the same analyst-note email manually.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Questions</strong> is free-text Q&amp;A over your actual portfolio data — "What's my largest position?", "How would selling everything today perform?" — archived so you can revisit past answers.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Thesis</strong> is a journal of why you own each share: your assumptions, the red lines that would prove you wrong and what you think it is worth. <em>Check now</em> tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It never says to buy or sell, and it cannot read company filings, so thin evidence shows as "not enough evidence".</p>
+                  {isAdmin && <p style={{ color: 'var(--color-text)' }}><strong>Compliance</strong> is an admin-only monthly check of a fixed ATO page list. It keeps an in-app note of updates that may matter for your share records, with source links, Markdown and PDF export, and reports you can delete to the recycle bin. It is general information, not tax or legal advice.</p>}
                   <p style={{ color: 'var(--color-text)' }}><strong>Metals</strong> tracks physical precious-metals purchases separately from share holdings, with live spot price lookup.</p>
                 </div>
               </ToolInfoModal>
@@ -852,7 +855,7 @@ export default function SharesPage() {
         )}
 
         <div className="flex gap-1 mb-6 border-b overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
-          {TABS.map((t) => (
+          {TABS.filter((t) => t.id !== 'compliance' || isAdmin).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -1399,6 +1402,8 @@ export default function SharesPage() {
             {tab === 'questions' && <QuestionsTab />}
 
             {tab === 'thesis' && <SharesThesisTab />}
+
+            {tab === 'compliance' && isAdmin && <SharesComplianceTab />}
 
             {tab === 'metals' && <MetalsTab />}
             {canUseShares && <SharesTutorChat currentTab={tab} onOpenTab={setTab} />}

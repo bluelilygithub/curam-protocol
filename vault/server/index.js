@@ -216,6 +216,8 @@ app.use('/api/shares/statements', requireFeature('shares'), require('./routes/sh
 app.use('/api/shares/documents', requireFeature('shares'), require('./routes/sharesDocuments'));
 app.use('/api/shares/pack', requireFeature('shares'), require('./routes/sharesPack'));
 app.use('/api/shares/thesis', requireFeature('shares'), require('./routes/sharesThesis')); // aiLimiter inside, on the check route only
+// Shares Compliance Advisory (docs/shares-compliance.md): admin-only, before /api/shares. aiLimiter is inside, on POST only.
+app.use('/api/shares/compliance', requireFeature('shares'), requireAdmin, require('./routes/sharesCompliance'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube-tutor', requireFeature('youtube'), aiLimiter, require('./routes/youtubeTutor')); // the YouTube guide chat (sees no searches, videos or notes)
@@ -355,6 +357,7 @@ process.on('uncaughtException', (err) => {
 // Start cron jobs
 const { startNewsDigestCron } = require('./cron/newsDigestCron');
 const { startSharesCron } = require('./cron/sharesCron');
+const { startSharesComplianceCron } = require('./cron/sharesComplianceCron');
 const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 const { startRecurringCron }        = require('./cron/recurringCron');
 const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
@@ -406,6 +409,7 @@ async function start() {
   } else {
     startNewsDigestCron();
     startSharesCron();
+    startSharesComplianceCron(); // monthly ATO update note for admins; one report per admin, no email
     startFinanceRemindersCron();
     startRecurringCron();
     startExpenseReviewCron();

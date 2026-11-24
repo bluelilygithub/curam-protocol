@@ -4546,6 +4546,24 @@
   "DELETE /api/shares/thesis/:id": {
    "class": "authed"
   },
+  "GET /api/shares/compliance/reports": {
+   "class": "admin"
+  },
+  "POST /api/shares/compliance/reports": {
+   "class": "admin"
+  },
+  "GET /api/shares/compliance/reports/:id": {
+   "class": "admin"
+  },
+  "DELETE /api/shares/compliance/reports/:id": {
+   "class": "admin"
+  },
+  "GET /api/shares/compliance/reports/:id/markdown": {
+   "class": "admin"
+  },
+  "GET /api/shares/compliance/reports/:id/pdf": {
+   "class": "admin"
+  },
   "GET /api/changelog": {
    "class": "admin"
   },
