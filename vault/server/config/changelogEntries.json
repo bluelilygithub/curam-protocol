@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f2bdc0d8",
+   "fullHash": "f2bdc0d841e347546168fbcfe4b59aeece8a881d",
+   "committedAt": "2026-11-24T15:31:11+10:00",
+   "author": "mrb",
+   "area": "Home",
+   "subject": "Needs-attention sidebar on Home; Vault opens on Home",
+   "filesChanged": 9,
+   "insertions": 262,
+   "deletions": 7,
+   "goal": "Make Home the landing page and show, beside the tiles, what needs attention in tasks, notes, plans, invoices, tickets and emails.",
+   "whatChanged": "AttentionSidebar.jsx on the Home page shows one box each for Tasks (overdue, due today), Notes (reminders due), Plans (steps of active plans past their end), Invoices (overdue invoices, bills from email to review), Tickets (yours overdue, assigned to you) and Emails (urgent or waiting Inbox Intel threads from the last 14 days, Email Follow-Up drafts to approve). New GET /api/attention/summary reuses the attention counts plus plans, tickets and emails; buildAttentionSummary words it. A one-time boot step (marker home_landing_2026_11_24) sets the workspace start page to /home and clears admins own start page where it was /shares. Unit and real-database tests added.",
+   "filesImpacted": [
+    "client/src/components/AttentionSidebar.jsx",
+    "client/src/pages/HomePage.jsx",
+    "server/routes/attention.js",
+    "server/services/attention.js",
+    "server/services/attention.test.js",
+    "server/routes/attentionSummary.db.test.js",
+    "server/testing/routeManifest.json",
+    "server/db.js",
+    "docs/home.md"
+   ],
+   "benefit": "Vault opens on one page with every app a click away and everything waiting on you at a glance.",
+   "concerns": "Not yet tried in a browser. Members with their own start page keep it. Inbox Intel counts depend on how recently mail was classified."
+  },
+  {
    "commit": "918fc6b7",
    "fullHash": "918fc6b70562a4e626d48ebd9c92e03505f01f79",
    "committedAt": "2026-11-24T15:04:25+10:00",

@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (home-attention)
+
+### Home — opens first, with what needs your attention
+Vault now opens on the Home page instead of Shares. Beside the tiles, a sidebar shows what is waiting on you: overdue and today's tasks, note reminders, plan steps past their end date, overdue invoices and bills to review, your overdue and assigned tickets, and urgent emails plus follow-up drafts to approve. Each line opens the right app.
+
+---
+
 ## 2026-11-24 (home-tiles)
 
 ### Home — a page of app tiles you arrange
