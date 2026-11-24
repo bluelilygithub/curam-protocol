@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-wide)
+
+### Tickets — wider description and activity
+On an open ticket, the description and activity now take half the screen on a wide monitor, instead of being squeezed into a narrow column. The status, assignee and other boxes sit to the right.
+
+---
+
 ## 2026-11-24 (tickets-type-client)
 
 ### Tickets — type filter, and links to the client

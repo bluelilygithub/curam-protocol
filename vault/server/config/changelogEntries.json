@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b109f681",
+   "fullHash": "b109f68146b974fbc82e37408166ce6c49f1fc2c",
+   "committedAt": "2026-11-24T14:04:16+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Description and activity take half the screen on a ticket",
+   "filesChanged": 1,
+   "insertions": 5,
+   "deletions": 4,
+   "goal": "Give the description and activity more room on the ticket page.",
+   "whatChanged": "TicketDetail.jsx was capped at max-w-4xl, leaving the description and activity about 600px wide. The cap is removed; on extra-large screens the left column is 50vw and the boxes on the right fill the rest up to max-w-sm. Between large and extra-large it keeps a 2:1 split, and smaller screens stack as before.",
+   "filesImpacted": [
+    "client/src/pages/tickets/TicketDetail.jsx"
+   ],
+   "benefit": "Long descriptions and comment threads are easier to read and write.",
+   "concerns": "Not yet tried in a browser."
+  },
+  {
    "commit": "8958149d",
    "fullHash": "8958149d9d5546613926bc5710dd5f25c23a8f3a",
    "committedAt": "2026-11-24T14:01:42+10:00",
