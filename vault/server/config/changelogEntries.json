@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "82812c13",
+   "fullHash": "82812c13f38ddf5427a7ff3d448b39186aa0556a",
+   "committedAt": "2026-11-24T18:42:43+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Models check, milestone 3: the Models tab and its API",
+   "filesChanged": 15,
+   "insertions": 480,
+   "deletions": 34,
+   "goal": "Let the admin see which model each tool uses, how its calls went and what to change, and run the check on demand, with a link to where each model is chosen in Settings.",
+   "whatChanged": "server/routes/codeMap.js gains GET /models (latest report) and POST /models/run (runs the check in the request, 409 while one runs or before the first analysis), both class admin in routeManifest.json; models/check.js adds latestReport and runNow (one check per server process). New client/src/pages/codeMap/ModelsView.jsx: Run check, workspace findings, a table per tool (default/backup/dedicated models, 30-day calls with \"too few\" under 20, cost, median time, error %, backup %, finding chips), a row that expands to how each model was chosen, capabilities, needs, numbers, evidence and Open in Settings (per-key Settings section or tool page), filters for has-findings and severity, Copy findings / Download CSV / Download .json via new exportModels.mjs. Guide catalogue entries (models, run-models-check), an (i) paragraph and tour step 10 of 11. findings.js: a standard/light model that is not set is now one workspace finding listing the tools, instead of one per tool. Docs updated.",
+   "filesImpacted": [
+    "server/routes/codeMap.js",
+    "server/routes/codeMap.test.js",
+    "server/testing/routeManifest.json",
+    "server/services/codeMap/models/check.js",
+    "server/services/codeMap/models/findings.js",
+    "server/services/codeMap/models/check.test.js",
+    "server/services/codeMapTutor.js",
+    "client/src/pages/codeMap/ModelsView.jsx",
+    "client/src/pages/codeMap/exportModels.mjs",
+    "client/src/pages/codeMap/exportModels.test.mjs",
+    "client/src/pages/codeMap/codeMapTools.mjs",
+    "client/src/pages/CodeMapPage.jsx",
+    "client/src/utils/tours/codeMapTour.js",
+    "docs/code-map.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "The Models check is visible and can be run any time; each recommendation shows its evidence and links straight to the setting to change. A workspace with no models set gets one finding instead of about 70 inbox items.",
+   "concerns": "The tab has not been opened in a browser; only the client build, the export test and the route tests ran. The check (stats SQL, failure tracing, pruning, saving and reading a report) was run against real Postgres in the throwaway vault_xuser database inside a rolled-back transaction, and crossUser.test.js passed there; nothing was run against production data. runNow guards one check per server process only, so two servers during a deploy could each run one (the inbox de-duplicates). Open in Settings paths are hand-mapped per setting key and will drift if a setting moves."
+  },
+  {
    "commit": "d61d96a6",
    "fullHash": "d61d96a67916ee86bb1f30d5f0e8958550a185de",
    "committedAt": "2026-11-24T18:28:28+10:00",
