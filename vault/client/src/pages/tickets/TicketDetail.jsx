@@ -121,7 +121,7 @@ export default function TicketDetail({ id, people }) {
           <div className="flex flex-col gap-5 min-w-0 lg:flex-[2] xl:flex-none xl:w-[50vw]">
             <section className="rounded-xl border p-4" style={panel}>
               <Field label="Description">
-                <VoiceInput type="textarea" rows={6} value={desc} onChange={setDesc} label="Description" placeholder="Details, links, steps…"
+                <VoiceInput append type="textarea" rows={6} value={desc} onChange={setDesc} label="Description" placeholder="Details, links, steps…"
                   className={FIELD_CLASS} style={{ ...FIELD_STYLE, background: 'var(--color-bg)' }} mic />
               </Field>
               {desc !== (t.description || '') && (
@@ -151,7 +151,7 @@ export default function TicketDetail({ id, people }) {
                   </li>
                 ))}
               </ol>
-              <VoiceInput type="textarea" rows={3} value={comment} onChange={setComment} label="Add a comment" placeholder="Add a comment…"
+              <VoiceInput append type="textarea" rows={3} value={comment} onChange={setComment} label="Add a comment" placeholder="Add a comment…"
                 className={FIELD_CLASS} style={{ ...FIELD_STYLE, background: 'var(--color-bg)' }} mic />
               <div className="flex justify-end mt-2">
                 <Btn onClick={addComment} disabled={busy || !comment.trim()}>Comment</Btn>

@@ -64,7 +64,7 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
       <div className="p-5 flex flex-col gap-4">
         <div className="rounded-lg border p-3 flex flex-col gap-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="text-xs font-medium" style={MUTED}>AI from text (optional)</div>
-          <VoiceInput type="textarea" rows={3} value={aiText} onChange={setAiText} label="Request for AI to turn into a ticket"
+          <VoiceInput append type="textarea" rows={3} value={aiText} onChange={setAiText} label="Request for AI to turn into a ticket"
             placeholder="Paste or dictate the request, e.g. “Acme says the invoice totals are wrong again, need it fixed before Friday”"
             className={FIELD_CLASS} style={FIELD_STYLE} mic />
           <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
         </div>
 
         <Field label="Title">
-          <VoiceInput value={form.title} onChange={set('title')} label="Ticket title" placeholder="What needs doing?" className={FIELD_CLASS} style={FIELD_STYLE} mic />
+          <VoiceInput append value={form.title} onChange={set('title')} label="Ticket title" placeholder="What needs doing?" className={FIELD_CLASS} style={FIELD_STYLE} mic />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
@@ -103,7 +103,7 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
         </div>
 
         <Field label="Description">
-          <VoiceInput type="textarea" rows={5} value={form.description} onChange={set('description')} label="Description"
+          <VoiceInput append type="textarea" rows={5} value={form.description} onChange={set('description')} label="Description"
             placeholder="Details, links, steps…" className={FIELD_CLASS} style={FIELD_STYLE} mic />
         </Field>
 
