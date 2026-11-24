@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "21650c2e",
+   "fullHash": "21650c2e304d7133b02ce3163bad2cbbeae39209",
+   "committedAt": "2026-11-24T18:16:47+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Models check, milestone 1: model inventory, tool needs, capabilities and call timing",
+   "filesChanged": 30,
+   "insertions": 507,
+   "deletions": 41,
+   "goal": "Start the Code Map Models check (a model advisor that recommends, never changes Settings): know which model every tool uses and what it needs, and start recording how long model calls take so later milestones can measure them.",
+   "whatChanged": "New server/services/codeMap/models/inventory.js: loadInventory() runs as the first admin and lists, per tool, each model it uses (default tier, backup setting, dedicated setting), how it resolved (a saved id no longer in the list falls back to the default, like the per-tool resolvers), its provider, whether it is in the model list, whether the provider key is set, and its capabilities. Tiers and setting keys are read from the tool's own server files in the latest Code Map run plus the local files they require, stopping at other tools' files and leaving out shared plumbing reached by more than 3 tools; guide chats count by createGuide({ tier }). New server/config/modelNeeds.js declares each tool's needs (vision, minContext, json, interactive/background), its usage feature names (toolForFeature) and ownsKeys for a key another tool reaches in passing. costCalculator.js gains modelInfo()/modelFamily(): vision, context and JSON by family with per-id corrections, marked table/family/unknown. usage_logs gains latency_ms; callModel adds latencyMs to its result with returnUsage, and 34 logUsage calls that take figures from a callModel result pass it (sed on one exact pattern). No route, UI or cron yet.",
+   "filesImpacted": [
+    "server/services/codeMap/models/inventory.js",
+    "server/services/codeMap/models/inventory.test.js",
+    "server/config/modelNeeds.js",
+    "server/services/costCalculator.js",
+    "server/services/callModel.js",
+    "server/utils/logUsage.js",
+    "server/db.js",
+    "docs/code-map.md",
+    "docs/key-files.md",
+    "21 files with logUsage calls (routes and services)"
+   ],
+   "benefit": "The Models check has an accurate, code-derived inventory to build findings on, a drift test that fails when a tool calls a model without declared needs or logs an unmapped feature, and latency data starts collecting from this deploy.",
+   "concerns": "Capabilities for most models are inferred from the family, and the 5.x values are not checked against provider docs. Needs in modelNeeds.js are judgement calls. Seven tools (talk, expenseReview, finance, mood, wellbeing, goals, student) show no model in their own code. Latency is NULL for the 37 logUsage calls not matched (chat, graphics, Gmail, multi-line calls) and for direct SDK calls. The sed edit touched 21 shared files; each still parses and related tests pass, but it was not run against a live database. Three video tests exit non-zero while printing passed, the same as before this change."
+  },
+  {
    "commit": "eb06dd9a",
    "fullHash": "eb06dd9ace499bf161f868f172d88c1ec0e63f17",
    "committedAt": "2026-11-24T17:43:35+10:00",
