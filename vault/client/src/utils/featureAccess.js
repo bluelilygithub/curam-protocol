@@ -53,6 +53,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
   topicResearch: false, // keep in step with server/config/featureAccess.js
   serpTracker: false, // keep in step with server/config/featureAccess.js
+  tickets: false,
   shelf: false, // Vault Shelf Windows app keys: keep in step with server/config/featureAccess.js
 };
 
@@ -64,6 +65,7 @@ export const FEATURE_LIFECYCLE = {
   serpTracker: 'preview',
   aiVisibility: 'preview',
   emailFollowUp: 'preview',
+  tickets: 'preview',
   shelf: 'preview',
   passwordVault: 'preview',
   memory: 'parked',
@@ -117,6 +119,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'drawings', label: 'Diagrams' },
       { key: 'sketchbook', label: 'Sketchbook' },
       { key: 'plans', label: 'Plans' },
+      { key: 'tickets', label: 'Tickets' },
       { key: 'music', label: 'Music' },
       { key: 'recipes', label: 'Recipes' },
       { key: 'pdf', label: 'PDF Tools' },

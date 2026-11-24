@@ -25,3 +25,4 @@ require('./translate'); // Translate: translations (with their files) and glossa
 require('./ponytailTasks'); // Ponytail report tasks (admin)
 require('./pdfSignatures'); // PDF Tools → Signed PDFs (signing record + kept copy)
 require('./skillScan'); // Skill Scanner scans (admin)
+require('./tickets'); // Tickets (with their comments and history)

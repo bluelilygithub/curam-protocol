@@ -84,6 +84,7 @@ export const semanticMap = {
   'history': { lucide: 'History' },
   'message-circle': { lucide: 'MessageCircle' },
   'list-checks': { lucide: 'ListChecks' },
+  ticket: { lucide: 'Ticket' },
   'gantt-chart': { lucide: 'GanttChart' },
   'check-circle': { lucide: 'CheckCircle2' },
   'circle': { lucide: 'Circle' },

@@ -71,6 +71,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   emailFollowUp: false,
   // the Vault Shelf Windows app pushes clipboard items into Notes, Invoice Review, the CRM inbox and a redaction check: off until an admin switches it on
   shelf: false,
+  // internal tickets (docs/tickets.md): new, off for members until an admin switches it on (admins can always open it)
+  tickets: false,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
@@ -88,6 +90,7 @@ const FEATURE_LIFECYCLE = {
   topicResearch: 'preview',   // built milestone by milestone; drafts, source check and suggestions not yet run against a real model
   aiVisibility: 'preview',    // new: search + model answers per run, not yet run on Railway
   emailFollowUp: 'preview',   // not run against a real model or mailbox
+  tickets: 'preview',         // new: internal tickets; not yet used on Railway
   shelf: 'preview',           // Windows app: installer unsigned, no guide chat yet
   passwordVault: 'preview',   // new, holds logins: off until an admin switches it on
   memory: 'parked',           // rarely used; hidden from menus by default

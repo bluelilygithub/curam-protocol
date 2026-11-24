@@ -4839,6 +4839,39 @@
   },
   "POST /api/code-map/briefing/docs-copy": {
    "class": "admin"
+  },
+  "GET /api/tickets": {
+   "class": "authed"
+  },
+  "GET /api/tickets/counts": {
+   "class": "authed"
+  },
+  "GET /api/tickets/people": {
+   "class": "authed"
+  },
+  "POST /api/tickets/draft": {
+   "class": "authed"
+  },
+  "POST /api/tickets": {
+   "class": "authed"
+  },
+  "GET /api/tickets/:id": {
+   "class": "authed"
+  },
+  "PUT /api/tickets/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/tickets/:id": {
+   "class": "authed"
+  },
+  "POST /api/tickets/:id/comments": {
+   "class": "authed"
+  },
+  "DELETE /api/tickets/:id/comments/:eventId": {
+   "class": "authed"
+  },
+  "POST /api/tickets/:id/task": {
+   "class": "authed"
   }
  }
 }

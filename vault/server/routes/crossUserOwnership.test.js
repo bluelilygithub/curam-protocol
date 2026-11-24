@@ -27,6 +27,12 @@ const MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'testing'
 const key = (r) => `${r.method} ${r.path}`;
 // Routes that show one member's rows to others ON PURPOSE. Each needs a written reason.
 const SHARED_BY_DESIGN = {
+  'GET /api/tickets': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what")',
+  'GET /api/tickets/:id': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what")',
+  'POST /api/tickets/:id/task': 'Tickets are shared by everyone who has the tickets feature, by design: the reply is the shared ticket with its new history line (docs/tickets.md, "Who sees what")',
+  'PUT /api/tickets/:id': 'Tickets are shared by everyone who has the tickets feature, by design: the reply is the shared ticket after the change (docs/tickets.md, "Who sees what")',
+  'POST /api/tickets/:id/comments': 'Tickets are shared by everyone who has the tickets feature, by design: the reply is the shared ticket after the change (docs/tickets.md, "Who sees what")',
+  'GET /api/tickets/people': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what")',
   'GET /api/recipes/grocery/corrections': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
   'GET /api/translate/styles': 'Translate house styles are workspace-wide approved examples kept by admins; every member\'s New translation lists them (docs/translate-agent.md, "House styles")',
   'GET /api/live-tv/guide/status': 'the Live TV guide is workspace-wide public schedule data (no userId); everyone sees the same guide (docs/live-tv.md, "TV guide")',
@@ -35,6 +41,10 @@ const SHARED_BY_DESIGN = {
 };
 // Writes that touch rows tied to another member's id ON PURPOSE. Each needs a written reason.
 const WRITES_BY_DESIGN = {
+  'PUT /api/tickets/:id': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what")',
+  'DELETE /api/tickets/:id': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what")',
+  'POST /api/tickets/:id/comments': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what")',
+  'POST /api/tickets/:id/task': 'Tickets are shared by everyone who has the tickets feature, by design: every person with access sees and works on every ticket (docs/tickets.md, "Who sees what"); the task is made in the caller own Tasks, linked to the shared ticket',
   'PATCH /api/guitar/library/:songId': "saves the caller's OWN settings row for a song (keyed by the caller's user id); nothing of the other member's is read or changed",
   'PUT /api/news-digest/context/:topicId': "saves the caller's OWN note row for a topic (keyed by the caller's user id); nothing of the other member's is read or changed",
   'DELETE /api/recipes/grocery/corrections/:id': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
@@ -166,7 +176,8 @@ const PROBE = (process.argv.find((x) => x.startsWith('--probe=')) || '').slice(8
     const after = await rowSnapshot(); const fkAfter = await fkCounts();
     const changed = changedRows(base, after);
     const grew = Object.keys(fkAfter).filter((i) => fkAfter[i] !== fkBase[i]).map((i) => `${fkEdges[i].child}.${fkEdges[i].col}`);
-    if (hasMark(b.text)) results.leaks.push(`${key(r)} -> ${b.status} ${r.url} (response)`);
+    // a write whose reply is a record shared by design (Tickets: the updated shared ticket) is listed in SHARED_BY_DESIGN like a read
+    if (hasMark(b.text) && !SHARED_BY_DESIGN[key(r)]) results.leaks.push(`${key(r)} -> ${b.status} ${r.url} (response)`);
     if ((changed.length || grew.length) && !WRITES_BY_DESIGN[key(r)]) results.violations.push(`${key(r)} as B with A's ids: ${changed.length ? `changed/removed A's rows in ${[...new Set(changed)].join(', ')}` : ''}${grew.length ? ` attached rows to ${[...new Set(grew)].join(', ')}` : ''} (status ${b.status})`);
     else if (b.status >= 200 && b.status < 300) results.accepted.push(`${key(r)} -> ${b.status}`);
     base = after; fkBase = fkAfter;

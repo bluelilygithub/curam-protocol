@@ -38,6 +38,7 @@ export const APP_NAV_GROUPS = [
     items: [
       { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
       { id: 'clientProjects', label: 'Client work', path: '/client-projects', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+      { id: 'tickets', label: 'Tickets', path: '/tickets', icon: 'ticket', featureKey: 'tickets', matchPrefix: true, aliases: 'ticket issue bug request helpdesk backlog idea admin internal work queue' },
       { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
       { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
       { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },

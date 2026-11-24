@@ -2576,6 +2576,45 @@ async function initSchema() {
     // (plans.resolveClientLink). Added here for the same reason: drawings is created before clients.
     await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
     await client.query(`ALTER TABLE drawings ADD COLUMN IF NOT EXISTS "clientProjectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
+    // Tickets (docs/tickets.md): internal work items shared by everyone with the `tickets` feature (no "userId": the workspace's tickets, not one
+    // person's). Created here, after `clients`. The number shown is T-<id>. Comments and the automatic change history are ticket_events.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id                SERIAL PRIMARY KEY,
+        title             TEXT NOT NULL,
+        description       TEXT NOT NULL DEFAULT '',
+        type              TEXT NOT NULL DEFAULT 'client' CHECK (type IN ('client','bug','admin','idea')),
+        status            TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','waiting','done')),
+        priority          TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('high','medium','low')),
+        "dueDate"         DATE,
+        "clientId"        INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+        "clientProjectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        "createdBy"       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        "assigneeId"      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        "sourceKind"      TEXT,
+        "sourceId"        TEXT,
+        "sourceLabel"     TEXT,
+        "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "closedAt"        TIMESTAMPTZ
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets (status, "updatedAt" DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets ("assigneeId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tickets_client ON tickets ("clientId")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticket_events (
+        id          SERIAL PRIMARY KEY,
+        "ticketId"  INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+        "userId"    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        kind        TEXT NOT NULL CHECK (kind IN ('comment','change')),
+        body        TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ticket_events_ticket ON ticket_events ("ticketId", "createdAt")`);
+    // a task made from a ticket ("Make a task") points back at it; deleting the ticket leaves the task
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "ticketId" INTEGER REFERENCES tickets(id) ON DELETE SET NULL`);
     // Email Follow-Up cases can name a CRM client. ef_cases is created earlier in this file, before clients, so the column is added here
     // (a no-op on databases that already have it). Test: node server/db.freshSchema.test.js
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
