@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "46d26dcb",
+   "fullHash": "46d26dcb54dcdf1f474134d85b9ef22a8b5533fb",
+   "committedAt": "2026-11-24T11:20:43+10:00",
+   "author": "mrb",
+   "area": "Skill Scanner",
+   "subject": "Skill Scanner: explain size refusals and refuse big folders that are not skills",
+   "filesChanged": 4,
+   "insertions": 107,
+   "deletions": 7,
+   "goal": "When a scan is refused as too big, or the target is a whole application rather than a skill, say why and what to do, without spending minutes or tokens.",
+   "whatChanged": "chatwoot/chatwoot (a whole Rails app) was refused as too big with a bare message. runner.js: a download over the cap (safeFetch 'too large') now says the repository is over 100 MB to download, so even a folder link cannot fetch it (GitHub only offers whole repositories as zips), and suggests downloading the folder and uploading a zip. extractZip errors carry code 'too_many_files' or 'too_large' (only files count toward the 10,000 limit, not folder entries), and prepareFolder turns them into 'That repository / The folder \"x\" / That zip has more than ...', plus a SCOPE sentence (skills and plugins, not whole applications) and the next step. A /tree/ link passes only: subPath to extractZip, which unpacks just that folder under the archive's top folder (every entry's path is still checked), so the limits apply to the folder. New skillMarker finds a SKILL.md, plugin.json, .mcp.json, mcp.json, server.json, gemini-extension.json, or a package.json / pyproject.toml / requirements.txt naming an MCP SDK (depth 8, 20,000 entries; .git, node_modules and similar skipped; CLAUDE.md and AGENTS.md do not count). runScan refuses a folder of more than NON_SKILL_MAX_FILES (300) files with no marker before SkillSpector runs, with a message saying it does not look like a skill or plugin; small folders are still scanned. The Skill Scanner guide gains the size and scope rules and a 'not possible' line pointing whole-app checks to Dependabot, CodeQL, Semgrep or OSV-Scanner; docs/skill-scan.md describes it. Tests cover folder-only unpacking, each refusal message, the markers and the not-a-skill refusal (SkillSpector not run).",
+   "filesImpacted": [
+    "server/services/skillScan/runner.js",
+    "server/services/skillScan/skillScan.test.js",
+    "server/services/skillScanTutor.js",
+    "docs/skill-scan.md"
+   ],
+   "benefit": "Too-big and out-of-scope targets get a clear explanation and a next step at once, instead of a bare error or a long, noisy, costly scan.",
+   "concerns": "The marker list is a judgement: a real skill or plugin of more than 300 files with none of these markers would be refused (the message says how to narrow it). A repository over 100 MB to download still cannot be scanned from a link, even one folder. The size check happens after downloading, so a huge repository still takes up to 60 seconds before the refusal."
+  },
+  {
    "commit": "4ffc3de2",
    "fullHash": "4ffc3de225baba5c4b452c6ccc5321c9ffd3a5a4",
    "committedAt": "2026-11-24T08:52:18+10:00",

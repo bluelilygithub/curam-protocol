@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (skill-scanner-too-big)
+
+### Skill Scanner — clear "too big" and "not a skill" refusals
+Scanning `chatwoot/chatwoot`, a whole web application, failed with a bare "too big" message. Size refusals now say which limit was hit, that Skill Scanner checks skills and plugins rather than whole applications, and what to do next. A `/tree/` folder link now unpacks only that folder, so the limits apply to the folder. A folder of more than 300 files with no SKILL.md, plugin.json or MCP server manifest is refused before scanning, so no minutes or tokens are spent on it.
+
+---
+
 ## 2026-11-24 (skill-scanner-token-cost)
 
 ### Skill Scanner — token cost per scan, and an estimate for the next
