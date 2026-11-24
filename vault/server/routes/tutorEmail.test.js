@@ -23,7 +23,11 @@ const reset = () => { sent.length = 0; };
 
 (async () => {
   // ---- every registered guide is known ----
-  assert.deepStrictEqual(Object.keys(GUIDES).sort(), ['cellar', 'finance', 'graphics', 'music', 'notes', 'pdf', 'route', 'video']);
+  // the email route knows exactly the guides in the registry (a fixed list here went stale as guides were added), each by its own name
+  const REGISTRY = require('../config/guides').GUIDES;
+  assert.deepStrictEqual(Object.keys(GUIDES).sort(), Object.keys(REGISTRY).sort());
+  for (const [id, g] of Object.entries(REGISTRY)) assert.strictEqual(GUIDES[id], g.name, `${id} is named as in the registry`);
+  for (const id of ['pdf', 'finance', 'tickets']) assert.ok(GUIDES[id], `${id} is a known guide`);
 
   // ---- to me and the admin: two separate emails, the admin copy replies to the person ----
   let out = await sendTutorEmails(user, { guide: 'pdf', turns, toMe: true, toAdmin: true }, deps());
