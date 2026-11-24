@@ -73,45 +73,45 @@ export function startSharesTour(setTab, { isAdmin = false } = {}) {
     buttons: [btnSecondary('Skip Tour', () => { done(); tour.cancel(); }), { text: 'Start Tour →', action: () => tour.next() }],
   });
 
-  step(2, 'shares-refresh', 'Quotes and the tab row',
-    'Refresh quotes asks for fresh prices; quotes can be up to 15 minutes old and the time of the last update shows beside the title. Everything below is organised in tabs along this row.',
-    '[data-tour="shares-refresh"]', 'bottom', 'portfolio');
+  step(2, 'shares-refresh', 'Quotes and the menu',
+    'Refresh quotes asks for fresh prices; quotes can be up to 15 minutes old and the time of the last update shows beside the title. Everything is organised in the menu on the left; search it, or press / to jump to the search box.',
+    '[data-tour="shares-refresh"]', 'right', 'portfolio');
 
   step(3, 'shares-records', 'Trades and Cash are the source',
     'Portfolio, CGT, Charts and the accountant pack are all worked out from two lists you keep: Trades (every buy and sell, in Australian dollars) and Cash (deposits, withdrawals, dividends and fees). Fix a figure there and everything else follows. Deleting a trade changes the totals, so the page asks first.',
-    '[data-tour="shares-tab-trades"]', 'bottom', 'trades');
+    '[data-tour="shares-tab-trades"]', 'right', 'trades');
 
   step(4, 'shares-tax', 'Capital gains and the accountant',
     'CGT works out each sale parcel by parcel (oldest first, with the 12-month discount test) for a chosen financial year. Statements reads dividend lines from a broker PDF into a review queue; nothing is applied until you approve it. Accountant pack builds the year\'s PDF, Excel file and zip. These are working records, not tax advice: your accountant decides what is taxed.',
-    '[data-tour="shares-tab-cgt"]', 'bottom', 'cgt');
+    '[data-tour="shares-tab-cgt"]', 'right', 'cgt');
 
   step(5, 'shares-insight', 'Charts and News',
     'Charts compare your portfolio with benchmarks and show who beat or lagged the market, drawdowns, sector mix and an earnings timeline. News writes a short AI briefing per holding each morning (bullish, bearish, watch or neutral) and a 30-day summary. They are information, not advice.',
-    '[data-tour="shares-tab-news"]', 'bottom', 'news');
+    '[data-tour="shares-tab-news"]', 'right', 'news');
 
   step(6, 'shares-questions', 'Questions',
     'Ask about your own portfolio in plain words, such as your biggest position or what a sale would have returned. Answers use only your stored data, quote the figures and are saved so you can look back. It explains numbers; it never says what to buy or sell.',
-    '[data-tour="shares-tab-questions"]', 'bottom', 'questions');
+    '[data-tour="shares-tab-questions"]', 'right', 'questions');
 
   step(7, 'shares-thesis', 'Thesis',
-    'Write why you own a share, the assumptions that must stay true and the red lines that would prove you wrong. Check now tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It cannot read company filings, so thin evidence shows as "not enough evidence". Past checks are kept so you can see drift.',
-    '[data-tour="shares-tab-thesis"]', 'bottom', 'thesis');
+    'Write why you own a share, the assumptions that must stay true and the red lines that would prove you wrong. Check now tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It cannot read company filings, so thin evidence shows as "not enough evidence". Save each rethink as a new revision; the check gives feedback on the latest one, referring to earlier revisions, your portfolio and the market. Past checks are kept so you can see drift.',
+    '[data-tour="shares-tab-thesis"]', 'right', 'thesis');
 
   if (isAdmin) {
     step(8, 'shares-compliance', 'Compliance (admins only)',
       'A monthly check of a fixed ATO page list writes an in-app note on changes that may matter for your share records, with source links and an action to consider. It is general information, not tax or legal advice: check the ATO page and your accountant. Reports are kept until you delete them, and deleted reports can be restored from the recycle bin.',
-      '[data-tour="shares-tab-compliance"]', 'bottom', 'compliance');
+      '[data-tour="shares-tab-compliance"]', 'right', 'compliance');
   }
 
   const metalsStep = isAdmin ? 9 : 8;
   const helpStep = isAdmin ? 10 : 9;
   step(metalsStep, 'shares-metals', 'Metals',
     'A separate book for physical gold: ounces, cost, current spot value and unrealised profit, with a price history and a drop alert. It is kept apart from your share holdings.',
-    '[data-tour="shares-tab-metals"]', 'bottom', 'metals');
+    '[data-tour="shares-tab-metals"]', 'right', 'metals');
 
   step(helpStep, 'shares-help', 'Help is one tap away',
-    'The (i) beside the title explains how Shares works, and the round guide button at the bottom right answers questions like "how do I add a share I bought?" or "what do I give my accountant?" and points at the right tab. Take this tour again any time from the link beside the title or from Settings → Tours.',
-    '[data-tour="shares-info"]', 'bottom', 'portfolio', true);
+    'The (i) at the top of this menu explains how Shares works, and the round guide button at the bottom right answers questions like "how do I add a share I bought?" or "what do I give my accountant?" and points at the right tab. Take this tour again any time from the compass beside the title or from Settings → Tours.',
+    '[data-tour="shares-menu"]', 'right', 'portfolio', true);
 
   tour.on('cancel', done);
   tour.start();

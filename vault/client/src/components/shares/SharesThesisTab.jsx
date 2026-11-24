@@ -59,6 +59,7 @@ export default function SharesThesisTab({ onAskGuide }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [revisions, setRevisions] = useState(null); // earlier revisions of the open thesis, once loaded
 
   const load = useCallback(async () => {
     try {
@@ -82,7 +83,21 @@ export default function SharesThesisTab({ onAskGuide }) {
     setShowHistory(false);
     setHistory([]);
     setConfirmDelete(false);
+    setRevisions(null);
   }, [selected]);
+
+  // Earlier revisions load with the thesis (one small query) so the count and list are there to review.
+  const currentId = current?.id;
+  const currentRevision = current?.revision;
+  useEffect(() => {
+    if (!currentId || currentRevision <= 1) { setRevisions([]); return; }
+    let live = true;
+    api.get(`/api/shares/thesis/${currentId}/revisions`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => { if (live) setRevisions(Array.isArray(data) ? data : []); })
+      .catch(() => { if (live) setRevisions([]); });
+    return () => { live = false; };
+  }, [currentId, currentRevision]);
 
   const loadHistory = async () => {
     if (!current) return;
@@ -105,6 +120,7 @@ export default function SharesThesisTab({ onAskGuide }) {
       assumptions: current.assumptions.length ? current.assumptions.map((a) => ({ text: a.text, how: a.how || '' })) : [{ text: '', how: '' }],
       redLines: current.redLines.length ? current.redLines.map((r) => ({ text: r.text })) : [{ text: '' }],
       anchors: { optimistic: '', neutral: '', pessimistic: '', ...(current.anchors || {}) }, mirror: current.mirror || '',
+      newRevision: true, revisionNote: '', revisionOf: current.revision || 1,
     });
   };
 
@@ -118,7 +134,7 @@ export default function SharesThesisTab({ onAskGuide }) {
       await load();
       setSelected(keyOf(data));
       setDraft(null);
-      addToast('Thesis saved', 'success');
+      addToast(draft.revisionOf && draft.newRevision ? `Saved as revision ${data.revision}` : 'Thesis saved', 'success');
     } catch (err) {
       addToast(err.message || 'Save failed', 'error');
     } finally {
@@ -128,7 +144,7 @@ export default function SharesThesisTab({ onAskGuide }) {
 
   const runCheck = async () => {
     if (!current) return;
-    startProcessing(`Checking the ${current.symbol} thesis…`, 'Reading your trades, news briefings and the last check. This can take up to a minute.');
+    startProcessing(`Checking the ${current.symbol} thesis…`, 'Reading your trades, portfolio, news and market briefings, earlier revisions and the last check. This can take up to a minute.');
     try {
       const res = await api.post(`/api/shares/thesis/${current.id}/check`);
       const data = await res.json().catch(() => ({}));
@@ -194,9 +210,9 @@ export default function SharesThesisTab({ onAskGuide }) {
         </div>
         {error && <p className="text-xs mb-3 px-3 py-2 rounded-md" style={{ background: '#fff1f2', color: BAD }}>{error}</p>}
 
-        <div className="grid gap-6 xl:grid-cols-[320px_1fr] items-start">
-          {/* left: one row per thesis, then holdings with none */}
-          <div className="space-y-2">
+        <div className="grid gap-6 xl:grid-cols-[1fr_340px] items-start">
+          {/* right on wide screens (first on phones): one row per thesis, then holdings with none */}
+          <div className="space-y-2 xl:order-2">
             {theses.map((t) => (
               <button
                 key={t.id} type="button" onClick={() => { setSelected(keyOf(t)); setDraft(null); }}
@@ -207,7 +223,7 @@ export default function SharesThesisTab({ onAskGuide }) {
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.symbol}<span className="text-xs ml-1" style={{ color: 'var(--color-muted)' }}>{t.exchange}</span></span>
                   {t.latestCheck ? <Pill verdict={t.latestCheck.verdict} score={t.latestCheck.healthScore} /> : <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Not checked yet</span>}
                 </span>
-                <span className="block text-xs mt-1 truncate" style={{ color: 'var(--color-muted)' }}>{t.thesis || `${t.assumptions.length} assumption${t.assumptions.length === 1 ? '' : 's'}`}</span>
+                <span className="block text-xs mt-1 truncate" style={{ color: 'var(--color-muted)' }}>{t.revision > 1 ? `Rev ${t.revision} · ` : ''}{t.thesis || `${t.assumptions.length} assumption${t.assumptions.length === 1 ? '' : 's'}`}</span>
               </button>
             ))}
             {untracked.length > 0 && (
@@ -228,8 +244,8 @@ export default function SharesThesisTab({ onAskGuide }) {
             </Tooltip>
           </div>
 
-          {/* right: editor, or the open thesis, or a prompt */}
-          <div>
+          {/* main: editor, or the open thesis, or a prompt */}
+          <div className="min-w-0 xl:order-1">
             {draft && (
               <div className="rounded-xl border p-4 space-y-4" style={card}>
                 <div className="flex gap-2">
@@ -292,8 +308,22 @@ export default function SharesThesisTab({ onAskGuide }) {
                   <VoiceInput type="textarea" append rows={4} value={draft.mirror} onChange={(v) => setDraft({ ...draft, mirror: v })} placeholder="If you cannot finish five sentences, you may not understand the purchase." label="Mirror test" />
                 </div>
 
+                {draft.revisionOf && (
+                  <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <Tooltip text={`Keeps revision ${draft.revisionOf} as it is so you can review it later and the check can compare against it. Untick to just fix wording in the current revision.`}>
+                      <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                        <input type="checkbox" checked={draft.newRevision} onChange={(e) => setDraft({ ...draft, newRevision: e.target.checked })} />
+                        Save as revision {draft.revisionOf + 1} (keep revision {draft.revisionOf} for review)
+                      </label>
+                    </Tooltip>
+                    {draft.newRevision && (
+                      <VoiceInput value={draft.revisionNote} onChange={(v) => setDraft({ ...draft, revisionNote: v })} placeholder="What changed, and why? e.g. Guidance cut, so I tightened assumption 2" label="What changed in this revision" />
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
-                  <button type="button" onClick={save} disabled={saving || !draft.symbol.trim()} className={btnCls} style={btnPrimary}>{saving ? 'Saving…' : 'Save thesis'}</button>
+                  <button type="button" onClick={save} disabled={saving || !draft.symbol.trim()} className={btnCls} style={btnPrimary}>{saving ? 'Saving…' : draft.revisionOf && draft.newRevision ? `Save revision ${draft.revisionOf + 1}` : 'Save thesis'}</button>
                   <button type="button" onClick={() => setDraft(null)} className={`${btnCls} border`} style={btnGhost}>Cancel</button>
                 </div>
               </div>
@@ -303,10 +333,10 @@ export default function SharesThesisTab({ onAskGuide }) {
               <div className="space-y-4">
                 <div className="rounded-xl border p-4" style={card}>
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{current.symbol} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>{current.exchange}</span></h2>
+                    <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{current.symbol} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>{current.exchange} · Revision {current.revision || 1} · {fmtWhen(current.updatedAt)}</span></h2>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Tooltip text="Ask a model whether your stored trades and news briefings still support this thesis. It cannot see company filings, so many answers will be 'not enough evidence'."><button type="button" onClick={runCheck} className={btnCls} style={btnPrimary}>Check now</button></Tooltip>
-                      <Tooltip text="Change the thesis, assumptions or red lines. Past checks keep the wording they were run against."><button type="button" onClick={startEdit} className={`${btnCls} border`} style={btnGhost}>Edit</button></Tooltip>
+                      <Tooltip text="Ask a model whether your stored trades and news briefings still support this thesis, and for feedback on this revision compared with your earlier revisions, your portfolio and the market briefings. It cannot see company filings, so many answers will be 'not enough evidence'."><button type="button" onClick={runCheck} className={btnCls} style={btnPrimary}>Check &amp; review</button></Tooltip>
+                      <Tooltip text="Write a new revision (the current one is kept for review), or fix wording in this one. Past checks keep the wording they were run against."><button type="button" onClick={startEdit} className={`${btnCls} border`} style={btnGhost}>Revise</button></Tooltip>
                       {confirmDelete ? (
                         <span className="text-sm" style={{ color: 'var(--color-text)' }}>Delete? <button type="button" onClick={remove} className="underline hover:opacity-60 transition-opacity duration-200" style={{ color: BAD }}>Yes</button> / <button type="button" onClick={() => setConfirmDelete(false)} className="underline hover:opacity-60 transition-opacity duration-200">No</button></span>
                       ) : (
@@ -314,6 +344,7 @@ export default function SharesThesisTab({ onAskGuide }) {
                       )}
                     </div>
                   </div>
+                  {current.revisionNote && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>What changed: {current.revisionNote}</p>}
                   {current.thesis && <p className="text-sm mb-3" style={{ color: 'var(--color-text)' }}>{current.thesis}</p>}
 
                   <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Assumptions</p>
@@ -354,10 +385,19 @@ export default function SharesThesisTab({ onAskGuide }) {
                 {latest ? (
                   <div className="rounded-xl border p-4" style={card}>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Latest check · {fmtWhen(latest.createdAt)}</p>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Latest check · {fmtWhen(latest.createdAt)}{latest.revision ? ` · on revision ${latest.revision}` : ''}</p>
                       <Pill verdict={latest.verdict} score={latest.healthScore} />
                     </div>
+                    {latest.revision && latest.revision !== (current.revision || 1) && (
+                      <p className="text-xs mb-2" style={{ color: WARN }}>This check was run on revision {latest.revision}. Press Check &amp; review for feedback on revision {current.revision}.</p>
+                    )}
                     {latest.summary && <p className="text-sm mb-3" style={{ color: 'var(--color-text)' }}>{latest.summary}</p>}
+                    {latest.feedback && (
+                      <div className="mb-3 rounded-lg p-3" style={{ background: 'var(--color-bg)' }}>
+                        <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Feedback on revision {latest.revision || current.revision || 1}</p>
+                        <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{latest.feedback}</p>
+                      </div>
+                    )}
                     {latest.drift?.length > 0 && (
                       <div className="mb-3">
                         <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Change since the last check</p>
@@ -378,14 +418,36 @@ export default function SharesThesisTab({ onAskGuide }) {
                       <ul className="mt-2 space-y-1">
                         {history.map((h) => (
                           <li key={h.id} className="text-sm flex items-center justify-between gap-2" style={{ color: 'var(--color-text)' }}>
-                            <span>{fmtWhen(h.createdAt)}</span><Pill verdict={h.verdict} score={h.healthScore} />
+                            <span>{fmtWhen(h.createdAt)}{h.revision ? <span className="text-xs ml-1" style={{ color: 'var(--color-muted)' }}>rev {h.revision}</span> : null}</span><Pill verdict={h.verdict} score={h.healthScore} />
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm px-1" style={{ color: 'var(--color-muted)' }}>Not checked yet. Press Check now to test the assumptions against your stored data.</p>
+                  <p className="text-sm px-1" style={{ color: 'var(--color-muted)' }}>Not checked yet. Press Check &amp; review to test the assumptions against your stored data and get feedback on this revision.</p>
+                )}
+
+                {revisions?.length > 0 && (
+                  <div className="rounded-xl border p-4" style={card}>
+                    <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Earlier revisions ({revisions.length})</p>
+                    <div className="space-y-2">
+                      {revisions.map((rv) => (
+                        <details key={rv.id} className="rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)' }}>
+                          <summary className="cursor-pointer text-sm" style={{ color: 'var(--color-text)' }}>
+                            Revision {rv.revision} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>· {fmtWhen(rv.createdAt)}{rv.note ? ` · ${rv.note}` : ''}</span>
+                          </summary>
+                          <div className="mt-2 space-y-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                            {rv.thesis && <p>{rv.thesis}</p>}
+                            {rv.assumptions.length > 0 && <ol className="space-y-1">{rv.assumptions.map((a, i) => <li key={i}>{i + 1}. {a.text}{a.how && <span className="text-xs block" style={{ color: 'var(--color-muted)' }}>Verify: {a.how}</span>}</li>)}</ol>}
+                            {rv.redLines.length > 0 && <div><p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Red lines</p><ul className="space-y-1">{rv.redLines.map((r, i) => <li key={i}>{r.text}</li>)}</ul></div>}
+                            {(rv.anchors?.optimistic || rv.anchors?.neutral || rv.anchors?.pessimistic) && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Value anchors: optimistic {rv.anchors.optimistic || '—'} · neutral {rv.anchors.neutral || '—'} · pessimistic {rv.anchors.pessimistic || '—'}</p>}
+                            {rv.mirror && <p className="text-xs whitespace-pre-wrap" style={{ color: 'var(--color-muted)' }}>Mirror test: {rv.mirror}</p>}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

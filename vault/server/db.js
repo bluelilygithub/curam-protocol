@@ -3929,6 +3929,30 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_share_thesis_checks_thesis
       ON share_thesis_checks ("thesisId", "createdAt" DESC)
   `);
+  // Revisions: share_theses holds the current revision; "Save as new revision" archives the old one here first.
+  await pool.query(`ALTER TABLE share_theses ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1`);
+  await pool.query(`ALTER TABLE share_theses ADD COLUMN IF NOT EXISTS "revisionNote" TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE share_thesis_checks ADD COLUMN IF NOT EXISTS feedback TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE share_thesis_checks ADD COLUMN IF NOT EXISTS revision INTEGER`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_thesis_revisions (
+      id            SERIAL PRIMARY KEY,
+      "thesisId"    INTEGER NOT NULL REFERENCES share_theses(id) ON DELETE CASCADE,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      revision      INTEGER NOT NULL,
+      thesis        TEXT NOT NULL DEFAULT '',
+      assumptions   JSONB NOT NULL DEFAULT '[]',
+      "redLines"    JSONB NOT NULL DEFAULT '[]',
+      anchors       JSONB NOT NULL DEFAULT '{}',
+      mirror        TEXT NOT NULL DEFAULT '',
+      note          TEXT NOT NULL DEFAULT '',
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_thesis_revisions_thesis
+      ON share_thesis_revisions ("thesisId", revision DESC)
+  `);
 
   // ── Precious metals ───────────────────────────────────────────────────────
   await pool.query(`

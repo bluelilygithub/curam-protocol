@@ -48,7 +48,9 @@ function sanitizeThesisInput(body) {
   const anchors = { optimistic: str(a.optimistic, 200), neutral: str(a.neutral, 200), pessimistic: str(a.pessimistic, 200) };
   const mirror = String(b.mirror == null ? '' : b.mirror).trim().slice(0, 1500);
   if (!thesis && !assumptions.length) return { error: 'write the thesis or at least one assumption' };
-  return { value: { symbol, exchange, thesis, assumptions, redLines, anchors, mirror } };
+  const newRevision = b.newRevision === true;
+  const revisionNote = str(b.revisionNote, 300);
+  return { value: { symbol, exchange, thesis, assumptions, redLines, anchors, mirror, newRevision, revisionNote } };
 }
 
 /**
@@ -98,6 +100,8 @@ function parseCheckReply(text, thesis) {
     drift,
     summary: str(obj.summary, 1200),
     watchNext: str(obj.watchNext, 600),
+    // Multi-paragraph, so keep line breaks (str() would flatten them).
+    feedback: String(obj.feedback == null ? '' : obj.feedback).trim().slice(0, 3000),
   };
 }
 
@@ -129,22 +133,29 @@ Rules:
 5. If a PREVIOUS CHECK is given, compare to it. For each dimension (valuation, assumptions, red lines, management, moat) say improved, unchanged, weakened or unclear. Different wording alone is not a change; only changed evidence is.
 6. Do not invent figures. Amounts are AUD unless noted. The pack comes from the app's stored data and news briefings only; it holds no company filings, so say "unclear" rather than pretend to have read them.
 7. Keep every evidence field under 300 characters and the summary under 6 sentences, in plain words.
+8. "feedback" is your review of the CURRENT REVISION of the thesis itself, for the investor to reconsider it. In 2-4 short paragraphs (separate them with a blank line):
+   - Is it clear and testable? Name any assumption that is vague, untestable or missing.
+   - If EARLIER REVISIONS are given, refer to them by number ("revision 2 said ..."). Say what changed and whether the change follows new evidence or looks like moving the goalposts (an assumption softened, or a red line dropped, after evidence turned against it).
+   - How the holding sits in the PORTFOLIO (its weight, overlap with other holdings) and how the MARKET CONDITIONS in the pack bear on the assumptions.
+   - Questions worth answering before the next revision.
+   Rule 4 still applies: frame it as questions and risks to weigh, never as an instruction to buy, sell or resize.
 
 Reply with ONLY one JSON object, no other text:
 {"assumptions":[{"n":1,"rating":"intact|weakening|impaired|broken|unclear","evidence":"..."}],
  "redLines":[{"n":1,"triggered":false,"evidence":""}],
  "drift":[{"dimension":"valuation|assumptions|red lines|management|moat","change":"improved|unchanged|weakened|unclear","evidence":"..."}],
- "summary":"...","watchNext":"what to look at before the next check"}`;
+ "summary":"...","watchNext":"what to look at before the next check","feedback":"..."}`;
 
 const fmtAud = (n) => (n == null || Number.isNaN(Number(n)) ? 'n/a' : `$${Number(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const fmtPct = (n) => (n == null || Number.isNaN(Number(n)) ? 'n/a' : `${Number(n) >= 0 ? '+' : ''}${Number(n).toFixed(2)}%`);
 const day = (v) => (v ? new Date(v).toISOString().slice(0, 10) : '');
 
 /** The text the model sees. Pure: pass in what was loaded. */
-function buildCheckPrompt({ thesis, position, trades, briefings, previous, today }) {
+function buildCheckPrompt({ thesis, position, trades, briefings, previous, today, revisions = [], portfolio = null, market = [] }) {
   const L = [];
   L.push(`TODAY: ${today}`);
-  L.push(`\n=== THE INVESTOR'S THESIS FOR ${thesis.symbol}${thesis.exchange ? `/${thesis.exchange}` : ''} ===`);
+  L.push(`\n=== THE INVESTOR'S THESIS FOR ${thesis.symbol}${thesis.exchange ? `/${thesis.exchange}` : ''} (CURRENT REVISION ${thesis.revision || 1}) ===`);
+  if (thesis.revisionNote) L.push(`What the investor said changed in this revision: ${thesis.revisionNote}`);
   L.push(`Why I own it: ${thesis.thesis || '(not written)'}`);
   L.push('Assumptions to test:');
   thesis.assumptions.forEach((a, i) => L.push(`  ${i + 1}. ${a.text}${a.how ? ` (how to verify: ${a.how})` : ''}`));
@@ -162,6 +173,29 @@ function buildCheckPrompt({ thesis, position, trades, briefings, previous, today
     L.push(`qty=${position.quantity}, avgCost=${fmtAud(position.avgCostAud)}, price=${fmtAud(position.priceAud)}, value=${fmtAud(position.valueAud)}, unrealised=${fmtAud(position.pnlAud)} (${fmtPct(position.pnlPct)}), today=${fmtPct(position.dayChangePct)}`);
   } else {
     L.push('(not currently held, or no quote)');
+  }
+
+  if (portfolio?.totalValueAud > 0) {
+    const total = portfolio.totalValueAud;
+    const pct = (v) => `${((Number(v) || 0) / total * 100).toFixed(1)}%`;
+    const held = (portfolio.positions || []).filter((p) => p.valueAud != null).sort((a, b) => b.valueAud - a.valueAud);
+    L.push('\n=== PORTFOLIO ===');
+    L.push(`total=${fmtAud(total)}, cash=${fmtAud(portfolio.cashAud)} (${pct(portfolio.cashAud)}), holdings=${held.length}${position?.valueAud != null ? `, ${thesis.symbol} weight=${pct(position.valueAud)}` : ''}`);
+    L.push(`Largest holdings: ${held.slice(0, 8).map((p) => `${p.symbol} ${pct(p.valueAud)}`).join(', ') || '(none)'}`);
+  }
+
+  L.push('\n=== MARKET CONDITIONS (portfolio-level briefings, newest first) ===');
+  if (!market.length) L.push('(none stored)');
+  for (const b of market.slice(0, 5)) L.push(`${day(b.date)} ${b.type === 'monthly_summary' ? 'MONTHLY SUMMARY' : `signal=${b.signal || 'n/a'}`} — ${String(b.content || '').slice(0, 600)}`);
+
+  if (revisions.length) {
+    L.push(`\n=== EARLIER REVISIONS OF THIS THESIS (${revisions.length}, newest first) ===`);
+    for (const r of revisions.slice(0, 5)) {
+      L.push(`-- Revision ${r.revision} (written ${day(r.createdAt)})${r.note ? ` note: ${r.note}` : ''}`);
+      L.push(`   Why: ${r.thesis || '(not written)'}`);
+      (r.assumptions || []).forEach((a, i) => L.push(`   A${i + 1}. ${a.text}`));
+      (r.redLines || []).forEach((x, i) => L.push(`   R${i + 1}. ${x.text}`));
+    }
   }
 
   L.push(`\n=== TRADES IN ${thesis.symbol} (${trades.length}) ===`);
@@ -195,7 +229,16 @@ function mapThesis(r) {
   return {
     id: r.id, symbol: r.symbol, exchange: r.exchange, thesis: r.thesis,
     assumptions: j(r.assumptions, []), redLines: j(r.redLines, []), anchors: j(r.anchors, {}), mirror: r.mirror,
+    revision: r.revision || 1, revisionNote: r.revisionNote || '',
     createdAt: r.createdAt, updatedAt: r.updatedAt,
+  };
+}
+
+function mapRevision(r) {
+  const j = (v, d) => (typeof v === 'string' ? JSON.parse(v) : v ?? d);
+  return {
+    id: r.id, thesisId: r.thesisId, revision: r.revision, thesis: r.thesis, note: r.note,
+    assumptions: j(r.assumptions, []), redLines: j(r.redLines, []), anchors: j(r.anchors, {}), mirror: r.mirror, createdAt: r.createdAt,
   };
 }
 
@@ -205,7 +248,8 @@ function mapCheck(r) {
   return {
     id: r.id, thesisId: r.thesisId, verdict: r.verdict, healthScore: r.healthScore,
     ratings: j(r.ratings, []), redLineHits: j(r.redLineHits, []), drift: j(r.drift, []),
-    summary: r.summary, watchNext: r.watchNext, thesisSnapshot: j(r.thesisSnapshot, {}), model: r.model, createdAt: r.createdAt,
+    summary: r.summary, watchNext: r.watchNext, feedback: r.feedback || '', revision: r.revision ?? null,
+    thesisSnapshot: j(r.thesisSnapshot, {}), model: r.model, createdAt: r.createdAt,
   };
 }
 
@@ -239,8 +283,54 @@ async function listChecks(userId, thesisId, limit = 20) {
   return rows.map(mapCheck);
 }
 
-/** Create or replace the thesis for a holding. Returns the saved thesis. */
+/** Earlier (archived) revisions of a thesis, newest first. The current revision lives on share_theses. */
+async function listRevisions(userId, thesisId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM share_thesis_revisions WHERE "userId"=$1 AND "thesisId"=$2 ORDER BY revision DESC`,
+    [userId, thesisId]
+  );
+  return rows.map(mapRevision);
+}
+
+/**
+ * Create or replace the thesis for a holding. Returns the saved thesis.
+ * With `newRevision`, the current wording is archived to share_thesis_revisions and the new one becomes revision N+1;
+ * without it the current revision is edited in place (for typo fixes).
+ */
 async function saveThesis(userId, clean) {
+  if (clean.newRevision) {
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      const cur = (await db.query(
+        `SELECT * FROM share_theses WHERE "userId"=$1 AND symbol=$2 AND exchange=$3 FOR UPDATE`,
+        [userId, clean.symbol, clean.exchange]
+      )).rows[0];
+      if (cur) {
+        await db.query(
+          `INSERT INTO share_thesis_revisions ("thesisId","userId",revision,thesis,assumptions,"redLines",anchors,mirror,note,"createdAt")
+           VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,$9,$10)`,
+          [cur.id, userId, cur.revision || 1, cur.thesis, JSON.stringify(cur.assumptions ?? []), JSON.stringify(cur.redLines ?? []),
+            JSON.stringify(cur.anchors ?? {}), cur.mirror, cur.revisionNote || '', cur.updatedAt]
+        );
+        const { rows } = await db.query(
+          `UPDATE share_theses SET thesis=$2, assumptions=$3::jsonb, "redLines"=$4::jsonb, anchors=$5::jsonb, mirror=$6,
+             revision=revision+1, "revisionNote"=$7, "updatedAt"=NOW()
+           WHERE id=$1 RETURNING *`,
+          [cur.id, clean.thesis, JSON.stringify(clean.assumptions), JSON.stringify(clean.redLines), JSON.stringify(clean.anchors),
+            clean.mirror, clean.revisionNote]
+        );
+        await db.query('COMMIT');
+        return mapThesis(rows[0]);
+      }
+      await db.query('ROLLBACK'); // nothing to archive yet: a plain create below
+    } catch (err) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      db.release();
+    }
+  }
   const { rows } = await pool.query(
     `INSERT INTO share_theses ("userId", symbol, exchange, thesis, assumptions, "redLines", anchors, mirror)
      VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8)
@@ -265,20 +355,25 @@ async function runCheck(userId, thesisId) {
   const modelId = pickTextModel(tiers, 'standard');
   if (!modelId) throw new Error('No model configured — check vault_models in Settings');
 
-  const [dash, tradeData, briefings, prevRows] = await Promise.all([
+  const [dash, tradeData, briefings, prevRows, revisions] = await Promise.all([
     sharesPortfolio.buildDashboard(userId),
     sharesPortfolio.getTradesAndLedger(userId),
     getBriefingsForUser(userId),
     pool.query(`SELECT * FROM share_thesis_checks WHERE "thesisId"=$1 AND "userId"=$2 ORDER BY "createdAt" DESC LIMIT 1`, [thesisId, userId]),
+    listRevisions(userId, thesisId),
   ]);
   const same = (x) => String(x.symbol).toUpperCase() === thesis.symbol && String(x.exchange || '').toUpperCase() === thesis.exchange;
   const position = (dash.positions || []).find(same) || null;
   const trades = (tradeData.trades || []).filter(same);
   const dailies = (briefings || []).filter((b) => b.type === 'daily' && b.symbol && same(b));
   const previous = mapCheck(prevRows.rows[0]);
+  const market = (briefings || []).filter((b) => !b.symbol && (b.type === 'daily' || b.type === 'monthly_summary'));
 
-  const prompt = buildCheckPrompt({ thesis, position, trades, briefings: dailies, previous, today: new Date().toISOString().slice(0, 10) });
-  const result = await callModel(modelId, prompt, { maxTokens: 2500, system: SYSTEM_PROMPT, returnUsage: true });
+  const prompt = buildCheckPrompt({
+    thesis, position, trades, briefings: dailies, previous, today: new Date().toISOString().slice(0, 10),
+    revisions, portfolio: dash, market,
+  });
+  const result = await callModel(modelId, prompt, { maxTokens: 4000, system: SYSTEM_PROMPT, returnUsage: true });
   logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_thesis_check' });
 
   const parsed = parseCheckReply(result.text, thesis);
@@ -286,10 +381,11 @@ async function runCheck(userId, thesisId) {
   const { healthScore, verdict } = scoreCheck(parsed);
 
   const ins = await pool.query(
-    `INSERT INTO share_thesis_checks ("thesisId","userId",verdict,"healthScore",ratings,"redLineHits",drift,summary,"watchNext","thesisSnapshot",model)
-     VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,$9,$10::jsonb,$11) RETURNING *`,
+    `INSERT INTO share_thesis_checks ("thesisId","userId",verdict,"healthScore",ratings,"redLineHits",drift,summary,"watchNext","thesisSnapshot",model,feedback,revision)
+     VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,$9,$10::jsonb,$11,$12,$13) RETURNING *`,
     [thesisId, userId, verdict, healthScore, JSON.stringify(parsed.ratings), JSON.stringify(parsed.redLineHits), JSON.stringify(parsed.drift),
-      parsed.summary, parsed.watchNext, JSON.stringify({ thesis: thesis.thesis, assumptions: thesis.assumptions, redLines: thesis.redLines }), modelId]
+      parsed.summary, parsed.watchNext, JSON.stringify({ thesis: thesis.thesis, assumptions: thesis.assumptions, redLines: thesis.redLines }), modelId,
+      parsed.feedback, thesis.revision]
   );
   const check = mapCheck(ins.rows[0]);
 
@@ -309,5 +405,5 @@ async function runCheck(userId, thesisId) {
 module.exports = {
   RATINGS, DRIFT_DIMENSIONS, SYSTEM_PROMPT,
   sanitizeThesisInput, parseCheckReply, scoreCheck, buildCheckPrompt,
-  listTheses, listChecks, saveThesis, runCheck, mapThesis,
+  listTheses, listChecks, listRevisions, saveThesis, runCheck, mapThesis,
 };

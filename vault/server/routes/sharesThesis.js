@@ -47,6 +47,17 @@ router.get('/:id/checks', async (req, res) => {
   }
 });
 
+// GET /api/shares/thesis/:id/revisions — earlier revisions, newest first (the current one is the thesis itself)
+router.get('/:id/revisions', async (req, res) => {
+  try {
+    const id = idOf(req);
+    if (!id) return res.status(400).json({ error: 'bad id' });
+    res.json(await svc.listRevisions(req.user.id, id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/shares/thesis/:id/check — run a check now (one model call)
 router.post('/:id/check', aiLimiter, async (req, res) => {
   try {
@@ -69,10 +80,11 @@ router.delete('/:id', async (req, res) => {
     const { rows } = await db.query('SELECT * FROM share_theses WHERE id=$1 AND "userId"=$2 FOR UPDATE', [id, req.user.id]);
     if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const checks = (await db.query('SELECT * FROM share_thesis_checks WHERE "thesisId"=$1 AND "userId"=$2 ORDER BY id', [id, req.user.id])).rows;
+    const revisions = (await db.query('SELECT * FROM share_thesis_revisions WHERE "thesisId"=$1 AND "userId"=$2 ORDER BY revision', [id, req.user.id])).rows;
     const binId = await bin.moveToBin(db, {
       userId: req.user.id, type: 'share-thesis', id,
-      title: `${rows[0].symbol} thesis`, detail: `${checks.length} check${checks.length === 1 ? '' : 's'} · Shares`,
-      payload: { thesis: rows[0], checks },
+      title: `${rows[0].symbol} thesis`, detail: `${checks.length} check${checks.length === 1 ? '' : 's'} · ${revisions.length + 1} revision${revisions.length ? 's' : ''} · Shares`,
+      payload: { thesis: rows[0], checks, revisions },
     });
     await db.query('DELETE FROM share_theses WHERE id=$1 AND "userId"=$2', [id, req.user.id]); // checks go with it (ON DELETE CASCADE)
     await db.query('COMMIT');

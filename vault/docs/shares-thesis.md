@@ -4,7 +4,7 @@ Shares → **Thesis**. Built 2026-11-07 as the first slice of roadmap step 10 ("
 
 ## What it does
 
-One written thesis per holding (also allowed for a share not held): why I own it, 3 to 7 assumptions that must stay true (each with how to verify it), red lines that would mean the thesis is wrong, optional value anchors (optimistic / neutral / pessimistic) and an optional five-sentence "mirror test". **Check now** asks a model whether the stored evidence still supports the thesis and saves the result as a dated row, so the history is the drift record.
+One written thesis per holding (also allowed for a share not held): why I own it, 3 to 7 assumptions that must stay true (each with how to verify it), red lines that would mean the thesis is wrong, optional value anchors (optimistic / neutral / pessimistic) and an optional five-sentence "mirror test". **Revisions:** `share_theses` holds the current revision (`revision`, `"revisionNote"`); "Save as revision N+1" (default when revising) archives the old wording to `share_thesis_revisions` in one transaction. Unticked, the save edits the current revision in place. Revisions go to the recycle bin with the thesis and restore with it. **Check & review** asks a model whether the stored evidence still supports the current revision and saves the result as a dated row (with `revision` and `feedback`), so the history is the drift record. The feedback reviews the revision itself, citing earlier revisions (goalpost-moving), the holding's portfolio weight and the portfolio-level market briefings (`symbol IS NULL`).
 
 A check rates each assumption `intact`, `weakening`, `impaired`, `broken` or `unclear`, lists any red line that was hit, and from the second check on says what changed since the last one across five dimensions (valuation, assumptions, red lines, management, moat).
 
@@ -28,7 +28,7 @@ A check rates each assumption `intact`, `weakening`, `impaired`, `broken` or `un
 
 ## The Shares tour
 
-A 9-step Shepherd tour of the whole Shares page (`client/src/utils/tours/sharesTour.js`, key `vault_tour_shares_completed`): welcome, Refresh quotes and the tab row, Trades and Cash as the source, CGT/Statements/Accountant pack, Charts and News, Questions, Thesis, Metals, help. It switches tabs as it goes (`setTab`) and returns to Portfolio at the end. Start it from the "Take the tour" link beside the page title or Settings → Tours → Shares Tour (`/shares?tour=1`). Tabs carry `data-tour="shares-tab-<id>"`, so a new tab can get a step the same way; keep `TOTAL_STEPS` and the step numbers in step. Starting it closes the first-visit (i) box. Checked in a browser 2026-11-07 (all 9 steps, no console errors, finish sets the key).
+A 9-step Shepherd tour of the whole Shares page (`client/src/utils/tours/sharesTour.js`, key `vault_tour_shares_completed`): welcome, Refresh quotes and the menu, Trades and Cash as the source, CGT/Statements/Accountant pack, Charts and News, Questions, Thesis, Metals, help. It switches tabs as it goes (`setTab`) and returns to Portfolio at the end. Start it from the compass in the sidebar title or Settings → Tours → Shares Tour (`/shares?tour=1`). The page uses `ToolSidebar` (left menu, groups in `MENU_GROUPS` in SharesPage.jsx); menu items carry `data-tour="shares-tab-<id>"`, so a new tab can get a step the same way; keep `TOTAL_STEPS` and the step numbers in step. Starting it closes the first-visit (i) box. Checked in a browser 2026-11-07 (all 9 steps, no console errors, finish sets the key).
 
 ## Tests
 

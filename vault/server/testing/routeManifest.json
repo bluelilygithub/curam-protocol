@@ -4549,6 +4549,9 @@
   "GET /api/shares/thesis/:id/checks": {
    "class": "authed"
   },
+  "GET /api/shares/thesis/:id/revisions": {
+   "class": "authed"
+  },
   "POST /api/shares/thesis/:id/check": {
    "class": "authed"
   },

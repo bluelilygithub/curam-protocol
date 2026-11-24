@@ -12,6 +12,8 @@ import SharesPackTab from '../components/shares/SharesPackTab';
 import SharesThesisTab from '../components/shares/SharesThesisTab';
 import SharesComplianceTab from '../components/shares/SharesComplianceTab';
 import Tooltip from '../components/Tooltip';
+import ToolSidebar from '../components/ToolSidebar';
+import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { startSharesTour, TOUR_KEY as SHARES_TOUR_KEY } from '../utils/tours/sharesTour';
 import SharesTutorChat from './shares/SharesTutorChat';
 import { useIcon } from '../providers/IconProvider';
@@ -30,6 +32,28 @@ const TABS = [
   { id: 'thesis', label: 'Thesis' },
   { id: 'compliance', label: 'Compliance' },
   { id: 'metals', label: 'Metals' },
+];
+
+// The left menu (ToolSidebar, same look as Graphics and PDF). Every TABS id appears once.
+const MENU_GROUPS = [
+  { label: 'Holdings', tip: 'What you own and the records it is worked out from.', tools: [
+    { id: 'portfolio', label: 'Portfolio', icon: 'shares', tip: 'Current holdings, live quotes and unrealised profit and loss.' },
+    { id: 'trades', label: 'Trades', icon: 'list', tip: 'Every buy and sell. Portfolio, CGT and Charts are worked out from these.' },
+    { id: 'cash', label: 'Cash', icon: 'coins', tip: 'Deposits, withdrawals, dividends and fees.' },
+    { id: 'metals', label: 'Metals', icon: 'scale', tip: 'Physical precious metals, kept apart from shares.' },
+  ] },
+  { label: 'Insight', tip: 'Charts, AI news, questions about your data and your thesis journal. Information, not advice.', tools: [
+    { id: 'charts', label: 'Charts', icon: 'line-chart', tip: 'Portfolio against benchmarks, movers, drawdowns, sectors and earnings.' },
+    { id: 'news', label: 'News', icon: 'news', tip: 'Daily AI briefings per holding and the market, plus monthly summaries.' },
+    { id: 'questions', label: 'Questions', icon: 'help-circle', tip: 'Ask about your own portfolio in plain words.' },
+    { id: 'thesis', label: 'Thesis', icon: 'lightbulb', tip: 'Why you own each share, in revisions, with a check and feedback on the latest one.' },
+  ] },
+  { label: 'Tax & records', tip: 'Capital gains, broker statements and the pack for your accountant. Working records, not tax advice.', tools: [
+    { id: 'cgt', label: 'CGT', icon: 'calculator', tip: 'Capital gains parcel by parcel for a financial year.' },
+    { id: 'statements', label: 'Statements', icon: 'file-text', tip: 'Read a broker PDF into a review queue.' },
+    { id: 'pack', label: 'Accountant pack', icon: 'briefcase', tip: 'The year\'s PDF, Excel file and zip for your accountant.' },
+    { id: 'compliance', label: 'Compliance', icon: 'shield-check', tip: 'Admin only: monthly check of ATO pages for changes.' },
+  ] },
 ];
 
 const fmtAud = (n) => {
@@ -796,31 +820,49 @@ export default function SharesPage() {
     setChartRange(range);
   };
 
+  const menu = MENU_GROUPS.map((g) => ({
+    ...g,
+    tools: g.tools.filter((t) => t.id !== 'compliance' || isAdmin).map((t) => ({ ...t, tour: `shares-tab-${t.id}` })),
+  }));
+  const tabLabel = TABS.find((t) => t.id === tab)?.label || '';
+
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-      <>
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-          <div>
-            <h1 className="text-xl font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
-              Shares
-              <button
-                onClick={sharesInfo.open}
-                data-tour="shares-info"
-                title="How Shares works"
-                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
-              >
-                {getIcon('info', { size: 14 })}
-              </button>
-              <Tooltip text={`Take the guided tour of Shares: the records, tax tabs, news, questions, thesis journal${isAdmin ? ', the admin compliance check' : ''} and where to get help (${isAdmin ? 10 : 9} steps).`}>
-                <button type="button" onClick={startTour} className="ml-2 text-xs font-normal underline hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>Take the tour</button>
-              </Tooltip>
-            </h1>
+    <VoiceInputProvider lang="en-AU">
+    <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
+      <ToolSidebar
+        title="Shares"
+        icon="shares"
+        groups={menu}
+        current={tab}
+        onSelect={setTab}
+        onInfo={sharesInfo.open}
+        infoTip="How Shares works: each section, what the AI parts can and cannot do."
+        onTour={startTour}
+        tourTip={`Take the guided tour of Shares: the records, tax sections, news, questions, thesis journal${isAdmin ? ', the admin compliance check' : ''} and where to get help (${isAdmin ? 10 : 9} steps).`}
+      >
+        <Tooltip text="Ask for fresh prices. Quotes can be up to 15 minutes old.">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            data-tour="shares-refresh"
+            disabled={refreshing}
+            className="w-full flex items-center justify-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            {getIcon('refresh-cw', { size: 13 })}
+            {refreshing ? 'Refreshing…' : 'Refresh quotes'}
+          </button>
+        </Tooltip>
+        <PortfolioStatusLine quotedAt={dashboard?.quotedAt} />
+      </ToolSidebar>
+
+      <main className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }}>
+        <div className="max-w-[1700px] mx-auto">
+            <h1 className="text-xl font-semibold mb-4" style={{ color: 'var(--color-text)' }}>{tabLabel}</h1>
             {sharesInfo.show && (
               <ToolInfoModal title="How Shares Works" onClose={sharesInfo.close}>
                 <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                  Twelve tabs, covering holdings tracking, tax records and AI-assisted portfolio Q&amp;A and thesis checks:
+                  Twelve sections in the menu on the left, covering holdings tracking, tax records and AI-assisted portfolio Q&amp;A and thesis checks:
                 </p>
                 <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                   <p style={{ color: 'var(--color-text)' }}><strong>Portfolio</strong> shows current holdings, live quotes, and unrealized P&amp;L. <strong>Trades</strong> and <strong>Cash</strong> are the underlying ledgers — every buy/sell and every cash movement, avg-cost method for realized P&amp;L.</p>
@@ -828,49 +870,18 @@ export default function SharesPage() {
                   <p style={{ color: 'var(--color-text)' }}><strong>Charts</strong> — portfolio vs. benchmark moves, beat/lag movers, drawdown alerts, sector allocation, earnings timeline, move heatmap.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>News</strong> — daily AI-generated briefings per holding (bullish/bearish/watch/neutral signals) plus End of month trend summaries. Auto-generates at 4 AM; "Send Portfolio Note" triggers the same analyst-note email manually.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Questions</strong> is free-text Q&amp;A over your actual portfolio data — "What's my largest position?", "How would selling everything today perform?" — archived so you can revisit past answers.</p>
-                  <p style={{ color: 'var(--color-text)' }}><strong>Thesis</strong> is a journal of why you own each share: your assumptions, the red lines that would prove you wrong and what you think it is worth. <em>Check now</em> tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It never says to buy or sell, and it cannot read company filings, so thin evidence shows as "not enough evidence".</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Thesis</strong> is a journal of why you own each share: your assumptions, the red lines that would prove you wrong and what you think it is worth. Save each rethink as a new <em>revision</em> so earlier ones stay to review. <em>Check &amp; review</em> tests the latest revision against your stored trades and news briefings, says whether the thesis is intact, weakening or broken, and gives feedback that refers to your earlier revisions, your portfolio and the market briefings. It never says to buy or sell, and it cannot read company filings, so thin evidence shows as "not enough evidence".</p>
                   {isAdmin && <p style={{ color: 'var(--color-text)' }}><strong>Compliance</strong> is an admin-only monthly check of a fixed ATO page list. It keeps an in-app note of updates that may matter for your share records, with source links, Markdown and PDF export, and reports you can delete to the recycle bin. It is general information, not tax or legal advice.</p>}
                   <p style={{ color: 'var(--color-text)' }}><strong>Metals</strong> tracks physical precious-metals purchases separately from share holdings, with live spot price lookup.</p>
                 </div>
               </ToolInfoModal>
             )}
-            <PortfolioStatusLine quotedAt={dashboard?.quotedAt} />
-          </div>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            data-tour="shares-refresh"
-            disabled={refreshing}
-            className="text-sm px-3 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
-            style={{ background: 'var(--color-primary)', color: '#fff' }}
-          >
-            {refreshing ? 'Refreshing…' : 'Refresh quotes'}
-          </button>
-        </div>
 
         {dashboard?.quoteError && (
           <p className="text-xs mb-4 px-3 py-2 rounded-md" style={{ background: '#fef3c7', color: '#92400e' }}>
             Quote warning: {dashboard.quoteError}
           </p>
         )}
-
-        <div className="flex gap-1 mb-6 border-b overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
-          {TABS.filter((t) => t.id !== 'compliance' || isAdmin).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              data-tour={`shares-tab-${t.id}`}
-              onClick={() => setTab(t.id)}
-              className="px-3 py-2 text-sm whitespace-nowrap hover:opacity-70 transition-opacity duration-200"
-              style={{
-                color: tab === t.id ? 'var(--color-primary)' : 'var(--color-muted)',
-                borderBottom: tab === t.id ? '2px solid var(--color-primary)' : '2px solid transparent',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
 
         {loading ? (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>
@@ -1409,8 +1420,10 @@ export default function SharesPage() {
             {canUseShares && <SharesTutorChat currentTab={tab} onOpenTab={setTab} />}
           </>
         )}
-      </>
+        </div>
+      </main>
     </div>
+    </VoiceInputProvider>
   );
 }
 

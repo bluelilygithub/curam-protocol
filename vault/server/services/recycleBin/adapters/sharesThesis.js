@@ -23,6 +23,9 @@ register('share-thesis', {
     for (const c of Array.isArray(payload.checks) ? payload.checks : []) {
       await insertRow(db, 'share_thesis_checks', c, { userId, override: { thesisId, ...asJson(c, ['ratings', 'redLineHits', 'drift', 'thesisSnapshot']) } });
     }
+    for (const r of Array.isArray(payload.revisions) ? payload.revisions : []) { // absent on theses binned before revisions existed
+      await insertRow(db, 'share_thesis_revisions', r, { userId, override: { thesisId, ...asJson(r, ['assumptions', 'redLines', 'anchors']) } });
+    }
     return { entityId: thesisId };
   },
 });

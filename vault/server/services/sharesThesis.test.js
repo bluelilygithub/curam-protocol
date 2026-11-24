@@ -76,5 +76,22 @@ const prompt = svc.buildCheckPrompt({
 for (const re of [/TODAY: 2026-11-07/, /1\. A1 \(how to verify: results\)/, /Guidance cut/, /PREVIOUS CHECK \(2026-08-01\)/, /rewrote the thesis text.*old words/, /neutral: \$150/]) assert.match(prompt, re);
 assert.match(svc.buildCheckPrompt({ thesis, position: null, trades: [], briefings: [], previous: null, today: 'x' }), /first check/);
 
+// ---- revisions, portfolio and market context ----
+const sv = svc.sanitizeThesisInput({ symbol: 'A', thesis: 'x', newRevision: true, revisionNote: ' margins guided lower ' }).value;
+assert.strictEqual(sv.newRevision, true);
+assert.strictEqual(sv.revisionNote, 'margins guided lower');
+assert.strictEqual(svc.sanitizeThesisInput({ symbol: 'A', thesis: 'x', newRevision: 'yes' }).value.newRevision, false, 'only a real true starts a revision');
+const ctx = svc.buildCheckPrompt({
+  thesis: { ...thesis, revision: 3, revisionNote: 'dropped R2' },
+  position: { quantity: 10, valueAud: 2500 },
+  trades: [], briefings: [], previous: null, today: 'x',
+  revisions: [{ revision: 2, createdAt: '2026-06-01', note: 'tightened', thesis: 'older words', assumptions: [{ text: 'old A1' }], redLines: [{ text: 'old R2' }] }],
+  portfolio: { totalValueAud: 10000, cashAud: 1000, positions: [{ symbol: 'NVDA', valueAud: 2500 }, { symbol: 'CBA', valueAud: 6500 }] },
+  market: [{ date: '2026-11-01', type: 'daily', signal: 'bearish', content: 'Rates up' }],
+});
+for (const re of [/CURRENT REVISION 3/, /dropped R2/, /Revision 2 .*tightened/, /A1\. old A1/, /R1\. old R2/, /NVDA weight=25\.0%/, /CBA 65\.0%/, /Rates up/]) assert.match(ctx, re);
+assert.match(svc.SYSTEM_PROMPT, /moving the goalposts/);
+assert.match(svc.parseCheckReply(JSON.stringify({ feedback: 'Para one.\n\nPara two.' }), thesis).feedback, /one\.\n\nPara/, 'feedback keeps paragraph breaks');
+
 console.log('sharesThesis.test.js: all passed');
 process.exit(0);
