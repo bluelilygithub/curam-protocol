@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8ff2db74",
+   "fullHash": "8ff2db744c7548f44ea5ef0f43411f1944663b5a",
+   "committedAt": "2026-11-24T13:29:10+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "What do you want to do? job tiles above the Tickets list",
+   "filesChanged": 7,
+   "insertions": 133,
+   "deletions": 9,
+   "goal": "Give Tickets the same \"What do you want to do?\" job tiles as the other apps.",
+   "whatChanged": "Six jobs (client/src/pages/tickets/ticketGoals.mjs) on the shared JobStart tiles above the filters. Log something, Turn an email or message into a ticket, Report a bug (bug, high) and Park an idea (idea, low) open New ticket filled in; See what is on my plate and Catch up on overdue tickets set the filters. Hide these is remembered in the browser and a Jobs button brings them back. The tour gains a step (7 now), the guide and docs describe the tiles, ticketGoals.test.mjs checks every tile, and JobStart says \"1 step\" not \"1 steps\".",
+   "filesImpacted": [
+    "client/src/pages/tickets/ticketGoals.mjs",
+    "client/src/pages/tickets/ticketGoals.test.mjs",
+    "client/src/pages/TicketsPage.jsx",
+    "client/src/components/JobStart.jsx",
+    "client/src/utils/tours/ticketsTour.js",
+    "server/services/ticketsTutor.js",
+    "docs/tickets.md"
+   ],
+   "benefit": "Common jobs are one click from the Tickets page, laid out like every other Vault app.",
+   "concerns": "Not yet tried in a browser. The hidden setting is per browser, not per account."
+  },
+  {
    "commit": "358231ad",
    "fullHash": "358231adb3acce7d5c0f8e0e2d6abbb19b2b04de",
    "committedAt": "2026-11-24T12:29:24+10:00",

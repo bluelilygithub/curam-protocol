@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-jobs)
+
+### Tickets — What do you want to do? job tiles
+The Tickets list now opens with six job tiles, like the other apps. Four open New ticket ready to go: log something, turn an email or message into a ticket with AI, report a bug and park an idea (the last two with the type and priority already chosen). See what is on my plate and Catch up on overdue tickets set the filters for you. Hide these tucks the tiles away in this browser, and the Jobs button brings them back. The tour has a new step for them.
+
+---
+
 ## 2026-11-24 (route-manifest)
 
 ### Testing — three routes added to the route manifest
