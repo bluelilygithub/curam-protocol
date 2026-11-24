@@ -4875,6 +4875,15 @@
   },
   "POST /api/tickets-tutor": {
    "class": "authed"
+  },
+  "GET /api/drawings/library": {
+   "class": "authed"
+  },
+  "PUT /api/drawings/library": {
+   "class": "authed"
+  },
+  "POST /api/presentations/design-samples": {
+   "class": "authed"
   }
  }
 }
