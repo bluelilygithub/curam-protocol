@@ -9,10 +9,10 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'list', label: 'Tickets list', group: 'Tickets list',
-    does: 'The Tickets page lists tickets, most recently changed first. Each row shows the T-number, a coloured dot for priority, the title, the type and the status, then the client and project, who it is assigned to, the due date (red when overdue) and how many comments it has. Click a row to open the ticket. Above the filters, What do you want to do? has job tiles: Log something that needs doing, Turn an email or message into a ticket and Report a bug or Park an idea (each opens New ticket, the last two with the type and priority filled in), See what is on my plate (Active and Mine) and Catch up on overdue tickets (Active and Overdue). Hide these tucks them away in this browser; the Jobs button at the top brings them back.',
+    does: 'The Tickets page lists tickets, most recently changed first. Each row shows the T-number, a coloured dot for priority, the title, the type and the status, then the client and project, who it is assigned to, the due date (red when overdue) and how many comments it has. Click a row to open the ticket. Tickets opens on What do you want to do?, job tiles: Log something that needs doing, Turn an email or message into a ticket, Report a bug and Park an idea (each opens New ticket, the last two with the type and priority filled in), See what is on my plate (opens Mine) and Catch up on overdue tickets (opens Overdue). Ticking Next time, open on the tool I used last skips the tiles and opens the last list; What do you want to do? at the top of the menu brings them back.',
     notes: 'Everyone who has Tickets sees every ticket. Up to 500 are shown at once; narrow the filters to see others.' },
   { id: 'filters', label: 'Filters and search', group: 'Tickets list',
-    does: 'Above the list: status chips (Active, which is every ticket not done and is the default, then Open, In progress, Waiting, Done and All), type chips (Every type, Client work, Bug, Admin, Idea), Mine for tickets assigned to you, and Overdue for tickets due before today and not done. The search box finds words in titles and descriptions, or a number such as T-12. Two drop-downs filter by priority and by who it is assigned to, including Nobody assigned.',
+    does: 'The menu on the left has New ticket, then Lists (Active, which is every ticket not done and is the usual list, Mine for tickets assigned to you, Overdue for tickets due before today and not done, In progress, Waiting, Done and All tickets) and By type (Client work, Bug, Admin, Idea, each only those not done). Its search box filters the menu, and the (i) and compass buttons beside the title open How Tickets works and the tour. Above the list, the search box finds words in titles and descriptions, or a number such as T-12, and two drop-downs filter by priority and by who it is assigned to, including Nobody assigned.',
     notes: 'Opened from a client\'s or project\'s Open in Tickets link, the list shows only their tickets until Show all is pressed.' },
   { id: 'new', label: 'New ticket', group: 'Tickets list',
     does: 'The + New ticket button opens a form: title, type, priority, due date, who it is assigned to, client and client project, and description. Every text box has the microphone for dictation. Create ticket saves it and opens it.',
@@ -58,7 +58,7 @@ const RULES = [
 const NOT_POSSIBLE = [
   'A form or portal for clients to raise tickets themselves, or emailing a client from a ticket: Tickets is internal only.',
   'Turning incoming emails into tickets by themselves: use Make a ticket in an Email Follow-Up case, or New ticket.',
-  'A board with columns to drag tickets between: change the Status box instead, and use the status chips to see each group.',
+  'A board with columns to drag tickets between: change the Status box instead, and use the lists in the menu on the left to see each group.',
   'Custom statuses, types or fields, categories or queues: the statuses, types and priorities are fixed.',
   'Time tracking, recurring tickets or attachments on a ticket: put links in the description, or make a task.',
   'Turning the morning email off for one person: it is only sent on days with something to report.',

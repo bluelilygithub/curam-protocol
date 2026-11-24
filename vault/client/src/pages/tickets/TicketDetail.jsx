@@ -9,7 +9,7 @@ import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { offerUndo } from '../../utils/binUndo';
 import PlanClientPicker from '../plans/PlanClientPicker';
 import { Btn, Field, Sel, StatusBadge, TypeTag, FIELD_CLASS, FIELD_STYLE, MUTED } from './ticketUi';
-import { TYPES, STATUSES, PRIORITIES, ticketNo, shortName, isOverdue, dueText, localToday, sourceHref } from './ticketLogic.mjs';
+import { TYPES, STATUSES, PRIORITIES, ticketNo, shortName, isOverdue, dueText, localToday, sourceHref, lastListHref } from './ticketLogic.mjs';
 
 const when = (iso) => new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
@@ -69,14 +69,14 @@ export default function TicketDetail({ id, people }) {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'The ticket could not be deleted.');
       offerUndo({ message: `${ticketNo(t)} moved to the recycle bin.`, binIds: d.binId });
-      navigate('/tickets');
+      navigate(lastListHref());
     } catch (e) { addToast(e.message, 'error'); }
   };
 
   if (error) {
     return (
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <Link to="/tickets" className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>← Tickets</Link>
+        <Link to={lastListHref()} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>← Tickets</Link>
         <p className="text-sm mt-4" role="alert" style={{ color: '#ef4444' }}>{error}</p>
       </div>
     );
@@ -90,7 +90,7 @@ export default function TicketDetail({ id, people }) {
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
       <div className="max-w-4xl">
-        <Link to="/tickets" className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>← Tickets</Link>
+        <Link to={lastListHref()} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>← Tickets</Link>
 
         <div className="flex items-start justify-between gap-3 mt-3 mb-5">
           <div className="min-w-0 flex-1">

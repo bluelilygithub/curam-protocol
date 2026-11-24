@@ -1,8 +1,20 @@
 // node client/src/pages/tickets/ticketLogic.test.mjs
 import assert from 'node:assert/strict';
-import { isOverdue, dueText, listQuery, prefillFrom, shortName, ticketNo, localToday, sourceHref, statusOf } from './ticketLogic.mjs';
+import { TICKET_VIEWS, VIEW_GROUPS, viewOf, lastListHref, TYPES as ALL_TYPES, STATUS_FILTERS as SF, isOverdue, dueText, listQuery, prefillFrom, shortName, ticketNo, localToday, sourceHref, statusOf } from './ticketLogic.mjs';
 
 const today = '2026-11-24';
+
+// the menu lists: unique ids, a real group, icon and tip, and only real filter values
+assert.equal(new Set(TICKET_VIEWS.map((v) => v.id)).size, TICKET_VIEWS.length);
+for (const v of TICKET_VIEWS) {
+  assert.ok(VIEW_GROUPS.some((g) => g.label === v.group) && v.icon && v.tip, `${v.id} is complete`);
+  assert.ok(SF.some((f) => f.value === v.filters.status), `${v.id} has a real status`);
+  if (v.filters.type) assert.ok(ALL_TYPES.some((t) => t.value === v.filters.type), `${v.id} has a real type`);
+  assert.ok(v.id !== 'start' && v.id !== 'new', 'no clash with the start screen or New ticket');
+}
+assert.equal(viewOf('mine').filters.assigneeId, 'me');
+assert.equal(viewOf('nope'), null);
+assert.equal(lastListHref(), '/tickets?view=active', 'no storage: back to Active');
 assert.equal(isOverdue({ dueDate: '2026-11-20', status: 'open' }, today), true);
 assert.equal(isOverdue({ dueDate: '2026-11-20', status: 'done' }, today), false);
 assert.equal(isOverdue({ dueDate: today, status: 'open' }, today), false);

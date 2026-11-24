@@ -26,6 +26,7 @@ export const TOOL_BLURBS = {
 
 // The longer text: what Tickets is and how it works (also the source of the tour's wording).
 export const HOW_IT_WORKS = [
+  ['Finding your way', 'Tickets opens on What do you want to do? (common jobs, one click each). The menu on the left has New ticket and the lists: Active, Mine, Overdue, In progress, Waiting, Done and All tickets, and one per type. Search, priority and who has it narrow any list.'],
   ['What it is', 'An internal list of work: client requests, bugs in Vault or our sites and apps, admin, and ideas for later. Nobody outside Vault raises or sees a ticket.'],
   ['Shared', 'Everyone who has Tickets sees and can change every ticket. Each change is written to the ticket\'s history with who made it.'],
   ['A ticket', 'A number (T-12), a title and description, a type, a status (Open, In progress, Waiting, Done), a priority, a due date, an optional client and project, who raised it and who has it.'],

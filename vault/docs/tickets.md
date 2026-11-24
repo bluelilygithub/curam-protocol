@@ -58,8 +58,8 @@ the same number when free. A client, project or person that has gone since is em
 
 ## Page (`/tickets`, `/tickets/:id`)
 
-Looks like the CRM page (`pages/tickets/ticketUi.jsx` copies its buttons, fields, chips and badges). The list has status chips (Active is the
-default), type chips, Mine, Overdue, search, priority and assignee filters. The ticket page saves each field as it changes, has the
+Looks like the CRM page (`pages/tickets/ticketUi.jsx` copies its buttons, fields, chips and badges). The lists are in the left-hand menu (see Layout
+below); search, priority and assignee filters sit above each list. The ticket page saves each field as it changes, has the
 description, the activity thread with comments (the shared microphone everywhere text is typed), tasks made from it, Make a task and Delete
 (with Undo). `/tickets?new=1&title=&clientId=&clientProjectId=&type=&sourceKind=&sourceId=&sourceLabel=` opens New ticket filled in: stage 2's
 "Make a ticket" buttons will use it.
@@ -88,12 +88,15 @@ the Apps button gets a dot when something is overdue. It refreshes every 5 minut
 
 The round guide button on both views is the shared guide chat (`pages/tickets/TicketsTutorChat.jsx`, `services/ticketsTutor.js`, mounted at
 `/api/tickets-tutor` behind the feature and `aiLimiter`, registered in `server/config/guides.js`). Its catalogue is
-`pages/tickets/ticketsTools.mjs`; `ticketsTutor.test.js` keeps the two in step. It sees no tickets. The 6-step tour
-(`utils/tours/ticketsTour.js`) starts from the Tour button, Settings → Tours, or `/tickets?tour=1`.
+`pages/tickets/ticketsTools.mjs`; `ticketsTutor.test.js` keeps the two in step. It sees no tickets. The 8-step tour
+(`utils/tours/ticketsTour.js`) starts from the compass beside the menu title, Settings → Tours, or `/tickets?tour=1`.
 
-Job tiles ("What do you want to do?", `pages/tickets/ticketGoals.mjs`, shown with the shared `components/JobStart.jsx`) sit above the
-filters. Tickets has no tool list, so each job does one thing: it opens New ticket filled in (a type and priority) or sets the filters
-(Mine, Overdue). Hide these stores the choice in this browser; the Jobs button brings them back. `ticketGoals.test.mjs` checks them.
+Layout (like Skill Scanner and PDF Tools): the shared `components/ToolSidebar.jsx` menu on the left, with New ticket and the lists
+(`TICKET_VIEWS` in `ticketLogic.mjs`: Active, Mine, Overdue, In progress, Waiting, Done, All tickets, and one per type), and "What do you
+want to do?" job tiles (`pages/tickets/ticketGoals.mjs`, shared `components/JobStart.jsx`) as the start screen. A list is
+`/tickets?view=<id>`; a link from another tool opens Active. "Next time, open on the tool I used last" skips the tiles (this browser
+only), and Back to the list from a ticket returns to the last list. Search, priority and assignee narrow any list.
+`ticketGoals.test.mjs` and `ticketLogic.test.mjs` check the tiles and lists.
 
 ## Not built
 

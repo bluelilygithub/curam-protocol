@@ -29,6 +29,37 @@ export const STATUS_FILTERS = [{ value: 'active', label: 'Active' }, ...STATUSES
 
 export const ticketNo = (t) => `T-${t.id}`;
 
+/**
+ * The lists in the left-hand menu (ToolSidebar). Each sets the status, assignee, overdue and type filters; search, priority and the
+ * assignee drop-down narrow it further. 'active' is the usual one.
+ */
+export const VIEW_GROUPS = [
+  { label: 'Lists', tip: 'Tickets by where they are up to, or whose they are.' },
+  { label: 'By type', tip: 'Tickets not done yet, one type at a time.' },
+];
+export const TICKET_VIEWS = [
+  { id: 'active', label: 'Active', group: 'Lists', icon: 'ticket', tip: 'Every ticket not done yet. The usual list.', filters: { status: 'active' } },
+  { id: 'mine', label: 'Mine', group: 'Lists', icon: 'user', tip: 'Tickets assigned to you that are not done.', filters: { status: 'active', assigneeId: 'me' } },
+  { id: 'overdue', label: 'Overdue', group: 'Lists', icon: 'alert-triangle', tip: 'Past their due date and not done, whoever has them.', filters: { status: 'active', overdue: true } },
+  { id: 'in_progress', label: 'In progress', group: 'Lists', icon: 'loader', tip: 'Tickets someone is working on now.', filters: { status: 'in_progress' } },
+  { id: 'waiting', label: 'Waiting', group: 'Lists', icon: 'clock', tip: 'Held up on someone else: a client, a supplier, a reply.', filters: { status: 'waiting' } },
+  { id: 'done', label: 'Done', group: 'Lists', icon: 'check-circle', tip: 'Finished tickets, most recently changed first.', filters: { status: 'done' } },
+  { id: 'all', label: 'All tickets', group: 'Lists', icon: 'list', tip: 'Everything, done or not.', filters: { status: '' } },
+  ...TYPES.map((t) => ({
+    id: `type-${t.value}`, label: t.label, group: 'By type', icon: { client: 'inbox', bug: 'alert-circle', admin: 'settings', idea: 'lightbulb' }[t.value],
+    tip: `${t.tip} Only those not done.`, filters: { status: 'active', type: t.value },
+  })),
+];
+export const viewOf = (id) => TICKET_VIEWS.find((v) => v.id === id) || null;
+
+/** Where "back to the list" goes: the list last shown in this browser, else Active. */
+export const LAST_VIEW_KEY = 'vault_tickets_last_view';
+export function lastListHref() {
+  let v = null;
+  try { v = globalThis.localStorage?.getItem(LAST_VIEW_KEY); } catch (_) { /* storage blocked */ }
+  return `/tickets?view=${viewOf(v) ? v : 'active'}`;
+}
+
 /** A person's short name: the part of the email before @ (Vault users have only an email). */
 export const shortName = (email) => (email ? String(email).split('@')[0] : '');
 
