@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "358231ad",
+   "fullHash": "358231adb3acce7d5c0f8e0e2d6abbb19b2b04de",
+   "committedAt": "2026-11-24T12:29:24+10:00",
+   "author": "mrb",
+   "area": "Testing",
+   "subject": "Tutor email test checks the guide registry instead of a fixed list",
+   "filesChanged": 1,
+   "insertions": 5,
+   "deletions": 1,
+   "goal": "Make the tutor email test pass and stop it going stale when guides are added.",
+   "whatChanged": "server/routes/tutorEmail.test.js asserted the email route knew exactly 8 guides (cellar, finance, graphics, music, notes, pdf, route, video); Vault has 42, so it failed. It now compares the route's guides with server/config/guides.js, checks each name matches the registry, and that pdf, finance and tickets are known. The rest of the test is unchanged and passes.",
+   "filesImpacted": [
+    "server/routes/tutorEmail.test.js"
+   ],
+   "benefit": "The test passes and keeps passing as guides are added, while still catching a guide the email route does not know.",
+   "concerns": "None noted."
+  },
+  {
    "commit": "1e78b72b",
    "fullHash": "1e78b72b7055481a7931952077fc1614b15e5feb",
    "committedAt": "2026-11-24T12:26:10+10:00",

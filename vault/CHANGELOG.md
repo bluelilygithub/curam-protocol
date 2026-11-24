@@ -9,6 +9,9 @@ A log of bugs found and fixed in the Curam Vault application.
 ### Testing — three routes added to the route manifest
 The route inventory test failed because the Diagrams shape library (read and save) and the Presentations design samples routes had no entry. All three are for any signed-in person and touch only their own data, so they are now listed as such, and the test passes.
 
+### Testing — tutor email test follows the guide registry
+The tutor email test expected exactly 8 guides, but Vault has 42. It now checks the email route knows every guide in the registry, by its registered name.
+
 ---
 
 ## 2026-11-24 (tickets-stage-2)
