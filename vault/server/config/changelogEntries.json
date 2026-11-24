@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7f6ae86e",
+   "fullHash": "7f6ae86eac48384e5e1f9d28067b86eb89311c30",
+   "committedAt": "2026-11-24T14:47:50+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Dictation keeps listening through pauses and adds to the text",
+   "filesChanged": 2,
+   "insertions": 5,
+   "deletions": 5,
+   "goal": "Stop the Tickets microphone cutting off mid-sentence and wiping what was already dictated.",
+   "whatChanged": "The Tickets text boxes used VoiceInput without append, the only ones in Vault that did. A textarea without append uses the short recogniser, which stops at the first pause, and each new recording replaced the box. The four textareas (AI from text, the description in New ticket and on a ticket, and the comment box) now keep listening until the mic is pressed again and add to what is there; the New ticket title adds rather than replaces.",
+   "filesImpacted": [
+    "client/src/pages/tickets/NewTicketModal.jsx",
+    "client/src/pages/tickets/TicketDetail.jsx"
+   ],
+   "benefit": "Dictating a ticket works like the rest of Vault: pauses do not end it, and starting again carries on from the existing text.",
+   "concerns": "Not yet tried in a browser. Browsers still end a session after a long silence; Vault restarts it until the mic is pressed."
+  },
+  {
    "commit": "4da0b135",
    "fullHash": "4da0b135476fdcb6d38a05482cf2fcf2eacc5125",
    "committedAt": "2026-11-24T14:20:21+10:00",

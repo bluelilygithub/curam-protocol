@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-mic)
+
+### Tickets — the microphone no longer cuts off or wipes your text
+In Tickets, the microphone stopped at the first pause, and pressing it again replaced what you had already said. The text boxes now work like the rest of Vault: they keep listening until you press the microphone again, and a new recording is added after the existing text.
+
+---
+
 ## 2026-11-24 (tickets-client-test)
 
 ### Testing — tickets and their client
