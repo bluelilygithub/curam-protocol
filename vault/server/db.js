@@ -2613,6 +2613,14 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ticket_events_ticket ON ticket_events ("ticketId", "createdAt")`);
+    // the day each person was last sent the Tickets daily digest (services/ticketDigest.js), so a restart cannot send twice
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticket_digest_log (
+        "userId"     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        "lastSentOn" DATE NOT NULL,
+        "lastSentAt" TIMESTAMPTZ NOT NULL
+      )
+    `);
     // a task made from a ticket ("Make a task") points back at it; deleting the ticket leaves the task
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "ticketId" INTEGER REFERENCES tickets(id) ON DELETE SET NULL`);
     // Email Follow-Up cases can name a CRM client. ef_cases is created earlier in this file, before clients, so the column is added here

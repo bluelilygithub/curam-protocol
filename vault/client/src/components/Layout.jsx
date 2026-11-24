@@ -91,6 +91,7 @@ function Layout() {
   const [showDueBanner,       setShowDueBanner]       = useState(false);
   const [bookmarkCount,       setBookmarkCount]       = useState(0);
   const [newSuggestionCount,  setNewSuggestionCount]  = useState(0);
+  const [ticketCounts, setTicketCounts] = useState(null); // { assigned, overdue } for the Tickets item in the Apps menu; null without Tickets
   const [showInquiryReminder, setShowInquiryReminder] = useState(false);
   const [showInquirySession,  setShowInquirySession]  = useState(false);
   // The reflection reminder waits its turn behind the morning digest, task reminder and hours prompt (utils/popupQueue.mjs).
@@ -124,6 +125,11 @@ function Layout() {
     api.get('/api/bookmarks/count').then(r => r.json()).then(d => setBookmarkCount(d.count || 0)).catch(() => {});
   };
 
+  // 403 when Tickets is off for this person: no badge
+  const fetchTicketCounts = () => {
+    api.get('/api/tickets/counts').then((r) => (r.ok ? r.json() : null)).then((d) => setTicketCounts(d && typeof d.assigned === 'number' ? d : null)).catch(() => {});
+  };
+
   const fetchSuggestionCount = () => {
     api.get('/api/suggestions/count?status=new').then(r => r.json()).then(d => setNewSuggestionCount(d.count || 0)).catch(() => {});
   };
@@ -131,11 +137,16 @@ function Layout() {
   useEffect(() => {
     fetchBookmarkCount();
     fetchSuggestionCount();
+    fetchTicketCounts();
+    const ticketTimer = setInterval(fetchTicketCounts, 5 * 60 * 1000);
+    window.addEventListener('vault:tickets-changed', fetchTicketCounts);
     window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
     window.addEventListener('vault:suggestions-changed', fetchSuggestionCount);
     return () => {
       window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
       window.removeEventListener('vault:suggestions-changed', fetchSuggestionCount);
+      window.removeEventListener('vault:tickets-changed', fetchTicketCounts);
+      clearInterval(ticketTimer);
     };
   }, []);
 
@@ -521,6 +532,7 @@ function Layout() {
             isAdmin={!!user?.isAdmin}
             missionReminderDue={missionReminderDue}
             newSuggestionCount={newSuggestionCount}
+            itemBadges={ticketCounts ? { tickets: { count: ticketCounts.assigned, alert: ticketCounts.overdue > 0 } } : {}}
           />
 
           {TOP_BAR_LINKS.filter((l) => l.placement === 'after-apps').map(renderTopBarLink)}

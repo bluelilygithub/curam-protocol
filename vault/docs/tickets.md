@@ -64,13 +64,33 @@ description, the activity thread with comments (the shared microphone everywhere
 (with Undo). `/tickets?new=1&title=&clientId=&clientProjectId=&type=&sourceKind=&sourceId=&sourceLabel=` opens New ticket filled in: stage 2's
 "Make a ticket" buttons will use it.
 
-## Stage 2 (not built yet)
+## Make a ticket (stage 2)
 
-"Make a ticket" on Notes, client and project pages (with a Tickets list there) and Email Follow-Up cases; a daily email digest (overdue, due
-today, newly assigned) and a menu badge; the guide chat, tour and job tiles.
+`pages/tickets/MakeTicketButton.jsx` (hidden without the feature) opens New ticket through `newTicketHref` (`pages/tickets/makeTicket.mjs`):
+from an open note (beside Make a plan: title, text cut to 1,500 characters, the note's client) and from an Email Follow-Up case (name, what is
+owed, client). Client pages have a **Tickets** tab and client project pages a **Tickets** section (`components/ClientTickets.jsx`, like
+ClientPlans): open first, New ticket already filed under them, and Open in Tickets (the list filtered by `?clientId=` or `?clientProjectId=`,
+with a Show all chip). Each ticket made this way links back to its source.
+
+## Daily digest and badge (stage 2)
+
+`cron/ticketDigestCron.js` runs `runDigest()` (`services/ticketDigest.js`) at 07:00 in the workspace time zone (the first admin's
+`user_timezone`, default Australia/Sydney), with the other email crons (off under DISABLE_EXTERNAL_CRON). Each person who can use Tickets gets
+one email listing their open tickets that are **overdue**, **due today**, and **newly assigned** to them by someone else since their last digest
+(raised already assigned to them, or an "Assigned: ... → them" history line); each ticket once. Nothing is sent when all three are empty.
+`ticket_digest_log` holds each person's last day: claimed before sending, so a restart or a second server cannot send twice; a failed send
+gives the day back. There is no per-person opt-out yet.
+
+The Tickets item in the Apps menu shows the number of open tickets assigned to you (`GET /api/tickets/counts`; red when any are overdue), and
+the Apps button gets a dot when something is overdue. It refreshes every 5 minutes and after a change on the Tickets pages.
+
+## Still to come
+
+The guide chat, tour and job tiles (stage 2, next).
 
 ## Tests
 
 - `server/routes/tickets.db.test.js` (real database): make, refuse, share, assign, history, done/reopen, filters, comments, tasks, delete and restore.
 - `server/services/ticketDraft.test.js`: the AI answer checks, the fence, and the call.
-- `client/src/pages/tickets/ticketLogic.test.mjs`: dates, filters, the prefill link, labels.
+- `server/services/ticketDigest.db.test.js` (real database): who gets what, once a day, a retry after a failed send, the time zone.
+- `client/src/pages/tickets/ticketLogic.test.mjs`: dates, filters, the prefill link and its round trip, labels.

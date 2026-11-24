@@ -45,6 +45,7 @@ export default function TicketDetail({ id, people }) {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'That could not be saved.');
       if (d.ticket) take(d.ticket); else if (d.id) take(d);
+      window.dispatchEvent(new Event('vault:tickets-changed'));
       if (okMessage) addToast(okMessage);
       return d;
     } catch (e) { addToast(e.message, 'error'); return null; } finally { setBusy(false); }

@@ -11,6 +11,7 @@ export default function AppsLauncher({
   isAdmin = false,
   missionReminderDue = false,
   newSuggestionCount = 0,
+  itemBadges = {}, // { [badgeKey]: { count, alert } } for items whose number comes from the page (Tickets)
 }) {
   const location = useLocation();
   const [navLayout, setNavLayout] = useState(undefined); // undefined = not loaded yet, null = unconfigured
@@ -41,6 +42,7 @@ export default function AppsLauncher({
         location={location}
         missionReminderDue={missionReminderDue}
         newSuggestionCount={newSuggestionCount}
+        itemBadges={itemBadges}
         registerOpen={(fn) => { openFromEvent.current = fn; }}
         dataTour="apps-launcher"
       />
@@ -58,6 +60,7 @@ export default function AppsLauncher({
           location={location}
           missionReminderDue={i === 0 && missionReminderDue}
           newSuggestionCount={i === 0 ? newSuggestionCount : 0}
+          itemBadges={itemBadges}
           registerOpen={i === 0 ? (fn) => { openFromEvent.current = fn; } : undefined}
           dataTour={i === 0 ? 'apps-launcher' : undefined}
         />
@@ -66,7 +69,9 @@ export default function AppsLauncher({
   );
 }
 
-function NavDropdown({ label, icon, groups, location, missionReminderDue, newSuggestionCount, registerOpen, dataTour }) {
+function NavDropdown({ label, icon, groups, location, missionReminderDue, newSuggestionCount, itemBadges = {}, registerOpen, dataTour }) {
+  // a dot on the button when an item it holds needs attention (an overdue ticket)
+  const itemAlert = groups.some((g) => g.items.some((it) => itemBadges[it.badgeKey]?.alert));
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const getIcon = useIcon();
@@ -113,7 +118,7 @@ function NavDropdown({ label, icon, groups, location, missionReminderDue, newSug
           >
             {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
           </span>
-        ) : missionReminderDue ? (
+        ) : missionReminderDue || itemAlert ? (
           <span
             className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
             style={{ background: '#f59e0b' }}
@@ -149,6 +154,7 @@ function NavDropdown({ label, icon, groups, location, missionReminderDue, newSug
                     const active = isNavItemActive(item, location.pathname, location.search);
                     const showMissionDot = item.badgeKey === 'missionReminder' && missionReminderDue;
                     const showSuggestionBadge = item.badgeKey === 'suggestions' && newSuggestionCount > 0;
+                    const itemBadge = item.badgeKey && itemBadges[item.badgeKey]?.count > 0 ? itemBadges[item.badgeKey] : null;
                     const Tag = item.external ? 'a' : Link;
                     const linkProps = item.external
                       ? { href: item.path, target: '_blank', rel: 'noopener noreferrer' }
@@ -182,6 +188,15 @@ function NavDropdown({ label, icon, groups, location, missionReminderDue, newSug
                             style={{ background: 'var(--color-primary)', color: '#fff' }}
                           >
                             {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
+                          </span>
+                        )}
+                        {itemBadge && (
+                          <span
+                            className="absolute top-1 right-1 min-w-[14px] h-3.5 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
+                            style={{ background: itemBadge.alert ? '#ef4444' : 'var(--color-primary)', color: '#fff' }}
+                            aria-label={`${itemBadge.count} assigned to you${itemBadge.alert ? ', some overdue' : ''}`}
+                          >
+                            {itemBadge.count > 9 ? '9+' : itemBadge.count}
                           </span>
                         )}
                       </Tag>

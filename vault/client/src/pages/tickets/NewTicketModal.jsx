@@ -44,6 +44,7 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
       const r = await api.post('/api/tickets', body);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'The ticket could not be saved.');
+      window.dispatchEvent(new Event('vault:tickets-changed'));
       onCreated(d);
     } catch (e) { setError(e.message); setSaving(false); }
   };

@@ -421,6 +421,7 @@ async function start() {
     startWeeklyDigestCron();
     startFitnessCron();
     startNoteRemindersCron(); // emails note reminders that have fallen due
+    require('./cron/ticketDigestCron').startTicketDigestCron().catch((err) => console.error('[tickets-digest] not scheduled:', err.message)); // 07:00 email of overdue, due today and newly assigned tickets
     startTopicResearchCron(); // searches watched Topic Research topics that are due (calls feeds and search services)
     startSerpTrackerCron(); // SERP Tracker daily run at 20:00 UTC (calls DataForSEO, a paid service)
     startClientEmailSyncCron(); // daily: logs email with each client into its Activity (reads Gmail, so it is off where external cron is off)
