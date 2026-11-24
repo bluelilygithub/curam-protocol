@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (tickets-sidebar)
+
+### Tickets — a left-hand menu like PDF Tools and Skill Scanner
+Tickets now has the same menu on the left as the other tool apps: New ticket, then the lists (Active, Mine, Overdue, In progress, Waiting, Done, All tickets) and one list per type. It opens on What do you want to do?, with the usual tick box to open on your last list instead, and the (i) and compass buttons explain Tickets and run the tour. Leaving a ticket goes back to the list you came from.
+
+---
+
 ## 2026-11-24 (tickets-jobs)
 
 ### Tickets — What do you want to do? job tiles

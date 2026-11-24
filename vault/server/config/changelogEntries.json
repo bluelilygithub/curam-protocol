@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "5de24043",
+   "fullHash": "5de24043189018f17ea6f5608546ca86c3ff21f9",
+   "committedAt": "2026-11-24T13:49:55+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Left-hand menu like PDF Tools and Skill Scanner",
+   "filesChanged": 10,
+   "insertions": 230,
+   "deletions": 122,
+   "goal": "Lay Tickets out like the other tool apps, with a sidebar menu.",
+   "whatChanged": "TicketsPage uses the shared ToolSidebar: New ticket, then Lists (Active, Mine, Overdue, In progress, Waiting, Done, All tickets) and By type (TICKET_VIEWS in ticketLogic.mjs), with the (i) How Tickets works box and the tour on the compass. What do you want to do? becomes the start screen with the usual open-on-last tick box, replacing the hide link and Jobs button. A list is /tickets?view=<id>; links from other tools open Active; a ticket goes back to the last list. The status, type, Mine and Overdue chips are removed (the menu has them); search, priority and assignee stay. Tour is 8 steps; guide text, docs and tests updated.",
+   "filesImpacted": [
+    "client/src/pages/TicketsPage.jsx",
+    "client/src/pages/tickets/TicketDetail.jsx",
+    "client/src/pages/tickets/ticketGoals.mjs",
+    "client/src/pages/tickets/ticketGoals.test.mjs",
+    "client/src/pages/tickets/ticketLogic.mjs",
+    "client/src/pages/tickets/ticketLogic.test.mjs",
+    "client/src/pages/tickets/ticketsTools.mjs",
+    "client/src/utils/tours/ticketsTour.js",
+    "server/services/ticketsTutor.js",
+    "docs/tickets.md"
+   ],
+   "benefit": "Tickets looks and works like PDF Tools, Graphics and Skill Scanner; every list is one click away, even from inside a ticket.",
+   "concerns": "Not yet tried in a browser. Combining a status with a type (for example done bugs) now needs All tickets plus search, as the type chips are gone."
+  },
+  {
    "commit": "8ff2db74",
    "fullHash": "8ff2db744c7548f44ea5ef0f43411f1944663b5a",
    "committedAt": "2026-11-24T13:29:10+10:00",
