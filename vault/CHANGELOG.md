@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-11-24 (route-manifest)
+
+### Testing — three routes added to the route manifest
+The route inventory test failed because the Diagrams shape library (read and save) and the Presentations design samples routes had no entry. All three are for any signed-in person and touch only their own data, so they are now listed as such, and the test passes.
+
+---
+
 ## 2026-11-24 (tickets-stage-2)
 
 ### Tickets — Make a ticket, a morning email, a menu badge, guide and tour

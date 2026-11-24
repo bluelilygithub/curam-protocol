@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "1e78b72b",
+   "fullHash": "1e78b72b7055481a7931952077fc1614b15e5feb",
+   "committedAt": "2026-11-24T12:26:10+10:00",
+   "author": "mrb",
+   "area": "Testing",
+   "subject": "Route manifest: classify the Diagrams library and Presentations design-samples routes",
+   "filesChanged": 1,
+   "insertions": 9,
+   "deletions": 0,
+   "goal": "Make the cross-user route inventory check pass again.",
+   "whatChanged": "server/routes/crossUser.test.js failed its inventory check on three routes added without manifest entries: GET and PUT /api/drawings/library (the Diagrams shape library) and POST /api/presentations/design-samples (Themes gallery thumbnails). All three are classified authed in server/testing/routeManifest.json: the library reads and writes only the caller's own drawing_libraries row, and design-samples lays out slides sent in the request and stores nothing. The inventory (1,628 routes), signed-out (401) and admin (403) checks pass.",
+   "filesImpacted": [
+    "server/testing/routeManifest.json"
+   ],
+   "benefit": "The route inventory test passes, so a new unclassified route will stand out again.",
+   "concerns": "None noted."
+  },
+  {
    "commit": "53a4cc62",
    "fullHash": "53a4cc623be349a985f76d9c5d66a380a9732158",
    "committedAt": "2026-11-24T12:21:25+10:00",
