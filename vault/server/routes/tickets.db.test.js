@@ -65,6 +65,7 @@ function serve(users) {
     assert.equal(t1.dueDate, '2020-01-01', 'a date stays a date');
     assert.equal(t1.clientName, `${tag} Acme`);
     assert.equal(t1.createdBy, A);
+    assert.equal(t1.clientOwnerId, A, 'the ticket says whose CRM the client is in, so the owner gets the link to the client page');
     for (const bad of [{ title: '' }, { title: 'x', type: 'feature' }, { title: 'x', status: 'closed' }, { title: 'x', priority: 'urgent' }, { title: 'x', dueDate: '01/12/2026' }]) {
       assert.equal((await call(A, 'POST', '/', bad)).status, 400, JSON.stringify(bad));
     }
@@ -106,6 +107,10 @@ function serve(users) {
     assert.deepEqual(await ids('overdue=true'), [t1.id], 'due in 2020 and not done');
     assert.deepEqual((await call(B, 'GET', '/?assigneeId=me')).body.tickets.filter((t) => made.includes(t.id)).map((t) => t.id), [t1.id]);
     assert.deepEqual(await ids(`clientId=${clientA}`), [t1.id]);
+    // the client page's Tickets tab asks for every status (ClientTickets.jsx), so done tickets are listed too
+    await call(A, 'PUT', `/${t2.id}`, { clientId: clientA, status: 'done' });
+    assert.deepEqual((await ids(`clientId=${clientA}&status=`)).sort(), [t1.id, t2.id].sort(), 'the client tab shows all its tickets, done included');
+    await call(A, 'PUT', `/${t2.id}`, { clientId: null, status: 'open' });
     const counts = (await call(B, 'GET', '/counts')).body;
     assert.ok(counts.assigned >= 1 && counts.overdue >= 1);
 
