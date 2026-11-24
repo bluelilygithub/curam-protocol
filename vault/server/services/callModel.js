@@ -39,8 +39,47 @@ function summarizeAnthropicContent(content) {
   }));
 }
 
-async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0, images = null, stream = false, onText = null, signal = null } = {}) {
+// The app files on the call stack (newest first, max 6), relative to the app folder, so a failed call can be traced to its tool.
+function appCallers(stack) {
+  const out = [];
+  for (const line of String(stack || '').split('\n').slice(1)) {
+    const m = line.match(/(?:\(|at (?:async )?)([^()]*?\.js):\d+:\d+\)?\s*$/);
+    if (!m) continue;
+    const f = m[1].replace(/\\/g, '/');
+    const at = f.lastIndexOf('/server/');
+    if (at < 0 || f.includes('/node_modules/') || f.endsWith('/services/callModel.js')) continue;
+    const rel = f.slice(at + 1);
+    if (!out.includes(rel)) out.push(rel);
+    if (out.length >= 6) break;
+  }
+  return out.join('>');
+}
+
+// A failed call goes to model_call_errors for Code Map → Models: the model, the calling files and the message (cut short). Never the
+// prompt or reply. A cancelled call is not a failure. Fire and forget: recording must never change what the caller sees.
+function recordError(modelId, err, where, t0) {
+  if (err && err.name === 'AbortError') return;
+  try {
+    require('../db').pool.query(
+      'INSERT INTO model_call_errors (model_id, callers, error, latency_ms) VALUES ($1, $2, $3, $4)',
+      [String(modelId), appCallers(where.stack), String((err && err.message) || err || 'failed').slice(0, 300), Date.now() - t0],
+    ).catch(() => {});
+  } catch { /* no database (tests): nothing to record */ }
+}
+
+async function callModel(modelId, userPrompt, opts = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
+  const where = new Error(); // the stack is only read if the call fails
+  const t0 = Date.now();
+  try {
+    return await callModelTimed(modelId, userPrompt, opts);
+  } catch (err) {
+    recordError(modelId, err, where, t0);
+    throw err;
+  }
+}
+
+async function callModelTimed(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0, images = null, stream = false, onText = null, signal = null } = {}) {
 
   // With returnUsage the result is an object; it also carries latencyMs so the caller can pass it to logUsage (Code Map → Models).
   const run = async () => {
@@ -276,4 +315,4 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
   };
 }
 
-module.exports = { callModel };
+module.exports = { callModel, appCallers };

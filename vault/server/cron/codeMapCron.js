@@ -9,6 +9,9 @@
 // Like the recycle bin tidy it runs on every server; withCronLock stops two servers running it during a rolling deploy, held until both
 // parts have finished. If someone is already running an analysis, the weekly analysis is skipped but the live check still runs. Neither
 // part's failure stops the other. See docs/code-map.md.
+// Between the two, the Models check (services/codeMap/models/check.js): which model each tool uses and how its calls went in the last
+// 30 days, with high and medium findings in the inbox. Plain code, no model call. It runs even when the analysis was skipped or failed
+// (it reads the latest finished run), and its failure stops neither of the others.
 
 const cron = require('node-cron');
 const { withCronLock } = require('../utils/cronLock');
@@ -48,6 +51,7 @@ async function runWeeklyCodeMap({
   pool = require('../db').pool,
   jobs = require('../services/codeMap/jobs'),
   liveChecks = require('../services/codeMap/liveCheck'),
+  modelsCheck = (o) => require('../services/codeMap/models/check').runModelsCheck(o),
   appUrl = process.env.APP_URL,
   log = getLogger(),
 } = {}) {
@@ -61,6 +65,14 @@ async function runWeeklyCodeMap({
   } catch (err) {
     analysisError = err;
   }
+  let models;
+  try {
+    const r = await modelsCheck({ userId: adminId });
+    models = { id: r.id, counts: r.report.counts };
+  } catch (err) {
+    log.error({ err }, '[codeMap] weekly models check failed');
+    models = { error: String((err && err.message) || 'failed').slice(0, 200) };
+  }
   let live;
   try {
     live = await weeklyLiveCheck(adminId, liveChecks, appUrl);
@@ -68,8 +80,8 @@ async function runWeeklyCodeMap({
     log.error({ err }, '[codeMap] weekly live check failed');
     live = { error: String((err && err.message) || 'failed').slice(0, 200) };
   }
-  if (analysisError) { analysisError.live = live; throw analysisError; } // the scheduler logs it; the live check has already run
-  return { ...analysis, live };
+  if (analysisError) { Object.assign(analysisError, { models, live }); throw analysisError; } // the scheduler logs it; the others have run
+  return { ...analysis, models, live };
 }
 
 function startCodeMapCron() {
@@ -78,9 +90,9 @@ function startCodeMapCron() {
   task = cron.schedule(SCHEDULE, () => {
     withCronLock('codeMap', () => runWeeklyCodeMap()).then((r) => {
       if (r) getLogger().info({ result: r }, '[codeMap] weekly run');
-    }).catch((err) => getLogger().error({ err, live: err && err.live }, '[codeMap] weekly run failed'));
+    }).catch((err) => getLogger().error({ err, models: err && err.models, live: err && err.live }, '[codeMap] weekly run failed'));
   }, { timezone: TIMEZONE });
-  log.info('[codeMap] weekly run (analysis, then live site check) scheduled for Sunday 03:17 Australia/Brisbane');
+  log.info('[codeMap] weekly run (analysis, models check, then live site check) scheduled for Sunday 03:17 Australia/Brisbane');
 }
 
 module.exports = { startCodeMapCron, runWeeklyCodeMap, SCHEDULE, TIMEZONE };

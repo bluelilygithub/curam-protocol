@@ -286,7 +286,7 @@ Rules:
   if (userId) {
     logUsage({
       userId, model: modelId,
-      inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+      inputTokens: res.inputTokens, outputTokens: res.outputTokens, latencyMs: res.latencyMs,
       feature: 'translate_glossary',
     }).catch(() => {});
   }
@@ -676,7 +676,7 @@ No markdown fences. No commentary.`;
   if (userId) {
     logUsage({
       userId, model: modelId,
-      inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+      inputTokens: res.inputTokens, outputTokens: res.outputTokens, latencyMs: res.latencyMs,
       feature: 'translate_chunk',
     }).catch(() => {});
   }
@@ -799,7 +799,7 @@ No markdown fences.`;
     if (userId) {
       logUsage({
         userId, model: modelId,
-        inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+        inputTokens: res.inputTokens, outputTokens: res.outputTokens, latencyMs: res.latencyMs,
         feature: 'translate_one',
       }).catch(() => {});
     }
@@ -922,7 +922,7 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
       if (userId) {
         logUsage({
           userId, model: modelId,
-          inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+          inputTokens: res.inputTokens, outputTokens: res.outputTokens, latencyMs: res.latencyMs,
           feature: 'translate_review',
         }).catch(() => {});
       }

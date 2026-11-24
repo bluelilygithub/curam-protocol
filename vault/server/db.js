@@ -3328,6 +3328,21 @@ async function initSchema() {
   await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_creation_tokens INTEGER NOT NULL DEFAULT 0`);
   // How long the model call took (callModel times it; NULL for rows from callers that do not pass it). Code Map → Models (docs/code-map.md).
   await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS latency_ms INTEGER`);
+  // TRUE when a tool's backup model answered because its primary failed (only News digest has a backup setting today).
+  await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS fallback BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Model calls that failed, recorded by callModel. Kept out of usage_logs so Usage & Cost counts and totals are unchanged. No prompt or
+  // reply text: the model, the calling files (to find the tool) and the error message, cut short. Pruned after 90 days by the Models check.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS model_call_errors (
+      id          BIGSERIAL PRIMARY KEY,
+      model_id    TEXT NOT NULL,
+      callers     TEXT NOT NULL DEFAULT '',
+      error       TEXT NOT NULL DEFAULT '',
+      latency_ms  INTEGER,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_model_call_errors_created ON model_call_errors (created_at DESC)`);
 
   // Which parts of Vault get opened (Admin -> Which tools get used). Counts only: a section key (the nav id, e.g. 'notes'), a day and a number.
   // Nothing about what was on the page. Used to decide which tools earn their place in the menu.
@@ -5207,6 +5222,18 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_code_map_ai_reviews_one_active ON code_map_ai_reviews ((status = 'running')) WHERE status = 'running'`);
+  // Code Map → Models check reports (docs/code-map.md "Models"): one row per check, per-tool rows and findings in result. Workspace-wide like
+  // code_map_runs; the last 30 are kept and older ones deleted outright (analysis output, not user content, so no recycle bin).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS code_map_model_reports (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      result        JSONB NOT NULL,
+      "durationMs"  INTEGER,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_code_map_model_reports_created ON code_map_model_reports ("createdAt" DESC)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (

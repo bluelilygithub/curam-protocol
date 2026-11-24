@@ -366,7 +366,7 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
         userId,
         model: result.model,
         inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
+        outputTokens: result.outputTokens, latencyMs: result.latencyMs,
         feature: 'product_scout',
       });
 

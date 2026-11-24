@@ -186,6 +186,7 @@ async function analyseTopicArticles(topicTitle, articles, context, primaryModelI
         inputTokens: result.inputTokens || 0,
         outputTokens: result.outputTokens || 0,
         model: primaryModelId,
+        latencyMs: result.latencyMs,
       };
     } catch (err) {
       console.warn(`[news] Primary model (${primaryModelId}) analysis failed, falling back to ${fallbackModelId}: ${err.message}`);
@@ -200,6 +201,8 @@ async function analyseTopicArticles(topicTitle, articles, context, primaryModelI
       inputTokens: result.inputTokens || 0,
       outputTokens: result.outputTokens || 0,
       model: fallbackModelId,
+      latencyMs: result.latencyMs,
+      fallback: Boolean(primaryModelId), // the backup only counts as "used" when there was a primary to fall back from
     };
   }
 

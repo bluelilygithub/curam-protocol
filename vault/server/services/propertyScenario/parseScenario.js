@@ -225,7 +225,7 @@ async function parseScenario(text, opts = {}) {
         userId: opts.userId,
         model: result.model || modelId,
         inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
+        outputTokens: result.outputTokens, latencyMs: result.latencyMs,
         feature: 'property_scenario_parse',
       });
     } catch {

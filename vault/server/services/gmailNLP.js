@@ -236,7 +236,7 @@ async function translateToGmailQuery(userMessage, today, modelId = null, usageCo
         userId: usageContext.userId,
         model: modelId,
         inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
+        outputTokens: result.outputTokens, latencyMs: result.latencyMs,
         feature: usageContext.feature || 'gmail',
       });
       raw = result.text;

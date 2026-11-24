@@ -63,6 +63,7 @@ assert.strictEqual(byVia['setting:skill_scan_model'].info.vision, false);
 const gone = byVia['setting:news_digest_fallback_model'];
 assert.strictEqual(gone.role, 'backup');
 assert.strictEqual(gone.savedId, 'gone-model');
+assert.strictEqual(gone.savedInList, false, 'the saved model is flagged as gone even though the fallback in use is in the list');
 assert.strictEqual(gone.modelId, 'claude-sonnet-4-6', 'a saved id no longer in the list falls back to the default, like the resolvers');
 assert.match(gone.resolvedFrom, /not in the model list/);
 assert.match(byVia['setting:translate_model'].resolvedFrom, /not set/);

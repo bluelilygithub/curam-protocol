@@ -228,7 +228,7 @@ async function translateToCalendarQuery(userMessage, today, modelId = null, usag
         userId: usageContext.userId,
         model: modelId,
         inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
+        outputTokens: result.outputTokens, latencyMs: result.latencyMs,
         feature: usageContext.feature || 'calendar_nlp',
       });
       raw = result.text;

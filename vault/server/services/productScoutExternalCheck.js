@@ -179,7 +179,7 @@ async function callExternalCheckModel(userId, modelId, prompt) {
     userId,
     model: result.model,
     inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
+    outputTokens: result.outputTokens, latencyMs: result.latencyMs,
     feature: 'product_scout',
   });
   return result.text;

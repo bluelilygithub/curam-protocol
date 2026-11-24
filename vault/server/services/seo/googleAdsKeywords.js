@@ -136,7 +136,7 @@ async function callJson(userId, modelId, prompt, { system, maxTokens, feature })
     userId,
     model: result.model,
     inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
+    outputTokens: result.outputTokens, latencyMs: result.latencyMs,
     feature,
   });
   let parsed = parseModelJson(result.text);
@@ -151,7 +151,7 @@ async function callJson(userId, modelId, prompt, { system, maxTokens, feature })
     userId,
     model: retry.model,
     inputTokens: retry.inputTokens,
-    outputTokens: retry.outputTokens,
+    outputTokens: retry.outputTokens, latencyMs: retry.latencyMs,
     feature: `${feature}_retry`,
   });
   parsed = parseModelJson(retry.text);

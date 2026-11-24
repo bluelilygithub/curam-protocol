@@ -251,7 +251,7 @@ async function generateBriefings(userId, holdings, newsMap, marketNews, modelId,
       userId,
       model: modelId,
       inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
+      outputTokens: result.outputTokens, latencyMs: result.latencyMs,
       feature: 'shares_news',
     });
     return String(result.text || '').trim();
@@ -443,7 +443,7 @@ async function generateMonthlySummary(userId) {
       userId,
       model: modelId,
       inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
+      outputTokens: result.outputTokens, latencyMs: result.latencyMs,
       feature: 'shares_news',
     });
     return String(result.text || '').trim();

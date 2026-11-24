@@ -293,7 +293,7 @@ async function callAskModel(userId, modelId, prompt, feature = 'shares_ask') {
     userId,
     model: modelId,
     inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
+    outputTokens: result.outputTokens, latencyMs: result.latencyMs,
     feature,
   });
   if (result.diagnostics?.empty) {

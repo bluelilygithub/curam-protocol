@@ -339,7 +339,7 @@ router.post('/topics/:topicId/chat', async (req, res) => {
 
     if (!aiText) {
       const result = await callModel(fallbackModelId, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
-      logUsage({ userId: req.user?.id, model: fallbackModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'news_digest' });
+      logUsage({ userId: req.user?.id, model: fallbackModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, fallback: Boolean(primaryModelId), feature: 'news_digest' });
       aiText = result.text
         || 'Sorry, I could not generate a response.';
     }

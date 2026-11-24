@@ -221,7 +221,7 @@ async function buildInsight(input = {}, deps = {}) {
           userId: input.userId,
           model: result.model || modelId,
           inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
+          outputTokens: result.outputTokens, latencyMs: result.latencyMs,
           feature: 'property_scenario_insight',
         });
       } catch {

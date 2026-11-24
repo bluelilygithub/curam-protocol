@@ -71,7 +71,7 @@ async function callRecipeModel(userId, modelId, prompt, { system, maxTokens = 20
     userId,
     model: result.model,
     inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
+    outputTokens: result.outputTokens, latencyMs: result.latencyMs,
     feature,
   });
   return result;

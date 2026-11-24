@@ -80,7 +80,7 @@ function inventoryTool({ tool, sourceText, needs, tiers, catalog, settings, env,
     if (!saved) resolvedFrom = 'not set, so the tool uses the workspace default';
     else if (usable) resolvedFrom = `Settings: ${key}`;
     else resolvedFrom = `Settings: ${key} names ${saved}, which is not in the model list, so the tool falls back to the default`;
-    models.push({ role, via: `setting:${key}`, savedId: saved || null, resolvedFrom, ...describeModel(usable ? saved : fallbackId, { catalog, env }) });
+    models.push({ role, via: `setting:${key}`, savedId: saved || null, savedInList: saved ? Boolean(usable) : null, resolvedFrom, ...describeModel(usable ? saved : fallbackId, { catalog, env }) });
   }
   return { tool: tool.id, label: tool.label, needs: needs || null, needsDeclared: Boolean(needs), models };
 }
@@ -121,11 +121,16 @@ function buildInventory({ run, readFile, tiers, catalog = [], settings = {}, env
   const claimed = new Map();
   for (const [id, n] of Object.entries(needsMap)) for (const k of n.ownsKeys || []) claimed.set(k, id);
   const rows = [];
+  const toolFiles = {};
   for (const tool of run?.tools || []) {
     const own = new Set(tool.ownedServer || []);
     const files = [...(reach.get(tool.id) || [])].filter((f) => own.has(f) || toolsPerFile.get(f) <= SHARED_LIMIT);
+    toolFiles[tool.id] = files;
     const sourceText = files.map(read).join('\n');
     const row = inventoryTool({ tool, sourceText, needs: needsMap[tool.id], tiers, catalog, settings, env, claimed });
+    // Code Map's own "No hardcoded model ids" rule for this tool, reused as is.
+    const hc = tool.checks?.models;
+    row.hardcoded = hc && hc.status === 'fail' ? { note: hc.note, evidence: (hc.evidence || []).slice(0, 5) } : null;
     if (row.models.length || row.needsDeclared) rows.push(row);
   }
   const toolIds = new Set((run?.tools || []).map((t) => t.id));
@@ -134,6 +139,9 @@ function buildInventory({ run, readFile, tiers, catalog = [], settings = {}, env
     tools: rows,
     undeclared: rows.filter((r) => r.models.length && !r.needsDeclared).map((r) => r.tool), // calls a model, no needs entry
     unknownNeeds: Object.keys(needsMap).filter((id) => !toolIds.has(id)), // a needs entry for a tool that does not exist
+    // For tracing a failed call to its tool (usage.js attributeCallers). Not stored with the report.
+    ownerOf,
+    toolFiles,
   };
 }
 

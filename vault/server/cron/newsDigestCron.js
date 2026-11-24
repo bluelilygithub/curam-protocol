@@ -240,6 +240,8 @@ async function generateDigestForUser(userId, dateStr, force = false) {
         model: usage.model,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
+        latencyMs: usage.latencyMs,
+        fallback: usage.fallback,
         feature: 'news_digest',
       });
 
