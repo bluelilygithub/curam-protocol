@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
+import { JobStart } from '../components/JobStart';
 import NewTicketModal from './tickets/NewTicketModal';
 import TicketDetail from './tickets/TicketDetail';
 import TicketsTutorChat from './tickets/TicketsTutorChat';
 import { GUIDE_TOOLS } from './tickets/ticketsTools.mjs';
+import { TICKET_GOALS } from './tickets/ticketGoals.mjs';
 import { startTicketsTour, TOUR_KEY as TICKETS_TOUR_KEY } from '../utils/tours/ticketsTour';
 import { Btn, Chip, StatusBadge, TypeTag, PriorityDot, MUTED } from './tickets/ticketUi';
 import { TYPES, PRIORITIES, STATUS_FILTERS, listQuery, isOverdue, dueText, ticketNo, shortName, localToday, prefillFrom } from './tickets/ticketLogic.mjs';
@@ -34,6 +36,8 @@ export default function TicketsPage() {
   );
 }
 
+const JOBS_KEY = 'vault_tickets_jobs_hidden';
+
 function TicketList({ people }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -48,6 +52,15 @@ function TicketList({ people }) {
   const [showNew, setShowNew] = useState(() => !!prefillFrom(params));
   const today = localToday();
   const set = (k) => (v) => setFilters((f) => ({ ...f, [k]: v }));
+  // the job tiles can be hidden per browser (a convenience, so a failed read just shows them)
+  const [jobsHidden, setJobsHidden] = useState(() => { try { return localStorage.getItem(JOBS_KEY) === '1'; } catch (_) { return false; } });
+  const hideJobs = (hidden) => { setJobsHidden(hidden); try { localStorage.setItem(JOBS_KEY, hidden ? '1' : '0'); } catch (_) { /* ignore */ } };
+  // a job either opens New ticket filled in, or replaces the filters (and any client scope) with its own
+  const pickJob = (goal) => {
+    if (goal.newTicket) { setPrefill(goal.newTicket); setShowNew(true); return; }
+    setFilters({ q: '', status: 'active', type: '', priority: '', assigneeId: '', overdue: false, clientId: '', clientProjectId: '', ...goal.filters });
+    setParams({}, { replace: true });
+  };
 
   // a "new ticket" link from another tool is read once, then removed from the address so a reload does not open it again;
   // Settings -> Tours opens /tickets?tour=1
@@ -76,10 +89,21 @@ function TicketList({ people }) {
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Tickets</h1>
         <div className="flex items-center gap-2">
+          {jobsHidden && <Btn variant="secondary" title="Show the What do you want to do? tiles again" onClick={() => hideJobs(false)}>Jobs</Btn>}
           <Btn variant="secondary" title="Take the Tickets tour" onClick={() => { try { localStorage.removeItem(TICKETS_TOUR_KEY); } catch (_) { /* ignore */ } startTicketsTour(); }}>Tour</Btn>
           <span data-tour="tickets-new"><Btn onClick={() => { setPrefill(null); setShowNew(true); }}>+ New ticket</Btn></span>
         </div>
       </div>
+
+      {!jobsHidden && (
+        <div className="mb-6">
+          <JobStart goals={TICKET_GOALS} intro="Pick a job: it opens New ticket filled in, or shows the right tickets." onPick={pickJob}
+            labelFor={(toolId) => GUIDE_TOOLS.find((t) => t.id === toolId)?.label || toolId} tourId="tickets-jobs" />
+          <button type="button" onClick={() => hideJobs(true)} className="text-xs mt-2 underline hover:opacity-60" style={MUTED}>
+            Hide these (the Jobs button at the top brings them back)
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 mb-5" data-tour="tickets-filters">
         <div className="flex gap-1 flex-wrap">

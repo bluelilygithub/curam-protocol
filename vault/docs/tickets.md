@@ -91,7 +91,9 @@ The round guide button on both views is the shared guide chat (`pages/tickets/Ti
 `pages/tickets/ticketsTools.mjs`; `ticketsTutor.test.js` keeps the two in step. It sees no tickets. The 6-step tour
 (`utils/tours/ticketsTour.js`) starts from the Tour button, Settings → Tours, or `/tickets?tour=1`.
 
-Job tiles ("What do you want to do?") were left out on purpose: the page follows the CRM layout, which has none.
+Job tiles ("What do you want to do?", `pages/tickets/ticketGoals.mjs`, shown with the shared `components/JobStart.jsx`) sit above the
+filters. Tickets has no tool list, so each job does one thing: it opens New ticket filled in (a type and priority) or sets the filters
+(Mine, Overdue). Hide these stores the choice in this browser; the Jobs button brings them back. `ticketGoals.test.mjs` checks them.
 
 ## Not built
 

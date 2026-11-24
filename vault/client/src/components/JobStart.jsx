@@ -34,7 +34,7 @@ export function JobStart({ goals, intro, onPick, labelFor, openOnLast, onToggleO
               </span>
               <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{goal.blurb}</span>
               <span className="block text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
-                {goal.steps.length} steps · {goal.steps.map((s) => labelFor(s.tool)).join(', ')}
+                {goal.steps.length} step{goal.steps.length === 1 ? '' : 's'} · {goal.steps.map((s) => labelFor(s.tool)).join(', ')}
               </span>
             </button>
           </Tooltip>

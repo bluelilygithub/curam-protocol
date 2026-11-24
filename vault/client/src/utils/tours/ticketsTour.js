@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_tickets_completed';
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -58,12 +58,22 @@ export function startTicketsTour() {
   });
 
   tour.addStep({
+    id: 'tickets-jobs',
+    title: 'What do you want to do?',
+    text: 'Each tile is a common job: log something, turn an email into a ticket, report a bug, park an idea, see your tickets, or catch up on overdue ones. It opens New ticket already filled in, or sets the filters for you. Hide them if you do not need them; the Jobs button brings them back.',
+    attachTo: { element: '[data-tour="tickets-jobs"]', on: 'bottom' },
+    beforeShowPromise: () => Promise.resolve(before('tickets-jobs', '[data-tour="tickets-jobs"]')()),
+    when: { show() { injectStepCounter(2); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'tickets-new',
     title: 'New ticket',
     text: 'Type or dictate a title and pick the type, priority, due date, who has it and the client. Or paste a messy request into AI from text and press Fill in with AI: it fills the form for you to check. Nothing is saved until Create ticket.',
     attachTo: { element: '[data-tour="tickets-new"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('tickets-new', '[data-tour="tickets-new"]')()),
-    when: { show() { injectStepCounter(2); } },
+    when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -73,7 +83,7 @@ export function startTicketsTour() {
     text: 'Active shows everything not done. The chips narrow it by status and type, Mine shows what is assigned to you and Overdue what is past due. Search finds words, or a number such as T-12.',
     attachTo: { element: '[data-tour="tickets-filters"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('tickets-filters', '[data-tour="tickets-filters"]')()),
-    when: { show() { injectStepCounter(3); } },
+    when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -83,7 +93,7 @@ export function startTicketsTour() {
     text: 'Click a ticket to open it. The boxes on the right (status, assigned to, priority, type, due date, client) save as you change them. Comment in the Activity box; changes are listed there by themselves. Make a task adds a linked task to your Tasks.',
     attachTo: { element: '[data-tour="tickets-list"]', on: 'top' },
     beforeShowPromise: () => Promise.resolve(before('tickets-ticket', '[data-tour="tickets-list"]')()),
-    when: { show() { injectStepCounter(4); } },
+    when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -91,7 +101,7 @@ export function startTicketsTour() {
     id: 'tickets-elsewhere',
     title: 'From other tools',
     text: 'Make a ticket in an open note or an Email Follow-Up case opens New ticket already filled in. A client\'s page has a Tickets tab, and a client project\'s page a Tickets section, each with its own New ticket button.',
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -99,7 +109,7 @@ export function startTicketsTour() {
     id: 'tickets-reminders',
     title: 'Reminders',
     text: 'Each morning at 7 you get an email of your tickets that are overdue, due today or newly assigned to you, when there are any. The Tickets item in the Apps menu shows how many are yours, red when some are overdue. The round guide button answers questions about Tickets.',
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },
