@@ -21,4 +21,7 @@ const md = modelsMd({ generatedAt: 'now', range: { from: 'a', to: 'b', days: 30 
 assert.match(md, /# Code Map: Models/);
 assert.match(md, /- \*\*high\*\* · T\. D/);
 assert.match(md, /Recommendations only/);
+assert.doesNotMatch(md, /## In short/, 'no summary section when the report has none');
+const withSummary = modelsMd({ counts: {}, findings: [], tools: [], summary: { overall: { text: 'All fine.' }, reason: 'Written by the app.' } });
+assert.match(withSummary, /## In short\nAll fine\.\n_Written by the app\._/);
 console.log('exportModels.test.mjs: all passed');

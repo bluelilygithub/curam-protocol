@@ -115,16 +115,18 @@ async function serve(jobs) {
   const jobs = fakeJobs();
   const s = await serve(jobs);
   try {
-    await t('Models: null before the first check, then the report; run as the signed-in admin; 409s pass their message; no aiLimiter yet', async () => {
+    await t('Models: null before the first check, then the report; run as the signed-in admin; 409s pass their message; run behind aiLimiter', async () => {
       assert.deepStrictEqual((await s.call('GET', '/api/code-map/models')).body, { report: null });
       const before = limited.length;
       const r = await s.call('POST', '/api/code-map/models/run');
       assert.strictEqual(r.status, 201);
       assert.strictEqual(r.body.report.id, 4);
       assert.strictEqual(serve.modelsRanBy, 3);
-      assert.strictEqual(limited.length, before, 'plain code, no model call: not behind the AI rate limit');
+      assert.strictEqual(limited.length, before + 1, 'the run asks the light model for a summary, so it is behind the AI rate limit');
+      const reads = limited.length;
       serve.modelsReport = { id: 4, result: { tools: [] } };
       assert.strictEqual((await s.call('GET', '/api/code-map/models')).body.report.id, 4);
+      assert.strictEqual(limited.length, reads, 'reading the report is not rate limited');
       serve.modelsBusy = true;
       const busy = await s.call('POST', '/api/code-map/models/run');
       assert.strictEqual(busy.status, 409);

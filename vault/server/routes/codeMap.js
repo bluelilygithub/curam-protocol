@@ -86,12 +86,13 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
   });
 
   // ── Models tab (server/services/codeMap/models/): which model each tool uses, how its calls went in 30 days, recommendations.
-  // Plain code, no model call (so no aiLimiter yet; milestone 4's summary will add one). Runs in the request, a few seconds, one at a time.
+  // The check is plain code; the run also asks the light model for a plain-English summary (one call), so POST is behind aiLimiter and
+  // the GET is not. Runs in the request, a few seconds, one at a time.
   router.get('/models', async (req, res) => {
     try { res.json({ report: await M().latestReport() }); } catch (err) { fail(res, err, 'models latest'); }
   });
 
-  router.post('/models/run', async (req, res) => {
+  router.post('/models/run', ai, async (req, res) => {
     try { res.status(201).json({ report: await M().runNow(req.user.id) }); } catch (err) { fail(res, err, 'models run'); }
   });
 

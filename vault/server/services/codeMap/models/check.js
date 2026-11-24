@@ -62,6 +62,8 @@ async function runModelsCheck({
   aggregate = require('./usage').aggregate,
   captureIf = (cond, p) => require('../../SuggestionService').captureIf(cond, p),
   makeFingerprint = (...a) => require('../../SuggestionService').makeFingerprint(...a),
+  summarize = (...a) => require('./summary').summarize(...a),
+  summaryWithModel = false, // the button asks for the light model's write-up; the weekly cron makes no model call
   log = getLogger(),
 } = {}) {
   const t0 = Date.now();
@@ -69,6 +71,13 @@ async function runModelsCheck({
   const owner = userId || inventory.adminId;
   const usage = await loadUsage({ pool, days: THRESHOLDS.days });
   const report = buildReport({ inventory, usage, aggregate });
+  try {
+    report.summary = await summarize(report, { userId: owner, useModel: summaryWithModel });
+  } catch (err) {
+    // a summary problem never loses the check: fall back to the app's own text
+    log.error({ err }, '[codeMapModels] summary failed');
+    report.summary = await summarize(report, { userId: owner, useModel: false });
+  }
 
   const ins = await pool.query(
     `INSERT INTO code_map_model_reports ("userId", result, "durationMs") VALUES ($1, $2::jsonb, $3) RETURNING id`,
@@ -116,7 +125,7 @@ async function runNow(userId, deps = {}) {
   if (running) throw Object.assign(new Error('A models check is already running. It takes a few seconds.'), { status: 409 });
   running = (async () => {
     const t0 = Date.now();
-    const { id, report } = await runModelsCheck({ userId, ...deps });
+    const { id, report } = await runModelsCheck({ userId, summaryWithModel: true, ...deps });
     return { id, createdAt: report.generatedAt, durationMs: Date.now() - t0, result: report };
   })();
   try { return await running; } finally { running = null; }

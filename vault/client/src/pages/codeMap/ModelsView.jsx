@@ -59,7 +59,20 @@ function FindingCard({ f }) {
   );
 }
 
-function ToolDetailRow({ t, colSpan }) {
+// Who wrote a summary part: the light model (its numbers checked against the evidence) or the app.
+function SummaryText({ part, className = 'text-sm' }) {
+  if (!part?.text) return null;
+  return (
+    <p className={`${className} leading-relaxed`} style={{ color: 'var(--color-text)' }}>
+      {part.text}
+      {part.source === 'model'
+        ? <Tooltip text="Written by the light AI model from this report's evidence; every number in it was checked against the evidence."><span className="ml-1 text-[11px] align-middle" style={{ color: 'var(--color-muted)' }} tabIndex={0}>(AI, figures checked)</span></Tooltip>
+        : null}
+    </p>
+  );
+}
+
+function ToolDetailRow({ t, colSpan, summary }) {
   const getIcon = useIcon();
   const s = t.stats;
   const needs = t.needs || {};
@@ -99,6 +112,7 @@ function ToolDetailRow({ t, colSpan }) {
             </p>
           </div>
           <div className="space-y-2">
+            <SummaryText part={summary} />
             <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Last 30 days</p>
             {s ? (
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
@@ -173,13 +187,21 @@ export default function ModelsView() {
                 : 'Not checked yet.'}
             </p>
           </div>
-          <Tooltip text={running ? 'Checking. It takes a few seconds.' : 'Check every tool now from Settings, the code and the last 30 days of usage. Plain code, no AI cost. Needs a Code Map analysis run first.'}>
+          <Tooltip text={running ? 'Checking. It takes a few seconds.' : 'Check every tool now from Settings, the code and the last 30 days of usage (plain code), then one light-model call writes the summary, its numbers checked against the evidence. Counts towards the AI rate limit. Needs a Code Map analysis run first.'}>
             <button type="button" onClick={runCheck} disabled={running} className={BTN} style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>
               {getIcon(running ? 'loader' : 'play', { size: 14, className: running ? 'animate-spin' : undefined })}{running ? 'Checking…' : 'Run check'}
             </button>
           </Tooltip>
         </div>
       </section>
+
+      {data?.summary && (
+        <section className="rounded-2xl border p-5 space-y-2" style={card}>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>In short</h3>
+          <SummaryText part={data.summary.overall} />
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{data.summary.reason}</p>
+        </section>
+      )}
 
       {!data ? (
         <EmptyState icon="code-map" title="No models check yet" body="Run check reads which model each tool uses and how its calls went. It needs a Code Map analysis run first." />
@@ -249,7 +271,7 @@ export default function ModelsView() {
                           <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-text)' }}>{pct(s.backupRate)}</td>
                           <td className="px-3 py-2"><Chips findings={shown} /></td>
                         </tr>
-                        {isOpen && <ToolDetailRow t={t} colSpan={COLS} />}
+                        {isOpen && <ToolDetailRow t={t} colSpan={COLS} summary={data.summary?.tools?.[t.tool]} />}
                       </React.Fragment>
                     );
                   })}

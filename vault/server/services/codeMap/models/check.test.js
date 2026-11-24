@@ -150,6 +150,15 @@ const deps = {
   assert.deepStrictEqual([...inbox.keys()], ['codeMapModels:pdf:capabilityMismatch:deepseek-chat']);
   assert.strictEqual([...inbox.values()][0], 2, 'raised again on the second run, so the existing item is refreshed');
   assert.strictEqual(stored.length, 2);
+  assert.strictEqual(stored[0].summary.overall.source, 'app', 'the weekly-style run stores the app summary without a model call');
+  assert.match(stored[0].summary.reason, /no AI call/);
+  // a summary that throws never loses the check: the app's text is stored instead and the error is logged
+  const errs = [];
+  let tries = 0;
+  const flaky = async (rep, o) => { tries += 1; if (o.useModel) throw new Error('model down'); return require('./summary').summarize(rep, o); };
+  const third = await runModelsCheck({ ...deps, summarize: flaky, summaryWithModel: true, log: { info() {}, error: (o, m) => errs.push(m) } });
+  assert.strictEqual(third.report.summary.overall.source, 'app');
+  assert.deepStrictEqual([tries, errs], [2, ['[codeMapModels] summary failed']]);
   console.log('check.test.js: all passed');
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

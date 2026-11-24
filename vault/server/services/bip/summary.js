@@ -99,21 +99,9 @@ function cleanSummary(text) {
     .slice(0, 4000);
 }
 
-const figures = (s) => (String(s || '').match(/\+?\d[\d ().,/-]*\d|\d{2,}/g) || [])
-  .map((t) => ({ text: t.trim(), digits: t.replace(/\D/g, '') }))
-  .filter((t) => t.digits.length >= 2);
-
-/**
- * Figures in the summary that do not appear in the input: a year, phone number or count the model made up.
- * shortcut: checks digits only, not names or wording; a made-up name passes. Upgrade to a name check if that is seen in practice.
- */
-function checkFigures(summary, sourceText) {
-  const tokens = figures(sourceText);
-  const whole = tokens.map((t) => t.digits); // a phone or year written with other spacing, or a year inside "2005-2026"
-  const parts = new Set(tokens.flatMap((t) => t.text.split(/\D+/).filter(Boolean))); // "13" and "6" from "13.6", never "40" from "04-09"
-  const found = (t) => (t.digits.length >= 4 ? whole.some((d) => d.includes(t.digits)) : parts.has(t.digits) || whole.includes(t.digits));
-  return [...new Set(figures(summary).filter((t) => !found(t)).map((t) => t.text))];
-}
+// Figures in the summary that do not appear in the input (a year, phone number or count the model made up). Shared with Code Map's
+// Models summary; single digits are not checked here.
+const { checkFigures } = require('../../utils/checkFigures');
 
 /** Write and save the summary for a finished profile. deps: getProfile, saveSummary, getModels, callModel, logUsage (tests). */
 async function generateSummary(userId, profileId, deps = {}) {

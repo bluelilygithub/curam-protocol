@@ -30,8 +30,9 @@ export function modelsMd(report, tools = report.tools || []) {
     `Checked ${report.generatedAt || ''} · usage ${r.from || ''} to ${r.to || ''} (${r.days || 30} days) · ${report.counts?.high || 0} high, ${report.counts?.medium || 0} medium, ${report.counts?.low || 0} low.`,
     'Recommendations only: nothing was changed. Swap a model in Settings if you agree.',
     '',
-    '## Findings',
   ];
+  if (report.summary?.overall?.text) out.push('## In short', report.summary.overall.text, `_${report.summary.reason || ''}_`, '');
+  out.push('## Findings');
   const all = report.findings || [];
   if (!all.length) out.push('None.');
   for (const f of all) out.push(`- **${f.severity}** · ${f.title}. ${f.detail}`);
