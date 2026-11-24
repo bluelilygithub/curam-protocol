@@ -4903,6 +4903,18 @@
   "POST /api/tickets/:id/task": {
    "class": "authed"
   },
+  "POST /api/tickets/emails/find": {
+   "class": "authed"
+  },
+  "GET /api/tickets/:id/emails": {
+   "class": "authed"
+  },
+  "POST /api/tickets/:id/emails/regrab": {
+   "class": "authed"
+  },
+  "PUT /api/tickets/:id/emails/:threadId": {
+   "class": "authed"
+  },
   "POST /api/tickets-tutor": {
    "class": "authed"
   },

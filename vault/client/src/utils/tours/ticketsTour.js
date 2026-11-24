@@ -80,7 +80,7 @@ export function startTicketsTour() {
   tour.addStep({
     id: 'tickets-new',
     title: 'New ticket',
-    text: 'Type or dictate a title and pick the type, priority, due date, who has it and the client. Or paste a messy request into AI from text and press Fill in with AI: it fills the form for you to check. Nothing is saved until Create ticket.',
+    text: 'Type or dictate a title and pick the type, priority, due date, who has it and the client. Or paste a messy request into AI from text and press Fill in with AI: it fills the form for you to check. Find emails searches your own Gmail for related threads to attach or dismiss. Nothing is saved until Create ticket.',
     attachTo: { element: '[data-tour="tickets-new"]', on: 'bottom' },
     beforeShowPromise: () => Promise.resolve(before('tickets-new', '[data-tour="tickets-new"]')()),
     when: { show() { injectStepCounter(4); } },
@@ -100,7 +100,7 @@ export function startTicketsTour() {
   tour.addStep({
     id: 'tickets-ticket',
     title: 'One ticket',
-    text: 'Click a ticket to open it. The boxes on the right (status, assigned to, priority, type, due date, client) save as you change them. Comment in the Activity box; changes are listed there by themselves. Make a task adds a linked task to your Tasks.',
+    text: 'Click a ticket to open it. The boxes on the right (status, assigned to, priority, type, due date, client) save as you change them. Comment in the Activity box; changes are listed there by themselves. Make a task adds a linked task to your Tasks. Related emails (only you see them) has Regrab emails, with when it last ran.',
     attachTo: { element: '[data-tour="tickets-list"]', on: 'top' },
     beforeShowPromise: () => Promise.resolve(before('tickets-ticket', '[data-tour="tickets-list"]')()),
     when: { show() { injectStepCounter(6); } },

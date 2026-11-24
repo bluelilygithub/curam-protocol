@@ -8,6 +8,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { offerUndo } from '../../utils/binUndo';
 import PlanClientPicker from '../plans/PlanClientPicker';
+import TicketEmails from './TicketEmails';
 import { Btn, Field, Sel, StatusBadge, TypeTag, FIELD_CLASS, FIELD_STYLE, MUTED } from './ticketUi';
 import { TYPES, STATUSES, PRIORITIES, ticketNo, shortName, isOverdue, dueText, localToday, sourceHref, lastListHref } from './ticketLogic.mjs';
 
@@ -25,6 +26,9 @@ export default function TicketDetail({ id, people }) {
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mail, setMail] = useState({ emails: [], excluded: [], lastRunAt: null }); // the viewer's own related emails
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailError, setMailError] = useState('');
   const today = localToday();
 
   const take = (d) => { setT(d); setTitle(d.title); setDesc(d.description || ''); };
@@ -37,6 +41,19 @@ export default function TicketDetail({ id, people }) {
     } catch (e) { setError(e.message); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  const mailCall = async (method, path, body) => {
+    const r = await api[method](`/api/tickets/${id}/emails${path}`, body);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'The emails could not be loaded.');
+    setMail(d); setMailError('');
+  };
+  useEffect(() => { mailCall('get', '').catch((e) => setMailError(e.message)); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const regrab = async () => {
+    setMailBusy(true);
+    try { await mailCall('post', '/regrab', {}); } catch (e) { setMailError(e.message); } finally { setMailBusy(false); }
+  };
+  const setMailStatus = (threadId, status) => mailCall('put', `/${encodeURIComponent(threadId)}`, { status }).catch((e) => addToast(e.message, 'error'));
 
   const send = async (method, path, body, okMessage) => {
     setBusy(true);
@@ -191,6 +208,12 @@ export default function TicketDetail({ id, people }) {
                   </div>
                 )}
               </div>
+            </section>
+
+            <section className="rounded-xl border p-4" style={panel}>
+              <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Related emails <span className="font-normal text-xs" style={MUTED}>(only you see these)</span></h2>
+              <TicketEmails emails={mail.emails} excluded={mail.excluded} lastRunAt={mail.lastRunAt} busy={mailBusy} error={mailError}
+                onRegrab={regrab} onSet={setMailStatus} />
             </section>
 
             {t.tasks.length > 0 && (

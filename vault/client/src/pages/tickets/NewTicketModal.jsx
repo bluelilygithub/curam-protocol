@@ -4,6 +4,7 @@ import Dialog from '../../components/Dialog';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import PlanClientPicker from '../plans/PlanClientPicker';
+import TicketEmails from './TicketEmails';
 import { Btn, Field, Sel, FIELD_CLASS, FIELD_STYLE, MUTED } from './ticketUi';
 import { TYPES, PRIORITIES, shortName } from './ticketLogic.mjs';
 
@@ -20,6 +21,10 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
   const [aiNote, setAiNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [mail, setMail] = useState([]); // related emails found in the person's Gmail, each with status suggested / attached / excluded
+  const [mailRunAt, setMailRunAt] = useState(null);
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailError, setMailError] = useState('');
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
   const draft = async () => {
@@ -36,11 +41,27 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
     } catch (e) { setError(e.message); } finally { setAiBusy(false); }
   };
 
+  // a regrab keeps what the person already attached or dismissed and replaces only the untouched suggestions (as the server does)
+  const findMail = async () => {
+    setMailBusy(true); setMailError('');
+    try {
+      const r = await api.post('/api/tickets/emails/find', { title: form.title, clientId: form.clientId });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Your Gmail could not be searched.');
+      setMail((cur) => {
+        const kept = cur.filter((e) => e.status !== 'suggested');
+        return [...kept, ...d.emails.filter((e) => !kept.some((k) => k.threadId === e.threadId)).map((e) => ({ ...e, status: 'suggested' }))];
+      });
+      setMailRunAt(new Date().toISOString());
+    } catch (e) { setMailError(e.message); } finally { setMailBusy(false); }
+  };
+  const setMailStatus = (threadId, status) => setMail((cur) => cur.map((e) => (e.threadId === threadId ? { ...e, status } : e)));
+
   const save = async () => {
     if (!form.title.trim()) { setError('Give the ticket a title.'); return; }
     setSaving(true); setError('');
     try {
-      const body = { ...form, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null };
+      const body = { ...form, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null, emails: mail, emailsRunAt: mailRunAt };
       const r = await api.post('/api/tickets', body);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'The ticket could not be saved.');
@@ -105,6 +126,11 @@ export default function NewTicketModal({ people, prefill, onClose, onCreated }) 
         <Field label="Description">
           <VoiceInput append type="textarea" rows={5} value={form.description} onChange={set('description')} label="Description"
             placeholder="Details, links, steps…" className={FIELD_CLASS} style={FIELD_STYLE} mic />
+        </Field>
+
+        <Field label="Related emails (only you see these)">
+          <TicketEmails emails={mail.filter((e) => e.status !== 'excluded')} excluded={mail.filter((e) => e.status === 'excluded')}
+            lastRunAt={mailRunAt} busy={mailBusy} error={mailError} onRegrab={findMail} onSet={setMailStatus} canRun={!!form.title.trim()} />
         </Field>
 
         {form.sourceKind && <p className="text-xs" style={MUTED}>From: {form.sourceLabel || form.sourceKind}</p>}

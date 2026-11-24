@@ -16,7 +16,7 @@ export const GROUP_TIPS = {
 
 export const TOOL_TIPS = {
   list: 'Find tickets with the filters and search, and start a new one.',
-  ticket: 'One ticket: change its status, who has it, priority, type, due date and client; comment; make a task.',
+  ticket: 'One ticket: change its status, who has it, priority, type, due date and client; comment; make a task; find related emails.',
 };
 
 export const TOOL_BLURBS = {
@@ -31,6 +31,7 @@ export const HOW_IT_WORKS = [
   ['Shared', 'Everyone who has Tickets sees and can change every ticket. Each change is written to the ticket\'s history with who made it.'],
   ['A ticket', 'A number (T-12), a title and description, a type, a status (Open, In progress, Waiting, Done), a priority, a due date, an optional client and project, who raised it and who has it.'],
   ['AI from text', 'In New ticket, Fill in with AI turns a pasted or dictated request into the title, type, priority, due date, client and steps, for you to check. Nothing is saved until you press Create ticket.'],
+  ['Related emails', 'In New ticket and on a ticket, Find emails (then Regrab emails, with when it last ran) searches your own Gmail for threads about the ticket. Attach the ones that matter and dismiss the rest; a dismissed thread is not suggested again on that ticket. Only you see your emails.'],
   ['From other tools', 'Make a ticket in an open note or an Email Follow-Up case, and New ticket in a client\'s or client project\'s Tickets list, open New ticket already filled in and linked back.'],
   ['Reminders', 'A morning email lists your tickets that are overdue, due today or newly assigned to you, when there are any. The Tickets item in the Apps menu shows how many are assigned to you, red when some are overdue.'],
 ];
@@ -48,5 +49,6 @@ export const GUIDE_TOOLS = [
   { id: 'client', label: 'Client and client project', tool: 'ticket' },
   { id: 'activity', label: 'Comments and history', tool: 'ticket' },
   { id: 'task', label: 'Make a task', tool: 'ticket' },
+  { id: 'emails', label: 'Related emails', tool: 'ticket' },
   { id: 'delete', label: 'Delete and undo', tool: 'ticket' },
 ];

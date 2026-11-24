@@ -100,6 +100,27 @@ want to do?" job tiles (`pages/tickets/ticketGoals.mjs`, shared `components/JobS
 only), and Back to the list from a ticket returns to the last list. Search, type, priority and assignee narrow any list.
 `ticketGoals.test.mjs` and `ticketLogic.test.mjs` check the tiles and lists.
 
+## Related emails (`services/ticketEmails.js`, `client/src/pages/tickets/TicketEmails.jsx`)
+
+On the New ticket form and on a ticket's page: **Find emails / Regrab emails** searches the person's own connected Gmail for threads about the
+ticket, and shows when it last ran ("Last run 25 Nov, 3:04 pm"). Each thread can be **attached** or **dismissed (✕)**, and a dismissed thread
+can be restored from "Show dismissed".
+
+- **Private:** tickets are shared but Gmail is not. Rows in `ticket_emails` and `ticket_email_runs` carry `"userId"`, and every read and
+  write filters on the signed-in person, so only the person who found or attached an email ever sees it (subject, sender, date, preview).
+- **Dismissing works per ticket:** an excluded thread is never suggested again on that ticket. A regrab deletes only untouched
+  `suggested` rows and adds new ones (`ON CONFLICT DO NOTHING`), so attached and excluded threads stay as they are.
+- **The search** is a plain Gmail query with no AI: up to six title words, plus the client's contact addresses and email domains when the
+  client is in the person's own CRM, limited to the last year. Client mail mentioning a title word comes first, falling back to any recent
+  client mail. With no client, a thread has to mention two title words to be shown. At most 15 threads, ranked by matching words, then by
+  date. Only headers and Gmail's snippet are read and stored.
+- **New ticket form:** nothing is saved until Create, which sends `emails` and `emailsRunAt` with the ticket, both saved in the same
+  transaction.
+- **Recycle bin:** deleting a ticket deletes its email rows, and restoring the ticket does not bring them back (they are private, and the bin
+  holds them for one person only).
+- A subject opens the thread in Gmail (`mail.google.com/mail/u/0/#all/<threadId>`). If several Google accounts are signed in, this may
+  open the wrong one.
+
 ## Not built
 
 A client-facing form or portal, email-to-ticket, a board view, custom statuses or fields, time tracking, recurring tickets, attachments,
@@ -109,6 +130,9 @@ private tickets, and a per-person switch for the morning email.
 
 - `server/routes/tickets.db.test.js` (real database): make, refuse, share, assign, history, done/reopen, filters, comments, tasks, delete and restore.
 - `server/services/ticketDraft.test.js`: the AI answer checks, the fence, and the call.
+- `server/services/ticketEmails.test.js`: search words, Gmail queries, ranking, input checks.
+- `server/services/ticketEmails.db.test.js` (real database, fake Gmail): emails are private to their owner, dismissed threads stay
+  dismissed on a regrab, the last-run time, and the message when Gmail is not connected.
 - `server/services/ticketsTutor.test.js`: the guide catalogue matches the page, and its facts, gaps and rules.
 - `server/services/ticketDigest.db.test.js` (real database): who gets what, once a day, a retry after a failed send, the time zone.
 - `client/src/pages/tickets/ticketLogic.test.mjs`: dates, filters, the prefill link and its round trip, labels.

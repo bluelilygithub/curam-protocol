@@ -15,16 +15,33 @@
 //   POST   /api/tickets/:id/comments                 { body }
 //   DELETE /api/tickets/:id/comments/:eventId        the writer or an admin
 //   POST   /api/tickets/:id/task                     { title? }  a linked task in the caller's Tasks
+//
+// Related emails (services/ticketEmails.js), private to the caller: only their own Gmail and only their own rows.
+//   POST   /api/tickets/emails/find                  { title, clientId? }  search the caller's Gmail (saves nothing; for the New ticket form)
+//   POST   /api/tickets  ... emails?, emailsRunAt?   the New ticket form's choices are saved with the ticket
+//   GET    /api/tickets/:id/emails                   { lastRunAt, emails, excluded }
+//   POST   /api/tickets/:id/emails/regrab            search again; attached and excluded threads are kept
+//   PUT    /api/tickets/:id/emails/:threadId         { status: attached | excluded | suggested }
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const tickets = require('../services/tickets');
 const ticketDraft = require('../services/ticketDraft');
+const ticketEmails = require('../services/ticketEmails');
 
 const router = express.Router();
 const BIN_TYPE = 'ticket';
+const emailSearchLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 'Too many email searches. Wait a minute and try again.' } });
+
+/** Gmail failures (expired sign-in, quota) are not bugs in Tickets: say so plainly. */
+function failEmail(res, err, where) {
+  if (tickets.publicError(err)) return fail(res, err, where);
+  getLogger().error({ err }, `[tickets] ${where}`);
+  return res.status(502).json({ error: 'Gmail could not be searched just now. If it keeps happening, reconnect Gmail in Settings.' });
+}
 
 function fail(res, err, where) {
   const pub = tickets.publicError(err);
@@ -67,8 +84,31 @@ router.post('/draft', aiLimiter, async (req, res) => {
   }
 });
 
+router.post('/emails/find', emailSearchLimiter, async (req, res) => {
+  try { res.json({ emails: await ticketEmails.find(pool, req.user.id, { title: req.body?.title, clientId: req.body?.clientId }) }); } catch (err) { failEmail(res, err, 'emails find'); }
+});
+
 router.post('/', async (req, res) => {
-  try { res.status(201).json(await inTx((db) => tickets.create(db, req.user.id, req.body || {}))); } catch (err) { fail(res, err, 'create'); }
+  const body = req.body || {};
+  try {
+    res.status(201).json(await inTx(async (db) => {
+      const t = await tickets.create(db, req.user.id, body);
+      if (body.emails || body.emailsRunAt) await ticketEmails.saveFromCreate(db, req.user.id, t.id, body.emails, body.emailsRunAt);
+      return t;
+    }));
+  } catch (err) { fail(res, err, 'create'); }
+});
+
+router.get('/:id/emails', async (req, res) => {
+  try { res.json(await ticketEmails.list(pool, req.user.id, req.params.id)); } catch (err) { fail(res, err, 'emails'); }
+});
+
+router.post('/:id/emails/regrab', emailSearchLimiter, async (req, res) => {
+  try { res.json(await ticketEmails.regrab(pool, req.user.id, req.params.id)); } catch (err) { failEmail(res, err, 'emails regrab'); }
+});
+
+router.put('/:id/emails/:threadId', async (req, res) => {
+  try { res.json(await ticketEmails.setStatus(pool, req.user.id, req.params.id, req.params.threadId, req.body?.status)); } catch (err) { fail(res, err, 'emails status'); }
 });
 
 router.get('/:id', async (req, res) => {

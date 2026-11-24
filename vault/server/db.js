@@ -2621,6 +2621,31 @@ async function initSchema() {
         "lastSentAt" TIMESTAMPTZ NOT NULL
       )
     `);
+    // Related emails on a ticket (services/ticketEmails.js): private to the person whose Gmail they came from, so every row carries "userId".
+    // status: suggested (found by a search), attached (kept on the ticket), excluded (dismissed: never suggested again on this ticket).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticket_emails (
+        "ticketId"  INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "threadId"  TEXT NOT NULL,
+        subject     TEXT NOT NULL DEFAULT '',
+        "fromAddr"  TEXT NOT NULL DEFAULT '',
+        "sentAt"    TIMESTAMPTZ,
+        snippet     TEXT NOT NULL DEFAULT '',
+        status      TEXT NOT NULL DEFAULT 'suggested' CHECK (status IN ('suggested','attached','excluded')),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("ticketId", "userId", "threadId")
+      )
+    `);
+    // when each person last searched their Gmail for a ticket (the "Regrab emails" button shows it)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticket_email_runs (
+        "ticketId"  INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "lastRunAt" TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY ("ticketId", "userId")
+      )
+    `);
     // a task made from a ticket ("Make a task") points back at it; deleting the ticket leaves the task
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "ticketId" INTEGER REFERENCES tickets(id) ON DELETE SET NULL`);
     // Email Follow-Up cases can name a CRM client. ef_cases is created earlier in this file, before clients, so the column is added here

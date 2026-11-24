@@ -41,6 +41,9 @@ const CATALOG = [
   { id: 'task', label: 'Make a task', group: 'One ticket',
     does: 'Make a task at the top of a ticket adds a task to your own Tasks with the ticket\'s title, due date and priority, linked back to the ticket. The ticket lists the tasks made from it, and its history notes it.',
     notes: 'The task is yours only. The ticket\'s client and project are put on it only when they are in your own CRM. A task does not change the ticket: mark the ticket Done yourself.' },
+  { id: 'emails', label: 'Related emails', group: 'One ticket',
+    does: 'The Related emails box, in New ticket and on an opened ticket, has a Find emails button (Regrab emails once it has run, with when it last ran beside it). It searches your own connected Gmail for threads about the ticket, using the title words and, when the client is in your own CRM, the client\'s contact addresses and email domains. Each thread has Attach to keep it on the ticket, or the cross to dismiss it. Show dismissed lists the dismissed ones with Restore. Attached threads have Detach. Clicking a subject opens the thread in Gmail.',
+    notes: 'Only you see your emails: other people on the same ticket never see what you found or attached, and their own search is separate. A dismissed thread is never suggested again on that ticket. Regrab replaces only the suggestions you have not acted on. Gmail must be connected in Settings first. No AI is used, and only the subject, sender, date and Gmail\'s preview are kept.' },
   { id: 'delete', label: 'Delete and undo', group: 'One ticket',
     does: 'Delete at the top of a ticket asks first, then moves the ticket and its comments to your recycle bin, with an Undo button straight away. It can be put back from the recycle bin in Settings for 30 days.',
     notes: 'Restoring brings back the same T-number and history. Tasks made from it stay in Tasks but are no longer linked to it.' },
@@ -50,14 +53,16 @@ const RULES = [
   'Tickets is an internal list of work for client work, bugs, admin and ideas. Nobody outside Vault can raise or see a ticket.',
   'Everyone who has Tickets sees and can change every ticket. Admins always have it; for members an admin turns it on in Settings, Feature Access, and can switch it off for one person.',
   'Every change to a ticket is saved at once (there is no Save button except Save description) and written to its history.',
-  'The only AI in Tickets is the Fill in with AI button (one AI request) and this guide chat.',
+  'The only AI in Tickets is the Fill in with AI button (one AI request) and this guide chat. Related emails is a plain Gmail search, not AI.',
+  'Related emails are private: only the person who found or attached an email sees it, even though the ticket itself is shared.',
   'A deleted ticket waits 30 days in the recycle bin in Settings, and an Undo button appears straight away.',
   'The Open buttons in this chat only switch to a tool on the page; they never create, change or delete a ticket by themselves.',
 ];
 
 const NOT_POSSIBLE = [
   'A form or portal for clients to raise tickets themselves, or emailing a client from a ticket: Tickets is internal only.',
-  'Turning incoming emails into tickets by themselves: use Make a ticket in an Email Follow-Up case, or New ticket.',
+  'Turning incoming emails into tickets by themselves: use Make a ticket in an Email Follow-Up case, or New ticket (its Related emails box can find and attach the threads).',
+  'Sharing an attached email with the rest of the team: related emails are private to the person who attached them. Paste the important part into a comment instead.',
   'A board with columns to drag tickets between: change the Status box instead, and use the lists in the menu on the left to see each group.',
   'Custom statuses, types or fields, categories or queues: the statuses, types and priorities are fixed.',
   'Time tracking, recurring tickets or attachments on a ticket: put links in the description, or make a task.',
