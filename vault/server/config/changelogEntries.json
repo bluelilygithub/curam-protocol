@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "388ae934",
+   "fullHash": "388ae9343d7b0b9ada4a491b9eb0670cedcb9cb7",
+   "committedAt": "2026-11-25T11:00:28+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Thesis check: reported figures from Finnhub in the evidence pack (US shares)",
+   "filesChanged": 7,
+   "insertions": 129,
+   "deletions": 8,
+   "goal": "Give thesis checks real company figures to rate margin, growth and valuation assumptions against, so fewer ratings end as not enough evidence (third idea borrowed from TradingAgents: a fundamentals report alongside news).",
+   "whatChanged": "New marketData.getFundamentals(symbol, exchange) calls Finnhub /stock/metric?metric=all for US shares and parseFinnhubMetrics picks valuation ratios (P/E, P/S, P/B, market cap), margins, revenue and EPS growth, debt/equity, current ratio and dividend yield (first present of several candidate keys each), plus the last four quarters of gross, operating and net margin. It returns null for ASX, without FINNHUB_API_KEY or on any error. runCheck fetches it in parallel with the other evidence; buildCheckPrompt adds a FUNDAMENTALS block (or \"not available\"), which the bear case, bull case and check all see. Rule 6 now lets the check quote these figures, with valuation ratios under the valuation drift dimension, and still says there are no filings, guidance or commentary. Thesis tab tooltip and footer, guide notes and docs/shares-thesis.md updated. New server/services/marketData.test.js.",
+   "filesImpacted": [
+    "server/services/marketData.js",
+    "server/services/marketData.test.js",
+    "server/services/sharesThesis.js",
+    "server/services/sharesThesis.test.js",
+    "server/services/sharesTutor.js",
+    "client/src/components/shares/SharesThesisTab.jsx",
+    "docs/shares-thesis.md"
+   ],
+   "benefit": "Assumptions like margins stay above 60% or revenue keeps growing can now be rated from reported numbers instead of news alone, at no AI cost (one free Finnhub call per check).",
+   "concerns": "The live Finnhub call has not been run (no key locally): the field names come from Finnhub documentation, so a renamed field silently drops out; read the FUNDAMENTALS block in the first real check. ASX shares get no figures. Quarterly series margins are assumed to be fractions and converted to percentages when 1.5 or less in size. A thesis saved with an empty exchange is treated as ASX and gets none. Not tried in a browser; tests pass and the client builds."
+  },
+  {
    "commit": "8beecd87",
    "fullHash": "8beecd875f22780f756af50a950868ce64ab2d3d",
    "committedAt": "2026-11-25T10:48:22+10:00",
