@@ -93,5 +93,17 @@ for (const re of [/CURRENT REVISION 3/, /dropped R2/, /Revision 2 .*tightened/, 
 assert.match(svc.SYSTEM_PROMPT, /moving the goalposts/);
 assert.match(svc.parseCheckReply(JSON.stringify({ feedback: 'Para one.\n\nPara two.' }), thesis).feedback, /one\.\n\nPara/, 'feedback keeps paragraph breaks');
 
+// ---- bull vs bear debate ----
+for (const side of ['bear', 'bull']) {
+  const sys = svc.debateSystem(side);
+  assert.match(sys, new RegExp(side.toUpperCase()));
+  for (const re of [/Never say buy, sell, hold/, /nothing in the pack/, /price move alone is not evidence/]) assert.match(sys, re, `${side} keeps the rules`);
+}
+assert.match(svc.SYSTEM_PROMPT, /DEBATE.*NOT evidence/, 'the judge is told the debate is argument, not evidence');
+assert.strictEqual(svc.formatDebate({}), '', 'no debate, no block');
+const deb = svc.formatDebate({ bear: '1. margins cut' });
+assert.match(deb, /BEAR CASE --\n1\. margins cut/);
+assert.match(deb, /BULL CASE --\n\(not available\)/, 'a failed side is marked, not dropped silently');
+
 console.log('sharesThesis.test.js: all passed');
 process.exit(0);

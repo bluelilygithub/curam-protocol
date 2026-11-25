@@ -139,12 +139,31 @@ Rules:
    - How the holding sits in the PORTFOLIO (its weight, overlap with other holdings) and how the MARKET CONDITIONS in the pack bear on the assumptions.
    - Questions worth answering before the next revision.
    Rule 4 still applies: frame it as questions and risks to weigh, never as an instruction to buy, sell or resize.
+9. If a DEBATE is given, it is two one-sided arguments (a bear case and a bull case), NOT evidence. Weigh them, then rate only on what the evidence pack itself shows; a point either side makes without a pack item behind it counts for nothing. Where the bear case finds real evidence against an assumption, do not wave it away.
 
 Reply with ONLY one JSON object, no other text:
 {"assumptions":[{"n":1,"rating":"intact|weakening|impaired|broken|unclear","evidence":"..."}],
  "redLines":[{"n":1,"triggered":false,"evidence":""}],
  "drift":[{"dimension":"valuation|assumptions|red lines|management|moat","change":"improved|unchanged|weakened|unclear","evidence":"..."}],
  "summary":"...","watchNext":"what to look at before the next check","feedback":"..."}`;
+
+// Bull vs bear stress test before the check (the researcher debate from TradingAgents, arXiv 2412.20138, Apache-2.0; rewritten, not copied).
+// Each side sees the same evidence pack and argues one way; the check above then judges. Framed against the thesis, never as a trade call.
+const DEBATE_SYSTEM = {
+  bear: 'argue as hard as the evidence allows that each assumption is weakening or broken and that each red line is close to being hit',
+  bull: 'argue as hard as the evidence allows that each assumption still holds and that no red line is near',
+};
+function debateSystem(side) {
+  return `You are the ${side.toUpperCase()} side in a stress test of a share investor's own written thesis. Using ONLY the evidence pack, ${DEBATE_SYSTEM[side]}.
+Rules: cite each point to a pack item (a briefing date and what it said, a trade, a figure). If the pack has nothing for an assumption, say "nothing in the pack" rather than invent. A price move alone is not evidence about the business. Never say buy, sell, hold, add or trim, and never predict a price.
+Reply in plain text: one short paragraph per numbered assumption ("1. ..."), then one line per red line ("R1. ..."). Under 300 words.`;
+}
+
+/** The debate block appended to the check prompt. Pure. */
+function formatDebate({ bear, bull }) {
+  if (!bear && !bull) return '';
+  return `\n\n=== DEBATE (arguments, not evidence; see rule 9) ===\n-- BEAR CASE --\n${bear || '(not available)'}\n\n-- BULL CASE --\n${bull || '(not available)'}`;
+}
 
 const fmtAud = (n) => (n == null || Number.isNaN(Number(n)) ? 'n/a' : `$${Number(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const fmtPct = (n) => (n == null || Number.isNaN(Number(n)) ? 'n/a' : `${Number(n) >= 0 ? '+' : ''}${Number(n).toFixed(2)}%`);
@@ -249,6 +268,7 @@ function mapCheck(r) {
     id: r.id, thesisId: r.thesisId, verdict: r.verdict, healthScore: r.healthScore,
     ratings: j(r.ratings, []), redLineHits: j(r.redLineHits, []), drift: j(r.drift, []),
     summary: r.summary, watchNext: r.watchNext, feedback: r.feedback || '', revision: r.revision ?? null,
+    bearCase: r.bearCase || '', bullCase: r.bullCase || '',
     thesisSnapshot: j(r.thesisSnapshot, {}), model: r.model, createdAt: r.createdAt,
   };
 }
@@ -373,7 +393,18 @@ async function runCheck(userId, thesisId) {
     thesis, position, trades, briefings: dailies, previous, today: new Date().toISOString().slice(0, 10),
     revisions, portfolio: dash, market,
   });
-  const result = await callModel(modelId, prompt, { maxTokens: 4000, system: SYSTEM_PROMPT, returnUsage: true });
+  // shortcut: one parallel round (each side does not answer the other); add a rebuttal round if the cases read as talking past each other.
+  const sides = await Promise.allSettled(['bear', 'bull'].map((side) =>
+    callModel(modelId, prompt, { maxTokens: 1200, system: debateSystem(side), returnUsage: true })));
+  const debate = {};
+  sides.forEach((s, i) => {
+    const side = i ? 'bull' : 'bear';
+    if (s.status !== 'fulfilled') return console.warn(`[sharesThesis] ${side} case failed:`, s.reason?.message); // check still runs without it
+    logUsage({ userId, model: modelId, inputTokens: s.value.inputTokens, outputTokens: s.value.outputTokens, latencyMs: s.value.latencyMs, feature: 'shares_thesis_debate' });
+    debate[side] = String(s.value.text || '').trim().slice(0, 3000);
+  });
+
+  const result = await callModel(modelId, prompt + formatDebate(debate), { maxTokens: 4000, system: SYSTEM_PROMPT, returnUsage: true });
   logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'shares_thesis_check' });
 
   const parsed = parseCheckReply(result.text, thesis);
@@ -381,11 +412,11 @@ async function runCheck(userId, thesisId) {
   const { healthScore, verdict } = scoreCheck(parsed);
 
   const ins = await pool.query(
-    `INSERT INTO share_thesis_checks ("thesisId","userId",verdict,"healthScore",ratings,"redLineHits",drift,summary,"watchNext","thesisSnapshot",model,feedback,revision)
-     VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,$9,$10::jsonb,$11,$12,$13) RETURNING *`,
+    `INSERT INTO share_thesis_checks ("thesisId","userId",verdict,"healthScore",ratings,"redLineHits",drift,summary,"watchNext","thesisSnapshot",model,feedback,revision,"bearCase","bullCase")
+     VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,$9,$10::jsonb,$11,$12,$13,$14,$15) RETURNING *`,
     [thesisId, userId, verdict, healthScore, JSON.stringify(parsed.ratings), JSON.stringify(parsed.redLineHits), JSON.stringify(parsed.drift),
       parsed.summary, parsed.watchNext, JSON.stringify({ thesis: thesis.thesis, assumptions: thesis.assumptions, redLines: thesis.redLines }), modelId,
-      parsed.feedback, thesis.revision]
+      parsed.feedback, thesis.revision, debate.bear || '', debate.bull || '']
   );
   const check = mapCheck(ins.rows[0]);
 
@@ -404,6 +435,6 @@ async function runCheck(userId, thesisId) {
 
 module.exports = {
   RATINGS, DRIFT_DIMENSIONS, SYSTEM_PROMPT,
-  sanitizeThesisInput, parseCheckReply, scoreCheck, buildCheckPrompt,
+  sanitizeThesisInput, parseCheckReply, scoreCheck, buildCheckPrompt, debateSystem, formatDebate,
   listTheses, listChecks, listRevisions, saveThesis, runCheck, mapThesis,
 };

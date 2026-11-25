@@ -8,6 +8,8 @@ One written thesis per holding (also allowed for a share not held): why I own it
 
 A check rates each assumption `intact`, `weakening`, `impaired`, `broken` or `unclear`, lists any red line that was hit, and from the second check on says what changed since the last one across five dimensions (valuation, assumptions, red lines, management, moat).
 
+**Bull vs bear stress test (2026-11-25):** before the check, two calls on the same evidence pack argue one side each (bear: assumptions weakening and red lines close; bull: the opposite). The check prompt gets both as a DEBATE block and rule 9 tells it they are arguments, not evidence, so the evidence-or-nothing rules below still decide every rating. Both cases are saved on the check (`"bearCase"`, `"bullCase"`) and shown under a collapsed "Stress test" on the tab. If a side fails, the check runs without it. It is one parallel round with no rebuttals, so a check now makes 3 model calls instead of 1 (usage logged as `shares_thesis_debate`). The pattern comes from the researcher debate in TradingAgents (arXiv 2412.20138, Apache-2.0); nothing was copied.
+
 ## Rules (enforced in code, tested)
 
 - **Never advice.** The prompt forbids buy/sell/hold and price prediction, and the verdict words cannot carry one. The screen says so under every check.

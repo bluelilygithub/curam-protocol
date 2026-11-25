@@ -3976,6 +3976,8 @@ async function initSchema() {
   await pool.query(`ALTER TABLE share_theses ADD COLUMN IF NOT EXISTS "revisionNote" TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE share_thesis_checks ADD COLUMN IF NOT EXISTS feedback TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE share_thesis_checks ADD COLUMN IF NOT EXISTS revision INTEGER`);
+  await pool.query(`ALTER TABLE share_thesis_checks ADD COLUMN IF NOT EXISTS "bearCase" TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE share_thesis_checks ADD COLUMN IF NOT EXISTS "bullCase" TEXT NOT NULL DEFAULT ''`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_thesis_revisions (
       id            SERIAL PRIMARY KEY,

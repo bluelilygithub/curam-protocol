@@ -398,6 +398,18 @@ export default function SharesThesisTab({ onAskGuide }) {
                         <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{latest.feedback}</p>
                       </div>
                     )}
+                    {(latest.bearCase || latest.bullCase) && (
+                      <details className="mb-3 rounded-lg p-3" style={{ background: 'var(--color-bg)' }}>
+                        <summary className="text-xs font-medium cursor-pointer hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Stress test: bear case and bull case</summary>
+                        <p className="text-xs mt-2 mb-2" style={{ color: 'var(--color-muted)' }}>Two one-sided arguments from the same evidence. The ratings above weigh them; neither is advice.</p>
+                        {[['Bear case', latest.bearCase], ['Bull case', latest.bullCase]].map(([label, text]) => text && (
+                          <div key={label} className="mb-2">
+                            <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>{label}</p>
+                            <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{text}</p>
+                          </div>
+                        ))}
+                      </details>
+                    )}
                     {latest.drift?.length > 0 && (
                       <div className="mb-3">
                         <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Change since the last check</p>
