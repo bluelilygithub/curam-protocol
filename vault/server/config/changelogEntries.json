@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "feffe916",
+   "fullHash": "feffe916744919848a1345ac9465ed756813266a",
+   "committedAt": "2026-11-25T11:09:23+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Docs: features, key files and thesis docs cover the stress test, US figures and track record",
+   "filesChanged": 4,
+   "insertions": 17,
+   "deletions": 14,
+   "goal": "Keep the reference docs true to what Shares now does, so the next change starts from accurate notes.",
+   "whatChanged": "docs/features.md: the Shares summary describes the stress test, the US Finnhub figures and the Track record (linking docs/shares-scorecard.md) and gives the right tour count (10, 11 for admins, was 9); the quotes line covers fundamentals, the cron line the scoring step after the 4 AM briefing, the briefings line the copy to share_signal_calls, and the tables list now includes the thesis tables and share_signal_calls. docs/key-files.md: marketData.js entry mentions getFundamentals and its test; the thesis entry no longer says trades and briefings only; new sharesSignalScorecard.js entry. docs/shares-thesis.md: routes (seven, was five), the bear/bull columns, usage labels, the stress test and Track record in the UI, the guide chat lines, the tests, and which live calls have not run. docs/shares-api-research.md: a Finnhub fundamentals note.",
+   "filesImpacted": [
+    "docs/features.md",
+    "docs/key-files.md",
+    "docs/shares-thesis.md",
+    "docs/shares-api-research.md"
+   ],
+   "benefit": "Accurate reference docs for the Shares thesis, scorecard and data sources, including the untested parts, so nobody relies on a stale description.",
+   "concerns": "Documentation only. It describes the code as written; the live model, scorecard SQL and Finnhub figures paths it mentions are still unverified."
+  },
+  {
    "commit": "d833661c",
    "fullHash": "d833661c18277ccfe400b3ff2c661de16442f770",
    "committedAt": "2026-11-25T11:06:50+10:00",
