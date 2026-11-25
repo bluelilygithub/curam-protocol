@@ -14,6 +14,8 @@ History of providers trialled for the Shares module and why each was rejected or
 
 **Alpha Vantage conservation:** ASX cron polls twice per day (5 AM + 1 PM Sydney) using `['ASX']` exchange filter. A 15-minute in-memory quote cache (`quoteCache` Map in `sharesPortfolio.js`) prevents redundant calls during user page loads. With fewer than 10 ASX holdings, this stays well under the 25 req/day cap.
 
+**Fundamentals (2026-11-25):** thesis checks read reported figures from Finnhub `/stock/metric?metric=all` (US only, same key and 60/min budget, one call per check). ASX shares get none: Alpha Vantage `OVERVIEW` would cover them but spends the same 25/day budget as the ASX quotes. The field names were taken from Finnhub's documentation and have not yet been checked against a live response. See `docs/shares-thesis.md`.
+
 ---
 
 ## Providers trialled and rejected
