@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f96d9a05",
+   "fullHash": "f96d9a05a58b2b879e4969d4a3ad9878279c1803",
+   "committedAt": "2026-11-25T11:25:17+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Portfolio Notes follow the briefing retention setting",
+   "filesChanged": 10,
+   "insertions": 15,
+   "deletions": 13,
+   "goal": "Keep Portfolio Notes for the same admin-chosen number of days as the daily briefings (the owner wants 90).",
+   "whatChanged": "server/services/sharesNewsService.js: the 7 AM Portfolio Note (type observation) prune uses getBriefingRetentionDays() instead of a fixed 45 days. Settings -> Shares box renamed Briefing and Portfolio Note History, label and help text updated (Charts read the stored notes, so a longer history fills the longer ranges; nothing already deleted comes back). The News tab header no longer says 45-day history. Settings search tip, guide notes in sharesTutor.js, docs/shares-portfolio-note.md, docs/schema-notes.md, docs/features.md, docs/shares-scorecard.md and a db.js comment updated.",
+   "filesImpacted": [
+    "server/services/sharesNewsService.js",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/pages/SharesPage.jsx",
+    "client/src/utils/settingsGroups.mjs",
+    "server/services/sharesTutor.js",
+    "server/db.js",
+    "docs/features.md",
+    "docs/schema-notes.md",
+    "docs/shares-portfolio-note.md",
+    "docs/shares-scorecard.md"
+   ],
+   "benefit": "One setting controls both histories, and Charts can show 90-day and longer ranges once the notes build up.",
+   "concerns": "A setting below 45 days now also shortens the Charts history and the high-water-mark fallback that read stored notes. Raising it does not restore notes already deleted. The renamed Settings box has not been checked in a browser; tests pass and the client builds."
+  },
+  {
    "commit": "419fba02",
    "fullHash": "419fba0224f3fa7d0707d8b1ada62f0c78e7ce02",
    "committedAt": "2026-11-25T11:18:57+10:00",
