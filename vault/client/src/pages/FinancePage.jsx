@@ -329,10 +329,10 @@ function SendLogEntry({ l, showDoc }) {
   );
 }
 
-function EmailActivityModal({ onClose }) {
+function EmailActivityModal({ onClose, initialQuery = '' }) {
   const [rows, setRows] = useState(null);
   const [days, setDays] = useState(90);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQuery);
   const [err, setErr] = useState('');
   useEffect(() => {
     setRows(null); setErr('');
@@ -1148,6 +1148,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
               </select>
             </Tooltip>
             {clientId && <Tooltip text="Remove the client filter and show every client again."><button onClick={onClearClientFilter} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Clear</button></Tooltip>}
+            {clientId && <Tooltip text="Open this client's record in CRM."><Link to={`/clients/${clientId}`} className="hover:opacity-60 transition-opacity underline" style={{ color: 'var(--color-primary)' }}>Open in CRM</Link></Tooltip>}
           </div>
         );
       })()}
@@ -1436,7 +1437,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
         </Modal>
       )}
 
-      {activityOpen && <EmailActivityModal onClose={() => setActivityOpen(false)} />}
+      {activityOpen && <EmailActivityModal onClose={() => setActivityOpen(false)} initialQuery={clientId ? (clients.find(c => String(c.id) === String(clientId))?.name || '') : ''} />}
 
       {/* Send invoice/quote modal */}
       {sendModal && (
