@@ -93,6 +93,16 @@ for (const re of [/CURRENT REVISION 3/, /dropped R2/, /Revision 2 .*tightened/, 
 assert.match(svc.SYSTEM_PROMPT, /moving the goalposts/);
 assert.match(svc.parseCheckReply(JSON.stringify({ feedback: 'Para one.\n\nPara two.' }), thesis).feedback, /one\.\n\nPara/, 'feedback keeps paragraph breaks');
 
+// ---- fundamentals block ----
+const withFund = svc.buildCheckPrompt({
+  thesis, position: null, trades: [], briefings: [], previous: null, today: '2026-11-25',
+  fundamentals: { source: 'Finnhub', figures: [{ label: 'Gross margin (TTM)', value: 69.44, unit: '%' }, { label: 'P/E (TTM)', value: 34.2, unit: 'x' }],
+    trends: [{ label: 'Gross margin', points: [{ period: '2026-09-30', pct: 69.5 }, { period: '2026-06-30', pct: 68.8 }] }] },
+});
+for (const re of [/FUNDAMENTALS FOR NVDA \(reported figures from Finnhub, fetched 2026-11-25; not filings\)/, /Gross margin \(TTM\): 69\.4%/, /P\/E \(TTM\): 34\.20x/, /2026-09-30 69\.5%, 2026-06-30 68\.8%/]) assert.match(withFund, re);
+assert.match(svc.buildCheckPrompt({ thesis, position: null, trades: [], briefings: [], previous: null, today: 'x' }), /not available: figures are fetched for US shares only/);
+assert.match(svc.SYSTEM_PROMPT, /FUNDAMENTALS block.*Quote those figures as evidence/);
+
 // ---- bull vs bear debate ----
 for (const side of ['bear', 'bull']) {
   const sys = svc.debateSystem(side);

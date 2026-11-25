@@ -378,7 +378,7 @@ export default function SharesThesisTab({ onAskGuide }) {
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{current.symbol} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>{current.exchange} · Revision {current.revision || 1} · {fmtWhen(current.updatedAt)}</span></h2>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Tooltip text="Ask a model whether your stored trades and news briefings still support this thesis, and for feedback on this revision compared with your earlier revisions, your portfolio and the market briefings. It cannot see company filings, so many answers will be 'not enough evidence'."><button type="button" onClick={runCheck} className={btnCls} style={btnPrimary}>Check &amp; review</button></Tooltip>
+                      <Tooltip text="Ask a model whether your stored trades and news briefings still support this thesis, and for feedback on this revision compared with your earlier revisions, your portfolio and the market briefings. For US shares it also sees reported figures (margins, growth, valuation ratios). It cannot see company filings, so many answers will be 'not enough evidence'."><button type="button" onClick={runCheck} className={btnCls} style={btnPrimary}>Check &amp; review</button></Tooltip>
                       <Tooltip text="Write a new revision (the current one is kept for review), or fix wording in this one. Past checks keep the wording they were run against."><button type="button" onClick={startEdit} className={`${btnCls} border`} style={btnGhost}>Revise</button></Tooltip>
                       {confirmDelete ? (
                         <span className="text-sm" style={{ color: 'var(--color-text)' }}>Delete? <button type="button" onClick={remove} className="underline hover:opacity-60 transition-opacity duration-200" style={{ color: BAD }}>Yes</button> / <button type="button" onClick={() => setConfirmDelete(false)} className="underline hover:opacity-60 transition-opacity duration-200">No</button></span>
@@ -467,7 +467,7 @@ export default function SharesThesisTab({ onAskGuide }) {
                       </div>
                     )}
                     {latest.watchNext && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Watch next: {latest.watchNext}</p>}
-                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Based on your Vault data and news briefings only, not company filings. It says whether your thesis holds, not whether to buy or sell.</p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Based on your Vault data, news briefings and, for US shares, reported figures from Finnhub; not company filings. It says whether your thesis holds, not whether to buy or sell.</p>
                     <button type="button" onClick={showHistory ? () => setShowHistory(false) : loadHistory} className="text-xs mt-2 hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>{showHistory ? 'Hide history' : 'Show earlier checks'}</button>
                     {showHistory && (
                       <ul className="mt-2 space-y-1">

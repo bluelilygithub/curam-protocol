@@ -17,6 +17,7 @@ const { logUsage } = require('../utils/logUsage');
 const sharesPortfolio = require('./sharesPortfolio');
 const { getBriefingsForUser, getWorkspaceTimezone, getDateInTz, sectorBenchmarkFor } = require('./sharesNewsService');
 const scorecard = require('./sharesSignalScorecard');
+const { getFundamentals } = require('./marketData');
 const { capture, makeFingerprint } = require('./SuggestionService');
 
 const MAX_ITEMS = 7;
@@ -132,7 +133,7 @@ Rules:
 3. A red line is triggered only if the pack shows it happening. Quote the evidence. Otherwise it is not triggered.
 4. Never say buy, sell, hold, add or trim. Never predict a price. Never give tax advice.
 5. If a PREVIOUS CHECK is given, compare to it. For each dimension (valuation, assumptions, red lines, management, moat) say improved, unchanged, weakened or unclear. Different wording alone is not a change; only changed evidence is.
-6. Do not invent figures. Amounts are AUD unless noted. The pack comes from the app's stored data and news briefings only; it holds no company filings, so say "unclear" rather than pretend to have read them.
+6. Do not invent figures. Amounts are AUD unless noted. The pack comes from the app's stored data, news briefings and, for US shares, a FUNDAMENTALS block of reported figures from a data provider (margins, growth, valuation ratios, recent quarterly margins). Quote those figures as evidence where an assumption is about them; valuation ratios belong to the "valuation" drift dimension. The pack holds no company filings, guidance or management commentary, so say "unclear" rather than pretend to have read them.
 7. Keep every evidence field under 300 characters and the summary under 6 sentences, in plain words.
 8. "feedback" is your review of the CURRENT REVISION of the thesis itself, for the investor to reconsider it. In 2-4 short paragraphs (separate them with a blank line):
    - Is it clear and testable? Name any assumption that is vague, untestable or missing.
@@ -172,7 +173,7 @@ const fmtPct = (n) => (n == null || Number.isNaN(Number(n)) ? 'n/a' : `${Number(
 const day = (v) => (v ? new Date(v).toISOString().slice(0, 10) : '');
 
 /** The text the model sees. Pure: pass in what was loaded. */
-function buildCheckPrompt({ thesis, position, trades, briefings, previous, today, revisions = [], portfolio = null, market = [] }) {
+function buildCheckPrompt({ thesis, position, trades, briefings, previous, today, revisions = [], portfolio = null, market = [], fundamentals = null }) {
   const L = [];
   L.push(`TODAY: ${today}`);
   L.push(`\n=== THE INVESTOR'S THESIS FOR ${thesis.symbol}${thesis.exchange ? `/${thesis.exchange}` : ''} (CURRENT REVISION ${thesis.revision || 1}) ===`);
@@ -222,6 +223,14 @@ function buildCheckPrompt({ thesis, position, trades, briefings, previous, today
   L.push(`\n=== TRADES IN ${thesis.symbol} (${trades.length}) ===`);
   if (!trades.length) L.push('(none)');
   for (const t of trades.slice(0, 30)) L.push(`${day(t.tradedAt)} ${String(t.side).toUpperCase()} ${t.quantity} @ ${fmtAud(t.pricePerShare)}`);
+
+  L.push(`\n=== FUNDAMENTALS FOR ${thesis.symbol} (reported figures${fundamentals?.source ? ` from ${fundamentals.source}` : ''}, fetched ${today}; not filings) ===`);
+  if (!fundamentals) L.push('(not available: figures are fetched for US shares only)');
+  else {
+    const fmt = (f) => (f.unit === '%' ? `${f.value.toFixed(1)}%` : f.unit === 'm' ? Math.round(f.value).toLocaleString('en-US') : `${f.value.toFixed(2)}x`);
+    for (const f of fundamentals.figures || []) L.push(`${f.label}: ${fmt(f)}`);
+    for (const t of fundamentals.trends || []) L.push(`${t.label} by quarter (newest first): ${t.points.map((p) => `${p.period} ${p.pct.toFixed(1)}%`).join(', ')}`);
+  }
 
   L.push(`\n=== NEWS BRIEFINGS FOR ${thesis.symbol} (last 45 days, newest first) ===`);
   if (!briefings.length) L.push('(none stored)');
@@ -377,7 +386,7 @@ async function runCheck(userId, thesisId) {
   const modelId = pickTextModel(tiers, 'standard');
   if (!modelId) throw new Error('No model configured — check vault_models in Settings');
 
-  const [dash, tradeData, briefings, prevRows, revisions, allCalls, tz] = await Promise.all([
+  const [dash, tradeData, briefings, prevRows, revisions, allCalls, tz, fundamentals] = await Promise.all([
     sharesPortfolio.buildDashboard(userId),
     sharesPortfolio.getTradesAndLedger(userId),
     getBriefingsForUser(userId),
@@ -385,6 +394,7 @@ async function runCheck(userId, thesisId) {
     listRevisions(userId, thesisId),
     scorecard.loadCalls(userId),
     getWorkspaceTimezone(),
+    getFundamentals(thesis.symbol, thesis.exchange),
   ]);
   const same = (x) => String(x.symbol).toUpperCase() === thesis.symbol && String(x.exchange || '').toUpperCase() === thesis.exchange;
   const position = (dash.positions || []).find(same) || null;
@@ -395,7 +405,7 @@ async function runCheck(userId, thesisId) {
 
   const prompt = buildCheckPrompt({
     thesis, position, trades, briefings: dailies, previous, today: new Date().toISOString().slice(0, 10),
-    revisions, portfolio: dash, market,
+    revisions, portfolio: dash, market, fundamentals,
   });
   // shortcut: one parallel round (each side does not answer the other); add a rebuttal round if the cases read as talking past each other.
   const sides = await Promise.allSettled(['bear', 'bull'].map((side) =>

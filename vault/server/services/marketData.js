@@ -90,6 +90,67 @@ async function getEarningsCalendar(symbol, fromDate, toDate) {
   }
 }
 
+// Reported figures from Finnhub /stock/metric (free tier, US only). Each entry: label, candidate keys (first present wins), unit.
+// Finnhub's metric block gives margins and growth as percentages (69.4 = 69.4%).
+const FUNDAMENTAL_FIELDS = [
+  ['P/E (TTM)', ['peTTM', 'peBasicExclExtraTTM', 'peExclExtraTTM'], 'x'],
+  ['P/S (TTM)', ['psTTM', 'psAnnual'], 'x'],
+  ['P/B', ['pbQuarterly', 'pbAnnual'], 'x'],
+  ['Gross margin (TTM)', ['grossMarginTTM', 'grossMarginAnnual'], '%'],
+  ['Operating margin (TTM)', ['operatingMarginTTM', 'operatingMarginAnnual'], '%'],
+  ['Net margin (TTM)', ['netProfitMarginTTM', 'netProfitMarginAnnual'], '%'],
+  ['Return on equity (TTM)', ['roeTTM', 'roeRfy'], '%'],
+  ['Revenue growth, latest quarter YoY', ['revenueGrowthQuarterlyYoy'], '%'],
+  ['Revenue growth (TTM YoY)', ['revenueGrowthTTMYoy'], '%'],
+  ['Revenue growth, 5-year', ['revenueGrowth5Y'], '%'],
+  ['EPS growth, latest quarter YoY', ['epsGrowthQuarterlyYoy'], '%'],
+  ['EPS growth (TTM YoY)', ['epsGrowthTTMYoy'], '%'],
+  ['Debt/equity', ['totalDebt/totalEquityQuarterly', 'totalDebt/totalEquityAnnual'], 'x'],
+  ['Current ratio', ['currentRatioQuarterly', 'currentRatioAnnual'], 'x'],
+  ['Dividend yield', ['dividendYieldIndicatedAnnual', 'currentDividendYieldTTM'], '%'],
+  ['Market cap (USD m)', ['marketCapitalization'], 'm'],
+];
+const TREND_SERIES = [['Gross margin', 'grossMargin'], ['Operating margin', 'operatingMargin'], ['Net margin', 'netMargin']];
+
+/** Finnhub /stock/metric body → { figures:[{label,value,unit}], trends:[{label, points:[{period, pct}]}] }. Pure; missing keys are skipped. */
+function parseFinnhubMetrics(body) {
+  const m = body?.metric || {};
+  const figures = [];
+  for (const [label, keys, unit] of FUNDAMENTAL_FIELDS) {
+    const key = keys.find((k) => m[k] != null && Number.isFinite(Number(m[k])));
+    if (key) figures.push({ label, value: Number(m[key]), unit });
+  }
+  const q = body?.series?.quarterly || {};
+  const trends = [];
+  for (const [label, key] of TREND_SERIES) {
+    const points = (Array.isArray(q[key]) ? q[key] : [])
+      .filter((p) => p?.period && Number.isFinite(Number(p.v)))
+      .slice(0, 4) // newest first in Finnhub's series
+      // Series margins are fractions (0.69); show them as percentages like the metric block.
+      .map((p) => ({ period: String(p.period).slice(0, 10), pct: Math.abs(Number(p.v)) <= 1.5 ? Number(p.v) * 100 : Number(p.v) }));
+    if (points.length) trends.push({ label, points });
+  }
+  return { figures, trends };
+}
+
+/** Reported figures for a US share, or null (no key, ASX, or the call failed). Never throws. */
+async function getFundamentals(symbol, exchange) {
+  const token = getFinnhubToken();
+  // shortcut: US only (Finnhub free tier); ASX would need Alpha Vantage OVERVIEW, which shares the 25/day quote budget.
+  if (!token || !isUsExchange(normalizeExchange(exchange))) return null;
+  const sym = toUsSymbol(symbol);
+  try {
+    const url = `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(sym)}&metric=all&token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const parsed = parseFinnhubMetrics(await res.json());
+    return parsed.figures.length || parsed.trends.length ? { symbol: sym, source: 'Finnhub', ...parsed } : null;
+  } catch (err) {
+    console.warn(`[marketData] fundamentals ${sym}:`, err.message);
+    return null;
+  }
+}
+
 // ─── Alpha Vantage (ASX) ────────────────────────────────────────────────────
 
 function getAlphaVantageKey() {
@@ -206,6 +267,8 @@ module.exports = {
   getUsdToAudRate,
   getGoldSpotAud,
   getEarningsCalendar,
+  getFundamentals,
+  parseFinnhubMetrics,
   priceToAud,
   normalizeExchange,
   isUsExchange,
