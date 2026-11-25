@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "a31ec71c",
+   "fullHash": "a31ec71c73a92c6c26175ddf8dea29e0e15225f9",
+   "committedAt": "2026-11-25T13:47:20+10:00",
+   "author": "mrb",
+   "area": "Finance",
+   "subject": "Finance: Open in CRM link beside the client filter; Email activity opens filtered to that client",
+   "filesChanged": 1,
+   "insertions": 4,
+   "deletions": 3,
+   "goal": "Make the Finance to CRM link visible even when the filtered client has no documents in the date range, and narrow Email activity to the client being looked at.",
+   "whatChanged": "FinancePage.jsx: when the Invoices or Quotes list is filtered to one client, an \"Open in CRM\" link to /clients/<id> sits beside Clear. EmailActivityModal takes an initialQuery; opened from a client-filtered list, its search box starts with that client's name (editable/clearable).",
+   "filesImpacted": [
+    "vault/client/src/pages/FinancePage.jsx"
+   ],
+   "benefit": "The CRM link no longer depends on there being rows in the list; the email log shows only the relevant client's sends without typing.",
+   "concerns": "Not viewed in the browser; checked only that the file compiles. Email activity filters by name text, so another client whose name contains it also matches. The name comes from the active-clients list, so a client not marked active in CRM gets no pre-fill."
+  },
+  {
    "commit": "2ab9b94e",
    "fullHash": "2ab9b94efb23669cc8bd98b4e652d7a49a24f652",
    "committedAt": "2026-11-25T13:31:28+10:00",
