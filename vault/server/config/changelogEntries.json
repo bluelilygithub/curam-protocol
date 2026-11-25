@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b25a758d",
+   "fullHash": "b25a758d4eee84e1bbc1a6a9b17d67a2bd2bdaf9",
+   "committedAt": "2026-11-26T03:46:10+10:00",
+   "author": "mrb",
+   "area": "Geo-check",
+   "subject": "Geo-check milestone 5: AI summary, guide chat, docs",
+   "filesChanged": 12,
+   "insertions": 295,
+   "deletions": 15,
+   "goal": "Finish Geo-check: an optional short AI note on a check, a guide chat that knows the Countries view, and complete docs.",
+   "whatChanged": "New server/services/geoCheck/summary.js: POST /api/geo-check/runs/:id/summary (behind aiLimiter) sends the person's standard model the plain differences, each country's facts and the top 1,600 pixels of one picture per country (shrunk to 800 px wide), and keeps the note on the run. Page text goes in as data the model is told not to follow. A model that cannot look at pictures is asked again with the facts alone, and the note says so. Usage is logged as geo_check_summary. CountriesView: a Summarise with AI button, with the note and \"It can be wrong: check the pictures\". Device preview guide: a Countries area and 8 entries, and its Open buttons switch to the Countries view first. docs/geo-check.md finished (set-up steps, all tests); key-files updated.",
+   "filesImpacted": [
+    "vault/server/services/geoCheck/summary.js",
+    "vault/server/services/geoCheck/summary.test.js",
+    "vault/server/services/geoCheck/jobs.js",
+    "vault/server/routes/geoCheck.js",
+    "vault/server/routes/geoCheck.db.test.js",
+    "vault/client/src/pages/devicePreview/CountriesView.jsx",
+    "vault/client/src/pages/DevicePreviewPage.jsx",
+    "vault/client/src/pages/devicePreview/devicePreviewTools.mjs",
+    "vault/server/services/devicePreviewTutor.js",
+    "vault/server/services/devicePreviewTutor.test.js",
+    "vault/docs/geo-check.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "A check can end with a two-line note anyone can read, and the guide can explain the Countries view.",
+   "concerns": "The summary has NOT been produced by a real AI model: local Vault has no model chosen in Settings and both local API keys (Anthropic, Gemini) are invalid, so it was tested with a stand-in model (prompt, picture shrinking with real sharp, text-only fallback, usage logging, errors) and the button was seen refusing with \"No AI model is set up\". First real call will be on Railway; cost per summary not measured. The guide chat was not asked a real question for the same reason (its drift tests pass). Nothing in Geo-check has been tried against DataImpulse or on Railway yet."
+  },
+  {
    "commit": "8040b8d7",
    "fullHash": "8040b8d7d8d52fcc6c1743930e728c0bad948705",
    "committedAt": "2026-11-25T19:49:21+10:00",
