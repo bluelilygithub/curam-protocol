@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8040b8d7",
+   "fullHash": "8040b8d7d8d52fcc6c1743930e728c0bad948705",
+   "committedAt": "2026-11-25T19:49:21+10:00",
+   "author": "mrb",
+   "area": "Geo-check",
+   "subject": "Geo-check milestone 4: what differs, in plain words",
+   "filesChanged": 10,
+   "insertions": 366,
+   "deletions": 8,
+   "goal": "Say in words what differs between countries, and what changed since an earlier check, so nobody has to spot it in the pictures.",
+   "whatChanged": "New server/services/geoCheck/diff.js (no AI): across the countries of one check it lists redirects, language, page title, currency, first prices, a cookie notice in some countries only, and headings and buttons shown in some countries only (those two only between countries that got the same language, because across languages every heading differs). Between two checks of the same page it lists, per country, what is new and what is gone. The across-countries result is worked out when a finished check is first opened and kept on the run; GET /runs/:id/compare/:otherId compares two checks (owner-checked, same page only). CountriesView: \"What differs between the countries\" above the grid, and \"Compare with an earlier check of this page\".",
+   "filesImpacted": [
+    "vault/server/services/geoCheck/diff.js",
+    "vault/server/services/geoCheck/diff.test.js",
+    "vault/server/services/geoCheck/jobs.js",
+    "vault/server/routes/geoCheck.js",
+    "vault/server/routes/geoCheck.db.test.js",
+    "vault/client/src/pages/devicePreview/CountriesView.jsx",
+    "vault/client/src/pages/devicePreview/countriesModel.mjs",
+    "vault/client/src/pages/devicePreview/countriesModel.test.mjs",
+    "vault/docs/geo-check.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "The release check reads as a short list (for example \"Sent to /index.ja.html in JP; Language: en-gb in AU, ja in JP\") instead of a grid to study.",
+   "concerns": "Checked on screen locally with booking.com from AU and JP through the local stand-in proxy (which exits from Australia, so prices did not change by country there). NOT tried against DataImpulse or on Railway. Sites that rotate offers between visits show many price and heading changes between two checks minutes apart; that is the site. Price spotting is a pattern match on symbols and codes, so unusual price formats are missed. Checks run before this change get their differences the first time they are opened."
+  },
+  {
    "commit": "7e5f2ac5",
    "fullHash": "7e5f2ac5fb6a2765ff5617011752b12833e02c94",
    "committedAt": "2026-11-25T19:29:33+10:00",
