@@ -73,6 +73,8 @@ Moved out of CLAUDE.md.
 | `SHELF_QUOTA_MB` | Vault Shelf — storage cap per person for unfiled CRM captures and Shelf rows in the Invoice Review queue (default 200). Pictures sent to Notes / CRM notes use the normal `ATTACHMENT_QUOTA_MB` instead. `server/routes/quickIngestRouter.js` |
 | `SHELF_INSTALLER_MAX_MB` | Vault Shelf — largest installer an admin may upload (default 200). Kept on the upload volume. `server/routes/quickIngestRouter.js` |
 | `BRAVE_PRICE_PER_QUERY_USD` / `SERP_PRICE_PER_QUERY_USD` | Topic Research — price of one Brave / Serper query for the per-run cost estimate (default 0: set real prices or the M5 monthly budget stop has nothing to count). Topic Research's Brave source reuses the existing `SEARCH_API_KEY` when it is a Brave key |
+| `GEO_PROXY_SERVER` / `GEO_PROXY_USERNAME_TEMPLATE` / `GEO_PROXY_PASSWORD` | Geo-check (Device preview's Countries, `docs/geo-check.md`) — the residential proxy (chosen 2026-11-25: DataImpulse). Gateway address (`http://host:port`), username with `{country}` (`au`) or `{COUNTRY}` (`AU`) where the provider wants the country, and the password (may also hold `{country}`, as IPRoyal does). All three or Geo-check says it is not set up. Never logged, stored or sent to a browser. `server/services/geoCheck/proxy.js` |
+| `GEO_PROXY_CHECK_URL` / `GEO_PROXY_COST_PER_GB` / `GEO_PROXY_LABEL` | Geo-check — address asked through the proxy to see which country it exited from (default `https://ipinfo.io/json`), price per GB in **Australian dollars** for the cost line (optional), and a name shown to admins (optional) |
 
 ---
 

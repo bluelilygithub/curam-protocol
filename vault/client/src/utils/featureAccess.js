@@ -37,6 +37,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   webExtractor: true,
   fonts: true,
   restyle: true,
+  geoCheck: false, // keep in step with server/config/featureAccess.js
   browserAgent: true,
   roomPlanner: true,
   gardenPlanner: true,
@@ -75,6 +76,7 @@ export const FEATURE_LIFECYCLE = {
   liveTv: 'preview',
   docCompare: 'preview',
   presentations: 'preview',
+  geoCheck: 'preview',
 };
 export const LIFECYCLE_LABELS = {
   preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
@@ -125,6 +127,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'pdf', label: 'PDF Tools' },
       { key: 'fonts', label: 'Font Customizer' },
       { key: 'restyle', label: 'Style editor' },
+      { key: 'geoCheck', label: 'Geo-check (Device preview countries)' },
       { key: 'browserAgent', label: 'Browser Agent' },
       { key: 'roomPlanner', label: 'Room Planner' },
       { key: 'gardenPlanner', label: 'Garden Planner' },

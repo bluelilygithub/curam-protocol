@@ -45,6 +45,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   webExtractor: true,
   fonts: true,
   restyle: true,
+  // Geo-check: Device preview's Countries view through a paid residential proxy (docs/geo-check.md), built milestone by milestone: off until an admin switches it on
+  geoCheck: false,
   browserAgent: true,
   roomPlanner: true,
   gardenPlanner: true,
@@ -100,6 +102,7 @@ const FEATURE_LIFECYCLE = {
   liveTv: 'preview',          // new: streams come and go, and most will not play in a browser; not yet run on Railway
   docCompare: 'preview',      // new: tested on generated documents only; not yet run on Railway or on real AI edits
   presentations: 'preview',   // new: model generation + PPTX/PDF/PNG export not yet run on Railway
+  geoCheck: 'preview',        // built milestone by milestone; not yet run against a real proxy
 };
 const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
 

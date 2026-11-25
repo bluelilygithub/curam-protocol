@@ -229,6 +229,7 @@ app.use('/api/graphics-tutor', requireFeature('graphics'), aiLimiter, require('.
 app.use('/api/fonts', requireFeature('fonts'), require('./routes/fonts'));
 app.use('/api/fonts-tutor', requireFeature('fonts'), aiLimiter, require('./routes/fontsTutor')); // the Font Customizer guide chat (sees no fonts)
 app.use('/api/restyle', requireFeature('restyle'), require('./routes/restyle'));
+app.use('/api/geo-check', requireFeature('restyle'), requireFeature('geoCheck'), require('./routes/geoCheck')); // Geo-check (docs/geo-check.md): milestone 1 has only the admin try route
 app.use('/api/device-preview-tutor', requireFeature('restyle'), aiLimiter, require('./routes/devicePreviewTutor')); // the Device preview guide chat (sees no addresses or pages); same switch as the Style editor
 app.use('/api/restyle-tutor', requireFeature('restyle'), aiLimiter, require('./routes/restyleTutor')); // the CSS guide chat (sees no pages)
 app.use('/api/room-projects', requireFeature('roomPlanner'), require('./routes/roomProjects'));

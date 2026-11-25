@@ -126,6 +126,41 @@ async function signIn(page, { username, password }, { twoStep }) {
   }
 }
 
+// ── Shared with Geo-check (server/services/geoCheck/capture.js): the safety rules for any browser context Vault opens ──
+
+/** Checks every request the context makes with checkSsrf() (verdict per host remembered for this context) and drops blocked kinds. */
+async function guardContext(context, blockedTypes = BLOCKED_TYPES) {
+  const verdicts = new Map();
+  const hostAllowed = async (hostname) => {
+    if (!verdicts.has(hostname)) verdicts.set(hostname, checkSsrf(hostname).then(() => true, () => false));
+    return verdicts.get(hostname);
+  };
+  await context.route('**/*', async (route) => {
+    const req = route.request();
+    let parsed;
+    try { parsed = new URL(req.url()); } catch { return route.abort(); }
+    if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') return route.continue();
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return route.abort();
+    if (blockedTypes.has(req.resourceType())) return route.abort();
+    return (await hostAllowed(parsed.hostname)) ? route.continue() : route.abort();
+  });
+}
+
+/** page.goto that turns "the site cut the connection" into { dropped: true } instead of an error. */
+async function openPage(page, address) {
+  try {
+    return { response: await page.goto(address, { waitUntil: 'domcontentloaded', timeout: RENDER_TIMEOUT_MS }) };
+  } catch (err) {
+    if (CONNECTION_REFUSED.test(String(err && err.message))) return { dropped: true };
+    throw err;
+  }
+}
+
+/** A redirect leg is not seen by context.route, so the address the page ended on is checked again. */
+async function assertPublicFinalUrl(finalUrl) {
+  try { await checkSsrf(new URL(finalUrl).hostname); } catch { throw new Error('The page redirected to a private or internal address'); }
+}
+
 /** Opens the page once as one identity. Returns what came back, including the status of the page itself. */
 async function renderOnce(browser, userAgent, url, login = null) {
   let origin = null;
@@ -136,31 +171,9 @@ async function renderOnce(browser, userAgent, url, login = null) {
     ...(login ? { httpCredentials: { username: login.username || '', password: login.password, origin } } : {}),
   });
   try {
-    // Every request is checked; the verdict for a host is remembered for this render only.
-    const verdicts = new Map();
-    const hostAllowed = async (hostname) => {
-      if (!verdicts.has(hostname)) verdicts.set(hostname, checkSsrf(hostname).then(() => true, () => false));
-      return verdicts.get(hostname);
-    };
-    await context.route('**/*', async (route) => {
-      const req = route.request();
-      let parsed;
-      try { parsed = new URL(req.url()); } catch { return route.abort(); }
-      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') return route.continue();
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return route.abort();
-      if (BLOCKED_TYPES.has(req.resourceType())) return route.abort();
-      return (await hostAllowed(parsed.hostname)) ? route.continue() : route.abort();
-    });
-
+    await guardContext(context);
     const page = await context.newPage();
-    const open = async (address) => {
-      try {
-        return { response: await page.goto(address, { waitUntil: 'domcontentloaded', timeout: RENDER_TIMEOUT_MS }) };
-      } catch (err) {
-        if (CONNECTION_REFUSED.test(String(err && err.message))) return { dropped: true };
-        throw err;
-      }
-    };
+    const open = (address) => openPage(page, address);
     let opened = await open(login && login.loginUrl ? login.loginUrl : url);
     if (opened.dropped) return { status: 0, html: '', finalUrl: url, dropped: true };
     let signedIn = false;
@@ -205,8 +218,7 @@ async function renderOnce(browser, userAgent, url, login = null) {
       });
     }).catch(() => {});
     const finalUrl = page.url();
-    // Each request was checked on its way out, but a redirect leg is not seen by context.route: the address we ended on is checked again.
-    try { await checkSsrf(new URL(finalUrl).hostname); } catch { throw new Error('The page redirected to a private or internal address'); }
+    await assertPublicFinalUrl(finalUrl);
     return { status, html: await page.content(), finalUrl, signedIn, readLanding };
   } finally {
     await context.close().catch(() => {});
@@ -245,4 +257,7 @@ async function renderPage(url, { login = null } = {}) {
   }
 }
 
-module.exports = { renderPage, renderAvailable, CONNECTION_REFUSED, USER_AGENTS };
+module.exports = {
+  renderPage, renderAvailable, loadPlaywright, CONNECTION_REFUSED, USER_AGENTS,
+  guardContext, openPage, assertPublicFinalUrl, SETTLE_TIMEOUT_MS,
+};
