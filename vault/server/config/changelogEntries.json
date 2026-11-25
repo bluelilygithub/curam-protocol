@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "5324c623",
+   "fullHash": "5324c6230533a78b655e2fba93722243f94e1b0d",
+   "committedAt": "2026-11-25T11:50:13+10:00",
+   "author": "mrb",
+   "area": "CRM",
+   "subject": "CRM: four-column client grid, \"Display name\" label for company clients",
+   "filesChanged": 1,
+   "insertions": 2,
+   "deletions": 2,
+   "goal": "Fit more client cards on wide screens, and make clear that the company form name field is the record title, not the primary contact.",
+   "whatChanged": "ClientsPage.jsx: the client card grid is 1 column on phones, 2 from sm (640px) and 4 from xl (1280px), previously at most 2. In the new/edit client modal the name field on a company client is labelled \"Display name *\" (individuals keep \"Name *\"). Label only; the stored field is unchanged.",
+   "filesImpacted": [
+    "vault/client/src/pages/ClientsPage.jsx"
+   ],
+   "benefit": "Twice as many clients visible at once on desktop; less confusion between the record name, the Company field and the primary contact (set under Contacts on the client page).",
+   "concerns": "Not run in the browser. At four columns, long client names, company names and contact emails will truncate more often. Screens between 640px and 1279px still show 2 columns."
+  },
+  {
    "commit": "b8c266ff",
    "fullHash": "b8c266ff8311aa2883b0c5c20cfef5a40f3dca77",
    "committedAt": "2026-11-25T11:29:41+10:00",
