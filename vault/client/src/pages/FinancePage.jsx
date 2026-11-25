@@ -1184,7 +1184,11 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
                       </button>
                     </Tooltip>
                   </td>
-                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{inv.clientName || '—'}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>
+                    {inv.clientRef && inv.clientName
+                      ? <Tooltip text="Open this client's record in CRM."><Link to={`/clients/${inv.clientRef}`} className="hover:opacity-60 transition-opacity underline">{inv.clientName}</Link></Tooltip>
+                      : (inv.clientName || '—')}
+                  </td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.issueDate)}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.dueDate)}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: inv.paidAt ? '#065f46' : 'var(--color-muted)' }}>{inv.paidAt ? fmtDate(inv.paidAt) : '—'}</td>
@@ -1500,7 +1504,11 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
           <div className="flex flex-col gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
             <div className="flex justify-between gap-4 flex-wrap">
               <div>
-                <div className="font-semibold text-base">{viewInvoice.clientName || 'No client'}</div>
+                <div className="font-semibold text-base">
+                  {viewInvoice.clientRef && viewInvoice.clientName
+                    ? <Tooltip text="Open this client's record in CRM."><Link to={`/clients/${viewInvoice.clientRef}`} className="hover:opacity-60 transition-opacity underline">{viewInvoice.clientName}</Link></Tooltip>
+                    : (viewInvoice.clientName || 'No client')}
+                </div>
                 {viewInvoice.clientAddress && <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{viewInvoice.clientAddress}</div>}
                 {viewInvoice.clientAbn     && <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ABN {viewInvoice.clientAbn}</div>}
               </div>
