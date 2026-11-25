@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_shares_completed';
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 function injectStepCounter(stepIndex, totalSteps = TOTAL_STEPS) {
   requestAnimationFrame(() => {
@@ -86,7 +86,7 @@ export function startSharesTour(setTab, { isAdmin = false } = {}) {
     '[data-tour="shares-tab-cgt"]', 'right', 'cgt');
 
   step(5, 'shares-insight', 'Charts and News',
-    'Charts compare your portfolio with benchmarks and show who beat or lagged the market, drawdowns, sector mix and an earnings timeline. News writes a short AI briefing per holding each morning (bullish, bearish, watch or neutral) and a 30-day summary. They are information, not advice.',
+    'Charts compare your portfolio with benchmarks and show who beat or lagged the market, drawdowns, sector mix and an earnings timeline. News writes a short AI briefing per holding each morning (bullish, bearish, watch or neutral) and a 30-day summary. Each bullish or bearish signal is also kept and scored later (see Track record on the Thesis tab). They are information, not advice.',
     '[data-tour="shares-tab-news"]', 'right', 'news');
 
   step(6, 'shares-questions', 'Questions',
@@ -94,17 +94,21 @@ export function startSharesTour(setTab, { isAdmin = false } = {}) {
     '[data-tour="shares-tab-questions"]', 'right', 'questions');
 
   step(7, 'shares-thesis', 'Thesis',
-    'Write why you own a share, the assumptions that must stay true and the red lines that would prove you wrong. Check now tests them against your stored trades and news briefings and says whether the thesis is intact, weakening or broken. It cannot read company filings, so thin evidence shows as "not enough evidence". Save each rethink as a new revision; the check gives feedback on the latest one, referring to earlier revisions, your portfolio and the market. Past checks are kept so you can see drift.',
+    'Write why you own a share, the assumptions that must stay true and the red lines that would prove you wrong. Check & review tests them against your stored trades, news briefings and, for US shares, reported figures such as margins and growth, and says whether the thesis is intact, weakening or broken. Before it decides, a bear case argues against each assumption and a bull case for it; open "Stress test" under a check to read both. It cannot read company filings, so thin evidence shows as "not enough evidence". Save each rethink as a new revision; past checks are kept so you can see drift.',
     '[data-tour="shares-tab-thesis"]', 'right', 'thesis');
 
+  step(8, 'shares-track-record', 'Track record',
+    'Every bullish or bearish news signal and every thesis verdict is saved with the price that day, then compared with how the share did against its index 30 and 90 days later. This card shows how often each kind of call was right. Thesis checks read it too, to sound only as sure as the record allows; it never changes a rating. It appears once the first call is recorded, and the first results take 30 days.',
+    '[data-tour="shares-track-record"]', 'left', 'thesis');
+
   if (isAdmin) {
-    step(8, 'shares-compliance', 'Compliance (admins only)',
+    step(9, 'shares-compliance', 'Compliance (admins only)',
       'A monthly check of a fixed ATO page list writes an in-app note on changes that may matter for your share records, with source links and an action to consider. It is general information, not tax or legal advice: check the ATO page and your accountant. Reports are kept until you delete them, and deleted reports can be restored from the recycle bin.',
       '[data-tour="shares-tab-compliance"]', 'right', 'compliance');
   }
 
-  const metalsStep = isAdmin ? 9 : 8;
-  const helpStep = isAdmin ? 10 : 9;
+  const metalsStep = isAdmin ? 10 : 9;
+  const helpStep = isAdmin ? 11 : 10;
   step(metalsStep, 'shares-metals', 'Metals',
     'A separate book for physical gold: ounces, cost, current spot value and unrealised profit, with a price history and a drop alert. It is kept apart from your share holdings.',
     '[data-tour="shares-tab-metals"]', 'right', 'metals');

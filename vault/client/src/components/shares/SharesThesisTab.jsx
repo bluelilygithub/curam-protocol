@@ -254,7 +254,7 @@ export default function SharesThesisTab({ onAskGuide }) {
               <button type="button" onClick={() => startNew('', '')} className={`${btnCls} border w-full mt-2`} style={btnGhost}>Write a thesis for another share</button>
             </Tooltip>
             {scorecard?.total > 0 && (
-              <div className="rounded-xl border p-3 mt-4" style={card}>
+              <div className="rounded-xl border p-3 mt-4" style={card} data-tour="shares-track-record">
                 <div className="flex items-center gap-1.5 mb-1">
                   <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Track record</p>
                   <Tooltip text="Each bullish or bearish news signal and each thesis check verdict is saved with the price that day, then compared with how the share did against its index 30 and 90 days later. 'Right' means a bullish signal or an intact thesis beat the index, and a bearish signal or a concern lagged it. Thesis checks also see this record, to set how confident they sound.">

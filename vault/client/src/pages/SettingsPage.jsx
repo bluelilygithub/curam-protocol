@@ -2203,7 +2203,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Shares Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                9-step tour — quotes, Trades and Cash as the source, capital gains and the accountant pack, charts and news, questions, the thesis journal, metals, and where to get help
+                10-step tour — quotes, Trades and Cash as the source, capital gains and the accountant pack, charts and news, questions, the thesis journal and its track record, metals, and where to get help
               </p>
             </div>
             <button
