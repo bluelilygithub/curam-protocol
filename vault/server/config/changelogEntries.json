@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "62c82161",
+   "fullHash": "62c8216135df399a1517ecfd156fd0e9954f9515",
+   "committedAt": "2026-11-25T17:38:29+10:00",
+   "author": "mrb",
+   "area": "Geo-check",
+   "subject": "Geo-check milestone 1: proxy, exit check, one capture (admin try route)",
+   "filesChanged": 16,
+   "insertions": 921,
+   "deletions": 27,
+   "goal": "First step of the Countries view in Device preview: prove one page can be captured as a visitor in another country sees it, through a residential proxy (DataImpulse chosen by the owner).",
+   "whatChanged": "New server/services/geoCheck: countries.js (33 countries with language, time zone and location), proxy.js (GEO_PROXY_* settings, country put into the username or password), exitCheck.js (reads which country the proxy really used; labels Verified / Unverified: exited from XX / exit not confirmed), capture.js (one country, one screen: real Chromium, exit check, page, scroll, JPEG up to 8,000 px tall, prices/currencies/headings/buttons, bytes counted). Admin-only POST /api/geo-check/try returns one picture without saving. renderPage.js: its request guard, page opening and final-address check are now shared functions; behaviour unchanged. New switch geoCheck (preview, off). docs/geo-check.md brief, env-vars and key-files updated. A timed-out exit check now stops the capture, because Chromium shows a wrong proxy password only as a time-out.",
+   "filesImpacted": [
+    "vault/server/services/geoCheck/capture.js",
+    "vault/server/services/geoCheck/proxy.js",
+    "vault/server/services/geoCheck/countries.js",
+    "vault/server/services/geoCheck/exitCheck.js",
+    "vault/server/routes/geoCheck.js",
+    "vault/server/services/restyle/renderPage.js",
+    "vault/server/index.js",
+    "vault/server/config/featureAccess.js",
+    "vault/client/src/utils/featureAccess.js",
+    "vault/docs/geo-check.md",
+    "vault/docs/env-vars.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "The risky parts (proxy sign-in, exit country, Chromium through a proxy with the SSRF guard) are proven before tables and screens are built on them.",
+   "concerns": "NOT tried against a real proxy (DataImpulse) or on Railway: tested locally with real Chromium through a local stand-in proxy that needs a username and password (apple.com/au, about 2.4 MB a phone capture). DataImpulse username format not yet confirmed. Railway memory for Chromium plus a proxy not measured. No identity retry (unlike renderPage), on purpose, to save paid traffic. Commit is on branch geo-check only, not on version-7."
+  },
+  {
    "commit": "bfef923b",
    "fullHash": "bfef923b69985c00c2bc80b969f13320b416d7e2",
    "committedAt": "2026-11-25T16:23:50+10:00",
