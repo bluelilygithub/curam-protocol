@@ -65,7 +65,7 @@ Legacy fields `portfolioLine`, `allocation`, `holdingPnl`, `bySymbol` remain for
 | `days` | Portfolio/symbol snapshots | Observation history |
 |---|---|---|
 | `1` | Intraday, since **local midnight in the workspace timezone** (was the database's UTC `CURRENT_DATE`, which made "Today" start around 10-11am in Sydney) | N/A for heatmap length |
-| `7` / `30` / `90` | Daily last snapshot per calendar day | Up to window from `share_news_briefings` |
+| `7` / `30` / `90` | Daily last snapshot per calendar day | Up to window from `share_news_briefings`, but never further back than the retention setting (see "How far back observations go") |
 
 Charts load when the **Charts** tab is opened (not on every Shares page load). **Refresh quotes** re-records snapshots and reloads chart data.
 
@@ -98,9 +98,18 @@ Currency: the Nasdaq and SOX proxies (QQQ, SOXX) are **USD-priced** ETFs and STW
 | `7d` / `30d` / `90d` | that many days back from now |
 | `12m` | 365 days back from now |
 | `fy` | **Australian financial year to date** — local midnight on 1 July (30 Jun–1 Jul is the boundary) to now; `days` counts both ends |
-| `all` | everything recorded — from the first portfolio snapshot (`history.firstSnapshotAt`); observations from the start |
+| `all` | everything recorded — from the first portfolio snapshot (`history.firstSnapshotAt`); observations only as far back as the retention setting keeps them |
 
 Beyond 90 days (`12m`, `fy` once it passes 90 days, `all`) the per-holding price series is cut to **one point a day** (the last of each day) so the payload stays a sensible size. The trailing return and period movers/benchmarks use the same window; for `fy` and `all` the trailing window is pinned to the exact start (`loadTrailingMetrics(..., windowStart)`) rather than "N days ago". The heatmap stays capped at 14 days. When the chosen range is longer than what has been recorded, the UI says how many days exist. Tests: `node server/services/sharesChartData.test.js` (range logic).
+
+### How far back observations go (2026-11-25)
+
+Two kinds of stored data feed the charts, and only one is pruned:
+
+- **Snapshots** (`share_symbol_snapshots`, `share_portfolio_snapshots`) and **index closes** (`share_benchmark_closes`) are never pruned, so portfolio value, price by holding and gold spot history can reach back to the first record.
+- **Portfolio Note observations** (`share_news_briefings`, `type='observation'`) are deleted after the admin setting **Settings → Shares → Briefing and Portfolio Note History** (`shares_briefing_retention_days`, default 45, 7–730, read by `getBriefingRetentionDays()` in `sharesNewsService.js`; the same setting covers the daily briefings). Charts built from observations, mainly **Portfolio vs benchmarks** over a range (`benchmarksPeriod`), stop at that window, so with the default 45 days the 90d, 12m, FY and all ranges show at most 45 days of benchmark moves.
+
+Raising the setting does not bring back deleted observations; the history grows from then on (90 days set today gives a full 90 days in about 45 days). Lowering it shortens these charts and the high-water-mark fallback in `portfolioAlerts.js`, which also reads stored observations.
 
 ### UI
 
