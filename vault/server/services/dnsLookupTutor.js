@@ -11,7 +11,7 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 const CATALOG = [
   { id: 'name', label: 'Name box', group: 'Look up',
     does: 'The box at the top of Look up records. Type a domain name (example.com), a web address (https://www.example.com/page) or an email address, and the page uses just the domain part. Type an IP address instead to find the name it belongs to (a reverse lookup).',
-    notes: 'It asks about the name you type, exactly. www.example.com and example.com can have different records.' },
+    notes: 'It asks about the name you type, exactly. www.example.com and example.com can have different records: MX, NS, TXT, SOA and CAA usually belong to the main domain, so www.example.com often shows only an address. If most records say None found, leave off the www.' },
   { id: 'types', label: 'Record types', group: 'Look up',
     does: 'The row of choices under the box picks which kinds of record to ask for: A and AAAA (the address a name points to), CNAME (an alias to another name), MX (where email goes), NS (who runs the name\'s DNS), TXT (notes such as SPF and site verification), SOA (the zone\'s admin details) and CAA (who may issue security certificates). All are ticked by default.',
     notes: 'Untick the ones you do not need to keep the answer short.' },

@@ -288,6 +288,9 @@ export default function DnsLookupPage() {
                     aria-label="Domain name or IP address" value={name} maxLength={300} autoCapitalize="none" spellCheck={false}
                     onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && lookUp()}
                   />
+                  <p className="text-xs -mt-1.5" style={{ color: 'var(--color-muted)' }}>
+                    Leave off the <strong>www.</strong> to see everything. Email, name server and text records (MX, NS, TXT, SOA, CAA) usually belong to the main domain (example.com); www.example.com often has only an address.
+                  </p>
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Record types" data-guide="types">
                     {ALL_TYPES.map((t) => {
                       const on = types.includes(t);
