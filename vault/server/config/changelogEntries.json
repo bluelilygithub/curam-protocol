@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "dce8bca6",
+   "fullHash": "dce8bca67f5f6f5a2e1ae7933f149701cce17c01",
+   "committedAt": "2026-11-25T16:12:55+10:00",
+   "author": "mrb",
+   "area": "DNS Lookup",
+   "subject": "DNS Lookup: show the country and city where the site is hosted",
+   "filesChanged": 7,
+   "insertions": 40,
+   "deletions": 12,
+   "goal": "Say which country a site is hosted in, not just which company hosts it.",
+   "whatChanged": "whoHosts.js asks ipinfo.io/<ip>/json (no key) alongside the RDAP lookup and returns location { country, region, city }; it also keeps the registry country as registeredIn. report.mjs adds a Country line to the Host and registrar box and both exports: \"Australia (Sydney, New South Wales)\", with a note for proxies that this is where the proxy answered; when ipinfo fails it says \"Not known\" and gives the network company's registered country, labelled as such. Guide catalogue, (i) text, docs and tests updated.",
+   "filesImpacted": [
+    "vault/server/services/dnsLookup/whoHosts.js",
+    "vault/client/src/pages/dnsLookup/report.mjs",
+    "vault/client/src/pages/dnsLookup/dnsLookupTools.mjs",
+    "vault/server/services/dnsLookupTutor.js",
+    "vault/server/services/dnsLookup/dnsLookup.test.js",
+    "vault/client/src/pages/dnsLookup/report.test.mjs",
+    "vault/docs/dns-lookup.md"
+   ],
+   "benefit": "The registry country is misleading (GitHub's Sydney servers are \"United States\" there); the location service gives the real place, which matters for Australian data-hosting questions.",
+   "concerns": "Seen working locally (github.com shows Australia, Sydney; CSV export carries it). ipinfo.io without a key allows about 50,000 lookups a month and may rate-limit; the line then falls back. IP location is an estimate, usually right to the country. Saved lookups from before this change have no country until looked up again."
+  },
+  {
    "commit": "29d53e1d",
    "fullHash": "29d53e1db1d730a027c37f6a1b736b7d5e97f433",
    "committedAt": "2026-11-25T15:57:58+10:00",
