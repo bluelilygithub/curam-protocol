@@ -3837,6 +3837,18 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_share_news_user_date
       ON share_news_briefings ("userId", date DESC)
   `);
+  // One-off cleanup, safe to repeat: before 2026-11-25 a parser bug saved some 30-day reviews with nothing in them
+  // (no overview, no stocks, no assessment). Only rows empty in all three are removed; the fix stops new ones.
+  {
+    const { rowCount } = await pool.query(`
+      DELETE FROM share_news_briefings
+      WHERE type = 'monthly_summary'
+        AND btrim(coalesce(content, '')) = ''
+        AND coalesce(jsonb_array_length(CASE WHEN jsonb_typeof(headlines->'stocks') = 'array' THEN headlines->'stocks' END), 0) = 0
+        AND btrim(coalesce(headlines->>'adviceQuality', '')) = ''
+    `);
+    if (rowCount) console.log(`[db] removed ${rowCount} empty Shares monthly review(s)`);
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_qa (
