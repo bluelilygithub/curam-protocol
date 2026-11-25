@@ -8,6 +8,7 @@ const { pool } = require('../db');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const bin = require('../services/recycleBin');
 const svc = require('../services/sharesThesis');
+const scorecard = require('../services/sharesSignalScorecard');
 
 const idOf = (req) => {
   const n = Number(req.params.id);
@@ -32,6 +33,16 @@ router.put('/', async (req, res) => {
     res.json(await svc.saveThesis(req.user.id, value));
   } catch (err) {
     console.error('[sharesThesis] save error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/shares/thesis/scorecard — how past news signals and thesis verdicts turned out at 30 and 90 days
+router.get('/scorecard', async (req, res) => {
+  try {
+    res.json(scorecard.summarise(await scorecard.loadCalls(req.user.id)));
+  } catch (err) {
+    console.error('[sharesThesis] scorecard error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

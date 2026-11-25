@@ -9,6 +9,7 @@ Shipped to production (`version-7`), each as its own push:
 - **Step 1 code — dividends:** withholding gross/net (derived, editable), franking columns, `paidOn` backfill and editing. Commit `6be2c7ef`.
 - **Step 2 code — CGT view:** parcels, held-days wording, FY totals. Commits `0b1d2aaf`, `eda71970`. *Not built yet:* the "what-if sell" part.
 - **Step 10, thesis journal (partly, 2026-11-07):** the Thesis tab and AI check are built; see `docs/shares-thesis.md`. Built out of order at the owner's request; steps 3-9 are still open. Watchlist, signal scorecard, income projection, scenarios, targets and rebalancing drift are not built. Awaiting a first real model check to judge the output.
+- **Step 10, signal scorecard (2026-11-25):** news signals and thesis verdicts are recorded and scored at 30 and 90 days against the index; Track record card on the Thesis tab, fed back into thesis checks as calibration. See `docs/shares-scorecard.md`. The SQL has not yet run against a database.
 - **Not on the roadmap:** the Charts range fix and sub-tabs (commit `ca8540bd`).
 
 **Data verified:** all 27 trades were re-entered from the AUD prices paid on the CMC statements (confirmed by the user, 2026-10-02). This closes the step 3 spot-check for USD prices labelled AUD and puts the CGT view's AUD-as-stored basis on verified figures. It also means the USD price at purchase is not stored, so any step 6 currency-effect split would have to be estimated from historical exchange rates.

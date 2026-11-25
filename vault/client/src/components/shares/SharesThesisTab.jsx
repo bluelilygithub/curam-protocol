@@ -77,6 +77,17 @@ export default function SharesThesisTab({ onAskGuide }) {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Track record of past calls; optional, so a failure just hides the card.
+  const [scorecard, setScorecard] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api.get('/api/shares/thesis/scorecard')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (live) setScorecard(data); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+
   const current = theses.find((t) => keyOf(t) === selected) || null;
 
   useEffect(() => {
@@ -242,6 +253,38 @@ export default function SharesThesisTab({ onAskGuide }) {
             <Tooltip text="Write a thesis for a share that is not in your holdings, such as one you are watching or have sold.">
               <button type="button" onClick={() => startNew('', '')} className={`${btnCls} border w-full mt-2`} style={btnGhost}>Write a thesis for another share</button>
             </Tooltip>
+            {scorecard?.total > 0 && (
+              <div className="rounded-xl border p-3 mt-4" style={card}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Track record</p>
+                  <Tooltip text="Each bullish or bearish news signal and each thesis check verdict is saved with the price that day, then compared with how the share did against its index 30 and 90 days later. 'Right' means a bullish signal or an intact thesis beat the index, and a bearish signal or a concern lagged it. Thesis checks also see this record, to set how confident they sound.">
+                    <span style={{ color: 'var(--color-muted)' }}>{getIcon('info', { size: 13 })}</span>
+                  </Tooltip>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ color: 'var(--color-muted)' }}>
+                      <th className="text-left font-normal py-1">Call</th>
+                      <th className="text-right font-normal py-1">30 days</th>
+                      <th className="text-right font-normal py-1">90 days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scorecard.groups.map((g) => (
+                      <tr key={`${g.source}:${g.call}`} style={{ color: 'var(--color-text)' }}>
+                        <td className="py-1 pr-2">{g.label}<span className="block" style={{ color: 'var(--color-muted)' }}>{g.total} recorded</span></td>
+                        {[g.h30, g.h90].map((h, i) => (
+                          <td key={i} className="py-1 text-right align-top whitespace-nowrap">
+                            {h.n ? <>{Math.round(h.hitRate * 100)}% right<span className="block" style={{ color: 'var(--color-muted)' }}>{h.hits}/{h.n} · {h.avgEdgePct >= 0 ? '+' : ''}{h.avgEdgePct.toFixed(1)}% vs index</span></> : <span style={{ color: 'var(--color-muted)' }}>None yet</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>{scorecard.pending ? `${scorecard.pending} still waiting for their 30-day mark. ` : ''}A record of how past calls turned out, not a forecast.</p>
+              </div>
+            )}
           </div>
 
           {/* main: editor, or the open thesis, or a prompt */}

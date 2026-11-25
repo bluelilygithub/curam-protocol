@@ -100,6 +100,7 @@ for (const side of ['bear', 'bull']) {
   for (const re of [/Never say buy, sell, hold/, /nothing in the pack/, /price move alone is not evidence/]) assert.match(sys, re, `${side} keeps the rules`);
 }
 assert.match(svc.SYSTEM_PROMPT, /DEBATE.*NOT evidence/, 'the judge is told the debate is argument, not evidence');
+assert.match(svc.SYSTEM_PROMPT, /TRACK RECORD.*calibration, NOT evidence.*never change a rating/, 'the track record cannot move a rating');
 assert.strictEqual(svc.formatDebate({}), '', 'no debate, no block');
 const deb = svc.formatDebate({ bear: '1. margins cut' });
 assert.match(deb, /BEAR CASE --\n1\. margins cut/);

@@ -10,7 +10,8 @@ const {
   formatPctOffDisplay,
   refreshHighWaterMarksAndAlerts,
 } = require('../services/portfolioAlerts');
-const { generateDailyBriefing, generateMonthlySummary, generateObservation } = require('../services/sharesNewsService');
+const { generateDailyBriefing, generateMonthlySummary, generateObservation, getDateInTz } = require('../services/sharesNewsService');
+const { scoreDue } = require('../services/sharesSignalScorecard');
 const { reportSharesCron } = require('../services/SuggestionService');
 const { recordBenchmarkCloses } = require('../services/sharesBenchmarks');
 const sendEmail = require('../utils/sendEmail');
@@ -357,6 +358,13 @@ async function startSharesCron() {
         } catch (err) {
           console.error(`[shares-cron] news briefing user ${userId}:`, err.message);
           await reportSharesCron('briefing-failed', { userId, error: err.message });
+        }
+        // Signal scorecard: score calls whose 30/90-day mark has passed (database only, no paid calls).
+        try {
+          await scoreDue(userId, getDateInTz(tz));
+        } catch (err) {
+          console.error(`[shares-cron] scorecard user ${userId}:`, err.message);
+          await reportSharesCron('briefing-failed', { userId, error: err.message, context: 'sharesCron scorecard' });
         }
       }
     }),

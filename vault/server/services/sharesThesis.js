@@ -15,7 +15,8 @@ const { callModel } = require('./callModel');
 const { getModelsForUser, pickTextModel } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const sharesPortfolio = require('./sharesPortfolio');
-const { getBriefingsForUser } = require('./sharesNewsService');
+const { getBriefingsForUser, getWorkspaceTimezone, getDateInTz, sectorBenchmarkFor } = require('./sharesNewsService');
+const scorecard = require('./sharesSignalScorecard');
 const { capture, makeFingerprint } = require('./SuggestionService');
 
 const MAX_ITEMS = 7;
@@ -140,6 +141,7 @@ Rules:
    - Questions worth answering before the next revision.
    Rule 4 still applies: frame it as questions and risks to weigh, never as an instruction to buy, sell or resize.
 9. If a DEBATE is given, it is two one-sided arguments (a bear case and a bull case), NOT evidence. Weigh them, then rate only on what the evidence pack itself shows; a point either side makes without a pack item behind it counts for nothing. Where the bear case finds real evidence against an assumption, do not wave it away.
+10. The TRACK RECORD shows how this app's past calls turned out: the share against its index 30 and 90 days later. It is calibration, NOT evidence about the business: never change a rating because of it. In "feedback", if past thesis concerns or news signals for this holding were mostly right or mostly wrong, say so in one sentence and word your summary with matching confidence. Under 5 scored calls, say the record is too small to read anything into.
 
 Reply with ONLY one JSON object, no other text:
 {"assumptions":[{"n":1,"rating":"intact|weakening|impaired|broken|unclear","evidence":"..."}],
@@ -375,12 +377,14 @@ async function runCheck(userId, thesisId) {
   const modelId = pickTextModel(tiers, 'standard');
   if (!modelId) throw new Error('No model configured — check vault_models in Settings');
 
-  const [dash, tradeData, briefings, prevRows, revisions] = await Promise.all([
+  const [dash, tradeData, briefings, prevRows, revisions, allCalls, tz] = await Promise.all([
     sharesPortfolio.buildDashboard(userId),
     sharesPortfolio.getTradesAndLedger(userId),
     getBriefingsForUser(userId),
     pool.query(`SELECT * FROM share_thesis_checks WHERE "thesisId"=$1 AND "userId"=$2 ORDER BY "createdAt" DESC LIMIT 1`, [thesisId, userId]),
     listRevisions(userId, thesisId),
+    scorecard.loadCalls(userId),
+    getWorkspaceTimezone(),
   ]);
   const same = (x) => String(x.symbol).toUpperCase() === thesis.symbol && String(x.exchange || '').toUpperCase() === thesis.exchange;
   const position = (dash.positions || []).find(same) || null;
@@ -404,7 +408,9 @@ async function runCheck(userId, thesisId) {
     debate[side] = String(s.value.text || '').trim().slice(0, 3000);
   });
 
-  const result = await callModel(modelId, prompt + formatDebate(debate), { maxTokens: 4000, system: SYSTEM_PROMPT, returnUsage: true });
+  const trackRecord = scorecard.formatTrackRecord(
+    scorecard.summarise(allCalls), scorecard.summarise(allCalls.filter(same)), thesis.symbol);
+  const result = await callModel(modelId, prompt + formatDebate(debate) + trackRecord, { maxTokens: 4000, system: SYSTEM_PROMPT, returnUsage: true });
   logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'shares_thesis_check' });
 
   const parsed = parseCheckReply(result.text, thesis);
@@ -419,6 +425,12 @@ async function runCheck(userId, thesisId) {
       parsed.feedback, thesis.revision, debate.bear || '', debate.bull || '']
   );
   const check = mapCheck(ins.rows[0]);
+
+  // Signal scorecard: the verdict is a call to score later (unclear is not). Never fails the check.
+  await scorecard.recordCall({
+    userId, source: 'thesis', symbol: thesis.symbol, exchange: thesis.exchange, call: scorecard.thesisCall(verdict),
+    priceAud: position?.priceAud, calledOn: getDateInTz(tz), benchKey: sectorBenchmarkFor(thesis.symbol, thesis.exchange).key,
+  }).catch((err) => console.warn('[sharesThesis] scorecard record:', err.message));
 
   // A triggered red line or a broken/impaired thesis is something to triage: put it in the suggestions inbox.
   if (['red-line', 'broken', 'impaired'].includes(verdict)) {

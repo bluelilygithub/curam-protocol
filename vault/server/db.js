@@ -3997,6 +3997,30 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_share_thesis_revisions_thesis
       ON share_thesis_revisions ("thesisId", revision DESC)
   `);
+  // Signal scorecard: each directional call (news signal, thesis verdict) with the price then, scored at 30 and 90 days.
+  // s30/s90: pending | scored | no-price. ret/bench are fractions (0.05 = +5%). See docs/shares-scorecard.md.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_signal_calls (
+      id            BIGSERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source        TEXT NOT NULL,
+      symbol        TEXT NOT NULL,
+      exchange      TEXT NOT NULL DEFAULT '',
+      "calledOn"    DATE NOT NULL,
+      call          TEXT NOT NULL,
+      "priceAud"    NUMERIC(18, 6) NOT NULL,
+      "benchSymbol" TEXT,
+      "benchAud"    NUMERIC(18, 6),
+      ret30         NUMERIC(12, 6),
+      bench30       NUMERIC(12, 6),
+      s30           TEXT NOT NULL DEFAULT 'pending',
+      ret90         NUMERIC(12, 6),
+      bench90       NUMERIC(12, 6),
+      s90           TEXT NOT NULL DEFAULT 'pending',
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE ("userId", source, symbol, exchange, "calledOn")
+    )
+  `);
 
   // ── Precious metals ───────────────────────────────────────────────────────
   await pool.query(`

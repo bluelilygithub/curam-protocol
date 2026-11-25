@@ -24,6 +24,7 @@ const { parseModelJson } = require('../utils/parseModelJson');
 const sharesPortfolio = require('./sharesPortfolio');
 const metalsPortfolio = require('./metalsPortfolio');
 const marketData = require('./marketData');
+const scorecard = require('./sharesSignalScorecard');
 const sendEmail = require('../utils/sendEmail');
 const { runtimeConfig } = require('../config/runtime');
 const {
@@ -354,6 +355,16 @@ async function generateDailyBriefing(userId) {
     throw err;
   } finally {
     client.release();
+  }
+
+  // Signal scorecard: keep each bullish/bearish call (the briefing rows themselves are pruned at 45 days). Never fails the briefing.
+  for (const b of stockBriefings) {
+    if (b.signal !== 'bullish' && b.signal !== 'bearish') continue;
+    const p = dash.positions.find((x) => x.symbol === b.symbol && x.exchange === b.exchange);
+    await scorecard.recordCall({
+      userId, source: 'briefing', symbol: b.symbol, exchange: b.exchange, call: b.signal,
+      priceAud: p?.priceAud, calledOn: today, benchKey: sectorBenchmarkFor(b.symbol, b.exchange).key,
+    }).catch((err) => console.warn(`[sharesNews] scorecard record ${b.symbol}:`, err.message));
   }
 
   console.log(`[sharesNews] Generated daily briefing for user ${userId} on ${today}: ${stockBriefings.length} stock(s)`);
@@ -1945,4 +1956,5 @@ module.exports = {
   getLatestObservation,
   getWorkspaceTimezone,
   getDateInTz,
+  sectorBenchmarkFor,
 };

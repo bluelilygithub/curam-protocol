@@ -4546,6 +4546,9 @@
   "PUT /api/shares/thesis": {
    "class": "authed"
   },
+  "GET /api/shares/thesis/scorecard": {
+   "class": "authed"
+  },
   "GET /api/shares/thesis/:id/checks": {
    "class": "authed"
   },
