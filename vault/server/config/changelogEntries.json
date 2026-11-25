@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "53ad01de",
+   "fullHash": "53ad01de0cab91ca5fb0c6cb3cd8514247de7d9c",
+   "committedAt": "2026-11-25T19:16:25+10:00",
+   "author": "mrb",
+   "area": "Geo-check",
+   "subject": "Geo-check milestone 2: runs as background jobs",
+   "filesChanged": 14,
+   "insertions": 828,
+   "deletions": 77,
+   "goal": "Let a country check cover several countries and screens, run in the background, and be saved, stopped and deleted like other Vault work.",
+   "whatChanged": "db.js: tables geo_check_runs and geo_check_captures, and a running run is marked stopped on restart. services/geoCheck/jobs.js: start/stop/list/get/picture/delete; one browser per run, 2 countries at once (GEO_CHECK_CONTEXTS), each country loaded once and resized for each screen; a failed country does not fail the run. Limits: one run at a time server-wide, 6 runs an hour per person, 24 pictures, 12 countries, an estimate check before the start and a byte ceiling during the run (GEO_PROXY_MAX_MB_PER_RUN, 150 MB). Pictures saved as attachments, so they count toward the 500 MB; a full space stops the run with a plain message. capture.js: captureCountry for several screens in a shared browser. routes/geoCheck.js: /config, /countries, /runs list/start/get/stop/delete, owner-checked picture route. Recycle-bin adapter geo-check-run (pictures deleted when the bin lets go). Needs-attention item for unopened finished checks. Inbox suggestion when the proxy fails for every country or exits from the wrong country for half of them.",
+   "filesImpacted": [
+    "vault/server/db.js",
+    "vault/server/services/geoCheck/jobs.js",
+    "vault/server/services/geoCheck/capture.js",
+    "vault/server/routes/geoCheck.js",
+    "vault/server/services/recycleBin/adapters/geoCheck.js",
+    "vault/server/services/recycleBin/adapters/index.js",
+    "vault/server/routes/attention.js",
+    "vault/server/services/attention.js",
+    "vault/server/routes/geoCheck.db.test.js",
+    "vault/docs/geo-check.md",
+    "vault/docs/env-vars.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "The whole back end of the Countries view exists and is tested against a real database, so milestone 3 is only the page.",
+   "concerns": "NOT tried against DataImpulse or on Railway. Tested with the local database and a fake browser (geoCheck.db.test.js: owner scoping, limits, Stop, byte ceiling, full storage, bin restore and delete forever), and once end to end with real Chromium through a local stand-in proxy (booking.com, 3 countries x 2 screens, 30.5 MB, 28 s). Railway memory with 2 contexts not measured. Heavy sites use about 10 MB a country, more than the 4 MB first guess in the estimate. Resizing one load means a site that serves phones different HTML shows its desktop version on phone-sized screens unless every screen chosen is a phone. No page yet: nothing visible to people."
+  },
+  {
    "commit": "62c82161",
    "fullHash": "62c8216135df399a1517ecfd156fd0e9954f9515",
    "committedAt": "2026-11-25T17:38:29+10:00",
