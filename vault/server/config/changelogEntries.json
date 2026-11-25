@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "7e5f2ac5",
+   "fullHash": "7e5f2ac5fb6a2765ff5617011752b12833e02c94",
+   "committedAt": "2026-11-25T19:29:33+10:00",
+   "author": "mrb",
+   "area": "Geo-check",
+   "subject": "Geo-check milestone 3: Countries view in Device preview",
+   "filesChanged": 9,
+   "insertions": 603,
+   "deletions": 10,
+   "goal": "Give people a page to run and read country checks, instead of the admin-only try route.",
+   "whatChanged": "DevicePreviewPage.jsx: a Screens / Countries switch, shown only to people who can use Geo-check; ?view=countries opens it. New CountriesView.jsx: not-set-up message; set-up with address, optional name, countries (add, remove, Save as my list), up to 4 screens from the device list, video and sound toggle, a live estimate in MB and A$; a progress panel with Stop while it runs; a grid of countries x screens with Verified / Unverified labels, language, redirects and size; a full-size view with a second picture beside it that scrolls in step; saved checks with Delete? Yes / No and Undo. countriesModel.mjs with a test. Tour (now 7 steps) and the (i) box mention Countries. routes/geoCheck.js: pictures failed to load when UPLOAD_DIR is a relative path (seen on screen locally); fixed, and the database test now uses a relative folder so it would catch it.",
+   "filesImpacted": [
+    "vault/client/src/pages/DevicePreviewPage.jsx",
+    "vault/client/src/pages/devicePreview/CountriesView.jsx",
+    "vault/client/src/pages/devicePreview/countriesModel.mjs",
+    "vault/client/src/pages/devicePreview/countriesModel.test.mjs",
+    "vault/client/src/utils/tours/devicePreviewTour.js",
+    "vault/server/routes/geoCheck.js",
+    "vault/server/routes/geoCheck.db.test.js",
+    "vault/docs/geo-check.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "Country checks can now be run, followed, compared and kept from the page, around a release.",
+   "concerns": "Checked on screen locally (Playwright, real Chromium, local database, local stand-in proxy that exits from Australia): switch, set-up, running with progress, finished grid, full-size compare scrolling in step, delete and Undo, no console errors. NOT tried against DataImpulse or on Railway. Not checked on a phone-sized browser window or in the dark themes. The guide chat does not know about Countries yet (milestone 5). With two countries at once, the progress line names the country started last."
+  },
+  {
    "commit": "53ad01de",
    "fullHash": "53ad01de0cab91ca5fb0c6cb3cd8514247de7d9c",
    "committedAt": "2026-11-25T19:16:25+10:00",
