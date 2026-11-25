@@ -16,7 +16,7 @@ const names = (list, count, max = 3) => {
  * raw = {
  *   invoicesOverdue: { count, total, sample[] }, tasksOverdue: { count, sample[] }, remindersDue: { count, sample[] },
  *   expensePending: { count }, tasksToday: { count, sample[] }, youtubeNew: { count, sample[] }, suggestionsNew: { count },
- *   pdfHtmlReady: { count, sample[] }
+ *   pdfHtmlReady: { count, sample[] }, geoCheckReady: { count, sample[] }
  * }  (any key may be missing: that source is off for this person or had nothing)
  * Returns [{ id, severity: 'high'|'normal'|'low', title, detail, to, count }], most urgent first, empty ones left out.
  */
@@ -45,6 +45,9 @@ function buildAttentionItems(raw = {}) {
 
   const web = raw.pdfHtmlReady || {};
   add('pdf-html-ready', 'normal', web.count, `${plural(web.count, 'web page', 'web pages')} ready in PDF → HTML`, names(web.sample, web.count), '/pdf?tool=pdftohtml');
+
+  const geo = raw.geoCheckReady || {};
+  add('geo-check-ready', 'normal', geo.count, `${plural(geo.count, 'country check', 'country checks')} ready in Device preview`, names(geo.sample, geo.count), '/device-preview?view=countries');
 
   const sug = raw.suggestionsNew || {};
   add('suggestions-new', 'low', sug.count, `${plural(sug.count, 'new suggestion', 'new suggestions')}`, 'Findings from Vault\'s background checks.', '/suggestions');

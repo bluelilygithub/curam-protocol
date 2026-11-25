@@ -1,6 +1,6 @@
 # Geo-check: "Countries" in Device preview — design brief
 
-Status: **milestone 1 built** (2026-11-25): the admin try route works locally with real Chromium through a local stand-in proxy; not yet tried against DataImpulse or on Railway. The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once). Branch `geo-check` (off `version-7`); nothing goes to `version-7` until the owner approves.
+Status: **milestones 1 and 2 built** (2026-11-25): the admin try route and background runs work locally with real Chromium and the local database through a local stand-in proxy; not yet tried against DataImpulse or on Railway. No page yet (milestone 3). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
 
 **What it is for:** around a release, see one page as visitors in several countries see it (currency, prices, language, geo-redirects, region-only banners), side by side per device, with a plain list of what differs. Used now and then, not a monitor.
 
@@ -278,3 +278,11 @@ Effect on milestones: milestone 1 needs only the three proxy variables set on Ra
 3. As an admin: `POST /api/geo-check/try` with `{ "url": "example.com", "country": "DE", "width": 390, "height": 844, "mobile": true }`. The answer has `status` (ok / blocked / failed), `label` (Verified / Unverified: exited from XX / exit not confirmed), `bytes`, `costAud`, the page facts and `image` as a `data:` address.
 
 What milestone 1 found: Chromium answers a refused proxy password by asking again forever, so the only sign is a time-out. A timed-out exit check therefore stops the capture with "The proxy did not answer" (16 s) instead of also waiting 30 s for the page. Measured locally on apple.com/au: about 2.4 MB downloaded and a 300 KB picture for a phone-width capture, 3.7 MB for a laptop width, about 6 s each.
+
+## Milestone 2: what was built and measured
+
+- `jobs.js`: start / stop / list / get / imagePath / remove; one shared browser per run, `GEO_CHECK_CONTEXTS` (default 2) countries at once; each country is one load resized to each screen. The site sees a phone only when every screen chosen is a phone.
+- A failed country is saved as failed pictures with its reason; the run fails only when every country failed. Proxy failing everywhere, or half the countries exiting from the wrong place, raises an inbox suggestion.
+- Stops early, with a plain message: Stop (captures kept), the byte ceiling, a full attachment space. Refused before the start: not set up, another run going (anyone's), 6 runs in the last hour, over 24 pictures or 12 countries, an estimate over the ceiling (average of the person's last 5 runs, else 4 MB a country).
+- Measured locally (real Chromium, stand-in proxy): booking.com, 3 countries x 2 screens, 30.5 MB and 28 s; Japan came back in Japanese from the browser language alone. Heavy sites run about 10 MB a country, so 4 MB is a low first guess; the estimate learns from the person's runs.
+- `seenAt` is NULL when a run finishes and set when it is opened; the needs-attention list shows unopened finished runs.

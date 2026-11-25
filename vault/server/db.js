@@ -6223,6 +6223,61 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS dns_lookups_user_idx ON dns_lookups ("userId", "createdAt" DESC)`);
 
+  // Geo-check (docs/geo-check.md): a page captured as visitors in several countries see it, through a residential proxy. One run =
+  // one address, several countries x screens; each capture's picture is an attachment (entityType 'geo-capture') on the upload volume.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS geo_check_runs (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      url             TEXT NOT NULL,
+      label           TEXT,
+      settings        JSONB NOT NULL,
+      status          VARCHAR(12) NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'done', 'failed', 'stopped')),
+      stage           TEXT,
+      progress        INTEGER NOT NULL DEFAULT 0,
+      "capturesDone"  INTEGER NOT NULL DEFAULT 0,
+      "capturesTotal" INTEGER NOT NULL DEFAULT 0,
+      "bytesTotal"    BIGINT NOT NULL DEFAULT 0,
+      diff            JSONB,
+      summary         TEXT,
+      "summaryModel"  TEXT,
+      "errorMessage"  TEXT,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finishedAt"    TIMESTAMPTZ,
+      "seenAt"        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS geo_check_runs_user_idx ON geo_check_runs ("userId", "createdAt" DESC)`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS geo_check_captures (
+      id              SERIAL PRIMARY KEY,
+      "runId"         INTEGER NOT NULL REFERENCES geo_check_runs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      country         CHAR(2) NOT NULL,
+      "deviceId"      TEXT NOT NULL,
+      width           INTEGER NOT NULL,
+      height          INTEGER NOT NULL,
+      status          VARCHAR(10) NOT NULL CHECK (status IN ('ok', 'failed', 'blocked')),
+      "exitCountry"   CHAR(2),
+      verified        BOOLEAN NOT NULL DEFAULT FALSE,
+      "httpStatus"    INTEGER,
+      "finalUrl"      TEXT,
+      "htmlLang"      TEXT,
+      title           TEXT,
+      extract         JSONB,
+      cut             BOOLEAN NOT NULL DEFAULT FALSE,
+      bytes           BIGINT NOT NULL DEFAULT 0,
+      "attachmentId"  INTEGER REFERENCES attachments(id) ON DELETE SET NULL,
+      error           TEXT,
+      "capturedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS geo_check_captures_run_idx ON geo_check_captures ("runId")`);
+  // A run cannot survive a restart (its browser lived in the old process): say so instead of showing it running for ever.
+  await pool.query(`UPDATE geo_check_runs SET status = 'stopped', stage = NULL, "finishedAt" = NOW(),
+                      "errorMessage" = 'Stopped part-way because the server restarted (usually a Vault update). The countries already done are kept.'
+                    WHERE status = 'running'`);
+
   console.log('[db] Schema ready');
 }
 

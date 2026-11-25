@@ -27,3 +27,4 @@ require('./pdfSignatures'); // PDF Tools → Signed PDFs (signing record + kept 
 require('./skillScan'); // Skill Scanner scans (admin)
 require('./tickets'); // Tickets (with their comments and history)
 require('./dnsLookup'); // DNS Lookup saved answers
+require('./geoCheck'); // Geo-check runs (with their captures; pictures removed on discard)

@@ -35,7 +35,7 @@ async function collect(req, extra = false) {
   const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch((err) => { console.error('[attention]', err.message); return null; });
   const taskBase = `FROM tasks WHERE "userId" = $1 AND "parentTaskId" IS NULL AND status IN ('todo','in-progress') AND "dueDate" IS NOT NULL`;
 
-  const [overdue, dueToday, reminders, invoices, expense, suggestions, youtube, pdfHtml, plansLate, ticketRows, inbox, drafts] = await Promise.all([
+  const [overdue, dueToday, reminders, invoices, expense, suggestions, youtube, pdfHtml, geoCheck, plansLate, ticketRows, inbox, drafts] = await Promise.all([
     q(`SELECT title, COUNT(*) OVER () AS n ${taskBase} AND LEFT("dueDate", 10) < $2
         ORDER BY "dueDate" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 3`, [userId, today]),
     q(`SELECT title, COUNT(*) OVER () AS n ${taskBase} AND LEFT("dueDate", 10) = $2
@@ -52,6 +52,9 @@ async function collect(req, extra = false) {
     // PDF Tools → PDF → HTML pages that finished in the background and have not been opened yet (PDF Tools has no feature switch)
     q(`SELECT filename, COUNT(*) OVER () AS n FROM pdf_html_jobs WHERE "userId" = $1 AND status = 'done' AND "seenAt" IS NULL
         ORDER BY "finishedAt" DESC LIMIT 3`, [userId]),
+    // Device preview → Countries: country checks that finished in the background and have not been opened yet
+    can('geoCheck') && can('restyle') ? q(`SELECT COALESCE(label, url) AS name, COUNT(*) OVER () AS n FROM geo_check_runs
+        WHERE "userId" = $1 AND status IN ('done', 'stopped', 'failed') AND "seenAt" IS NULL ORDER BY "finishedAt" DESC LIMIT 3`, [userId]) : null,
     // steps of active plans that should have finished by today (a step ends startDate + durationDays)
     extra && can('plans') ? q(`SELECT s.title || ' (' || p.title || ')' AS title, COUNT(*) OVER () AS n FROM plan_steps s JOIN plans p ON p.id = s."planId"
         WHERE p."userId" = $1 AND p.status = 'active' AND s.status <> 'done' AND s."startDate" IS NOT NULL AND s."startDate" + s."durationDays" < $2::date
@@ -77,6 +80,7 @@ async function collect(req, extra = false) {
     suggestionsNew: suggestions ? { count: Number(suggestions[0]?.n || 0) } : null,
     youtubeNew: youtube && youtube.count > 0 ? youtube : null,
     pdfHtmlReady: list(pdfHtml, 'filename'),
+    geoCheckReady: list(geoCheck, 'name'),
   };
   if (extra) {
     raw.plansOverdue = list(plansLate, 'title');

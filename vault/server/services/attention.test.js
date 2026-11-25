@@ -32,6 +32,7 @@ assert.equal(byId['youtube-new'].detail, 'Bread 101, Rye, ...', 'the count says 
 // the sample is capped at three by the database, so the count decides whether to add the ellipsis
 assert.equal(buildAttentionItems({ tasksOverdue: { count: 9, sample: ['A', 'B', 'C'] } })[0].detail, 'A, B, C, ...');
 assert.equal(buildAttentionItems({ tasksOverdue: { count: 2, sample: ['A', 'B'] } })[0].detail, 'A, B');
+assert.deepEqual(buildAttentionItems({ geoCheckReady: { count: 1, sample: ['before release 4.2'] } }).map((i) => [i.title, i.to]), [['1 country check ready in Device preview', '/device-preview?view=countries']]);
 
 // a long title is cut so the line stays short
 const long = buildAttentionItems({ tasksOverdue: { count: 1, sample: ['x'.repeat(200)] } })[0];

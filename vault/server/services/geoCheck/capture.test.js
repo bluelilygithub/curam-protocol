@@ -5,7 +5,7 @@
 // bytes summed, blocked pages, and plain error words. Uses IP-literal addresses so no DNS lookup is needed.
 
 const assert = require('assert');
-const { captureOne, contextOptions, pageFacts } = require('./capture');
+const { captureOne, captureCountry, contextOptions, pageFacts } = require('./capture');
 const { countryOf } = require('./countries');
 
 const PROXY = { server: 'http://gw.example.net:823', username: 'SECRETUSER', password: 'SECRETPASS' };
@@ -35,6 +35,7 @@ function fakeBrowser({ exitJson = { country: 'AU' }, status = 200, title = 'Shop
             url: () => current,
             async waitForLoadState() {},
             async waitForTimeout() {},
+            async setViewportSize(v) { seen.viewports = (seen.viewports || []).concat([v.width]); },
             async evaluate(_fn, arg) {
               if (arg !== undefined) return undefined; // the scroll
               return { lang: 'en-AU', title, text: 'Price A$49.95 AUD, cookies', headings: ['Sale'], buttons: ['Buy'], height };
@@ -72,6 +73,8 @@ function fakeRoute(url, resourceType = 'document') {
   assert.ok(/Mobile/.test(de.userAgent));
   assert.strictEqual(de.proxy, PROXY);
   assert.strictEqual(contextOptions(countryOf('JP'), { width: 1280, height: 900 }, PROXY).isMobile, false);
+  assert.strictEqual(contextOptions(countryOf('JP'), [SCREEN, { width: 1280, height: 900 }], PROXY).isMobile, false, 'a phone only when every screen is');
+  assert.strictEqual(contextOptions(countryOf('JP'), [SCREEN, SCREEN], PROXY).viewport.width, 390);
 
   // a good capture
   let { browser, seen } = fakeBrowser();
@@ -153,6 +156,19 @@ function fakeRoute(url, resourceType = 'document') {
   assert.deepStrictEqual(facts.headings, ['A']);
   assert.ok(facts.prices.includes('€12,50') && facts.prices.includes('9 kr') && facts.prices.includes('USD 5'), JSON.stringify(facts.prices));
   assert.ok(!('text' in facts));
+
+  // one load per country, resized per screen, in a shared browser that is left open; Stop ends between screens
+  ({ browser, seen } = fakeBrowser());
+  const LAPTOP = { width: 1366, height: 768 };
+  out = await captureCountry({ url: PAGE, country: 'NZ', screens: [SCREEN, LAPTOP] }, deps(browser, { browser }));
+  assert.strictEqual(out.shots.length, 2);
+  assert.deepStrictEqual(seen.viewports, [1366]);
+  assert.strictEqual(seen.shots[1].clip.width, 1366);
+  assert.strictEqual(seen.contexts.length, 1, 'one context (one load) for both screens');
+  assert.deepStrictEqual(seen.closed, { context: 1, browser: 0 }, 'a shared browser stays open');
+  const ac = new AbortController(); ac.abort();
+  ({ browser } = fakeBrowser());
+  assert.strictEqual((await captureCountry({ url: PAGE, country: 'NZ', screens: [SCREEN, LAPTOP] }, deps(browser, { signal: ac.signal }))).shots.length, 0);
 
   console.log('geoCheck capture tests passed');
 })().catch((err) => { console.error(err); process.exit(1); });

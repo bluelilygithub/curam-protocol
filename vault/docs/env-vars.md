@@ -75,6 +75,7 @@ Moved out of CLAUDE.md.
 | `BRAVE_PRICE_PER_QUERY_USD` / `SERP_PRICE_PER_QUERY_USD` | Topic Research — price of one Brave / Serper query for the per-run cost estimate (default 0: set real prices or the M5 monthly budget stop has nothing to count). Topic Research's Brave source reuses the existing `SEARCH_API_KEY` when it is a Brave key |
 | `GEO_PROXY_SERVER` / `GEO_PROXY_USERNAME_TEMPLATE` / `GEO_PROXY_PASSWORD` | Geo-check (Device preview's Countries, `docs/geo-check.md`) — the residential proxy (chosen 2026-11-25: DataImpulse). Gateway address (`http://host:port`), username with `{country}` (`au`) or `{COUNTRY}` (`AU`) where the provider wants the country, and the password (may also hold `{country}`, as IPRoyal does). All three or Geo-check says it is not set up. Never logged, stored or sent to a browser. `server/services/geoCheck/proxy.js` |
 | `GEO_PROXY_CHECK_URL` / `GEO_PROXY_COST_PER_GB` / `GEO_PROXY_LABEL` | Geo-check — address asked through the proxy to see which country it exited from (default `https://ipinfo.io/json`), price per GB in **Australian dollars** for the cost line (optional), and a name shown to admins (optional) |
+| `GEO_CHECK_CONTEXTS` / `GEO_PROXY_MAX_MB_PER_RUN` | Geo-check runs — countries captured at once inside a run (default 2, at most 3; one run at a time server-wide) and the most one run may download through the proxy in MB (default 150): checked against an estimate before the start and enforced during the run. `server/services/geoCheck/jobs.js` |
 
 ---
 

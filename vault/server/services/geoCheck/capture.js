@@ -19,11 +19,12 @@ const MOBILE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (
 // Chromium's words for "the proxy itself failed" (wrong password, no traffic left, gateway down), told apart from the site failing.
 const PROXY_FAILED = /net::ERR_(PROXY_\w+|TUNNEL_CONNECTION_FAILED|NO_SUPPORTED_PROXIES)/;
 
-/** The browser context settings for one country and one screen. */
-function contextOptions(country, screen, proxyOption) {
-  const mobile = !!screen.mobile;
+/** The browser context settings for one country; it opens at the first screen's size, and is a phone only when every screen is. */
+function contextOptions(country, screens, proxyOption) {
+  const list = Array.isArray(screens) ? screens : [screens];
+  const mobile = list.every((s) => !!s.mobile);
   return {
-    viewport: { width: screen.width, height: screen.height },
+    viewport: { width: list[0].width, height: list[0].height },
     deviceScaleFactor: 1, isMobile: mobile, hasTouch: mobile,
     userAgent: mobile ? MOBILE_UA : USER_AGENTS[0],
     locale: country.locale, timezoneId: country.timezoneId,
@@ -98,26 +99,37 @@ async function scrollThrough(page) {
   await page.waitForTimeout(400);
 }
 
+
+function launchBrowser() {
+  return loadPlaywright().chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
+}
+
 /**
- * @param {{url:string, country:string, screen:{width:number,height:number,mobile?:boolean}, allowMedia?:boolean}} opts
+ * One country: one context through that country's proxy, the exit check, one load of the page, then for each screen: resize, scroll,
+ * read the facts, take the picture ("one load per country, resized per screen", the only mode in v1). The site sees a phone only when
+ * every screen asked for is a phone; otherwise a desktop browser.
+ * @param {{url:string, country:string, screens:Array<{width:number,height:number,mobile?:boolean}>, allowMedia?:boolean}} opts
  *   url already normalised and checked with checkSsrf by the caller
- * @returns {Promise<{country, status:'ok'|'blocked'|'failed', exitCountry, verified, label, httpStatus, finalUrl, facts, bytes, image:Buffer|null, cut:boolean, error:string|null}>}
+ * @param {{browser?, launch?, proxyFor?, checkUrl?, signal?: AbortSignal}} deps  a given browser is used and left open (a run shares one)
+ * @returns {Promise<{country, status:'ok'|'blocked'|'failed', exitCountry, verified, label, httpStatus, finalUrl, bytes, error,
+ *   shots: Array<{facts, image:Buffer, cut:boolean}>}>}  shots in the order of `screens`; fewer when it failed or was stopped part-way
  */
-async function captureOne({ url, country: code, screen, allowMedia = false }, deps = {}) {
+async function captureCountry({ url, country: code, screens, allowMedia = false }, deps = {}) {
   const country = countryOf(code);
   if (!country) throw new Error('That country is not in the list.');
+  if (!Array.isArray(screens) || !screens.length) throw new Error('Choose at least one screen.');
   const proxyOption = (deps.proxyFor || proxy.proxyFor)(country.code);
   if (!proxyOption) throw new Error('Geo-check is not set up: the proxy details are missing.');
-  const launch = deps.launch || (() => loadPlaywright().chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] }));
 
-  const browser = await launch();
+  const ownBrowser = !deps.browser;
+  const browser = deps.browser || await (deps.launch || launchBrowser)();
   const out = {
     country: country.code, status: 'failed', exitCountry: null, verified: false, label: 'Unverified: exit not confirmed',
-    httpStatus: null, finalUrl: null, facts: null, bytes: 0, image: null, cut: false, error: null,
+    httpStatus: null, finalUrl: null, bytes: 0, error: null, shots: [],
   };
   let context = null;
   try {
-    context = await browser.newContext(contextOptions(country, screen, proxyOption));
+    context = await browser.newContext(contextOptions(country, screens, proxyOption));
     await guardContext(context, new Set(allowMedia ? [] : ['media']));
     const totalBytes = countBytes(context);
     const page = await context.newPage();
@@ -131,22 +143,26 @@ async function captureOne({ url, country: code, screen, allowMedia = false }, de
         await page.waitForLoadState('networkidle', { timeout: SETTLE_TIMEOUT_MS }).catch(() => {});
         out.finalUrl = page.url();
         await assertPublicFinalUrl(out.finalUrl);
-        await scrollThrough(page);
-        const raw = await page.evaluate(() => ({
-          lang: document.documentElement.lang || '',
-          title: document.title || '',
-          text: document.body ? document.body.innerText.slice(0, 200000) : '',
-          headings: Array.from(document.querySelectorAll('h1, h2, h3')).map((e) => e.innerText),
-          buttons: Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]')).map((e) => e.innerText || e.value || ''),
-          height: document.documentElement.scrollHeight,
-        }));
-        out.facts = pageFacts(raw);
-        out.cut = raw.height > MAX_SHOT_HEIGHT;
-        out.image = await page.screenshot({
-          type: 'jpeg', quality: 70, fullPage: true, timeout: 30000,
-          clip: { x: 0, y: 0, width: screen.width, height: Math.max(1, Math.min(raw.height || screen.height, MAX_SHOT_HEIGHT)) },
-        });
-        out.status = (out.httpStatus >= 400 || BLOCKED_TITLE.test(out.facts.title)) ? 'blocked' : 'ok';
+        for (const [i, screen] of screens.entries()) {
+          if (deps.signal && deps.signal.aborted) break;
+          if (i > 0) { await page.setViewportSize({ width: screen.width, height: screen.height }); await page.waitForTimeout(500); }
+          await scrollThrough(page);
+          const raw = await page.evaluate(() => ({
+            lang: document.documentElement.lang || '',
+            title: document.title || '',
+            text: document.body ? document.body.innerText.slice(0, 200000) : '',
+            headings: Array.from(document.querySelectorAll('h1, h2, h3')).map((e) => e.innerText),
+            buttons: Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]')).map((e) => e.innerText || e.value || ''),
+            height: document.documentElement.scrollHeight,
+          }));
+          const image = await page.screenshot({
+            type: 'jpeg', quality: 70, fullPage: true, timeout: 30000,
+            clip: { x: 0, y: 0, width: screen.width, height: Math.max(1, Math.min(raw.height || screen.height, MAX_SHOT_HEIGHT)) },
+          });
+          out.shots.push({ facts: pageFacts(raw), image, cut: raw.height > MAX_SHOT_HEIGHT });
+        }
+        const title = out.shots[0] ? out.shots[0].facts.title : '';
+        out.status = (out.httpStatus >= 400 || BLOCKED_TITLE.test(title)) ? 'blocked' : 'ok';
       }
     } catch (err) {
       const message = String(err && err.message);
@@ -155,13 +171,21 @@ async function captureOne({ url, country: code, screen, allowMedia = false }, de
       else if (message.startsWith('The proxy') || message.startsWith('The page redirected')) out.error = message;
       else if (/Timeout/i.test(message)) out.error = 'The page took too long to load through the proxy.';
       else out.error = 'The page could not be loaded through the proxy.';
+      out.status = 'failed';
     }
     out.bytes = await totalBytes();
   } finally {
     if (context) await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    if (ownBrowser) await browser.close().catch(() => {});
   }
   return out;
 }
 
-module.exports = { captureOne, contextOptions, pageFacts, countBytes, MAX_SHOT_HEIGHT, PROXY_FAILED };
+/** One country, one screen (the admin try route): the single-picture shape. */
+async function captureOne({ url, country, screen, allowMedia = false }, deps = {}) {
+  const { shots, ...rest } = await captureCountry({ url, country, screens: [screen], allowMedia }, deps);
+  const shot = shots[0] || null;
+  return { ...rest, facts: shot ? shot.facts : null, image: shot ? shot.image : null, cut: shot ? shot.cut : false };
+}
+
+module.exports = { captureCountry, captureOne, launchBrowser, contextOptions, pageFacts, countBytes, MAX_SHOT_HEIGHT, PROXY_FAILED };
