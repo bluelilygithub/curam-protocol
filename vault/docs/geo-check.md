@@ -1,6 +1,6 @@
 # Geo-check: "Countries" in Device preview — design brief
 
-Status: **milestones 1 and 2 built** (2026-11-25): the admin try route and background runs work locally with real Chromium and the local database through a local stand-in proxy; not yet tried against DataImpulse or on Railway. No page yet (milestone 3). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
+Status: **milestones 1-3 built** (2026-11-25): the admin try route, background runs and the Countries view in Device preview work locally with real Chromium, the local database and a local stand-in proxy (checked on screen); not yet tried against DataImpulse or on Railway. Still to come: the plain-code diff (4) and the AI summary, guide chat and final docs (5). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
 
 **What it is for:** around a release, see one page as visitors in several countries see it (currency, prices, language, geo-redirects, region-only banners), side by side per device, with a plain list of what differs. Used now and then, not a monitor.
 
@@ -286,3 +286,11 @@ What milestone 1 found: Chromium answers a refused proxy password by asking agai
 - Stops early, with a plain message: Stop (captures kept), the byte ceiling, a full attachment space. Refused before the start: not set up, another run going (anyone's), 6 runs in the last hour, over 24 pictures or 12 countries, an estimate over the ceiling (average of the person's last 5 runs, else 4 MB a country).
 - Measured locally (real Chromium, stand-in proxy): booking.com, 3 countries x 2 screens, 30.5 MB and 28 s; Japan came back in Japanese from the browser language alone. Heavy sites run about 10 MB a country, so 4 MB is a low first guess; the estimate learns from the person's runs.
 - `seenAt` is NULL when a run finishes and set when it is opened; the needs-attention list shows unopened finished runs.
+
+## Milestone 3: the Countries view
+
+- `DevicePreviewPage.jsx`: a Screens / Countries switch, shown only when `GET /api/geo-check/config` answers (so only to people with both switches); `?view=countries` opens it (the needs-attention link). The address box keeps its value across the two views. (i) box and tour (step 3 of 7, `dp-switch`) mention Countries.
+- `devicePreview/CountriesView.jsx`: not-set-up `EmptyState`; set-up (address, optional name, country chips with Add and "Save as my list", up to 4 screens from the device catalogue, video and sound toggle, live estimate line in MB and A$, refuses over 24 pictures); progress panel with Stop while running (polls every 2 s; you can leave); result grid (countries x screens, first screen of each picture, label, language, redirect, size, "cut at 8,000 pixels"); full-size `Dialog` with a second picture beside it that scrolls in step; saved checks list with inline Delete? Yes / No and Undo. Opening the view opens the newest check (a running one first).
+- `devicePreview/countriesModel.mjs` (+ test): estimate line, labels, grid, screens sent to the server (phones as phones).
+- Found on screen: the picture route failed when `UPLOAD_DIR` is relative (it is locally); fixed with `path.resolve`, and the database test now uses a relative folder.
+- Not yet: the guide chat does not know about Countries (milestone 5); with two countries at once the progress line names the one started last.

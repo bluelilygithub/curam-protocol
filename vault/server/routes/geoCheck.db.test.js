@@ -15,7 +15,8 @@ const os = require('os');
 const path = require('path');
 
 if (!process.env.DATABASE_URL) { console.log('SKIP geoCheck.db.test.js: DATABASE_URL is not set'); process.exit(0); }
-process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'geo-check-test-'));
+// relative on purpose: UPLOAD_DIR is relative in local .env files, and the picture route once failed on that
+process.env.UPLOAD_DIR = path.relative(process.cwd(), fs.mkdtempSync(path.join(os.tmpdir(), 'geo-check-test-')));
 
 let schemaReady;
 const schemaDone = new Promise((resolve) => { schemaReady = resolve; });

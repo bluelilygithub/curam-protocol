@@ -5,6 +5,7 @@
 // requireFeature('geoCheck'). Every query is the caller's own. Logs never carry the proxy username or password, the page address or page text.
 
 const express = require('express');
+const path = require('path');
 const { requireAdmin } = require('../middleware/auth');
 const { normaliseHttpUrl, checkSsrf } = require('../services/htmlFetch');
 const { getLogger } = require('../middleware/requestContext');
@@ -99,7 +100,8 @@ function createRouter({ jobs = createGeoJobs(), pool = require('../db').pool, mo
     try {
       const file = await jobs.imagePath(req.user.id, Number(req.params.id) || 0, Number(req.params.captureId) || 0);
       res.set('Cache-Control', 'private, max-age=86400');
-      res.type('jpeg').sendFile(file, (e) => { if (e && !res.headersSent) res.status(404).json({ error: 'Picture not found.' }); });
+      res.type('jpeg').sendFile(path.resolve(file), // UPLOAD_DIR may be relative (it is locally)
+ (e) => { if (e && !res.headersSent) res.status(404).json({ error: 'Picture not found.' }); });
     } catch (err) { fail(res, err, '/image'); }
   });
 

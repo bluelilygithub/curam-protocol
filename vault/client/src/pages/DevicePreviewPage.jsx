@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -10,12 +10,15 @@ import useProcessingStore from '../store/processingStore';
 import useToastStore from '../store/toastStore';
 import { devicesOfKind, customScreen, CUSTOM_LIMITS } from '../utils/deviceCatalog.mjs';
 import DevicePreviewTutorChat from './devicePreview/DevicePreviewTutorChat';
+import CountriesView from './devicePreview/CountriesView';
 import { GUIDE_TOOLS, HOW_IT_WORKS } from './devicePreview/devicePreviewTools.mjs';
 import { startDevicePreviewTour, TOUR_KEY as DP_TOUR_KEY } from '../utils/tours/devicePreviewTour';
 import { DEFAULT_SELECTION, MAX_SCREENS, ZOOMS, buildPreviewDoc, toggleScreen, resolveScreens, cardLayout } from './devicePreview/devicePreviewModel.mjs';
 
 // Device preview: type the address of a public page and see it at the size of real phones, tablets and monitors, side by side. It uses the same
 // page loader as the Style editor (so it needs the same switch in Feature Access) but only looks: nothing is saved and nothing is changed.
+// The Countries view (?view=countries, pages/devicePreview/CountriesView.jsx, docs/geo-check.md) shows the page as seen from other countries;
+// it has its own switch (geoCheck) and only appears when /api/geo-check/config answers.
 const GROUPS = [
   { kind: 'phone', label: 'Phones', tip: 'Real phone screen sizes.' },
   { kind: 'tablet', label: 'Tablets', tip: 'Real tablet screen sizes.' },
@@ -45,6 +48,14 @@ export default function DevicePreviewPage() {
   const [customH, setCustomH] = useState('800');
   const [landscape, setLandscape] = useState(false);
   const [zoom, setZoom] = useState('fit');
+  const [geoConfig, setGeoConfig] = useState(null); // null = Countries not available to this person
+  const view = geoConfig && params.get('view') === 'countries' ? 'countries' : 'screens';
+  const setView = (v) => { const next = new URLSearchParams(params); if (v === 'countries') next.set('view', 'countries'); else next.delete('view'); setParams(next, { replace: true }); };
+  const loadGeoConfig = useCallback(() => {
+    api.get('/api/geo-check/config').then((r) => (r.ok ? r.json() : null)).then(setGeoConfig).catch(() => {});
+  }, []);
+  useEffect(() => { loadGeoConfig(); }, [loadGeoConfig]);
+  const countryName = useCallback((code) => ((geoConfig && geoConfig.catalogue.find((c) => c.code === code)) || {}).name || code, [geoConfig]);
 
   // Settings -> Device preview Tour opens /device-preview?tour=1
   useEffect(() => {
@@ -129,6 +140,20 @@ export default function DevicePreviewPage() {
           </Tooltip>
         </div>
 
+        {geoConfig && (
+          <div className="flex" role="group" aria-label="What to compare" data-tour="dp-switch">
+            {[['screens', 'Screens', 'The page on several phones, tablets and monitors, side by side.'], ['countries', 'Countries', 'The page as visitors in other countries see it: prices, language, redirects and banners.']].map(([id, text, tip], i) => (
+              <Tooltip key={id} text={tip}>
+                <button type="button" onClick={() => setView(id)} aria-pressed={view === id} className="hover:opacity-70 transition-opacity duration-200"
+                  style={{ ...segment(view === id), color: view === id ? 'var(--color-on-primary)' : 'var(--color-text)', padding: '6px 14px', fontSize: 13, borderRadius: i === 0 ? '8px 0 0 8px' : '0 8px 8px 0' }}>{text}</button>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+
+        {view === 'countries' && <CountriesView url={url} setUrl={setUrl} config={geoConfig} countryName={countryName} onConfigChange={loadGeoConfig} />}
+
+        {view === 'screens' && (<>
         <section className="rounded-xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="flex flex-wrap items-start gap-2" data-guide="show" data-tour="dp-address">
             <div className="flex-1 min-w-[16rem]">
@@ -278,6 +303,7 @@ export default function DevicePreviewPage() {
             </div>
           </div>
         )}
+        </>)}
       </div>
 
       <DevicePreviewTutorChat currentTool="show" onOpenTool={openToolById} />
@@ -292,6 +318,9 @@ export default function DevicePreviewPage() {
             <p style={{ color: 'var(--color-text)' }}><strong>2. Choose screens.</strong> Tap up to four devices, or add your own width and height.</p>
             <p style={{ color: 'var(--color-text)' }}><strong>3. Compare.</strong> Turn phones and tablets on their side, or change how big each one is drawn.</p>
           </div>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            <strong>Countries</strong> (when it is switched on for you): the page as visitors in other countries see it. Each country is opened in a real browser through an internet connection in that country, in its language and time zone, and a picture is taken on each screen you choose. Every picture says <em>Verified</em> when the connection really came out of that country, or <em>Unverified: exited from XX</em> when it did not. A check runs on the server, so you can leave the page, and it is saved until you delete it. The connections are paid by the amount downloaded (a check of six countries is usually 20 to 60 MB), so videos and sound are skipped unless you tick them.
+          </p>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
             Sizes are the screen's width and height in CSS pixels, which is what a page's own layout rules respond to. A real phone also has browser bars that use some of the height, so treat the height as close, not exact. The page is shown without its scripts (menus that open and sliders will not work), and pages that need a login cannot be loaded. To change a page's styling, use the Style editor.
           </p>

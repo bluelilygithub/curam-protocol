@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_device_preview_completed';
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -67,12 +67,22 @@ export function startDevicePreviewTour() {
   });
 
   tour.addStep({
+    id: 'dp-switch',
+    title: 'Screens or Countries',
+    text: 'Screens shows the page on several devices at once. Countries (when it is switched on for you) shows it as visitors in other countries see it: each country is opened through an internet connection there, and every picture says whether the connection really came from that country. A check runs on the server and is saved, so you can leave the page and compare before and after a release.',
+    attachTo: { element: '[data-tour="dp-switch"]', on: 'bottom' },
+    beforeShowPromise: check('dp-switch', '[data-tour="dp-switch"]'),
+    when: { show() { injectStepCounter(3); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'dp-devices',
     title: 'Choose screens',
     text: 'Tap up to four phones, tablets or monitors. Tap one again to remove it. Each screen is drawn as wide as the real device, so the page changes shape the way it does there.',
     attachTo: { element: '[data-tour="dp-devices"]', on: 'top' },
     beforeShowPromise: check('dp-devices', '[data-tour="dp-devices"]'),
-    when: { show() { injectStepCounter(3); } },
+    when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -82,7 +92,7 @@ export function startDevicePreviewTour() {
     text: 'Need a size that is not in the list? Type a width and a height in pixels and press Add. You can keep up to three of your own.',
     attachTo: { element: '[data-tour="dp-own"]', on: 'top' },
     beforeShowPromise: check('dp-own', '[data-tour="dp-own"]'),
-    when: { show() { injectStepCounter(4); } },
+    when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -92,7 +102,7 @@ export function startDevicePreviewTour() {
     text: 'The phone button holds phones and tablets on their side. Fit shrinks every screen so it fits on the page; 100% shows the real size, which may need scrolling sideways.',
     attachTo: { element: '[data-tour="dp-view"]', on: 'top' },
     beforeShowPromise: check('dp-view', '[data-tour="dp-view"]'),
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -100,7 +110,7 @@ export function startDevicePreviewTour() {
     id: 'dp-limits',
     title: 'Good to know',
     text: 'Heights are close, not exact: a real phone has browser bars that use some of it. The page is shown without its scripts, so menus that open will not work, and pages behind a login cannot be loaded. To change how a page looks, use the Style editor. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },
