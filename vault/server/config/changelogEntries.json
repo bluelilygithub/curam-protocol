@@ -71,7 +71,10 @@
     "docs/shares-thesis.md"
    ],
    "benefit": "Monthly reviews are either complete or not saved, and a bad daily reply can no longer wipe a day of briefings. The briefing history length is the admin's choice.",
-   "concerns": "parseModelJson is shared by about 28 callers: when a reply has prose around it and both brackets appear, an object that opens first is now returned where an inner array used to be. That is correct for object replies, but a caller that relied on getting the inner array out of a wrapper object would change; the three existing tests that use the parser pass. Raising the retention does not restore briefings already deleted. Existing empty monthly reviews are left in place. Portfolio Note observations still keep a fixed 45 days. The Settings field and the fix against a real model reply have not been tried live."
+   "concerns": "parseModelJson is shared by about 28 callers: when a reply has prose around it and both brackets appear, an object that opens first is now returned where an inner array used to be. That is correct for object replies, but a caller that relied on getting the inner array out of a wrapper object would change; the three existing tests that use the parser pass. Raising the retention does not restore briefings already deleted. Existing empty monthly reviews were left in place by this commit; 419fba02 removes them on boot. Portfolio Note observations kept a fixed 45 days until f96d9a05 put them on the same setting (and renamed the Settings box Briefing and Portfolio Note History). The Settings field and the fix against a real model reply have not been tried live.",
+   "replacesText": {
+    "concerns": "parseModelJson is shared by about 28 callers: when a reply has prose around it and both brackets appear, an object that opens first is now returned where an inner array used to be. That is correct for object replies, but a caller that relied on getting the inner array out of a wrapper object would change; the three existing tests that use the parser pass. Raising the retention does not restore briefings already deleted. Existing empty monthly reviews are left in place. Portfolio Note observations still keep a fixed 45 days. The Settings field and the fix against a real model reply have not been tried live."
+   }
   },
   {
    "commit": "04031c2e",
@@ -204,8 +207,11 @@
     "docs/shares-thesis.md",
     "ROADMAP.md"
    ],
-   "benefit": "A permanent, honest record of how often the app's signals and thesis concerns were right, kept past the 45-day briefing prune, at no extra API cost, and fed back so checks sound only as sure as their record supports.",
-   "concerns": "The SQL in recordCall and scoreDue has not been run against a database (local Postgres role missing); only the pure functions are tested and the modules load. Nothing shows for 30 days after the first call. Shares sold before the mark have no snapshots and end as no-price, so the record leans to holdings kept. Scoring thesis concerns against price sits uneasily with the rule that price is not evidence about the business; rule 10 keeps it to calibration. Not tried in a browser; the client builds."
+   "benefit": "A permanent, honest record of how often the app's signals and thesis concerns were right, kept past the briefing prune (45 days by default; an admin setting since 1d0b14c2), at no extra API cost, and fed back so checks sound only as sure as their record supports.",
+   "concerns": "The SQL in recordCall and scoreDue has not been run against a database (local Postgres role missing); only the pure functions are tested and the modules load. Nothing shows for 30 days after the first call. Shares sold before the mark have no snapshots and end as no-price, so the record leans to holdings kept. Scoring thesis concerns against price sits uneasily with the rule that price is not evidence about the business; rule 10 keeps it to calibration. Not tried in a browser; the client builds.",
+   "replacesText": {
+    "benefit": "A permanent, honest record of how often the app's signals and thesis concerns were right, kept past the 45-day briefing prune, at no extra API cost, and fed back so checks sound only as sure as their record supports."
+   }
   },
   {
    "commit": "894d2724",
