@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b8c266ff",
+   "fullHash": "b8c266ff8311aa2883b0c5c20cfef5a40f3dca77",
+   "committedAt": "2026-11-25T11:29:41+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Docs: charts and key files cover the briefing retention setting",
+   "filesChanged": 2,
+   "insertions": 12,
+   "deletions": 3,
+   "goal": "Explain in the Shares docs how the retention setting limits the charts, and correct a long-standing wrong claim.",
+   "whatChanged": "docs/shares-charts.md: new section How far back observations go: snapshots and index closes are never pruned, while Portfolio Note observations are deleted after shares_briefing_retention_days, so observation-based charts (mainly Portfolio vs benchmarks over a range) stop at that window; what raising or lowering the setting does, including the high-water-mark fallback in portfolioAlerts.js. The all range no longer claims observations from the start, and the time-range table notes the limit. docs/key-files.md: the sharesNewsService.js entry names the setting, getBriefingRetentionDays/clampRetentionDays, the default and range, and its test.",
+   "filesImpacted": [
+    "docs/shares-charts.md",
+    "docs/key-files.md"
+   ],
+   "benefit": "The docs say plainly why long chart ranges show only part of their window and how to change that.",
+   "concerns": "Documentation only. The chart claims were checked by reading sharesChartData.js and portfolioAlerts.js, not by viewing the Charts tab."
+  },
+  {
    "commit": "f96d9a05",
    "fullHash": "f96d9a05a58b2b879e4969d4a3ad9878279c1803",
    "committedAt": "2026-11-25T11:25:17+10:00",
