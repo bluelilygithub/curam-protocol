@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "89469bac",
+   "fullHash": "89469bac37e20f20dae3f19e601e6a92d2e81a14",
+   "committedAt": "2026-11-25T11:03:10+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares tour: stress test, US figures and track record",
+   "filesChanged": 5,
+   "insertions": 15,
+   "deletions": 11,
+   "goal": "Keep the Shares tour and help text in step with today's three thesis features, so a new user learns about them.",
+   "whatChanged": "client/src/utils/tours/sharesTour.js: the Thesis step now describes the bear/bull stress test and the US reported figures and uses the real button name (Check & review, not Check now); a new step 8, Track record, attaches to data-tour=\"shares-track-record\" (added to the card in SharesThesisTab.jsx) and falls back to the centre of the screen when the card is not shown yet; the News step notes that signals are scored. Steps renumbered (10, or 11 for admins). The tour button tip in SharesPage.jsx, the Shares Tour entry in SettingsPage.jsx and the tour section in docs/shares-thesis.md now give the new counts; the How Shares Works box describes the figures, the stress test and Track record.",
+   "filesImpacted": [
+    "client/src/utils/tours/sharesTour.js",
+    "client/src/components/shares/SharesThesisTab.jsx",
+    "client/src/pages/SharesPage.jsx",
+    "client/src/pages/SettingsPage.jsx",
+    "docs/shares-thesis.md"
+   ],
+   "benefit": "The tour, help box and Settings entry describe what the Thesis tab actually does now, and the step counts are right.",
+   "concerns": "Not clicked through in a browser; the client builds and the step numbering was checked by reading the file. Until the first call is recorded the Track record step shows in the middle of the screen with no card behind it."
+  },
+  {
    "commit": "388ae934",
    "fullHash": "388ae9343d7b0b9ada4a491b9eb0670cedcb9cb7",
    "committedAt": "2026-11-25T11:00:28+10:00",
