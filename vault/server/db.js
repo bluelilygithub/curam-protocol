@@ -6209,6 +6209,20 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS bip_sources_profile_idx ON bip_sources ("profileId", name, "checkedAt" DESC)`);
 
+  // DNS Lookup: every lookup the person ran, with the answer as it was shown (docs/dns-lookup.md). Deletes go to the recycle bin.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dns_lookups (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind        VARCHAR(10) NOT NULL CHECK (kind IN ('records', 'email')),
+      name        TEXT NOT NULL,
+      resolver    VARCHAR(20),
+      result      JSONB NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS dns_lookups_user_idx ON dns_lookups ("userId", "createdAt" DESC)`);
+
   console.log('[db] Schema ready');
 }
 

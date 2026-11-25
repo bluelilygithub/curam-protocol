@@ -22,8 +22,10 @@ checkGuide({
     ['lookup', 'notes', /only reads DNS/, 'a lookup only reads'],
     ['compare', 'does', /same answer or different/, 'compare says same or different'],
     ['email-check', 'notes', /DKIM/, 'DKIM is not checked'],
+    ['about', 'notes', /proxy/, 'a proxy hides the real host'],
+    ['saved', 'notes', /not refreshed/, 'a saved answer is a snapshot'],
   ],
   gaps: [/Changing, adding or deleting/, /Page speed/, /WHOIS/, /DKIM/, /private network/, /Watching a name/],
-  rules: [/never opens the website/, /Compare both/, /No names or answers are saved/],
+  rules: [/never opens the website/, /Compare both/, /Saved lookups, which only they can see/],
   system: [/Never state or guess what a name's records are/],
 }).catch((e) => { console.error(e); process.exit(1); });

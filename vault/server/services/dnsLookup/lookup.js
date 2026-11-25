@@ -114,4 +114,4 @@ async function lookupEmailParts(resolverKey, name) {
   return { mx, txt, dmarc };
 }
 
-module.exports = { RESOLVERS, TYPES, normalizeInput, lookupRecords, reverseLookup, lookupEmailParts, queryType };
+module.exports = { RESOLVERS, TYPES, normalizeInput, lookupRecords, reverseLookup, lookupEmailParts, queryType, makeResolver };

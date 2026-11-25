@@ -51,7 +51,7 @@ export function startDnsLookupTour() {
   tour.addStep({
     id: 'dns-welcome',
     title: 'DNS Lookup — Quick Tour',
-    text: 'DNS is the internet\'s phone book. This page asks a public resolver what a name points to, and checks that a domain\'s email records look right. It only reads; it never changes anything.',
+    text: 'DNS is the internet\'s phone book. This page asks a public resolver what a name points to, says who hosts it and who it is registered with, and checks that a domain\'s email records look right. It only reads; it never changes anything.',
     when: { show() { injectStepCounter(1); } },
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
@@ -78,10 +78,10 @@ export function startDnsLookupTour() {
 
   tour.addStep({
     id: 'dns-email',
-    title: 'Check email setup',
-    text: 'Type a domain here to read its mail records. Each finding is marked good, worth a look or a problem, in plain words. It cannot tell whether an email will really arrive.',
-    attachTo: { element: '[data-tour="dns-email"]', on: 'top' },
-    beforeShowPromise: check('dns-email', '[data-tour="dns-email"]'),
+    title: 'The menu',
+    text: 'Look up records also shows who hosts the site and which registrar the domain is with. Check email setup reads the mail records of a domain in plain words. Saved lookups keeps every answer you run, to open again or export as a report or CSV.',
+    attachTo: { element: '[data-tour="dns-lookup-menu"]', on: 'right' },
+    beforeShowPromise: check('dns-email', '[data-tour="dns-lookup-menu"]'),
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
@@ -89,7 +89,7 @@ export function startDnsLookupTour() {
   tour.addStep({
     id: 'dns-limits',
     title: 'Good to know',
-    text: 'Answers can be out of date for a while after a change, because resolvers keep an answer for its time to live (TTL). Nothing is saved, and records are changed where the domain is managed, such as Cloudflare. Stuck? Press the round button at the bottom right and ask the guide.',
+    text: 'Answers can be out of date for a while after a change, because resolvers keep an answer for its time to live (TTL). Nothing is ever changed: records are changed where the domain is managed, such as Cloudflare. Stuck? Press the round button at the bottom right and ask the guide.',
     when: { show() { injectStepCounter(5); } },
     buttons: [
       btnBack(),

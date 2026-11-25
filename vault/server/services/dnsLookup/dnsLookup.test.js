@@ -47,4 +47,17 @@ const many = `v=spf1 ${Array.from({ length: 11 }, (_, i) => `include:s${i}.com`)
 assert.strictEqual(spfLookupCount(many), 11);
 assert.ok(find(emailChecks({ txt: [{ value: many }] }), 'spf-lookups'), 'over ten lookups is flagged');
 
+// host and registrar: the domain RDAP is asked about, and the IP record read
+const { registrableDomain, parseIpRdap } = require('./whoHosts');
+assert.strictEqual(registrableDomain('www.shop.example.com'), 'example.com');
+assert.strictEqual(registrableDomain('www.example.com.au'), 'example.com.au');
+assert.strictEqual(registrableDomain('example.co'), 'example.co');
+assert.strictEqual(registrableDomain('mail.example.co.uk'), 'example.co.uk');
+const cfHost = parseIpRdap({ name: 'CLOUDFLARENET', entities: [{ roles: ['registrant'], vcardArray: ['vcard', [['fn', {}, 'text', 'Cloudflare, Inc.']]] }] }, '104.16.1.1');
+assert.strictEqual(cfHost.organisation, 'Cloudflare, Inc.');
+assert.strictEqual(cfHost.proxy, true, 'Cloudflare is marked as a proxy');
+const aws = parseIpRdap({ name: 'AMAZON-AP', remarks: [{ description: ['Amazon Web Services, Inc.'] }], entities: [] }, '3.3.3.3');
+assert.strictEqual(aws.organisation, 'Amazon Web Services, Inc.', 'a registry remark is used when there is no registrant');
+assert.strictEqual(aws.proxy, false);
+
 console.log('dnsLookup tests passed');

@@ -47,7 +47,7 @@
 - `measurements` — Unit converter for cooking, building and everyday measures (all in the browser).
 - `fitness` — Personal fitness planner with sessions, rest days and gentle tracking (not medical advice).
 - `burnerMail` — Throw-away email addresses on your own domain for sign-ups; codes and links arrive in Vault.
-- `dnsLookup` — See what a domain points to, where its email goes, and whether a DNS change has spread.
+- `dnsLookup` — See what a domain points to, who hosts it and its registrar, where its email goes, and whether a DNS change has spread; saves each lookup and exports it.
 - `emailFollowUp` — Email Follow-Up: a ledger of commitments in email threads (cases you open by hand) with drafted follow-ups.
 - `passwordVault` — Zero-knowledge store for logins, some linked to CRM clients.
 - `topicResearch` — Find what is already written about a topic, so the owner can write their own piece.
