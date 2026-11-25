@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8beecd87",
+   "fullHash": "8beecd875f22780f756af50a950868ce64ab2d3d",
+   "committedAt": "2026-11-25T10:48:22+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Signal scorecard: score news signals and thesis verdicts at 30 and 90 days",
+   "filesChanged": 14,
+   "insertions": 380,
+   "deletions": 5,
+   "goal": "See whether the Shares app's own calls turn out right, and let thesis checks calibrate their confidence on that record (roadmap step 10 signal scorecard; idea from the reflection memory in TradingAgents, arXiv 2412.20138).",
+   "whatChanged": "New table share_signal_calls (server/db.js) and service server/services/sharesSignalScorecard.js. The 4 AM briefing records each bullish/bearish signal, and each thesis check records its verdict as concern or intact (unclear is skipped), with the AUD price and the index close (STW/SOXX/QQQ via sectorBenchmarkFor, now exported). scoreDue runs per user after the briefing in the existing shares-news cron lock: at 30 and 90 days it reads the first stored snapshot price and the index close and marks the call right (bullish/intact beat the index, bearish/concern lagged it) or no-price after 10 days without a snapshot. New route GET /api/shares/thesis/scorecard (route manifest updated); Track record card on the Thesis tab; the thesis check prompt gets a TRACK RECORD block with rule 10 (calibration only, never moves a rating). A monthly suggestion fires when news signals are right under 40% over 20+ scored calls. Guide text, ROADMAP status, docs/shares-scorecard.md and docs/shares-thesis.md updated.",
+   "filesImpacted": [
+    "server/services/sharesSignalScorecard.js",
+    "server/services/sharesSignalScorecard.test.js",
+    "server/db.js",
+    "server/services/sharesNewsService.js",
+    "server/services/sharesThesis.js",
+    "server/services/sharesThesis.test.js",
+    "server/cron/sharesCron.js",
+    "server/routes/sharesThesis.js",
+    "server/testing/routeManifest.json",
+    "server/services/sharesTutor.js",
+    "client/src/components/shares/SharesThesisTab.jsx",
+    "docs/shares-scorecard.md",
+    "docs/shares-thesis.md",
+    "ROADMAP.md"
+   ],
+   "benefit": "A permanent, honest record of how often the app's signals and thesis concerns were right, kept past the 45-day briefing prune, at no extra API cost, and fed back so checks sound only as sure as their record supports.",
+   "concerns": "The SQL in recordCall and scoreDue has not been run against a database (local Postgres role missing); only the pure functions are tested and the modules load. Nothing shows for 30 days after the first call. Shares sold before the mark have no snapshots and end as no-price, so the record leans to holdings kept. Scoring thesis concerns against price sits uneasily with the rule that price is not evidence about the business; rule 10 keeps it to calibration. Not tried in a browser; the client builds."
+  },
+  {
    "commit": "894d2724",
    "fullHash": "894d2724a911850d74b34f416c932ecfd41c9590",
    "committedAt": "2026-11-25T10:21:25+10:00",
