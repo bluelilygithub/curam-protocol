@@ -2,6 +2,51 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "1d0b14c2",
+   "fullHash": "1d0b14c235bedb7a6e20f36d740f128c418ca583",
+   "committedAt": "2026-11-25T11:17:05+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Fix empty monthly reviews; setting for how long daily briefings are kept",
+   "filesChanged": 10,
+   "insertions": 130,
+   "deletions": 32,
+   "goal": "Stop the Shares 30-day review being saved empty, and let the admin choose how many days of daily briefings to keep (the owner wants 90).",
+   "whatChanged": "Root cause: server/utils/parseModelJson.js tried a JSON array before an object, so a model reply with a line of prose before the review object came back as its inner stocks array, which passed the old typeof object check and was saved with no overview, stocks or assessment. The parser now tries whichever bracket opens first (new server/utils/parseModelJson.test.js). In server/services/sharesNewsService.js the monthly review refuses any reply without an overview (retry, then error, never an empty row) and the daily briefing checks for its stocks/market shape before replacing the day. New admin setting shares_briefing_retention_days (Settings -> Shares -> Daily Briefing History in client/src/pages/SettingsPage.jsx; default 45, clamped 7-730 by clampRetentionDays, read from the first admin like the drop alert) now sets both the 4 AM prune and how far back the News tab and thesis checks read. Thesis prompt label no longer says last 45 days. Settings search tip, guide notes, docs/features.md and docs/shares-thesis.md updated; new server/services/sharesNewsRetention.test.js.",
+   "filesImpacted": [
+    "server/utils/parseModelJson.js",
+    "server/utils/parseModelJson.test.js",
+    "server/services/sharesNewsService.js",
+    "server/services/sharesNewsRetention.test.js",
+    "server/services/sharesThesis.js",
+    "server/services/sharesTutor.js",
+    "client/src/pages/SettingsPage.jsx",
+    "client/src/utils/settingsGroups.mjs",
+    "docs/features.md",
+    "docs/shares-thesis.md"
+   ],
+   "benefit": "Monthly reviews are either complete or not saved, and a bad daily reply can no longer wipe a day of briefings. The briefing history length is the admin's choice.",
+   "concerns": "parseModelJson is shared by about 28 callers: when a reply has prose around it and both brackets appear, an object that opens first is now returned where an inner array used to be. That is correct for object replies, but a caller that relied on getting the inner array out of a wrapper object would change; the three existing tests that use the parser pass. Raising the retention does not restore briefings already deleted. Existing empty monthly reviews are left in place. Portfolio Note observations still keep a fixed 45 days. The Settings field and the fix against a real model reply have not been tried live."
+  },
+  {
+   "commit": "04031c2e",
+   "fullHash": "04031c2e98c9f172809b1ad1aca5fed51296ce67",
+   "committedAt": "2026-11-25T11:17:04+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Roadmap status: stress test, signal scorecard and fundamentals",
+   "filesChanged": 1,
+   "insertions": 6,
+   "deletions": 3,
+   "goal": "Keep the Shares roadmap status block a true record of what shipped today.",
+   "whatChanged": "ROADMAP.md status block only (the plan and decisions stay as agreed): as-of date set to 2026-11-25; signal scorecard removed from the step 10 not-built list; new lines for the thesis stress test (894d2724), the scorecard (8beecd87, first scoring run 2026-11-26), thesis fundamentals as a non-roadmap item that is a small part of step 9 (388ae934), and the tour, guide and docs commits.",
+   "filesImpacted": [
+    "ROADMAP.md"
+   ],
+   "benefit": "Anyone starting Shares work sees what is built, by which commit, and what is still unverified.",
+   "concerns": "Documentation only. The live paths it lists as unverified are still unverified."
+  },
+  {
    "commit": "feffe916",
    "fullHash": "feffe916744919848a1345ac9465ed756813266a",
    "committedAt": "2026-11-25T11:09:23+10:00",
