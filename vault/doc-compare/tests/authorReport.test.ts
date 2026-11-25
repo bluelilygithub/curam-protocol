@@ -59,7 +59,7 @@ describe('authorItems', () => {
 describe('the PDF', () => {
   it('a removed section: summary, Must fix, the instruction and the missing text', async () => {
     const { r, names } = await changesOf('section-removed.docx');
-    const doc = buildAuthorPdf({ changes: r.changes, trivialCount: r.trivialCount, fileNames: names, similarity: 83, override: false });
+    const doc = await buildAuthorPdf({ changes: r.changes, trivialCount: r.trivialCount, fileNames: names, similarity: 83, override: false });
     const { text, pages } = await pdfText(doc.output('arraybuffer'));
     expect(pages).toBeGreaterThanOrEqual(1);
     expect(text).toMatch(/Review of the edited document/);
@@ -71,19 +71,19 @@ describe('the PDF', () => {
   });
   it('a number change shows the old and new value and both are in the word diff', async () => {
     const { r, names } = await changesOf('number-changed.md');
-    const { text } = await pdfText(buildAuthorPdf({ changes: r.changes, trivialCount: r.trivialCount, fileNames: names, similarity: 99, override: false }).output('arraybuffer'));
-    expect(text).toMatch(/Check the changed figure: "30" -> "60"/);
+    const { text } = await pdfText((await buildAuthorPdf({ changes: r.changes, trivialCount: r.trivialCount, fileNames: names, similarity: 99, override: false })).output('arraybuffer'));
+    expect(text).toMatch(/Check the changed figure: "30" → "60"/);
     expect(text).not.toMatch(/\?/);
     expect(text).toMatch(/\b30\b[\s\S]*\b60\b/);
   });
   it('identical files: says nothing needs action', async () => {
     const { r, names } = await changesOf('identical.txt');
-    const { text } = await pdfText(buildAuthorPdf({ changes: r.changes, trivialCount: r.trivialCount, fileNames: names, similarity: 100, override: false }).output('arraybuffer'));
+    const { text } = await pdfText((await buildAuthorPdf({ changes: r.changes, trivialCount: r.trivialCount, fileNames: names, similarity: 100, override: false })).output('arraybuffer'));
     expect(text).toMatch(/No changes need action/);
   });
   it('a long document wraps onto more pages', async () => {
     const many: Change[] = Array.from({ length: 60 }, (_, i) => ch({ id: i + 1, category: 'removed', severity: 'high', original: 'A long missing paragraph. '.repeat(30) }));
-    const { pages } = await pdfText(buildAuthorPdf({ changes: many, trivialCount: 0, fileNames: ['a.docx', 'b.docx'], similarity: 90, override: false }).output('arraybuffer'));
+    const { pages } = await pdfText((await buildAuthorPdf({ changes: many, trivialCount: 0, fileNames: ['a.docx', 'b.docx'], similarity: 90, override: false })).output('arraybuffer'));
     expect(pages).toBeGreaterThan(5);
   });
 });

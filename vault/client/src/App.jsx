@@ -272,7 +272,7 @@ function App() {
               <Route path="/room-planner" element={<RoomPlannerPage />} />
               <Route path="/garden-planner" element={<GardenPlannerPage />} />
               <Route path="/route-tracer" element={<RouteTracerPage />} />
-              <Route path="/doc-compare" element={<DocComparePage />} />
+              <Route path="/doc-compare" element={<FeatureRoute feature="docCompare"><DocComparePage /></FeatureRoute>} />
               <Route path="/cellar-planner" element={<CellarPlannerPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

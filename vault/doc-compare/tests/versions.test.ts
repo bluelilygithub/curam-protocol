@@ -75,7 +75,7 @@ describe('intentionally different versions', () => {
   it('the report is a Version comparison: no verdict and no watermark', async () => {
     const [a, b] = [await read(LONG, 'a.md'), await read(SHORT, 'b.md')];
     const r = compareDocs(a, b, DEFAULT_SETTINGS, true);
-    const pdf = buildReportPdf({
+    const pdf = await buildReportPdf({
       result: r, layoutChanges: [], layout: { pages: [] }, sim: { score: 70, headingScore: 1, overlapScore: 1, structureScore: 1, reasons: [] },
       override: false, settings: { similarityThreshold: 60, layoutPixelRatio: 0.005 }, fileNames: ['long.md', 'short.md'], all: r.changes, visible: r.changes, filtersNote: '', landscape: false, versions: true,
     });
