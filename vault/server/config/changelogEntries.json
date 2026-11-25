@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d833661c",
+   "fullHash": "d833661c18277ccfe400b3ff2c661de16442f770",
+   "committedAt": "2026-11-25T11:06:50+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares guide chat: stress test, US figures and track record",
+   "filesChanged": 1,
+   "insertions": 9,
+   "deletions": 4,
+   "goal": "Let the Shares guide answer accurately about the thesis stress test, the US reported figures and the Track record, and stop it repeating an outdated limit.",
+   "whatChanged": "server/services/sharesTutor.js: the thesis catalogue entry now describes the bear/bull stress test, the Finnhub figures for US shares and the Track record card, and its notes were rewritten (US only, debate is argument not evidence, three AI calls per check, card appears after the first call and results take 30 days). The news entry notes that bullish/bearish signals are kept and scored. Two new rules explain how calls are scored (right = beat or lagged the index as called, unclear not counted, scored at 30 and 90 days after the 4 AM briefing) and that the record only shapes how confident checks sound, never a rating. The not-possible line on filings no longer says the check uses only trades and briefings; new lines cover ASX figures, forecasting whether a call will be right, and shares sold before their mark.",
+   "filesImpacted": [
+    "server/services/sharesTutor.js"
+   ],
+   "benefit": "The guide describes what the Thesis tab now does and says plainly what the new features cannot do.",
+   "concerns": "The live guide has not been asked a question; the guide test passes and the built prompt was checked to carry the new text. The guide prompt is a little longer, so each guide call costs slightly more."
+  },
+  {
    "commit": "89469bac",
    "fullHash": "89469bac37e20f20dae3f19e601e6a92d2e81a14",
    "committedAt": "2026-11-25T11:03:10+10:00",
