@@ -51,7 +51,7 @@ Runs after the 4 AM daily per-stock briefing cron and after the overnight US clo
 
 - Table: `share_news_briefings`
 - `type='observation'`, one row per user per day (replaced on re-run)
-- Pruned after 45 days
+- Pruned after the admin's Settings → Shares retention (`shares_briefing_retention_days`, default 45, 7–730), the same setting as the daily briefings
 - `headlines` JSONB stores metadata: index %, `portfolioMove`, mover symbols, `aiUnavailable`
 
 ### Report structure

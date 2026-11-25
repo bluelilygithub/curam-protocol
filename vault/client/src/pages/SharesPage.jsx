@@ -2292,7 +2292,7 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
         <div>
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Daily briefings</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Auto-generated at 4 AM · 45-day history · end-of-month summaries retained permanently
+            Auto-generated at 4 AM · history length set by the admin (45 days unless changed) · end-of-month summaries retained permanently
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

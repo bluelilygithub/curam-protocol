@@ -6,7 +6,7 @@ Shares → Thesis → **Track record** card. Built 2026-11-25 as the "signal sco
 
 One row per call in `share_signal_calls` (unique per user, source, symbol, exchange, day; a rerun the same day replaces the row and resets its scores):
 
-- **`briefing`**: the 4 AM news briefing's per-holding signal when it is `bullish` or `bearish` (`watch`/`neutral` have no direction). Recorded at the end of `generateDailyBriefing`. Briefing rows are pruned at 45 days; these are not.
+- **`briefing`**: the 4 AM news briefing's per-holding signal when it is `bullish` or `bearish` (`watch`/`neutral` have no direction). Recorded at the end of `generateDailyBriefing`. Briefing rows are pruned after the Settings → Shares retention (45 days by default); these are not.
 - **`thesis`**: a thesis check verdict, `concern` (weakening, impaired, broken, red line) or `intact`. `unclear` is not a call. Recorded at the end of `runCheck`.
 
 Each row keeps the AUD price at the time (the dashboard price) and the close of the holding's index (`sectorBenchmarkFor`: STW for ASX, SOXX for chip names, else QQQ, from `share_benchmark_closes`).

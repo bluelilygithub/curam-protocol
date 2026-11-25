@@ -1871,7 +1871,8 @@ async function generateObservation(userId) {
     })]
   );
 
-  const cutoff = getDateInTz(tz, 45);
+  // Portfolio Notes follow the same Settings → Shares retention as the daily briefings.
+  const cutoff = getDateInTz(tz, await getBriefingRetentionDays());
   await pool.query(
     `DELETE FROM share_news_briefings WHERE "userId"=$1 AND type='observation' AND date < $2`,
     [userId, cutoff]

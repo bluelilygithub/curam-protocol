@@ -3611,7 +3611,7 @@ async function initSchema() {
   `);
 
   // One close per index proxy (QQQ, SOXX, STW) per trading day, kept permanently: the
-  // observation rows that also carry index moves are pruned at 45 days, too short for beta.
+  // observation rows that also carry index moves are pruned (45 days by default), too short for beta.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_benchmark_closes (
       symbol            TEXT NOT NULL,

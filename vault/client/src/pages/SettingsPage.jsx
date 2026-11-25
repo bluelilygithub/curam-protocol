@@ -2617,15 +2617,16 @@ function SettingsPage() {
         </div>
 
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1 mt-8" style={{ color: 'var(--color-muted)' }}>
-          Daily Briefing History
+          Briefing and Portfolio Note History
         </h2>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          How many days of daily news briefings to keep on the News tab (7 to 730). Older ones are deleted at the next
-          4 AM briefing. Raising it does not bring back briefings already deleted; the history grows from now on.
+          How many days of daily news briefings and Portfolio Notes to keep (7 to 730). Older ones are deleted at the next
+          4 AM briefing or 7 AM Portfolio Note. Charts read the stored notes, so a longer history also fills the longer chart
+          ranges. Raising it does not bring back anything already deleted; the history grows from now on.
           Monthly reviews and the Track record are kept for good either way.
         </p>
         <label htmlFor="shares-briefing-days" className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
-          Keep daily briefings for (days)
+          Keep briefings and notes for (days)
         </label>
         <div className="flex items-center gap-2">
           <input
