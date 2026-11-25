@@ -15,6 +15,13 @@ export function aboutLines(about) {
   else if (h) {
     const who = [h.organisation, h.network && h.network !== h.organisation ? `network ${h.network}` : null].filter(Boolean).join(', ') || 'Unknown';
     lines.push(['Hosted by', h.proxy ? `${who}. This is a proxy or CDN in front of the site, so the real server behind it is hidden.` : who]);
+    const loc = h.location;
+    if (loc) {
+      const place = [loc.city, loc.region].filter(Boolean).join(', ');
+      lines.push(['Country', `${loc.country}${place ? ` (${place})` : ''}${h.proxy ? '. This is where the proxy answered from, not the real server.' : ''}`]);
+    } else if (h.registeredIn) {
+      lines.push(['Country', `Not known. The network company is registered in ${h.registeredIn}, which is not always where the server is.`]);
+    }
     lines.push(['Address checked', h.ip]);
     if (h.reverseName) lines.push(['Reverse name', h.reverseName]);
   }

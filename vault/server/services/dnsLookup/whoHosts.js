@@ -25,20 +25,35 @@ function parseIpRdap(json, ip) {
   const remark = (Array.isArray(json?.remarks) ? json.remarks : []).flatMap((r) => r.description || [])[0] || null;
   const organisation = vcardValue(withRole('registrant'), 'fn') || remark || vcardValue(withRole('administrative'), 'fn') || null;
   const network = json?.name || null;
-  return {
-    ip, organisation, network, country: json?.country || null,
-    proxy: PROXIES.test(`${organisation || ''} ${network || ''}`),
-  };
+  // Where the network's owner is registered (RIPE/APNIC give a code; ARIN only an address whose last line is the country). This is the
+  // company's country, not the server's: a Microsoft network registered in the US can sit in Sydney. Only a fallback for `location`.
+  const label = withRole('registrant')?.vcardArray?.[1]?.find((r) => r[0] === 'adr')?.[1]?.label;
+  const registeredIn = countryName(json?.country) || (label ? String(label).trim().split(/\n/).pop().trim() : null) || null;
+  return { ip, organisation, network, registeredIn, proxy: PROXIES.test(`${organisation || ''} ${network || ''}`) };
+}
+
+const REGIONS = new Intl.DisplayNames(['en'], { type: 'region' });
+function countryName(code) {
+  if (!/^[A-Z]{2}$/i.test(String(code || ''))) return null;
+  try { return REGIONS.of(code.toUpperCase()); } catch { return null; }
+}
+
+// Where the server physically is, from ipinfo.io (free without a key, up to 50,000 a month). null when it cannot say.
+function parseIpinfo(json) {
+  const country = countryName(json?.country);
+  if (!country) return null;
+  return { country, region: json.region || null, city: json.city || null };
 }
 
 async function hostOf(resolverKey, ip, deps) {
   try {
     const fetchJson = deps.fetchPublicJson || fetchPublicJson;
-    const [{ json }, ptr] = await Promise.all([
+    const [{ json }, ptr, place] = await Promise.all([
       fetchJson(`https://rdap.org/ip/${encodeURIComponent(ip)}`, { module: 'dns-lookup-rdap', timeoutMs: 8000 }),
       (deps.reverseLookup || reverseLookup)(resolverKey, ip),
+      fetchJson(`https://ipinfo.io/${encodeURIComponent(ip)}/json`, { module: 'dns-lookup-ipinfo', timeoutMs: 6000 }).then((r) => parseIpinfo(r.json)).catch(() => null),
     ]);
-    return { ...parseIpRdap(json, ip), reverseName: ptr?.records?.[0]?.value || null };
+    return { ...parseIpRdap(json, ip), location: place, reverseName: ptr?.records?.[0]?.value || null };
   } catch (err) {
     return { ip, error: `Could not find who runs ${ip} (${err.message}).` };
   }
@@ -67,4 +82,4 @@ async function whoHosts(resolverKey, input, deps = {}) {
   return { hosting: address ? await hostOf(resolverKey, address, deps) : null, registrar };
 }
 
-module.exports = { whoHosts, registrableDomain, parseIpRdap };
+module.exports = { whoHosts, registrableDomain, parseIpRdap, parseIpinfo };

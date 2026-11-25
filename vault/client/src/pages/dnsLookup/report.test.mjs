@@ -3,12 +3,14 @@ import assert from 'assert';
 import { aboutLines, reportCsv, reportHtml, reportFilename } from './report.mjs';
 
 const about = {
-  hosting: { ip: '104.16.1.1', organisation: 'Cloudflare, Inc.', network: 'CLOUDFLARENET', proxy: true, reverseName: null },
+  hosting: { ip: '104.16.1.1', organisation: 'Cloudflare, Inc.', network: 'CLOUDFLARENET', proxy: true, reverseName: null, location: { country: 'United States', region: 'California', city: 'San Francisco' } },
   registrar: { domain: 'example.com', name: 'Example Registrar', registered: '2001-01-01', expires: '2030-01-01' },
 };
 const lines = Object.fromEntries(aboutLines(about));
 assert.match(lines['Hosted by'], /Cloudflare.*real server behind it is hidden/s);
 assert.strictEqual(lines.Registrar, 'Example Registrar');
+assert.match(lines.Country, /^United States \(San Francisco, California\)\. This is where the proxy answered from/);
+assert.match(Object.fromEntries(aboutLines({ hosting: { ip: '1.2.3.4', organisation: 'X', registeredIn: 'United States' } })).Country, /Not known.*registered in United States/);
 assert.match(aboutLines({ hosting: null, registrar: { error: 'The registry did not answer.' } })[0][1], /No address/);
 
 const item = {

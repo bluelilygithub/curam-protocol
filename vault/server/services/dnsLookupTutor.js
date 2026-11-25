@@ -25,7 +25,7 @@ const CATALOG = [
     does: 'Compare both asks Cloudflare and Google the same question and says, for each record type, whether they gave the same answer or different ones. Use it after changing a record to see whether the change has spread.',
     notes: 'Different answers usually mean the change is still spreading and it will settle by itself. Some records take hours.' },
   { id: 'about', label: 'Host and registrar', group: 'Look up',
-    does: 'Every lookup also shows a Host and registrar panel above the records: the company that runs the computer the name points to (the host, from the network record of the address), the address itself and its reverse name, and the registrar the domain is registered through, with its registered and expiry dates when the registry gives them.',
+    does: 'Every lookup also shows a Host and registrar panel above the records: the company that runs the computer the name points to (the host, from the network record of the address), the country and city where that server is (from a location service, ipinfo.io), the address itself and its reverse name, and the registrar the domain is registered through, with its registered and expiry dates when the registry gives them.',
     notes: 'If the host is Cloudflare, Akamai, Fastly or another proxy, the real server behind it is hidden and the panel says so. Some registries (such as .au) do not give dates. It never shows the name or address of the owner.' },
   { id: 'export', label: 'Export', group: 'Look up',
     does: 'Export, beside an answer and on each saved lookup, downloads it as a Report (a page that opens in any browser and can be printed to PDF) or a CSV file that opens in Excel or Google Sheets.',
