@@ -8,6 +8,7 @@ const express = require('express');
 const path = require('path');
 const { requireAdmin } = require('../middleware/auth');
 const { normaliseHttpUrl, checkSsrf } = require('../services/htmlFetch');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 const { getLogger } = require('../middleware/requestContext');
 const { renderAvailable } = require('../services/restyle/renderPage');
 const proxy = require('../services/geoCheck/proxy');
@@ -95,6 +96,14 @@ function createRouter({ jobs = createGeoJobs(), pool = require('../db').pool, mo
   // GET /api/geo-check/runs/:id/compare/:otherId: what changed between two checks of the same address
   router.get('/runs/:id/compare/:otherId', async (req, res) => {
     try { res.json(await jobs.compare(req.user.id, Number(req.params.id) || 0, Number(req.params.otherId) || 0)); } catch (err) { fail(res, err, '/compare'); }
+  });
+
+  // POST /api/geo-check/runs/:id/summary: the optional AI note on a finished check (the person's standard model; usage logged)
+  router.post('/runs/:id/summary', aiLimiter, async (req, res) => {
+    try {
+      const out = await jobs.summarise(req.user.id, Number(req.params.id) || 0, { countryName: (c) => (countryOf(c) || {}).name || c });
+      res.json(out);
+    } catch (err) { fail(res, err, '/summary'); }
   });
 
   router.post('/runs/:id/stop', async (req, res) => {

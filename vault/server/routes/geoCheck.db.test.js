@@ -94,7 +94,12 @@ async function waitDone(server, user, id) {
   try {
     // ── a normal run ──
     const cap = fakeCapture({ fail: { DE: 'The page took too long to load through the proxy.' }, exits: { JP: 'US' } });
-    const main = makeJobs(cap.fn);
+    const main = makeJobs(cap.fn, { deps: { summarise: async (_u, run, o) => {
+      const file = await o.imagePath(run.captures.find((c) => c.hasImage).id);
+      assert.ok(fs.existsSync(file), 'the summary gets real picture files');
+      assert.equal(o.countryName('JP'), 'Japan');
+      return { summary: 'A short note.', model: 'stand-in-model' };
+    } } });
     const s = await serve(createRouter({ jobs: main.jobs, pool }));
     servers.push(s);
 
@@ -163,6 +168,14 @@ async function waitDone(server, user, id) {
     await waitDone(s, A, r.body.id);
     assert.equal((await call(s, A, 'GET', `/runs/${runId}/compare/${r.body.id}`)).status, 400, 'different address');
     assert.equal((await call(s, B, 'GET', `/runs/${runId}/compare/${run2}`)).status, 404, 'not theirs');
+
+    // ── the AI summary (stand-in model): kept on the run; owner only ──
+    r = await call(s, A, 'POST', `/runs/${runId}/summary`);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.summary, 'A short note.');
+    r = await call(s, A, 'GET', `/runs/${runId}`);
+    assert.deepEqual([r.body.summary, r.body.summaryModel], ['A short note.', 'stand-in-model']);
+    assert.equal((await call(s, B, 'POST', `/runs/${runId}/summary`)).status, 404);
 
     // ── limits ──
     const bad = async (body, status, re) => { const x = await call(s, B, 'POST', '/runs', { url: URL1, screens: [PHONE], countries: ['AU'], ...body }); assert.equal(x.status, status, JSON.stringify(x.body)); if (re) assert.match(x.body.error, re); };

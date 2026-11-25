@@ -7,6 +7,7 @@ import Skeleton from '../../components/Skeleton';
 import Dialog from '../../components/Dialog';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import useToastStore from '../../store/toastStore';
+import useProcessingStore from '../../store/processingStore';
 import { devicesOfKind, deviceById } from '../../utils/deviceCatalog.mjs';
 import {
   DEFAULT_SCREEN_IDS, MAX_COUNTRY_SCREENS, MAX_COUNTRIES, parseSpokenAddress, formatMb, formatCost, estimateLine,
@@ -75,6 +76,7 @@ function Badge({ capture }) {
 export default function CountriesView({ url, setUrl, config, countryName, onConfigChange }) {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
 
   const [countries, setCountries] = useState(config.countries);
   const [screenIds, setScreenIds] = useState(DEFAULT_SCREEN_IDS);
@@ -205,20 +207,30 @@ export default function CountriesView({ url, setUrl, config, countryName, onConf
     } catch (e) { setAgainst(null); addToast(e.message || 'Those checks could not be compared.', 'error'); }
   };
 
+  const summarise = async () => {
+    startProcessing('Writing a summary of this check…', 'The AI model is reading the differences and looking at one picture per country.');
+    try {
+      const r = await api.post(`/api/geo-check/runs/${run.id}/summary`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'The summary could not be written.');
+      setRun((cur) => (cur && cur.id === run.id ? { ...cur, summary: d.summary, summaryModel: d.model } : cur));
+    } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); }
+  };
+
   const earlier = useMemo(() => comparableRuns(run, runs), [run, runs]);
   const grid = useMemo(() => gridOf(run), [run]);
   const others = useMemo(() => (run ? run.captures.filter((c) => c.hasImage) : []), [run]);
 
   if (!config.configured) {
     return (
-      <div className="rounded-xl border" style={card}>
+      <div className="rounded-xl border" style={card} data-guide="countries">
         <EmptyState icon="globe" title="Countries is not set up yet" body="It needs a proxy service that lets Vault open pages from other countries. An admin adds its details on the server; then you can check a page from up to twelve countries at once." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-guide="countries">
       <div className="flex flex-col xl:grid xl:grid-cols-2 xl:items-start gap-4">
         <section className="rounded-xl border p-4 space-y-3" style={card} data-guide="countries-setup" data-tour="dp-countries">
           <div className="flex flex-wrap items-start gap-2">
@@ -367,6 +379,17 @@ export default function CountriesView({ url, setUrl, config, countryName, onConf
               <Tooltip text="Worked out from each page's language, title, currency, prices, cookie notice, headings, buttons and where it ended up. Headings and buttons are only compared between countries that got the same language. Plain comparison, no AI.">
                 <h3 className="text-sm font-semibold w-fit" style={{ color: 'var(--color-text)' }}>What differs between the countries</h3>
               </Tooltip>
+              <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-tour="dp-country-summary">
+                {run.summary && (
+                  <>
+                    <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{run.summary}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Written by {run.summaryModel || 'the AI model'}. It can be wrong: check the pictures before acting on it.</p>
+                  </>
+                )}
+                <Tooltip text="Optional. Your standard AI model reads the differences below and looks at the top of one picture per country, then writes a short note on what differs and what looks wrong. Uses a little of your AI allowance each time.">
+                  <button type="button" onClick={summarise} className={btnSecondary} style={btnSecondaryStyle}>{run.summary ? 'Write the summary again' : 'Summarise with AI'}</button>
+                </Tooltip>
+              </div>
               <DiffList diff={run.diff} empty={run.diff.compared && run.diff.compared.length < 2 ? 'Fewer than two countries came back, so there is nothing to compare.' : 'No differences found in language, title, currency, prices, cookie notice, headings, buttons or redirects.'} />
               {earlier.length > 0 && (
                 <div className="pt-2 space-y-2 border-t" style={{ borderColor: 'var(--color-border)' }}>

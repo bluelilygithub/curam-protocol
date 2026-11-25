@@ -1,6 +1,6 @@
 # Geo-check: "Countries" in Device preview — design brief
 
-Status: **milestones 1-4 built** (2026-11-25): the admin try route, background runs, the Countries view and the plain-code differences work locally with real Chromium, the local database and a local stand-in proxy (checked on screen); not yet tried against DataImpulse or on Railway. Still to come: the AI summary, guide chat and final docs (5). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
+Status: **all five milestones built** (2026-11-25/26) on branch `geo-check`. Worked locally with real Chromium, the local database and a local stand-in proxy (checked on screen). **Not yet tried** against DataImpulse, on Railway, or with a real AI model (both local AI keys are invalid, so the summary was tested with a stand-in model only). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
 
 **What it is for:** around a release, see one page as visitors in several countries see it (currency, prices, language, geo-redirects, region-only banners), side by side per device, with a plain list of what differs. Used now and then, not a monitor.
 
@@ -302,3 +302,18 @@ What milestone 1 found: Chromium answers a refused proxy password by asking agai
 - The across-countries result is worked out the first time a finished check is opened and kept in `geo_check_runs.diff` (so checks ended by a restart get one too). `GET /runs/:id/compare/:otherId` compares two finished checks of the same page (host and path, ignoring www., a trailing slash and the query), older first.
 - The view shows "What differs between the countries" above the grid and a "Compare with an earlier check of this page" choice under it.
 - Known noise: a site that rotates its offers between visits (booking.com does) shows many price and heading changes between two checks minutes apart; that is the site, not the check.
+
+## Milestone 5: AI summary, guide chat, docs
+
+- `server/services/geoCheck/summary.js` (+ `summary.test.js`): `POST /runs/:id/summary` (behind `aiLimiter`) asks the person's **standard** model (`getModelsForUser`, never a hardcoded id) for a short release-check note. It sends each country's facts, the plain differences and the top 1,600 pixels of one picture per country (shrunk to 800 px wide with sharp). Page text goes inside `<page-data>` tags that the model is told to treat as data only. A model that cannot look at pictures is asked again with the facts alone, and the note says so. Usage is logged as `geo_check_summary`. The note is kept on the run (`summary`, `summaryModel`) and shown with "It can be wrong: check the pictures".
+- Device preview guide: a Countries area (`countries`) and 8 entries (switch, countries, screens, start, pictures, differences, summary, saved) in `devicePreviewTools.mjs` and `server/services/devicePreviewTutor.js`; what it cannot do now names Countries' limits. The guide's Open buttons switch to the Countries view (or back to Screens) before scrolling. `npm run test:device-preview-tutor`, `npm run test:guides`.
+
+## Using it (owner)
+
+1. Railway: `GEO_PROXY_SERVER`, `GEO_PROXY_USERNAME_TEMPLATE` (with `{country}` where DataImpulse wants the country), `GEO_PROXY_PASSWORD`; optional `GEO_PROXY_COST_PER_GB` (A$), `GEO_PROXY_LABEL`, `GEO_CHECK_CONTEXTS` (default 2), `GEO_PROXY_MAX_MB_PER_RUN` (default 150).
+2. Settings → Feature Access: turn on **Geo-check** for members who should have it (admins always do; it also needs the Style editor switch).
+3. Device preview → Countries. If the first check says "The proxy did not answer", the username or password is wrong or the account has no traffic; "Unverified: exited from XX" on every country means the country is in the wrong place in the username template.
+
+## All tests
+
+`node server/services/geoCheck/{countries,proxy,exitCheck,capture,diff,summary}.test.js`, `DATABASE_URL=... node server/routes/geoCheck.db.test.js`, `node client/src/pages/devicePreview/countriesModel.test.mjs`, `node server/services/attention.test.js`, `node server/config/featureAccess.test.js`, `npm run test:device-preview`, `npm run test:device-preview-tutor`, `npm run test:guides`.

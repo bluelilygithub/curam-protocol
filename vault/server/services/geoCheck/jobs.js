@@ -244,6 +244,18 @@ function createGeoJobs(deps = {}) {
     return { older: brief(older), newer: brief(newer), ...diffRuns(older, newer) };
   }
 
+  /** Ask the person's standard model for a short note on a finished check (summary.js); kept on the run. */
+  async function summarise(userId, id, { countryName } = {}) {
+    const run = await get(userId, id);
+    if (run.status === 'running') throw err('Wait for the check to finish first.', 409);
+    if (!run.captures.some((c) => c.status !== 'failed')) throw err('Nothing came back from this check, so there is nothing to summarise.', 400);
+    const out = await (deps.summarise || require('./summary').summarise)(userId, run, {
+      imagePath: (captureId) => imagePath(userId, id, captureId).then((p) => require('path').resolve(p)), countryName,
+    });
+    await q(`UPDATE geo_check_runs SET summary = $3, "summaryModel" = $4 WHERE id = $1 AND "userId" = $2`, [id, userId, out.summary, out.model]);
+    return out;
+  }
+
   /** The stored picture of one capture (owner-checked): { path } or 404. */
   async function imagePath(userId, runId, captureId) {
     const { rows } = await q(`SELECT a."storedPath" FROM geo_check_captures c JOIN attachments a ON a.id = c."attachmentId"
@@ -277,7 +289,7 @@ function createGeoJobs(deps = {}) {
     }
   }
 
-  return { start, stop, list, get, compare, imagePath, remove, estimate, contexts, maxBytes };
+  return { start, stop, list, get, compare, summarise, imagePath, remove, estimate, contexts, maxBytes };
 }
 
 module.exports = { createGeoJobs, cleanScreens, cleanCountries, MAX_CAPTURES, MAX_COUNTRIES, MAX_SCREENS, RUNS_PER_HOUR };

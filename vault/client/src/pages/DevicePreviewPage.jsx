@@ -74,7 +74,11 @@ export default function DevicePreviewPage() {
   // The guide's "Open" buttons: scroll to the area that holds the control.
   const openToolById = (id) => {
     const target = GUIDE_TOOLS.find((t) => t.id === id);
-    document.querySelector(`[data-guide="${target ? target.tool : id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const area = target ? target.tool : id;
+    // Countries is a view of its own: switch to it (or back to Screens) first, then scroll once it has drawn
+    const wanted = area === 'countries' ? 'countries' : 'screens';
+    if (wanted !== view && (wanted === 'screens' || geoConfig)) setView(wanted);
+    setTimeout(() => document.querySelector(`[data-guide="${area}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), wanted !== view ? 300 : 0);
   };
 
   useEffect(() => {
@@ -306,7 +310,7 @@ export default function DevicePreviewPage() {
         </>)}
       </div>
 
-      <DevicePreviewTutorChat currentTool="show" onOpenTool={openToolById} />
+      <DevicePreviewTutorChat currentTool={view === 'countries' ? 'countries' : 'show'} onOpenTool={openToolById} />
 
       {info.show && (
         <ToolInfoModal title="How Device preview Works" onClose={info.close}>
