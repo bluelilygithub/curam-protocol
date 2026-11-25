@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "2ab9b94e",
+   "fullHash": "2ab9b94efb23669cc8bd98b4e652d7a49a24f652",
+   "committedAt": "2026-11-25T13:31:28+10:00",
+   "author": "mrb",
+   "area": "Finance",
+   "subject": "Finance: client name links to the CRM record in invoice/quote lists and detail",
+   "filesChanged": 1,
+   "insertions": 10,
+   "deletions": 2,
+   "goal": "Jump from an invoice or quote in Finance straight to that client's record in CRM (the reverse of the existing CRM to Finance link).",
+   "whatChanged": "FinancePage.jsx: in the Invoices and Quotes tables the client name is a link to /clients/<clientRef>, with a tooltip. The client name at the top of the invoice/quote detail window links the same way. Documents with no client show the plain name or a dash as before.",
+   "filesImpacted": [
+    "vault/client/src/pages/FinancePage.jsx"
+   ],
+   "benefit": "One click from a Finance document to the client's CRM record, instead of going through the CRM list.",
+   "concerns": "Not viewed in the browser; checked only that the file compiles. Other Finance tabs that show a client name (e.g. send log, reports) are not linked."
+  },
+  {
    "commit": "5324c623",
    "fullHash": "5324c6230533a78b655e2fba93722243f94e1b0d",
    "committedAt": "2026-11-25T11:50:13+10:00",
