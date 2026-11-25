@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "bfef923b",
+   "fullHash": "bfef923b69985c00c2bc80b969f13320b416d7e2",
+   "committedAt": "2026-11-25T16:23:50+10:00",
+   "author": "mrb",
+   "area": "DNS Lookup",
+   "subject": "DNS Lookup: help line under the name box about leaving off www.",
+   "filesChanged": 2,
+   "insertions": 4,
+   "deletions": 1,
+   "goal": "Stop a www. lookup looking broken: the owner looked up a www. name and saw only the A record.",
+   "whatChanged": "DnsLookupPage.jsx: a muted line under the name box says to leave off the www., because MX, NS, TXT, SOA and CAA usually belong to the main domain and www.example.com often has only an address. dnsLookupTutor.js: the Name box notes in the guide catalogue say the same, so the guide can answer \"why are my records missing\".",
+   "filesImpacted": [
+    "vault/client/src/pages/DnsLookupPage.jsx",
+    "vault/server/services/dnsLookupTutor.js"
+   ],
+   "benefit": "People get the full set of records first time instead of thinking the tool is broken.",
+   "concerns": "Seen on the local page; guide tests pass. Help text only: a www. lookup still returns only what www. has (no automatic retry on the main domain)."
+  },
+  {
    "commit": "dce8bca6",
    "fullHash": "dce8bca67f5f6f5a2e1ae7933f149701cce17c01",
    "committedAt": "2026-11-25T16:12:55+10:00",
