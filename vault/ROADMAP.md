@@ -2,14 +2,17 @@
 
 The agreed plan for the Shares app (`/shares`). Referenced from `CLAUDE.md`. The plan and decisions below are kept exactly as agreed; the status block is a factual note of what has shipped, kept separate so the plan text stays untouched.
 
-## Status (as of 2026-09-30)
+## Status (as of 2026-11-25)
 
 Shipped to production (`version-7`), each as its own push:
 
 - **Step 1 code — dividends:** withholding gross/net (derived, editable), franking columns, `paidOn` backfill and editing. Commit `6be2c7ef`.
 - **Step 2 code — CGT view:** parcels, held-days wording, FY totals. Commits `0b1d2aaf`, `eda71970`. *Not built yet:* the "what-if sell" part.
-- **Step 10, thesis journal (partly, 2026-11-07):** the Thesis tab and AI check are built; see `docs/shares-thesis.md`. Built out of order at the owner's request; steps 3-9 are still open. Watchlist, signal scorecard, income projection, scenarios, targets and rebalancing drift are not built. Awaiting a first real model check to judge the output.
-- **Step 10, signal scorecard (2026-11-25):** news signals and thesis verdicts are recorded and scored at 30 and 90 days against the index; Track record card on the Thesis tab, fed back into thesis checks as calibration. See `docs/shares-scorecard.md`. The SQL has not yet run against a database.
+- **Step 10, thesis journal (partly, 2026-11-07):** the Thesis tab and AI check are built; see `docs/shares-thesis.md`. Built out of order at the owner's request; steps 3-9 are still open. Watchlist, income projection, scenarios, targets and rebalancing drift are not built. Awaiting a first real model check to judge the output.
+- **Step 10, thesis stress test (2026-11-25):** each check first runs a bear case and a bull case on the same evidence; the check weighs them as argument, not evidence (3 model calls per check). Idea from TradingAgents (arXiv 2412.20138). Commit `894d2724`. The live model calls have not run yet.
+- **Step 10, signal scorecard (2026-11-25):** news signals and thesis verdicts are recorded and scored at 30 and 90 days against the index; Track record card on the Thesis tab, fed back into thesis checks as calibration. See `docs/shares-scorecard.md`. Commit `8beecd87`. The SQL has not yet run against a database; the first scoring run is the 4 AM briefing on 2026-11-26. *Not built:* scoring shares sold before their mark, similarity-based lessons, feeding the record into the daily briefing.
+- **Thesis fundamentals (2026-11-25, not a roadmap step):** thesis checks for US shares read reported figures from Finnhub `/stock/metric` (valuation ratios, margins, growth, debt, last four quarters of margins). It is per-holding data only, a small part of what step 9 (peers panel) plans; ASX has none. Commit `388ae934`. The live Finnhub call has not run (no key locally).
+- **Supporting updates (2026-11-25):** Shares tour now 10 steps (11 for admins) with a Track record step (`89469bac`), guide chat (`d833661c`), docs (`feffe916`).
 - **Not on the roadmap:** the Charts range fix and sub-tabs (commit `ca8540bd`).
 
 **Data verified:** all 27 trades were re-entered from the AUD prices paid on the CMC statements (confirmed by the user, 2026-10-02). This closes the step 3 spot-check for USD prices labelled AUD and puts the CGT view's AUD-as-stored basis on verified figures. It also means the USD price at purchase is not stored, so any step 6 currency-effect split would have to be estimated from historical exchange rates.
