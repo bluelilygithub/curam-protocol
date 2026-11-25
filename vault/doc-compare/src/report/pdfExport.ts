@@ -1,7 +1,7 @@
-import { jsPDF } from 'jspdf';
+import type { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
-import { mapQuotes } from '../compare/normalize';
 import type { LayoutPage } from '../compare/layout';
+import { newPdf } from './pdfFonts';
 import { SECTION_STATUS_LABEL, stillCheck } from '../compare/sections';
 import { ACCURACY_NOTE, VERDICT_TEXT, decisionsSummary, progress, reviewItems, summarySentence, verdictOf, type Decisions, type Verdict } from '../review/verdict';
 import { CATEGORY_LABEL, type Category, type Change, type ComparisonResult, type SimilarityResult } from './model';
@@ -10,9 +10,11 @@ const APP_VERSION = '0.1.0';
 const RED: [number, number, number] = [185, 28, 28];
 const GREEN: [number, number, number] = [21, 128, 61];
 
-// shortcut: jsPDF's built-in fonts are Latin-1 only, so other characters print as "?"; embed a TTF font if reports need other scripts
-export const latin1 = (s: string) => mapQuotes(s).replace(/[…]/g, '...').replace(/→/g, '->').replace(/↕/g, '<->').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
-const cut = (s: string | undefined, n = 300) => (s ? latin1(s.length > n ? `${s.slice(0, n - 1)}...` : s) : '');
+// every character prints (Unicode fonts, pdfFonts.ts); only control and zero-width characters are taken out
+// the fonts load on the first export: a tab left open across a deploy can fail to fetch them, and the button would otherwise do nothing
+export const pdfFailed = (e: unknown) => window.alert(`The PDF could not be made (${e instanceof Error ? e.message : String(e)}). Reload the page and try again.`);
+export const clean = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F​-‍⁠﻿]/g, '');
+const cut = (s: string | undefined, n = 300) => (s ? clean(s.length > n ? `${s.slice(0, n - 1)}...` : s) : '');
 
 export interface ExportInput {
   result: ComparisonResult;
@@ -46,13 +48,13 @@ const DECISION_WORD = { restore: 'Restore', accept: 'Accepted', later: 'Fix late
 export const WATERMARK = 'UNRESOLVED ISSUES — NOT READY TO SUBMIT';
 
 /** Builds the comparison report (returned, so it can be tested); exportPdf saves it. */
-export function buildReportPdf(x: ExportInput): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+export async function buildReportPdf(x: ExportInput): Promise<jsPDF> {
+  const doc = await newPdf(JSON.stringify(x, (k, v) => (k === 'thumb' ? undefined : v)));
   const margin = 40;
   let y = margin;
   const line = (text: string, size = 10, bold = false, colour: [number, number, number] = [30, 30, 30]) => {
     doc.setFont('helvetica', bold ? 'bold' : 'normal').setFontSize(size).setTextColor(...colour);
-    for (const l of doc.splitTextToSize(latin1(text), doc.internal.pageSize.getWidth() - margin * 2) as string[]) {
+    for (const l of doc.splitTextToSize(clean(text), doc.internal.pageSize.getWidth() - margin * 2) as string[]) {
       if (y > doc.internal.pageSize.getHeight() - margin) { doc.addPage(); y = margin; }
       doc.text(l, margin, y); y += size * 1.35;
     }
@@ -108,7 +110,7 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   line(`Checked: ${new Date().toLocaleString()} · DocCompare ${APP_VERSION}`);
   y += 10;
   doc.setFillColor(...VERDICT_COLOUR[verdict]).roundedRect(margin, y, W - margin * 2, 46, 6, 6, 'F');
-  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(255, 255, 255).text(latin1(VERDICT_TEXT[verdict].title), margin + 16, y + 30);
+  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(255, 255, 255).text(clean(VERDICT_TEXT[verdict].title), margin + 16, y + 30);
   doc.setTextColor(30, 30, 30);
   y += 66;
   line(summarySentence(x.all), 11);
@@ -149,7 +151,7 @@ export function buildReportPdf(x: ExportInput): jsPDF {
     autoTable(doc, {
       startY: y,
       head: [['Round', 'Added', 'Note', 'Words', 'Fixed / not fixed / new', 'Red / amber / info', 'Verdict']],
-      body: x.project.timeline.map((r) => [String(r.number), new Date(r.addedAt).toLocaleDateString('en-AU'), cut(r.note ?? '', 80), `${r.words}${r.largestLoss ? ' (most lost)' : ''}`, r.summary, r.counts, latin1(VERDICT_TEXT[r.verdict].title)]),
+      body: x.project.timeline.map((r) => [String(r.number), new Date(r.addedAt).toLocaleDateString('en-AU'), cut(r.note ?? '', 80), `${r.words}${r.largestLoss ? ' (most lost)' : ''}`, r.summary, r.counts, clean(VERDICT_TEXT[r.verdict].title)]),
       styles: { fontSize: 8, cellPadding: 3, valign: 'top' },
       headStyles: { fillColor: [155, 91, 70] },
       margin: { left: margin, right: margin },
@@ -190,7 +192,7 @@ export function buildReportPdf(x: ExportInput): jsPDF {
   autoTable(doc, {
     startY: y,
     head: [['Metadata', 'Original', 'Edited', 'Difference']],
-    body: x.result.metadata.map((m) => [`${m.flagged ? '! ' : ''}${m.label}`, latin1(m.original), latin1(m.edited), latin1(m.difference)]),
+    body: x.result.metadata.map((m) => [`${m.flagged ? '! ' : ''}${m.label}`, clean(m.original), clean(m.edited), clean(m.difference)]),
     styles: { fontSize: 8 },
     headStyles: { fillColor: [155, 91, 70] },
     margin: { left: margin, right: margin },
@@ -245,18 +247,18 @@ export function buildReportPdf(x: ExportInput): jsPDF {
       doc.saveGraphicsState();
       doc.setGState(new (doc as unknown as { GState: new (o: { opacity: number }) => unknown }).GState({ opacity: 0.13 }) as never);
       doc.setFont('helvetica', 'bold').setFontSize(pw > ph ? 34 : 26).setTextColor(...RED);
-      doc.text(latin1(WATERMARK), pw / 2, ph / 2, { align: 'center', angle: 35, baseline: 'middle' } as never);
+      doc.text(clean(WATERMARK), pw / 2, ph / 2, { align: 'center', angle: 35, baseline: 'middle' } as never);
       doc.restoreGraphicsState();
-      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...RED).text(latin1(WATERMARK), pw / 2, ph - 16, { align: 'center' });
+      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...RED).text(clean(WATERMARK), pw / 2, ph - 16, { align: 'center' });
     }
     doc.setTextColor(30, 30, 30);
   }
   return doc;
 }
 
-export function exportPdf(x: ExportInput): void {
+export async function exportPdf(x: ExportInput): Promise<void> {
   const base = x.fileNames[0].replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  buildReportPdf(x).save(`${x.versions ? 'version_comparison' : 'comparison'}_${base}_${date}.pdf`);
+  await buildReportPdf(x).then((doc) => doc.save(`${x.versions ? 'version_comparison' : 'comparison'}_${base}_${date}.pdf`), pdfFailed);
 }

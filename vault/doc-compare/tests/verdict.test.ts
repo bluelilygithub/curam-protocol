@@ -91,7 +91,7 @@ const report = (decisions: Decisions) => buildReportPdf({
 
 describe('the report', () => {
   it('page 1 has the verdict, sentence, accuracy note and decisions; then Full detail', async () => {
-    const pages = await pdfText(report({}).output('arraybuffer'));
+    const pages = await pdfText((await report({})).output('arraybuffer'));
     expect(pages[0]).toMatch(/Not ready to submit/);
     expect(pages[0]).toMatch(/The LLM removed 1 paragraph/);
     expect(pages[0]).toMatch(/doesn't check whether the content is accurate/);
@@ -99,11 +99,11 @@ describe('the report', () => {
     expect(pages.join(' ')).toMatch(/Full detail/);
   });
   it('every page carries the watermark while a red item is open, and none once all red items are decided', async () => {
-    const open = await pdfText(report({}).output('arraybuffer'));
-    for (const p of open) expect(p).toMatch(/UNRESOLVED ISSUES - NOT READY TO SUBMIT/);
-    const later = await pdfText(report({ [itemKey(removed)]: { decision: 'restore', decidedAt: at }, [itemKey(number)]: { decision: 'later', decidedAt: at } }).output('arraybuffer'));
+    const open = await pdfText((await report({})).output('arraybuffer'));
+    for (const p of open) expect(p).toMatch(/UNRESOLVED ISSUES — NOT READY TO SUBMIT/);
+    const later = await pdfText((await report({ [itemKey(removed)]: { decision: 'restore', decidedAt: at }, [itemKey(number)]: { decision: 'later', decidedAt: at } })).output('arraybuffer'));
     for (const p of later) expect(p).toMatch(/UNRESOLVED ISSUES/);
-    const done = await pdfText(report({ [itemKey(removed)]: { decision: 'restore', decidedAt: at }, [itemKey(number)]: { decision: 'accept', decidedAt: at } }).output('arraybuffer'));
+    const done = await pdfText((await report({ [itemKey(removed)]: { decision: 'restore', decidedAt: at }, [itemKey(number)]: { decision: 'accept', decidedAt: at } })).output('arraybuffer'));
     for (const p of done) expect(p).not.toMatch(/UNRESOLVED ISSUES/);
     expect(done[0]).toMatch(/Review recommended/);
   });

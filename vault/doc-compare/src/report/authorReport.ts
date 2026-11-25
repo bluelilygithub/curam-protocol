@@ -1,8 +1,9 @@
-import { jsPDF } from 'jspdf';
+import type { jsPDF } from 'jspdf';
 import { itemKey, type Decisions } from '../review/verdict';
 import { describe } from './messages';
 import { CATEGORY_LABEL, type Change, type Severity } from './model';
-import { latin1 } from './pdfExport';
+import { clean, pdfFailed } from './pdfExport';
+import { newPdf, words } from './pdfFonts';
 
 /**
  * "Review for the author": a complete, actionable PDF to send back to whoever produced the edit. Unlike the comparison report it ignores the
@@ -40,8 +41,8 @@ const SECTIONS: { sev: Severity; title: string; intro: string; colour: [number, 
 ];
 
 /** Builds the PDF (returned, not saved, so it can be tested). */
-export function buildAuthorPdf(x: AuthorInput): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+export async function buildAuthorPdf(x: AuthorInput): Promise<jsPDF> {
+  const doc = await newPdf(JSON.stringify(x));
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const M = 48, width = W - M * 2, bottom = H - 50;
   let y = M;
@@ -49,7 +50,7 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
   const acceptedCount = authorItems(x.changes).length - items.length;
 
   const font = (size: number, style: 'normal' | 'bold' | 'italic' = 'normal', colour: [number, number, number] = [30, 30, 30]) => doc.setFont('helvetica', style).setFontSize(size).setTextColor(...colour);
-  const lines = (text: string, w = width) => doc.splitTextToSize(latin1(text), w) as string[];
+  const lines = (text: string, w = width) => doc.splitTextToSize(clean(text), w) as string[];
   const need = (h: number) => { if (y + h > bottom) { doc.addPage(); y = M; } };
   const para = (text: string, size = 10, style: 'normal' | 'bold' | 'italic' = 'normal', colour?: [number, number, number], indent = 0) => {
     font(size, style, colour);
@@ -96,8 +97,8 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
       need(64);
       // tick box and heading line
       doc.setDrawColor(120, 120, 120).setLineWidth(0.8).rect(M, y - 9, 10, 10);
-      font(10, 'bold'); doc.text(latin1(`${n}.  ${CATEGORY_LABEL[c.category]}`), M + 18, y);
-      font(9, 'normal', [90, 90, 90]); doc.text(latin1(c.location).slice(0, 110), M + 18 + doc.getTextWidth(latin1(`${n}.  ${CATEGORY_LABEL[c.category]}`)) + 14, y);
+      font(10, 'bold'); doc.text(clean(`${n}.  ${CATEGORY_LABEL[c.category]}`), M + 18, y);
+      font(9, 'normal', [90, 90, 90]); doc.text(clean(c.location).slice(0, 110), M + 18 + doc.getTextWidth(clean(`${n}.  ${CATEGORY_LABEL[c.category]}`)) + 14, y);
       y += 15;
       const msg = describe(c);
       para(msg.action, 10, 'bold', [30, 30, 30], 18);
@@ -127,7 +128,7 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
     font(8, 'normal', [130, 130, 130]);
-    doc.text(latin1(`Review of ${x.fileNames[1]}`).slice(0, 90), M, H - 28);
+    doc.text(clean(`Review of ${x.fileNames[1]}`).slice(0, 90), M, H - 28);
     doc.text(`Page ${p} of ${total}`, W - M, H - 28, { align: 'right' });
   }
   return doc;
@@ -148,7 +149,7 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
     need(lh);
     let count = 0;
     for (const p of parts) {
-      for (const word of latin1(p.text).split(/(\s+)/)) {
+      for (const word of words(clean(p.text))) {
         if (!word) continue;
         if (count++ > 2500) return; // very long paragraphs: the start is enough to find it
         const ws = /^\s+$/.test(word);
@@ -168,9 +169,9 @@ export function buildAuthorPdf(x: AuthorInput): jsPDF {
 
 const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 
-export function downloadAuthorPdf(x: AuthorInput): void {
+export async function downloadAuthorPdf(x: AuthorInput): Promise<void> {
   const base = x.fileNames[1].replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  buildAuthorPdf(x).save(`review_${base}_${date}.pdf`);
+  await buildAuthorPdf(x).then((doc) => doc.save(`review_${base}_${date}.pdf`), pdfFailed);
 }
