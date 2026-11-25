@@ -6,7 +6,7 @@
  * Daily briefings: fetches news per holding (Finnhub for US, web search for ASX),
  * fetches Nasdaq market context, then makes one AI call producing a paragraph +
  * signal (bullish/bearish/watch/neutral) per stock. Stored in share_news_briefings
- * with type='daily'. Retained for 45 days, then auto-pruned.
+ * with type='daily'. Retained for the admin's Settings → Shares retention (default 45 days), then auto-pruned.
  *
  * Monthly summaries: reviews 30 days of daily briefings, assesses market sentiment
  * trends and signal accuracy. Stored with type='monthly_summary'. Never auto-deleted.
@@ -258,10 +258,12 @@ async function generateBriefings(userId, holdings, newsMap, marketNews, modelId,
     return String(result.text || '').trim();
   }
 
+  // The reply must be the { stocks, market } object; anything else would replace today's briefings with nothing.
+  const isBriefing = (p) => p && typeof p === 'object' && !Array.isArray(p) && (Array.isArray(p.stocks) || p.market);
   let raw = await callOnce(prompt, DAILY_SYSTEM_PROMPT);
   let parsed = parseModelJson(raw);
 
-  if (!parsed || typeof parsed !== 'object') {
+  if (!isBriefing(parsed)) {
     raw = await callOnce(
       `The previous response was not valid JSON. Return ONLY valid JSON matching this shape (no markdown, no commentary):\n{\n  "stocks": [{ "symbol": "NVDA", "exchange": "NYSE", "paragraph": "...", "signal": "bullish" }],\n  "market": { "paragraph": "...", "signal": "neutral" }\n}\n\nPrevious output:\n${raw.slice(0, 6000)}`,
       'You fix malformed JSON for portfolio news briefings. Output valid JSON only.'
@@ -269,7 +271,7 @@ async function generateBriefings(userId, holdings, newsMap, marketNews, modelId,
     parsed = parseModelJson(raw);
   }
 
-  if (!parsed || typeof parsed !== 'object') {
+  if (!isBriefing(parsed)) {
     console.error('[sharesNews] daily briefing JSON parse failed', { preview: raw.slice(0, 400) });
     throw new Error('AI returned invalid JSON for daily briefings — try again');
   }
@@ -310,6 +312,7 @@ async function generateDailyBriefing(userId) {
   // run does not wipe today's briefing.
   const briefings = await generateBriefings(userId, holdings, newsMap, marketNews, modelId, today);
   const stockBriefings = Array.isArray(briefings.stocks) ? briefings.stocks : [];
+  const retentionDays = await getBriefingRetentionDays();
 
   const client = await pool.connect();
   try {
@@ -344,7 +347,7 @@ async function generateDailyBriefing(userId) {
       );
     }
 
-    const cutoff = getDateInTz(tz, 45);
+    const cutoff = getDateInTz(tz, retentionDays);
     await client.query(
       `DELETE FROM share_news_briefings WHERE "userId"=$1 AND type='daily' AND date < $2`,
       [userId, cutoff]
@@ -357,7 +360,7 @@ async function generateDailyBriefing(userId) {
     client.release();
   }
 
-  // Signal scorecard: keep each bullish/bearish call (the briefing rows themselves are pruned at 45 days). Never fails the briefing.
+  // Signal scorecard: keep each bullish/bearish call (the briefing rows themselves are pruned after the retention setting). Never fails the briefing.
   for (const b of stockBriefings) {
     if (b.signal !== 'bullish' && b.signal !== 'bearish') continue;
     const p = dash.positions.find((x) => x.symbol === b.symbol && x.exchange === b.exchange);
@@ -460,10 +463,12 @@ async function generateMonthlySummary(userId) {
     return String(result.text || '').trim();
   }
 
+  // A review without an overview is not saved: that is how empty monthly reviews were stored before 2026-11-25.
+  const isSummary = (d) => d && typeof d === 'object' && !Array.isArray(d) && String(d.overview || '').trim();
   let raw = await callOnce(promptText, SUMMARY_SYSTEM_PROMPT);
   let summaryData = parseModelJson(raw);
 
-  if (!summaryData || typeof summaryData !== 'object') {
+  if (!isSummary(summaryData)) {
     raw = await callOnce(
       `The previous response was not valid JSON. Return ONLY valid JSON with no markdown fences.\n\nPrevious output:\n${raw.slice(0, 6000)}`,
       'You fix malformed JSON for a 30-day portfolio summary. Output valid JSON only.'
@@ -471,7 +476,7 @@ async function generateMonthlySummary(userId) {
     summaryData = parseModelJson(raw);
   }
 
-  if (!summaryData || typeof summaryData !== 'object') {
+  if (!isSummary(summaryData)) {
     console.error('[sharesNews] monthly summary JSON parse failed', { preview: raw.slice(0, 400) });
     throw new Error('AI returned invalid JSON for monthly summary — try again');
   }
@@ -1932,11 +1937,31 @@ async function getLatestObservation(userId) {
 
 // ─── Query ────────────────────────────────────────────────────────────────────
 
+// How many days of daily briefings to keep: the first admin's Settings → Shares value (default 45, 7–730).
+const BRIEFING_RETENTION_KEY = 'shares_briefing_retention_days';
+const BRIEFING_RETENTION_DEFAULT = 45;
+function clampRetentionDays(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.min(730, Math.max(7, n)) : BRIEFING_RETENTION_DEFAULT;
+}
+async function getBriefingRetentionDays() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.value FROM settings s JOIN users u ON u.id = s."userId"
+       WHERE s.key = $1 AND u."isAdmin" = TRUE ORDER BY u.id ASC LIMIT 1`,
+      [BRIEFING_RETENTION_KEY]
+    );
+    return clampRetentionDays(rows[0]?.value);
+  } catch {
+    return BRIEFING_RETENTION_DEFAULT;
+  }
+}
+
 async function getBriefingsForUser(userId) {
-  // Daily: last 45 days. Monthly summaries: all (never deleted).
+  // Daily: the retention setting's window. Monthly summaries: all (never deleted).
   // Observations are excluded here — they have their own endpoint.
   const tz = await getWorkspaceTimezone();
-  const cutoff = getDateInTz(tz, 45);
+  const cutoff = getDateInTz(tz, await getBriefingRetentionDays());
   const { rows } = await pool.query(
     `SELECT id, date, symbol, exchange, content, signal, headlines, "priceChangePct", "createdAt", type
      FROM share_news_briefings
@@ -1957,4 +1982,5 @@ module.exports = {
   getWorkspaceTimezone,
   getDateInTz,
   sectorBenchmarkFor,
+  clampRetentionDays,
 };

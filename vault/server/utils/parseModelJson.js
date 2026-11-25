@@ -11,23 +11,18 @@ function parseModelJson(text) {
   } catch {
     /* continue */
   }
-  const arrStart = s.indexOf('[');
-  const arrEnd = s.lastIndexOf(']');
-  if (arrStart !== -1 && arrEnd > arrStart) {
-    try {
-      return JSON.parse(s.slice(arrStart, arrEnd + 1));
-    } catch {
-      /* continue */
-    }
-  }
-  const objStart = s.indexOf('{');
-  const objEnd = s.lastIndexOf('}');
-  if (objStart !== -1 && objEnd > objStart) {
-    try {
-      return JSON.parse(s.slice(objStart, objEnd + 1));
-    } catch {
-      return null;
-    }
+  // Try the bracket that opens first: an object reply with prose around it must not come back as its first inner array.
+  const tryPair = (open, close) => {
+    const start = s.indexOf(open);
+    const end = s.lastIndexOf(close);
+    if (start === -1 || end <= start) return undefined;
+    try { return JSON.parse(s.slice(start, end + 1)); } catch { return undefined; }
+  };
+  const objFirst = s.indexOf('{') !== -1 && (s.indexOf('[') === -1 || s.indexOf('{') < s.indexOf('['));
+  const pairs = objFirst ? [['{', '}'], ['[', ']']] : [['[', ']'], ['{', '}']];
+  for (const [open, close] of pairs) {
+    const v = tryPair(open, close);
+    if (v !== undefined) return v;
   }
   return null;
 }

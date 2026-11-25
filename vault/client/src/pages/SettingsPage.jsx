@@ -194,6 +194,7 @@ function SettingsPage() {
 
   // Shares alerts
   const [sharesDropAlertPct, setSharesDropAlertPct] = useState('0');
+  const [sharesBriefingDays, setSharesBriefingDays] = useState('45');
 
   // Amazon Search
   const [productScoutAmazonDomain, setProductScoutAmazonDomain] = useState('amazon.com.au');
@@ -374,6 +375,7 @@ function SettingsPage() {
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
       if (data.expense_review_priority_domains) setExpensePriorityDomains(data.expense_review_priority_domains);
       if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
+      if (data.shares_briefing_retention_days != null) setSharesBriefingDays(String(data.shares_briefing_retention_days));
       if (data.translate_language_order) {
         try {
           const parsed = JSON.parse(data.translate_language_order);
@@ -2611,6 +2613,39 @@ function SettingsPage() {
             {Number(sharesDropAlertPct) > 0
               ? `Alert when holdings drop ${Number(sharesDropAlertPct)}% or more in a day`
               : 'Test mode — email after every poll'}
+          </span>
+        </div>
+
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1 mt-8" style={{ color: 'var(--color-muted)' }}>
+          Daily Briefing History
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          How many days of daily news briefings to keep on the News tab (7 to 730). Older ones are deleted at the next
+          4 AM briefing. Raising it does not bring back briefings already deleted; the history grows from now on.
+          Monthly reviews and the Track record are kept for good either way.
+        </p>
+        <label htmlFor="shares-briefing-days" className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+          Keep daily briefings for (days)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="shares-briefing-days"
+            type="number"
+            min="7"
+            max="730"
+            step="1"
+            value={sharesBriefingDays}
+            onChange={(e) => setSharesBriefingDays(e.target.value)}
+            onBlur={() => {
+              const n = Math.min(730, Math.max(7, Math.round(Number(sharesBriefingDays)) || 45));
+              setSharesBriefingDays(String(n));
+              api.post('/api/settings', { key: 'shares_briefing_retention_days', value: String(n) }).catch(() => {});
+            }}
+            className="w-28 px-3 py-1.5 rounded-lg border text-sm"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {`About ${Math.round((Number(sharesBriefingDays) || 45) / 30)} month${Math.round((Number(sharesBriefingDays) || 45) / 30) === 1 ? '' : 's'} of briefings`}
           </span>
         </div>
       </section>

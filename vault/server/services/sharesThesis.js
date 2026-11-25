@@ -232,7 +232,7 @@ function buildCheckPrompt({ thesis, position, trades, briefings, previous, today
     for (const t of fundamentals.trends || []) L.push(`${t.label} by quarter (newest first): ${t.points.map((p) => `${p.period} ${p.pct.toFixed(1)}%`).join(', ')}`);
   }
 
-  L.push(`\n=== NEWS BRIEFINGS FOR ${thesis.symbol} (last 45 days, newest first) ===`);
+  L.push(`\n=== NEWS BRIEFINGS FOR ${thesis.symbol} (newest first, up to 20) ===`);
   if (!briefings.length) L.push('(none stored)');
   for (const b of briefings.slice(0, 20)) {
     L.push(`${day(b.date)} signal=${b.signal || 'n/a'} dayMove=${fmtPct(b.priceChangePct)} — ${String(b.content || '').slice(0, 400)}`);
