@@ -245,7 +245,7 @@ function ClientModal({ client, onClose, onSaved }) {
           </div>
 
           <div className={form.clientType === 'individual' ? '' : 'grid grid-cols-2 gap-3'}>
-            <Field label={form.clientType === 'individual' ? 'Name *' : 'Name *'}>
+            <Field label={form.clientType === 'individual' ? 'Name *' : 'Display name *'}>
               <Input
                 value={form.name}
                 onChange={set('name')}
@@ -478,7 +478,7 @@ function ClientList() {
 
       {/* Client grid */}
       {!loading && clients.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {clients.map(client => (
             <ClientCard
               key={client.id}
