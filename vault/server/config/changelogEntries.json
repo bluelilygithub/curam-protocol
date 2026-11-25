@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "894d2724",
+   "fullHash": "894d2724a911850d74b34f416c932ecfd41c9590",
+   "committedAt": "2026-11-25T10:21:25+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Thesis check: bull vs bear stress test before the check",
+   "filesChanged": 5,
+   "insertions": 64,
+   "deletions": 5,
+   "goal": "Make the thesis check look harder for evidence against each assumption, borrowing the researcher debate from TradingAgents (arXiv 2412.20138, Apache-2.0) without its buy/sell output.",
+   "whatChanged": "Before the check, runCheck makes two parallel model calls on the same evidence pack: a bear case (assumptions weakening, red lines close) and a bull case (assumptions holding). Each must cite pack items and keeps the never-advice and price-is-not-evidence rules. The check prompt gets both as a DEBATE block, and new rule 9 tells the judge they are arguments, not evidence, so the existing downgrade and scoring rules still decide every rating. Cases are saved in new columns share_thesis_checks.\"bearCase\" and \"bullCase\" and shown in a collapsed Stress test section on the Thesis tab. If one side fails, the check runs without it. Usage is logged as shares_thesis_debate. Tests and docs updated.",
+   "filesImpacted": [
+    "server/services/sharesThesis.js",
+    "server/services/sharesThesis.test.js",
+    "server/db.js",
+    "client/src/components/shares/SharesThesisTab.jsx",
+    "docs/shares-thesis.md"
+   ],
+   "benefit": "A one-sided case against the thesis is written out every time, and the investor can read both sides next to the ratings.",
+   "concerns": "The live model call has not been run, so the first real check is untested. Each check now makes 3 standard-model calls instead of 1, about 3 times the cost. There is one round with no rebuttals, so the two sides can talk past each other. Not tried in a browser; the JSX builds and sharesThesis.test.js and sharesTutor.test.js pass."
+  },
+  {
    "commit": "7b47a19b",
    "fullHash": "7b47a19b9aa2aa4c1dc2dac6d13479f0825c9601",
    "committedAt": "2026-11-25T09:29:48+10:00",
