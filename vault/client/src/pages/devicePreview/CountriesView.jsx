@@ -10,7 +10,7 @@ import useToastStore from '../../store/toastStore';
 import { devicesOfKind, deviceById } from '../../utils/deviceCatalog.mjs';
 import {
   DEFAULT_SCREEN_IDS, MAX_COUNTRY_SCREENS, MAX_COUNTRIES, parseSpokenAddress, formatMb, formatCost, estimateLine,
-  captureLabel, gridOf, screensForRun, toggleId,
+  captureLabel, gridOf, screensForRun, toggleId, comparableRuns,
 } from './countriesModel.mjs';
 
 // Device preview → Countries (docs/geo-check.md): the page as visitors in several countries see it, captured in a real browser through a
@@ -47,6 +47,26 @@ function CaptureImage({ runId, captureId, alt, style, className }) {
   return <img src={src} alt={alt} className={className} style={style} />;
 }
 
+/** A plain list of differences: [{ topic, text }], plus the countries left out. */
+function DiffList({ diff, empty }) {
+  if (!diff) return null;
+  return (
+    <div className="space-y-1">
+      {diff.lines.length === 0 && <p className="text-sm" style={{ color: 'var(--color-text)' }}>{empty}</p>}
+      {diff.lines.length > 0 && (
+        <ul className="space-y-1">
+          {diff.lines.map((l, i) => (
+            <li key={i} className="text-sm" style={{ color: 'var(--color-text)' }}><strong>{l.topic}:</strong> {l.text}</li>
+          ))}
+        </ul>
+      )}
+      {diff.notCompared && diff.notCompared.length > 0 && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Not compared: {diff.notCompared.join(', ')}.</p>
+      )}
+    </div>
+  );
+}
+
 function Badge({ capture }) {
   const l = captureLabel(capture);
   return <span className="text-xs font-medium" style={{ color: TONE[l.tone] }}>{l.text}</span>;
@@ -66,6 +86,7 @@ export default function CountriesView({ url, setUrl, config, countryName, onConf
   const [run, setRun] = useState(null);             // the open run, with captures
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [zoomed, setZoomed] = useState(null);       // { capture, other }
+  const [against, setAgainst] = useState(null);     // { id, result } : an earlier check of the same page, and what changed
 
   const devices = screenIds.map(deviceById).filter(Boolean);
   const pictures = countries.length * devices.length;
@@ -86,6 +107,7 @@ export default function CountriesView({ url, setUrl, config, countryName, onConf
       const r = await api.get(`/api/geo-check/runs/${id}`);
       if (!r.ok) throw new Error('gone');
       setRun(await r.json());
+      setAgainst(null);
     } catch { addToast('That country check could not be opened.', 'error'); }
   }, [addToast]);
 
@@ -172,6 +194,18 @@ export default function CountriesView({ url, setUrl, config, countryName, onConf
     } catch (e) { addToast(e.message || 'That country check could not be deleted.', 'error'); }
   };
 
+  const compareWith = async (otherId) => {
+    if (!otherId) { setAgainst(null); return; }
+    setAgainst({ id: otherId, result: null });
+    try {
+      const r = await api.get(`/api/geo-check/runs/${run.id}/compare/${otherId}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setAgainst({ id: otherId, result: d });
+    } catch (e) { setAgainst(null); addToast(e.message || 'Those checks could not be compared.', 'error'); }
+  };
+
+  const earlier = useMemo(() => comparableRuns(run, runs), [run, runs]);
   const grid = useMemo(() => gridOf(run), [run]);
   const others = useMemo(() => (run ? run.captures.filter((c) => c.hasImage) : []), [run]);
 
@@ -326,6 +360,33 @@ export default function CountriesView({ url, setUrl, config, countryName, onConf
                 <div className="h-full transition-all duration-200" style={{ width: `${Math.max(3, run.progress)}%`, background: 'var(--color-primary)' }} />
               </div>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>You can leave this page; the check carries on and shows under Needs attention when it is ready.</p>
+            </div>
+          )}
+          {!running && run.diff && (
+            <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} data-guide="countries-diff" data-tour="dp-country-diff">
+              <Tooltip text="Worked out from each page's language, title, currency, prices, cookie notice, headings, buttons and where it ended up. Headings and buttons are only compared between countries that got the same language. Plain comparison, no AI.">
+                <h3 className="text-sm font-semibold w-fit" style={{ color: 'var(--color-text)' }}>What differs between the countries</h3>
+              </Tooltip>
+              <DiffList diff={run.diff} empty={run.diff.compared && run.diff.compared.length < 2 ? 'Fewer than two countries came back, so there is nothing to compare.' : 'No differences found in language, title, currency, prices, cookie notice, headings, buttons or redirects.'} />
+              {earlier.length > 0 && (
+                <div className="pt-2 space-y-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <Tooltip text="Pick an earlier check of the same page to see what changed since then, country by country.">
+                    <select aria-label="Compare with an earlier check" value={against ? against.id : ''} onChange={(e) => compareWith(Number(e.target.value) || null)} className="h-8 rounded-lg border px-2 text-xs" style={btnSecondaryStyle}>
+                      <option value="">Compare with an earlier check of this page…</option>
+                      {earlier.map((r) => <option key={r.id} value={r.id}>{r.label ? `${r.label}, ` : ''}{new Date(r.createdAt).toLocaleString()}</option>)}
+                    </select>
+                  </Tooltip>
+                  {against && !against.result && <Skeleton lines={2} label="Comparing" />}
+                  {against && against.result && (
+                    <div className="space-y-1">
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Changes from {new Date(against.result.older.createdAt).toLocaleString()} to {new Date(against.result.newer.createdAt).toLocaleString()}:
+                      </p>
+                      <DiffList diff={against.result} empty="Nothing changed in language, title, currency, prices, cookie notice, headings, buttons or redirects." />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {!running && run.errorMessage && (

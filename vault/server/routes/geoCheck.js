@@ -92,6 +92,11 @@ function createRouter({ jobs = createGeoJobs(), pool = require('../db').pool, mo
     try { res.json(await jobs.get(req.user.id, Number(req.params.id) || 0)); } catch (err) { fail(res, err, '/runs/:id'); }
   });
 
+  // GET /api/geo-check/runs/:id/compare/:otherId: what changed between two checks of the same address
+  router.get('/runs/:id/compare/:otherId', async (req, res) => {
+    try { res.json(await jobs.compare(req.user.id, Number(req.params.id) || 0, Number(req.params.otherId) || 0)); } catch (err) { fail(res, err, '/compare'); }
+  });
+
   router.post('/runs/:id/stop', async (req, res) => {
     try { res.json({ stopped: await jobs.stop(req.user.id, Number(req.params.id) || 0) }); } catch (err) { fail(res, err, '/runs/:id/stop'); }
   });

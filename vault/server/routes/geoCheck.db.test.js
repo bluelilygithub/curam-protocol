@@ -145,6 +145,25 @@ async function waitDone(server, user, id) {
     assert.equal((await call(s, B, 'DELETE', `/runs/${runId}`)).status, 404);
     assert.equal((await call(s, A, 'GET', '/runs')).body.runs[0].id, runId);
 
+    // ── what differs: across countries (kept on the run), and between two checks of the same address ──
+    let diff = (await call(s, A, 'GET', `/runs/${runId}`)).body.diff;
+    assert.deepEqual(diff.notCompared, ['DE (failed)']);
+    assert.deepEqual(diff.compared, ['AU', 'JP', 'NZ']);
+    assert.equal(diff.lines.find((l) => l.topic === 'Page title').text, '"Shop AU" in AU; "Shop JP" in JP; "Shop NZ" in NZ.');
+    assert.ok((await pool.query('SELECT diff FROM geo_check_runs WHERE id = $1', [runId])).rows[0].diff, 'kept on the run');
+    r = await call(s, A, 'POST', '/runs', { url: 'https://93.184.216.34/shop/', countries: ['AU', 'NZ'], screens: [PHONE] });
+    const run2 = r.body.id;
+    await waitDone(s, A, run2);
+    r = await call(s, A, 'GET', `/runs/${run2}/compare/${runId}`);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.older.id, runId, 'older first whichever way round');
+    assert.deepEqual(r.body.lines, [], 'same facts in both checks');
+    assert.deepEqual(r.body.notCompared, ['DE (only in the older check)', 'JP (only in the older check)']);
+    r = await call(s, A, 'POST', '/runs', { url: 'http://93.184.216.34/other', countries: ['AU'], screens: [PHONE] });
+    await waitDone(s, A, r.body.id);
+    assert.equal((await call(s, A, 'GET', `/runs/${runId}/compare/${r.body.id}`)).status, 400, 'different address');
+    assert.equal((await call(s, B, 'GET', `/runs/${runId}/compare/${run2}`)).status, 404, 'not theirs');
+
     // ── limits ──
     const bad = async (body, status, re) => { const x = await call(s, B, 'POST', '/runs', { url: URL1, screens: [PHONE], countries: ['AU'], ...body }); assert.equal(x.status, status, JSON.stringify(x.body)); if (re) assert.match(x.body.error, re); };
     await bad({ url: 'http://127.0.0.1/admin' }, 400, /public web address/);

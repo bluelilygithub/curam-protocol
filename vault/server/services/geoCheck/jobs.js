@@ -14,6 +14,7 @@
 // Injectable (pool, captureCountry, launchBrowser, saveImage, ...) so tests need no browser or proxy. See docs/geo-check.md.
 
 const { countryOf } = require('./countries');
+const { diffRun, diffRuns, samePlace } = require('./diff');
 
 const MAX_CAPTURES = 24;
 const MAX_COUNTRIES = 12;
@@ -211,16 +212,36 @@ function createGeoJobs(deps = {}) {
     return rows.map((r) => ({ ...r, bytesTotal: Number(r.bytesTotal) }));
   }
 
-  /** One run with its captures. Opening a finished run counts as seeing it (clears the needs-attention item). */
-  async function get(userId, id) {
+  async function load(userId, id) {
     const { rows } = await q(`SELECT * FROM geo_check_runs WHERE id = $1 AND "userId" = $2`, [id, userId]);
     const r = rows[0];
     if (!r) throw err('That country check is no longer here.', 404);
-    if (r.status !== 'running' && !r.seenAt) await q(`UPDATE geo_check_runs SET "seenAt" = NOW() WHERE id = $1`, [id]).catch(() => {});
     const { rows: caps } = await q(`SELECT id, country, "deviceId", width, height, status, "exitCountry", verified, "httpStatus", "finalUrl", "htmlLang",
                                            title, extract, cut, bytes, ("attachmentId" IS NOT NULL) AS "hasImage", error, "capturedAt"
                                       FROM geo_check_captures WHERE "runId" = $1 AND "userId" = $2 ORDER BY id`, [id, userId]);
     return { ...r, bytesTotal: Number(r.bytesTotal), captures: caps.map((c) => ({ ...c, bytes: Number(c.bytes) })) };
+  }
+
+  /** One run with its captures. Opening a finished run counts as seeing it (clears the needs-attention item). The across-countries
+   *  diff is worked out the first time a finished run is opened and kept (runs ended by a restart get one too). */
+  async function get(userId, id) {
+    const r = await load(userId, id);
+    if (r.status !== 'running' && !r.seenAt) await q(`UPDATE geo_check_runs SET "seenAt" = NOW() WHERE id = $1`, [id]).catch(() => {});
+    if (r.status !== 'running' && !r.diff) {
+      r.diff = diffRun(r, r.captures);
+      await q(`UPDATE geo_check_runs SET diff = $2 WHERE id = $1`, [id, JSON.stringify(r.diff)]).catch((e) => d.log({ err: e }, '[geoCheckJobs] diff save'));
+    }
+    return r;
+  }
+
+  /** What changed between two finished checks of the same address, older first whichever way round they are given. */
+  async function compare(userId, id, otherId) {
+    const [x, y] = [await load(userId, id), await load(userId, otherId)];
+    if (x.status === 'running' || y.status === 'running') throw err('Wait for the check to finish before comparing.', 409);
+    if (samePlace(x.url) !== samePlace(y.url)) throw err('Only two checks of the same address can be compared.', 400);
+    const [older, newer] = new Date(x.createdAt) <= new Date(y.createdAt) ? [x, y] : [y, x];
+    const brief = (r) => ({ id: r.id, label: r.label, createdAt: r.createdAt });
+    return { older: brief(older), newer: brief(newer), ...diffRuns(older, newer) };
   }
 
   /** The stored picture of one capture (owner-checked): { path } or 404. */
@@ -256,7 +277,7 @@ function createGeoJobs(deps = {}) {
     }
   }
 
-  return { start, stop, list, get, imagePath, remove, estimate, contexts, maxBytes };
+  return { start, stop, list, get, compare, imagePath, remove, estimate, contexts, maxBytes };
 }
 
 module.exports = { createGeoJobs, cleanScreens, cleanCountries, MAX_CAPTURES, MAX_COUNTRIES, MAX_SCREENS, RUNS_PER_HOUR };

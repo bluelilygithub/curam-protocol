@@ -1,6 +1,6 @@
 // node client/src/pages/devicePreview/countriesModel.test.mjs
 import assert from 'node:assert/strict';
-import { parseSpokenAddress, formatMb, formatCost, estimateLine, captureLabel, gridOf, screensForRun, toggleId, DEFAULT_SCREEN_IDS } from './countriesModel.mjs';
+import { samePlace, comparableRuns, parseSpokenAddress, formatMb, formatCost, estimateLine, captureLabel, gridOf, screensForRun, toggleId, DEFAULT_SCREEN_IDS } from './countriesModel.mjs';
 import { deviceById } from '../../utils/deviceCatalog.mjs';
 
 assert.equal(parseSpokenAddress('Example dot com slash Shop'), 'example.com/shop');
@@ -36,5 +36,10 @@ assert.deepEqual(screensForRun(devices).map((s) => s.mobile), [true, false]);
 assert.deepEqual(toggleId(['a'], 'b'), { list: ['a', 'b'], refused: false });
 assert.deepEqual(toggleId(['a', 'b'], 'a'), { list: ['b'], refused: false });
 assert.equal(toggleId(['a', 'b', 'c', 'd'], 'e').refused, true);
+
+assert.equal(samePlace('https://www.shop.example/a/?x=1'), samePlace('http://shop.example/a'));
+const rs = [{ id: 1, url: 'https://shop.example/', status: 'done' }, { id: 2, url: 'https://shop.example', status: 'running' }, { id: 3, url: 'https://other.example/', status: 'done' }, { id: 4, url: 'https://www.shop.example/', status: 'stopped' }];
+assert.deepEqual(comparableRuns({ id: 1, url: 'https://shop.example/' }, rs).map((r) => r.id), [4]);
+assert.deepEqual(comparableRuns(null, rs), []);
 
 console.log('countriesModel tests passed');

@@ -1,6 +1,6 @@
 # Geo-check: "Countries" in Device preview — design brief
 
-Status: **milestones 1-3 built** (2026-11-25): the admin try route, background runs and the Countries view in Device preview work locally with real Chromium, the local database and a local stand-in proxy (checked on screen); not yet tried against DataImpulse or on Railway. Still to come: the plain-code diff (4) and the AI summary, guide chat and final docs (5). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
+Status: **milestones 1-4 built** (2026-11-25): the admin try route, background runs, the Countries view and the plain-code differences work locally with real Chromium, the local database and a local stand-in proxy (checked on screen); not yet tried against DataImpulse or on Railway. Still to come: the AI summary, guide chat and final docs (5). The owner confirmed the recommended answers below on 2026-11-25 (DataImpulse; Device preview; countries as listed; no sign-in in v1; resized load only; 2 contexts at once).
 
 **What it is for:** around a release, see one page as visitors in several countries see it (currency, prices, language, geo-redirects, region-only banners), side by side per device, with a plain list of what differs. Used now and then, not a monitor.
 
@@ -294,3 +294,11 @@ What milestone 1 found: Chromium answers a refused proxy password by asking agai
 - `devicePreview/countriesModel.mjs` (+ test): estimate line, labels, grid, screens sent to the server (phones as phones).
 - Found on screen: the picture route failed when `UPLOAD_DIR` is relative (it is locally); fixed with `path.resolve`, and the database test now uses a relative folder.
 - Not yet: the guide chat does not know about Countries (milestone 5); with two countries at once the progress line names the one started last.
+
+## Milestone 4: what differs (plain code, no model)
+
+- `server/services/geoCheck/diff.js` (+ `diff.test.js`): `diffRun` across the countries of one check (redirects, language, page title, currency, first five prices, cookie notice, headings and buttons shown in some countries only) and `diffRuns` for the same country in two checks of one address (what is new and gone). A country is compared from all its pictures (headings and buttons are the union over screens; the rest from the first picture, one load serves every screen). Failed and blocked countries are named under "Not compared".
+- Headings and buttons are only compared between countries that got the same language: on booking.com (AU English, JP Japanese) every heading differed, which buried the four lines that mattered.
+- The across-countries result is worked out the first time a finished check is opened and kept in `geo_check_runs.diff` (so checks ended by a restart get one too). `GET /runs/:id/compare/:otherId` compares two finished checks of the same page (host and path, ignoring www., a trailing slash and the query), older first.
+- The view shows "What differs between the countries" above the grid and a "Compare with an earlier check of this page" choice under it.
+- Known noise: a site that rotates its offers between visits (booking.com does) shows many price and heading changes between two checks minutes apart; that is the site, not the check.

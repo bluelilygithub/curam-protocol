@@ -68,3 +68,17 @@ export function toggleId(list, id, max = MAX_COUNTRY_SCREENS) {
   if (list.length >= max) return { list, refused: true };
   return { list: [...list, id], refused: false };
 }
+
+/** host + path without www., a trailing slash, query or hash (same rule as server/services/geoCheck/diff.js): checks of the same page. */
+export function samePlace(u) {
+  try {
+    const x = new URL(u);
+    return `${x.host.replace(/^www\./, '')}${x.pathname.replace(/\/+$/, '')}`.toLowerCase();
+  } catch { return String(u || '').toLowerCase(); }
+}
+
+/** Earlier finished checks of the same page as `run`, newest first: the choices for "compare with". */
+export function comparableRuns(run, runs) {
+  if (!run || !runs) return [];
+  return runs.filter((r) => r.id !== run.id && r.status !== 'running' && samePlace(r.url) === samePlace(run.url));
+}
