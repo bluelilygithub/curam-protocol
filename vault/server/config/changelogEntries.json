@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "419fba02",
+   "fullHash": "419fba0224f3fa7d0707d8b1ada62f0c78e7ce02",
+   "committedAt": "2026-11-25T11:18:57+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Remove the empty monthly reviews saved before the parser fix",
+   "filesChanged": 1,
+   "insertions": 12,
+   "deletions": 0,
+   "goal": "Delete the empty 30-day reviews left by the parseModelJson bug, at the owner's request.",
+   "whatChanged": "server/db.js: an idempotent DELETE on boot from share_news_briefings for type monthly_summary rows whose content (overview) is blank, whose headlines stocks list is empty or missing, and whose adviceQuality is blank. It logs \"[db] removed N empty Shares monthly review(s)\" when it removes any; after the first boot it matches nothing, because commit 1d0b14c2 stops new empty reviews.",
+   "filesImpacted": [
+    "server/db.js"
+   ],
+   "benefit": "The News tab no longer lists empty monthly reviews.",
+   "concerns": "Permanent delete, done on purpose without the recycle bin because the rows hold no content. The SQL has not been run against a database (no local database, Railway CLI not logged in), so check the deploy log for the removed count or an error. A review with any overview, stock line or assessment is kept. The statement stays in db.js and runs on every boot; it is cheap and can be removed later."
+  },
+  {
    "commit": "1d0b14c2",
    "fullHash": "1d0b14c235bedb7a6e20f36d740f128c418ca583",
    "committedAt": "2026-11-25T11:17:05+10:00",
