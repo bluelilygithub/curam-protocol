@@ -10,8 +10,9 @@ import { useIcon } from '../providers/IconProvider';
 import DocCompareTutorChat from './docCompare/DocCompareTutorChat';
 import {
   DOC_COMPARE_TOOLS, DOC_COMPARE_GOALS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, VERSIONS_REVIEW_BLURB, HOW_IT_WORKS, GUIDE_TOOLS,
-  OPEN_TYPE, VIEW_TYPE, CONTEXT_TYPE,
+  OPEN_TYPE, VIEW_TYPE, CONTEXT_TYPE, FETCH_TYPE, FETCHED_TYPE,
 } from './docCompare/docCompareTools.mjs';
+import api from '../utils/apiClient';
 
 /**
  * DocCompare, laid out like Graphics and Video Tools: the tool list on the left (ToolSidebar), the "What do you want to do?" job screen
@@ -96,6 +97,31 @@ export default function DocComparePage() {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [post]);
+
+  // "Fetch a web page": the app in the frame asks with only the typed address; this page calls the server with the person's login
+  // (apiClient) and hands the page's bytes back. The app makes no request itself, and none of the person's files ever travel.
+  useEffect(() => {
+    const onFetch = async (ev) => {
+      if (ev.origin !== window.location.origin || ev.source !== frameRef.current?.contentWindow) return;
+      const d = ev.data;
+      if (!d || d.type !== FETCH_TYPE || typeof d.id !== 'string' || typeof d.url !== 'string') return;
+      const reply = (msg, transfer = []) => frameRef.current?.contentWindow?.postMessage({ type: FETCHED_TYPE, id: d.id, ...msg }, window.location.origin, transfer);
+      try {
+        const res = await api.post('/api/doc-compare/fetch', { url: d.url.slice(0, 2048) });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          reply({ ok: false, error: body.error || `The page could not be fetched (error ${res.status}).` });
+          return;
+        }
+        const bytes = await res.arrayBuffer();
+        reply({ ok: true, bytes, finalUrl: res.headers.get('X-Final-Url') || d.url, contentType: res.headers.get('X-Page-Content-Type') || '' }, [bytes]);
+      } catch (e) {
+        reply({ ok: false, error: e?.message || 'The page could not be fetched.' });
+      }
+    };
+    window.addEventListener('message', onFetch);
+    return () => window.removeEventListener('message', onFetch);
+  }, []);
 
   // the guided tour: it switches tools the same way the list does ('start' = the job screen)
   const goTool = useCallback((id) => { if (id === 'start') { setGoal(null); setTool('start'); } else openTool(id); }, [openTool]);

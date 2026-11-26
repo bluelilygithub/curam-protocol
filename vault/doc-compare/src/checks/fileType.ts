@@ -15,16 +15,19 @@ export async function detectType(file: File): Promise<Reader> {
   if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) {
     throw new GateError('legacy-doc', `${file.name} is a legacy Word (.doc) file. Re-save it as .docx and try again.`);
   }
-  if (head[0] === 0x50 && head[1] === 0x4b) throw new GateError('unsupported', `${file.name} is a ZIP-based file that isn't a Word document (supported: PDF, DOCX, Markdown, plain text).`);
+  if (head[0] === 0x50 && head[1] === 0x4b) throw new GateError('unsupported', `${file.name} is a ZIP-based file that isn't a Word document (supported: PDF, DOCX, web page, Markdown, plain text).`);
   if (!head.subarray(0, 8192).includes(0) && !ext(file.name)) {
-    throw new GateError('unsupported', `${file.name} has no extension. Name it .txt or .md so it can be compared.`);
+    throw new GateError('unsupported', `${file.name} has no extension. Name it .txt, .md or .html so it can be compared.`);
   }
-  throw new GateError('unsupported', `${file.name} isn't a supported type (${ext(file.name) || 'unknown'}). Supported: PDF, DOCX, Markdown (.md), plain text (.txt).`);
+  throw new GateError('unsupported', `${file.name} isn't a supported type (${ext(file.name) || 'unknown'}). Supported: PDF, DOCX, web page (.html), Markdown (.md), plain text (.txt).`);
 }
 
-/** Gate 1: both files must be the same supported type. */
-export async function checkFileTypes(original: File, edited: File): Promise<Reader> {
+/** A web page and a Word file may be compared with each other: the copywriting workflow takes a page's text into Word and back. */
+const MIXABLE = new Set(['html', 'docx']);
+
+/** Gate 1: both files must be the same supported type (or a web page and a Word file). Returns each file's reader. */
+export async function checkFileTypes(original: File, edited: File): Promise<[Reader, Reader]> {
   const [a, b] = await Promise.all([detectType(original), detectType(edited)]);
-  if (a.id !== b.id) throw new GateError('type-mismatch', `Original is ${a.label}, edited is ${b.label} — both files must be the same type.`);
-  return a;
+  if (a.id !== b.id && !(MIXABLE.has(a.id) && MIXABLE.has(b.id))) throw new GateError('type-mismatch', `Original is ${a.label}, edited is ${b.label} — both files must be the same type (a web page and a Word file may be compared with each other).`);
+  return [a, b];
 }

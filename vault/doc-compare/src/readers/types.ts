@@ -29,7 +29,7 @@ export type BlockType = 'heading' | 'paragraph' | 'listItem' | 'tableCell' | 'pa
 
 export interface Block {
   id: string;
-  type: BlockType;
+  type: BlockType; // an 'image' block's text is its alt text (web pages, DOCX), not counted as words
   level?: number; // heading level / list depth
   style?: string; // block-level style: DOCX paragraph style name, Markdown list kind / code language
   text: string;
@@ -78,6 +78,8 @@ export interface DocMetadata {
   imageCount: number;
   referenceCount?: number; // reference-list entries (set by the comparison, not the reader)
   noteCount?: number; // footnotes and endnotes
+  url?: string; // web pages: the page's address, when the file records it
+  extraction?: string; // web pages: where the main content was taken from
 }
 
 export interface PageRef {

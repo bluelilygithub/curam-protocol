@@ -45,7 +45,8 @@ export const limits: PostCheck = (a, b, _ops, ctx) => {
     if (w.edited > s.wordLimit) out.push({ category: 'wordLimit', severity: SEVERITY.wordLimit, location: 'Whole document', original: String(w.original), edited: String(w.edited), detail: `${w.edited.toLocaleString('en-AU')} words, over the ${s.wordLimit.toLocaleString('en-AU')}-word limit by ${(w.edited - s.wordLimit).toLocaleString('en-AU')}${s.excludeReferences ? ' (reference list not counted)' : ''}` });
   }
   const pages = b.metadata.pageCount;
-  if (s.pageLimit && s.pageLimit > 0 && pages && pages > s.pageLimit) {
+  const web = a.sourceType === 'html' || b.sourceType === 'html'; // a web page has no pages
+  if (!web && s.pageLimit && s.pageLimit > 0 && pages && pages > s.pageLimit) {
     out.push({ category: 'wordLimit', severity: SEVERITY.wordLimit, location: 'Whole document', original: String(a.metadata.pageCount ?? '—'), edited: String(pages), detail: `${pages} pages, over the ${s.pageLimit}-page limit by ${pages - s.pageLimit}` });
   }
   return out;

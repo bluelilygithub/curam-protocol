@@ -8,7 +8,8 @@
 //  - DNS rebinding: the name is resolved ONCE, every address must be public, and the connection is made to that exact
 //    address (the original host name is kept only for the Host header and the TLS certificate check);
 //  - redirects to somewhere internal: every hop goes through the same checks, at most 5 hops;
-//  - big or slow responses: the body is streamed and cut off at maxBytes, with an overall timeout;
+//  - big or slow responses: the body is streamed and cut off at maxBytes; `timeoutMs` ends a connection that goes quiet, and the
+//    optional `totalTimeoutMs` ends the whole fetch (every redirect included) even if the server keeps trickling bytes;
 //  - odd ports: only 80 and 443.
 //
 // Errors thrown here carry `.status = 400` and a message that is safe to show the person.
@@ -110,8 +111,10 @@ function pinnedLookup(address) {
   return (_host, opts, cb) => (opts && opts.all ? cb(null, [{ address, family }]) : cb(null, address, family));
 }
 
-function requestOnce(url, address, { timeoutMs, maxBytes, accept }) {
+function requestOnce(url, address, { timeoutMs, maxBytes, accept, userAgent, deadline }) {
   return new Promise((resolve, reject) => {
+    const left = deadline ? deadline - Date.now() : Infinity;
+    if (left <= 0) return reject(fail('Fetching the file timed out'));
     const mod = url.protocol === 'https:' ? https : http;
     const req = mod.request({
       protocol: url.protocol,
@@ -119,7 +122,7 @@ function requestOnce(url, address, { timeoutMs, maxBytes, accept }) {
       port: url.port || (url.protocol === 'https:' ? 443 : 80),
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: { 'user-agent': 'CuramVault/1.0', accept },
+      headers: { 'user-agent': userAgent || 'CuramVault/1.0', accept },
       timeout: timeoutMs,
       // Connect to the address we already checked, not whatever the name resolves to a second time.
       lookup: pinnedLookup(address),
@@ -152,6 +155,10 @@ function requestOnce(url, address, { timeoutMs, maxBytes, accept }) {
       res.on('error', reject);
     });
     req.on('timeout', () => { req.destroy(); reject(fail('Fetching the file timed out')); });
+    if (Number.isFinite(left)) {
+      const timer = setTimeout(() => { req.destroy(); reject(fail('Fetching the file timed out')); }, left);
+      req.on('close', () => clearTimeout(timer));
+    }
     req.on('error', (err) => reject(err.status ? err : fail('Could not fetch the file')));
     req.end();
   });
@@ -161,7 +168,8 @@ function requestOnce(url, address, { timeoutMs, maxBytes, accept }) {
  * Download a public http(s) file. Resolves { buffer, contentType, finalUrl }.
  * `deps.resolve`, `deps.isAllowedIp` and `deps.ports` exist so tests can run without the network; production uses the defaults.
  */
-async function fetchPublicFile(rawUrl, { maxBytes = 25 * 1024 * 1024, timeoutMs = 15000, maxRedirects = 5, accept = '*/*', deps = {} } = {}) {
+async function fetchPublicFile(rawUrl, { maxBytes = 25 * 1024 * 1024, timeoutMs = 15000, totalTimeoutMs, maxRedirects = 5, accept = '*/*', userAgent, deps = {} } = {}) {
+  const deadline = totalTimeoutMs ? Date.now() + totalTimeoutMs : undefined;
   let url;
   try { url = new URL(String(rawUrl || '').trim()); } catch { throw fail('Enter a valid URL'); }
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
@@ -172,7 +180,7 @@ async function fetchPublicFile(rawUrl, { maxBytes = 25 * 1024 * 1024, timeoutMs 
     // eslint-disable-next-line no-await-in-loop
     const address = await resolvePublicAddress(url.hostname, deps);
     // eslint-disable-next-line no-await-in-loop
-    const result = await requestOnce(url, address, { timeoutMs, maxBytes, accept });
+    const result = await requestOnce(url, address, { timeoutMs, maxBytes, accept, userAgent, deadline });
     if (!result.redirect) return { buffer: result.buffer, contentType: result.contentType, finalUrl: url.toString() };
     try { url = new URL(result.redirect); } catch { throw fail('The address redirected somewhere invalid'); }
   }

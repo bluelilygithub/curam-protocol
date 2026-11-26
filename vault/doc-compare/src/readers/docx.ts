@@ -11,6 +11,8 @@ const tagOf = (n: XNode) => Object.keys(n).find((k) => k !== ':@') ?? '';
 const kids = (n: XNode | undefined): XNode[] => (n ? ((n[tagOf(n)] as XNode[]) ?? []) : []);
 const attr = (n: XNode | undefined, a: string): string | undefined => (n?.[':@'] as Record<string, string> | undefined)?.[a];
 const child = (n: XNode | undefined, t: string) => kids(n).find((c) => tagOf(c) === t);
+/** A picture's alt text: the descr of its wp:docPr (Word's Alt Text box), '' if none. */
+const altOf = (n: XNode): string => { if (tagOf(n) === 'wp:docPr') return attr(n, 'descr') ?? ''; for (const k of kids(n)) { const a = altOf(k); if (a) return a; } return ''; };
 const textOf = (nodes: XNode[]): string => nodes.map((c) => (typeof c['#text'] === 'string' ? (c['#text'] as string) : textOf(kids(c)))).join('');
 const parse = (xml: string) => parser.parse(xml) as XNode[];
 const findDeep = (nodes: XNode[], t: string): XNode | undefined => {
@@ -200,7 +202,7 @@ export const docxReader: Reader = {
     let tableNo = 0;
     const nextNumber = numberer(readNumbering(numberingXml));
 
-    const paragraph = (p: XNode, table?: { t: number; r: number; c: number }): { runs: Run[]; pageBreakAfter: boolean; images: number; styleName?: string; level?: number; type: RawBlock['type']; notes: string[]; numId?: string; ilvl: number } => {
+    const paragraph = (p: XNode, table?: { t: number; r: number; c: number }): { runs: Run[]; pageBreakAfter: boolean; images: string[]; styleName?: string; level?: number; type: RawBlock['type']; notes: string[]; numId?: string; ilvl: number } => {
       const pPr = child(p, 'w:pPr');
       const styleId = attr(child(pPr, 'w:pStyle'), 'w:val');
       const chain = styleChain(styles, styleId);
@@ -211,7 +213,8 @@ export const docxReader: Reader = {
       const isList = !!numPr || chain.some((s) => s.list);
       const baseFmt: Fmt = Object.assign({}, defaults, ...chain.map((s) => s.rPr));
       const runs: Run[] = [];
-      let pageBreakAfter = false, images = 0;
+      let pageBreakAfter = false;
+      const images: string[] = []; // alt text of each picture
       const notes: string[] = [];
       const walkRuns = (nodes: XNode[], link?: string) => {
         for (const n of nodes) {
@@ -230,13 +233,16 @@ export const docxReader: Reader = {
               else if (ct === 'w:tab') text += '\t';
               else if (ct === 'w:br' || ct === 'w:cr') { if (attr(c, 'w:type') === 'page') pageBreakAfter = true; else text += '\n'; }
               else if (ct === 'w:noBreakHyphen') text += '‑';
-              else if (ct === 'w:drawing' || ct === 'w:pict' || ct === 'w:object') images++;
+              else if (ct === 'w:drawing' || ct === 'w:pict' || ct === 'w:object') images.push(altOf(c));
               else if (ct === 'w:footnoteReference' || ct === 'w:endnoteReference') notes.push(`${ct === 'w:footnoteReference' ? 'fn' : 'en'}:${attr(c, 'w:id')}`);
             }
             if (text) runs.push({ ...fmt, text });
           } else if (t === 'w:hyperlink') {
             const rid = attr(n, 'r:id');
-            walkRuns(kids(n), (rid && rels.get(rid)) ?? (attr(n, 'w:anchor') ? `#${attr(n, 'w:anchor')}` : link));
+            // a link to a place inside a web page keeps the place: Word stores "#fragment" apart from the address, as w:anchor
+            const anchor = attr(n, 'w:anchor');
+            const target = rid ? rels.get(rid) : undefined;
+            walkRuns(kids(n), target ? `${target}${anchor ? `#${anchor}` : ''}` : anchor ? `#${anchor}` : link);
           } else if (t === 'w:del' || t === 'w:moveFrom' || t === 'w:pPr') {
             // tracked deletions are not part of the visible text
           } else if (t === 'w:sdtContent' || t === 'w:sdt' || t === 'w:ins' || t === 'w:moveTo' || t === 'w:smartTag' || t === 'w:fldSimple' || t === 'w:customXml') {
@@ -266,7 +272,7 @@ export const docxReader: Reader = {
           const text = p.runs.map((r) => r.text).join('');
           const number = nextNumber(p.numId, p.ilvl);
           if (text.trim() || p.type === 'heading') out.push({ type: p.type, level: p.level, style: p.styleName, text, runs: p.runs, ...(number ? { number } : {}), ...(p.notes.length ? { notes: p.notes } : {}) });
-          for (let i = 0; i < p.images; i++) out.push({ type: 'image', text: '', runs: [] });
+          for (const alt of p.images) out.push({ type: 'image', text: alt, runs: [] });
           if (p.pageBreakAfter) out.push({ type: 'pageBreak', text: '', runs: [] });
         } else if (t === 'w:tbl') {
           const tIdx = tableNo++;
@@ -276,15 +282,15 @@ export const docxReader: Reader = {
               const span = Number(attr(child(child(tc, 'w:tcPr'), 'w:gridSpan'), 'w:val') ?? 1);
               const runs: Run[] = [];
               const notes: string[] = [];
-              let images = 0;
+              const images: string[] = [];
               // a cell holds paragraphs (and possibly nested tables, flattened into the cell text)
               const cellParas = (xs: XNode[]) => xs.forEach((x) => {
-                if (tagOf(x) === 'w:p') { const p = paragraph(x, { t: tIdx, r, c }); if (runs.length && p.runs.length) runs.push({ text: '\n' }); runs.push(...p.runs); notes.push(...p.notes); images += p.images; }
+                if (tagOf(x) === 'w:p') { const p = paragraph(x, { t: tIdx, r, c }); if (runs.length && p.runs.length) runs.push({ text: '\n' }); runs.push(...p.runs); notes.push(...p.notes); images.push(...p.images); }
                 else if (tagOf(x) === 'w:tbl' || tagOf(x) === 'w:tr' || tagOf(x) === 'w:tc' || tagOf(x) === 'w:sdt' || tagOf(x) === 'w:sdtContent') cellParas(kids(x));
               });
               cellParas(kids(tc));
               out.push({ type: 'tableCell', text: runs.map((x) => x.text).join(''), runs, ...(notes.length ? { notes } : {}), location: { table: { t: tIdx, r, c } } });
-              for (let i = 0; i < images; i++) out.push({ type: 'image', text: '', runs: [] });
+              for (const alt of images) out.push({ type: 'image', text: alt, runs: [] });
               c += span;
             }
           });

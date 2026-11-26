@@ -11,4 +11,6 @@ declare module '@vault-client/pages/docCompare/docCompareTools.mjs' {
   export const OPEN_TYPE: string;
   export const VIEW_TYPE: string;
   export const CONTEXT_TYPE: string;
+  export const FETCH_TYPE: string;
+  export const FETCHED_TYPE: string;
 }

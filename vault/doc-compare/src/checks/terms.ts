@@ -85,12 +85,15 @@ export const terms: PostCheck = (a, b, _ops, ctx) => {
   }
   // acronyms new in the edited version, never spelled out there
   const defsB = acronymDefinitions(B.text);
+  // the same scan over the original, so "NETPs" or "IGST- integrated" there counts: a word-boundary count would miss both
+  const ACRONYM = /\b[A-Z]{2,6}(?=s?\b)/g;
+  const inA = new Set([...A.text.matchAll(ACRONYM)].map((m) => m[0]));
   const seen = new Set<string>();
   for (const bl of B.blocks) {
     if (!/[a-z]/.test(bl.text)) continue; // a heading in capitals
-    for (const m of bl.text.matchAll(/\b[A-Z]{2,6}(?=s?\b)/g)) {
+    for (const m of bl.text.matchAll(ACRONYM)) {
       const acr = m[0];
-      if (seen.has(acr) || WELL_KNOWN.has(acr) || /^[IVXLC]+$/.test(acr) || defsB.has(acr) || countOf(acr, A.text) > 0) continue;
+      if (seen.has(acr) || WELL_KNOWN.has(acr) || /^[IVXLC]+$/.test(acr) || defsB.has(acr) || inA.has(acr)) continue;
       seen.add(acr);
       out.push({ category: 'terminology', severity: SEVERITY.terminology, location: locate(bl, true), edited: acr, detail: `Acronym ${acr} is new and never spelled out` });
     }

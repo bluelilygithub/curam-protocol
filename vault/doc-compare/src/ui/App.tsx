@@ -28,6 +28,9 @@ import type { ProjectReport } from '../report/pdfExport';
 import { fmtSize, ProjectsView, type ImportConflict, type Quota } from './ProjectsView';
 import { TimelineView } from './TimelineView';
 import { VersionsView } from './VersionsView';
+import { htmlReader } from '../readers/html';
+import { downloadWord } from '../report/wordExport';
+import { canFetchPages, requestPage } from '../web/fetchPage';
 
 /** Saves a Blob as a file on this computer (the export of a project). */
 function download(blob: Blob, name: string) {
@@ -405,6 +408,27 @@ export function App() {
     setOriginal(undefined); setEdited(undefined); setLatestFile(undefined); setLabel(''); setNote('');
     setView('compare');
   };
+  // ---- web pages: inside Vault a box can fetch a page by its address (web/fetchPage.ts); the standalone build only takes files ----
+  /** A page fetched as the original of a new check becomes a project at once: its dated snapshot is kept before any draft exists. */
+  async function startPageProject(file: File, doc: NormalizedDoc) {
+    reset();
+    const p = createProject(await storeFile(file, doc), label.trim() || undefined);
+    const saved = await saveProject({ ...p, settings: { wordLimit: settings.wordLimit, pageLimit: settings.pageLimit, requiredHeadings: settings.requiredHeadings, glossary: settings.glossary } });
+    setLabel('');
+    openProject(saved);
+    say(`Saved the page, as it was at ${new Date(file.lastModified).toLocaleString('en-AU')}, as the original of the project "${saved.name}". Download it as Word to edit, then add your edited file as round 1.`);
+  }
+  const fetchInto = canFetchPages() ? {
+    original: async (u: string) => { const page = await requestPage(u); if (asProject && !versions) await startPageProject(page.file, page.doc); else pick('original', page.file); },
+    edited: async (u: string) => pick('edited', (await requestPage(u)).file),
+    latest: async (u: string) => { const page = await requestPage(u); reset(); setLatestFile(page.file); },
+  } : undefined;
+  const isWebPage = (f?: File) => !!f && /\.(html?|xhtml)$/i.test(f.name);
+  /** "Download as Word": the original web page's content as a .docx made here, to edit in Word and add back as a round. */
+  const wordDownload = async (src: { doc?: NormalizedDoc; file?: File }, name: string) => {
+    try { await downloadWord(src.doc ?? (await htmlReader.read(src.file!)), name); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+  const WORD_TIP = "Download the page's main content as a Word file (.docx), made here in this browser. Edit it in Word or Google Docs, keep it as .docx, and add it back as the next round: every check runs against this snapshot.";
   const putProject = async (p: Project) => { await projectStore?.put({ ...p, sizeBytes: projectSize(p) }); void refreshProjects(); void estimate(); };
   const exportOne = async (p: Project) => {
     try {
@@ -582,9 +606,15 @@ export function App() {
                   <DropZone label="Original (kept in this project)" hint="The clean copy every draft is checked against." file={original}
                     onFile={() => say('The original stays as it is. To check against a later round instead, use "Make the new original" in Timeline.')} />
                   <div data-guide="add-round">
-                    <DropZone label={`Add the latest version (round ${(latestNo ?? 0) + 1})`} hint="The newest draft, from the LLM or from you." file={latestFile} onFile={(f) => { reset(); setLatestFile(f); }} />
+                    <DropZone label={`Add the latest version (round ${(latestNo ?? 0) + 1})`} hint="The newest draft, from the LLM or from you, or the published page." file={latestFile} onFile={(f) => { reset(); setLatestFile(f); }} onFetch={fetchInto?.latest} />
                   </div>
                 </section>
+                {project.original.doc.sourceType === 'html' && (
+                  <div className="row" data-guide="download-word">
+                    <button className="btn" onClick={() => void wordDownload({ doc: project.original.doc }, `${project.name}_original`)} title={WORD_TIP}>Download the original as Word</button>
+                    <span className="muted small">Then add your edited .docx above as the next round, or fetch the published page to check it went live as approved.</span>
+                  </div>
+                )}
                 <div className="compare-row" data-guide="compare-button">
                   <button className="btn primary" disabled={!original || !latestFile || busy} onClick={() => void start(original, latestFile)}
                     title={!latestFile ? 'Add the latest version first.' : 'Check this version against your original and the previous round. Nothing leaves this browser tab.'}>{busy ? 'Checking…' : 'Check this version'}</button>
@@ -608,9 +638,14 @@ export function App() {
                   {!savedId && checks.length > 0 && <button className="link" onClick={() => setView('saved')} title="Open a check you ran before.">Open a saved check ({checks.length})</button>}
                 </div>
                 <section className="drops" aria-label="Files to compare" data-guide="files">
-                  <DropZone label={versions ? 'Version A' : 'Original'} hint={versions ? 'One version, for example the long one.' : 'The document before the AI edited it.'} file={original} onFile={(f) => pick('original', f)} />
-                  <DropZone label={versions ? 'Version B' : 'Edited (LLM output)'} hint={versions ? 'The other version, for example the short one.' : 'The version the AI produced.'} file={edited} onFile={(f) => pick('edited', f)} />
+                  <DropZone label={versions ? 'Version A' : 'Original'} hint={versions ? 'One version, for example the long one.' : 'The document before the AI edited it, or the web page before your edits.'} file={original} onFile={(f) => pick('original', f)} onFetch={fetchInto?.original} />
+                  <DropZone label={versions ? 'Version B' : 'Edited (LLM output)'} hint={versions ? 'The other version, for example the short one.' : 'The version the AI produced, or your edited Word file.'} file={edited} onFile={(f) => pick('edited', f)} onFetch={fetchInto?.edited} />
                 </section>
+                {isWebPage(original) && !versions && (
+                  <div className="row" data-guide="download-word">
+                    <button className="btn" onClick={() => void wordDownload({ file: original }, `${original!.name}`)} title={WORD_TIP}>Download the original as Word</button>
+                  </div>
+                )}
                 {original && (
                   <label className="inline save-project" data-guide="save-project" title="A project keeps a clean copy of your original, so every later draft is checked against it and you can see what was fixed round by round. Untick to compare these two files once (kept under Saved checks).">
                     <input type="checkbox" checked={asProject && !versions} disabled={versions} onChange={(ev) => setAsProject(ev.target.checked)} /> Save this as your original? We'll keep a clean copy so every later draft is checked against it (a project).
