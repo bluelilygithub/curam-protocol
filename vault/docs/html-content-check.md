@@ -11,6 +11,7 @@
 - **Help (2026-11-26, before the owner's first test):** the page now follows the Video Tools / PDF Tools conventions: a Tooltip on every control, the (i) "How HTML Content Check Works" box (opens once per browser, and from the (i) beside the title), a 12-step compass tour (also Settings → HTML Content Check Tour, or `/html-content-check?tour=1`) and the guide chat. Code Map scores the tool 100.
 - **Milestone 4b (done, 2026-11-26), from the owner's real Dorothy Stoner request:** a job holds several pages; a round reads them all and changes are per page; request lines carry their "Under …" heading, belong to a page or to none, and are Normal, Held over or Keep; matching runs per page; repeats are flagged. See "Several pages".
 - **Milestone 5 (done, 2026-11-27):** the person approves request lines per round (Approve / Needs work); Make the client report downloads a fillable PDF of the approved lines, grouped by page. Also: a page counter ("3 of 12 pages", "Page 2 of 3", "Add a page (9 left)") and the mic inside the page name box. See "Approving and the client report".
+- **Review by line (done, 2026-11-27), from the owner's UX feedback:** Changes opens on one list of request lines, page by page, with a bar that stays on screen (progress, Next undecided, the client report, the list for the developer), keys, folding of approved lines, and a note on each Needs work line. See "Review by line".
 - Not yet: returned reports (M6, M7).
 
 ## Where it lives
@@ -80,6 +81,18 @@ One change request often covers several pages of a site (the Dorothy Stoner requ
 - **Where each line stands** (`summary.js`, in every round response as `lines`): linked (with the pages and changes), no change found, could not be read, not matched yet, held, or a Keep state. A line with no page counts as linked when any page links it; a line on a page only counts that page. "Lines with no change found" is across all pages; "Changes nobody asked for" is per page.
 - **Screens.** New job and Job details have a pages editor. Rounds lists each round's pages, with Upload a saved copy on a page that failed. Changes has a tab per page with its count, and the request beside it shows that page's lines and the lines on All pages, with each line's state across the round.
 - **Cost and time.** Matching is one call per page with changes; a round of six pages, read one after another, can take a minute or two (more with a real browser).
+
+## Review by line
+
+The owner found the two-column Changes screen cumbersome (2026-11-27) and chose five changes, all built in `ReviewView.jsx` (grouping and the developer list in `reviewList.mjs`, tested by `client/src/pages/htmlContentCheck/reviewList.test.mjs`):
+
+- **One list.** For a change request, Changes opens on Review by line: the request lines, grouped by page (a line with no page goes under the page of its first linked change, else "Across the site", first), each with its linked changes underneath and Approve / Needs work beside it. All changes is the old two-column view, and is still where changes are linked by hand.
+- **The bar** stays at the top while scrolling: the round, "N of M lines decided · approved · need work · left" with a bar, Next undecided, Show all, Include changes nobody asked for, Make the client report, and the list for the developer. Match to request shows there until the round is matched.
+- **Keys** (ignored while typing in a box): J / K move between lines, A approves, N marks Needs work, U clears.
+- **Folding.** An approved line folds to one row ("✓ Approved …") unless Show all is on; click it to open it. Keep and held-over lines, and each page's changes nobody asked for (closed), are under "Not reviewed line by line" at the end.
+- **The list for the developer.** A Needs work line gets a note box (saved as the approval's note). Copy for the developer puts the Needs work lines, page by page, with their notes, on the clipboard; Email it opens the same text in the person's email app (mailto). Nothing is sent by Vault.
+
+No server change: it uses the milestone 5 approval route (`note` now sent from the screen).
 
 ## Approving and the client report (milestone 5)
 
