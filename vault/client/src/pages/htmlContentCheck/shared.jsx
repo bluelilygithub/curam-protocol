@@ -4,6 +4,7 @@ import Tooltip from '../../components/Tooltip';
 // Small pieces the HTML Content Check screens share. Colours come from the theme variables only.
 export const CARD = { borderColor: 'var(--color-border)', background: 'var(--color-surface)' };
 export const FIELD_CLASS = 'w-full px-3 py-2.5 rounded-xl border text-sm focus:border-[var(--color-primary)]';
+export const FIELD_INLINE = FIELD_CLASS.replace('w-full', 'w-auto'); // a select that sits in a row, sized to its words
 export const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
 /** Reads an apiClient response; throws the server's plain message when it failed. */

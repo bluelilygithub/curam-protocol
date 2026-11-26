@@ -201,6 +201,7 @@ Page `/html-content-check`. Add it once to `client/src/config/appNavigation.js` 
 **House parts:** `apiClient` for every call; `Dialog` for modals; inline Yes / No for routine deletes; `Tooltip` on every control; the (i) box (`ToolInfoModal`); the compass tour; the guide chat (`TutorChat`, registered in `server/config/guides.js` with its catalogue matching the tool list); `getIcon` (register any new icons in the icon map); theme colours only; hover by opacity; 200 ms transitions; toasts for quick feedback.
 
 **Client report PDF layout**
+- Grouped by page (since M4b): one section per page, with its own address and date.
 - Header: job name, page address, round number and date, with the line "This shows the page as it was on <date>".
 - One row per request line: ref, request text, before and after with the changed words marked, and a notes field.
 - Changed images as before and after thumbnails, if the snapshot has them (optional in v1).
@@ -226,7 +227,7 @@ The only change to DocCompare in this brief:
 
 Keep these possible without rework, and describe each in `docs/html-content-check.md` under "Future":
 
-1. **Checklist engine.** New `content_check_items.kind` values (`remove`, `replace`, `insert`, `image`, `held_over`), with `oldText`, `newText` and `section` added as columns later. A pure module, `server/services/htmlContentCheck/checks/`, with the signature `runChecks({ baseline, previous, current, items }) → { [itemRef]: result }`, stored under `results.checks`. Design rules for when it's built: old text must be found in the baseline; new text must be absent from the baseline; a close match counts only if it is nearer the new text than the old; text where only case or quotes changed is compared strictly.
+1. **Checklist engine.** New `content_check_items.kind` values (`remove`, `replace`, `insert`, `image`; `held_over` and `keep` already exist since M4b, in a simple form), with `oldText`, `newText` and `section` added as columns later. A pure module, `server/services/htmlContentCheck/checks/`, with the signature `runChecks({ baseline, previous, current, items }) → { [itemRef]: result }`, stored under `results.checks`. Design rules for when it's built: old text must be found in the baseline; new text must be absent from the baseline; a close match counts only if it is nearer the new text than the old; text where only case or quotes changed is compared strictly.
 2. **Accept and broken-again.** A future `content_check_acceptances` table (item, round, by, at). Re-checks compare against accepted rounds.
 3. **Learned rules.** A future `content_check_rules` table, per person, with admin sharing. They go into the matching prompt, capped in count and length.
 4. **Scheduled re-checks.** A cron inside `withCronLock` that fetches new rounds for open jobs and raises "page changed since approval" through `SuggestionService.captureIf()`. This is why snapshots are produced on the server.
@@ -295,6 +296,8 @@ Each milestone goes on its own branch, is tested, gets its Changelog entry, and 
 - Lines with no change found; changes nobody asked for.
 
 *Tests:* the schema; unknown ids dropped; injection text inside the request and page treated as data; a recorded model response used as a fixed fixture (no live model in the automated tests).
+
+**M4b: Several pages (added by the owner, 2026-11-26, from the real Dorothy Stoner request).** Done. A job holds several pages (`content_check_pages`: job, address, label, order, reading method); each existing job's address became its page 1. A round reads all of a job's pages; diffs are per page. Request lines belong to a page or to none (none: matched against all pages); "Under …" lines become page or section labels, not request lines; lines can be assigned to pages on review. Matching runs per page with that page's lines and changes only. Line kinds: Normal, Held over (never checked, shown as held) and Keep (warned if its text changed or disappeared). Likely duplicate lines are flagged to merge. The Changes and Rounds screens show pages. The fixed splitter test is the owner's request. Details: `docs/html-content-check.md`, "Several pages".
 
 **M5: Client report.**
 - Fillable PDF with the agreed layout and field names, using Vault's existing fillable-PDF code.

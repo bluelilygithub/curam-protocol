@@ -64,6 +64,10 @@ function serve() {
     return { status: res.status, body: await res.json() };
   };
 
+  // a round is one row per page (milestone 4b); these jobs have one page. Snapshots are not sent back: read them from the table.
+  const rr = (body) => ({ number: body.round.number, ...body.round.pages[0] });
+  const snapOf = async (jobId, n) => (await pool.query('SELECT snapshot FROM content_check_rounds WHERE "jobId" = $1 AND number = $2', [jobId, n])).rows[0].snapshot;
+
   try {
     // ---- create fetches round 0 ----
     let r = await call(A, 'POST', '/jobs', { url: 'gallery.example/artists/dorothy-stoner', requestText: '- Fix the heading' });
@@ -78,37 +82,38 @@ function serve() {
 
     r = await call(A, 'GET', `/jobs/${job.id}/rounds/0`);
     assert.equal(r.status, 200);
-    assert.equal(r.body.snapshot.v, 1);
-    assert.ok(r.body.snapshot.blocks.some((b) => b.text === 'Grace Cossington Smith, Margaret Preston'), 'the sidebar is in the snapshot');
-    assert.equal(r.body.rawHtml, undefined, 'the stored page is never sent back');
+    assert.equal((await snapOf(job.id, 0)).v, 1);
+    assert.ok((await snapOf(job.id, 0)).blocks.some((b) => b.text === 'Grace Cossington Smith, Margaret Preston'), 'the sidebar is in the snapshot');
+    assert.equal(r.body.pages[0].rawHtml, undefined, 'the stored page is never sent back');
+    assert.equal(r.body.pages[0].snapshot, undefined, 'nor the snapshot');
     const raw = (await pool.query('SELECT "rawHtml" FROM content_check_rounds WHERE "jobId" = $1 AND number = 0', [job.id])).rows[0].rawHtml;
     assert.equal(zlib.gunzipSync(raw).toString('utf8'), BEFORE, 'the page is kept, gzipped');
 
     // ---- Check again: unchanged is still a round; then the edited page ----
     net.calls = [];
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
-    assert.equal(r.status, 201); assert.equal(r.body.round.number, 1); assert.equal(r.body.round.status, 'ready');
+    assert.equal(r.status, 201); assert.equal(rr(r.body).number, 1); assert.equal(rr(r.body).status, 'ready');
     net.plain = { html: AFTER, finalUrl: 'https://gallery.example/artists/dorothy-stoner' };
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
-    assert.equal(r.body.round.number, 2);
-    assert.ok((await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body.snapshot.blocks.some((b) => b.text === 'Dorothy Stoner (1921–2008)'));
+    assert.equal(rr(r.body).number, 2);
+    assert.ok((await snapOf(job.id, 2)).blocks.some((b) => b.text === 'Dorothy Stoner (1921–2008)'));
 
     // ---- a failed round is stored with its reason; the next attempt replaces it ----
     net.plain = pub('Could not fetch the page (HTTP 500)');
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
-    assert.equal(r.body.round.number, 3); assert.equal(r.body.round.status, 'failed');
-    assert.equal(r.body.round.error, 'Could not fetch the page (HTTP 500)'); assert.equal(r.body.round.fetchedVia, 'plain');
+    assert.equal(rr(r.body).number, 3); assert.equal(rr(r.body).status, 'failed');
+    assert.equal(rr(r.body).error, 'Could not fetch the page (HTTP 500)'); assert.equal(rr(r.body).fetchedVia, 'plain');
     net.plain = new Error('ECONNRESET at 10.1.2.3 secret detail');
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
-    assert.equal(r.body.round.number, 3, 'a second failure replaces the first');
-    assert.ok(!/secret|10\.1\.2\.3/.test(r.body.round.error), 'an unexpected error is not shown as is');
+    assert.equal(rr(r.body).number, 3, 'a second failure replaces the first');
+    assert.ok(!/secret|10\.1\.2\.3/.test(rr(r.body).error), 'an unexpected error is not shown as is');
     const huge = `<html><body>${Array.from({ length: 60 }, () => `<p>${'abcdefgh '.repeat(1000)}</p>`).join('')}</body></html>`;
     net.plain = { html: huge, finalUrl: 'https://gallery.example/artists/dorothy-stoner' };
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
-    assert.equal(r.body.round.status, 'failed'); assert.match(r.body.round.error, /Nothing was cut/);
+    assert.equal(rr(r.body).status, 'failed'); assert.match(rr(r.body).error, /Nothing was cut/);
     net.plain = { html: AFTER, finalUrl: 'https://gallery.example/artists/dorothy-stoner' };
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
-    assert.equal(r.body.round.number, 3); assert.equal(r.body.round.status, 'ready', 'success replaces the failed round');
+    assert.equal(rr(r.body).number, 3); assert.equal(rr(r.body).status, 'ready', 'success replaces the failed round');
     assert.deepEqual(r.body.job.rounds.map((x) => `${x.number}:${x.status}`), ['0:ready', '1:ready', '2:ready', '3:ready']);
 
     // ---- milestone 3: each round keeps what changed, against the starting point and the round before ----
@@ -120,12 +125,12 @@ function serve() {
     assert.equal(rounds[3].sinceBaseline.total, 7, 'but still differs from the starting point');
     assert.equal(rounds[3].previousNumber, 2);
     let full = (await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body;
-    assert.equal(full.results.diff.baselineNumber, 0);
-    assert.ok(full.results.diff.vsPrevious.changes.some((c) => c.type === 'removed' && c.before.text === '1998: Retrospective, Example Gallery'));
+    assert.equal(full.pages[0].results.diff.baselineNumber, 0);
+    assert.ok(full.pages[0].results.diff.vsPrevious.changes.some((c) => c.type === 'removed' && c.before.text === '1998: Retrospective, Example Gallery'));
     // a round kept before changes were worked out (milestone 2) gets them when read
     await pool.query(`UPDATE content_check_rounds SET results = '{}'::jsonb WHERE "jobId" = $1 AND number = 2`, [job.id]);
     full = (await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body;
-    assert.equal(full.results.diff.vsPrevious.stats.total, 7, 'filled in on read');
+    assert.equal(full.pages[0].results.diff.vsPrevious.stats.total, 7, 'filled in on read');
     // the round before a failed one is skipped: compare with the last round that was read
     // (round 3 replaced the failed attempts, so its "before" is round 2)
 
@@ -135,7 +140,7 @@ function serve() {
     net.calls = [];
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
     assert.deepEqual(net.calls.map((c) => c[0]), ['plain', 'browser']);
-    assert.equal(r.body.round.fetchedVia, 'browser'); assert.equal(r.body.round.finalUrl, 'https://gallery.example/app/');
+    assert.equal(rr(r.body).fetchedVia, 'browser'); assert.equal(rr(r.body).finalUrl, 'https://gallery.example/app/');
 
     // ---- a job set to the real browser never tries a plain fetch; one whose first fetch fails is still made ----
     net.calls = [];
@@ -145,7 +150,7 @@ function serve() {
     r = await call(A, 'POST', '/jobs', { kind: 'compare', url: 'https://blocked.example/' });
     assert.equal(r.status, 201);
     assert.deepEqual(r.body.rounds.map((x) => [x.number, x.status, x.error]), [[0, 'failed', 'That address is not allowed']]);
-    assert.equal((await call(A, 'GET', `/jobs/${r.body.id}/rounds/0`)).body.snapshot, null, 'a failed round has no snapshot');
+    assert.equal(await snapOf(r.body.id, 0), null, 'a failed round has no snapshot');
 
     // ---- a starting point that needed the real browser: later rounds use it too, so the two ways of reading do not look like edits ----
     net.plain = { html: '<html><body><div id="root"></div></body></html>', finalUrl: 'https://js.example/' };
@@ -156,7 +161,7 @@ function serve() {
     net.calls = [];
     const next = await call(A, 'POST', `/jobs/${r.body.id}/rounds`);
     assert.deepEqual(net.calls.map((c) => c[0]), ['browser']);
-    assert.equal(next.body.round.fetchedVia, 'browser'); assert.equal(next.body.job.rounds[1].sincePrevious.total, 0);
+    assert.equal(rr(next.body).fetchedVia, 'browser'); assert.equal(next.body.job.rounds[1].sincePrevious.total, 0);
 
     // ---- a saved copy instead of fetching ----
     r = await call(A, 'POST', '/jobs', { kind: 'compare', url: 'https://staging.example/page', fetch: false });
@@ -166,8 +171,8 @@ function serve() {
     assert.equal((await uploadAs(A, savedJob.id, 'page.html', 'x'.repeat(5 * 1024 * 1024 + 1))).status, 413, 'over 5 MB');
     r = await uploadAs(A, savedJob.id, 'Dorothy Stoner.html', `<!-- saved from url=(0040)https://staging.example/artists/saved -->\n${BEFORE.replace(/<link rel="canonical"[^>]*>/, '')}`);
     assert.equal(r.status, 201, JSON.stringify(r.body));
-    assert.equal(r.body.round.number, 0); assert.equal(r.body.round.fetchedVia, 'upload');
-    assert.equal(r.body.round.finalUrl, 'https://staging.example/artists/saved');
+    assert.equal(rr(r.body).number, 0); assert.equal(rr(r.body).fetchedVia, 'upload');
+    assert.equal(rr(r.body).finalUrl, 'https://staging.example/artists/saved');
 
     // ---- someone else's job ----
     assert.equal((await call(B, 'POST', `/jobs/${job.id}/rounds`)).status, 404);
@@ -186,7 +191,7 @@ function serve() {
     await bin.restoreItem(A, r.body.binId);
     const back = (await call(A, 'GET', `/jobs/${job.id}`)).body;
     assert.deepEqual(back.rounds.map((x) => `${x.number}:${x.status}:${x.fetchedVia}`), ['0:ready:plain', '1:ready:plain', '2:ready:plain', '3:ready:plain', '4:ready:browser']);
-    assert.ok((await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body.snapshot.blocks.length > 10, 'snapshots back');
+    assert.ok((await snapOf(job.id, 2)).blocks.length > 10, 'snapshots back');
     assert.equal((await pool.query('SELECT "rawHtml" FROM content_check_rounds WHERE "jobId" = $1 AND number = 0', [job.id])).rows[0].rawHtml, null, 'the stored page does not come back');
 
     console.log('htmlContentCheck.rounds.db.test.js: all checks passed');

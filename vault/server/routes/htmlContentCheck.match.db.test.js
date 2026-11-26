@@ -63,6 +63,10 @@ function serve() {
     const res = await fetch(base + p, { method, headers: { 'x-test-user': String(user), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     return { status: res.status, body: await res.json() };
   };
+  // a round is one row per page (milestone 4b); this job has one page. Line states come from the round's `lines`.
+  const rr = (body) => ({ number: body.round.number, ...body.round.pages[0] });
+  const M = (body) => body.pages[0].results.matches;
+  const status = (body) => Object.fromEntries(body.lines.map((l) => [l.ref, l.status]));
   try {
     net.plain = BEFORE;
     const job = (await call(A, 'POST', '/jobs', { url: 'https://gallery.example/a', requestText: REQUEST })).body;
@@ -74,23 +78,24 @@ function serve() {
     // ---- match, stored, read back ----
     let r = await call(A, 'POST', `/jobs/${job.id}/rounds/1/match`);
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.deepEqual(r.body.matches.unmatchedItems, ['R6', 'R8']);
-    assert.deepEqual(r.body.matches.unrequestedChanges, ['c1']);
-    assert.deepEqual(r.body.matches.items.R7.changeIds, ['c7'], 'the grouped copyright change linked by R7');
+    assert.deepEqual(status(r.body), { R1: 'linked', R2: 'linked', R3: 'linked', R4: 'linked', R5: 'linked', R6: 'noChange', R7: 'linked', R8: 'unreadable' });
+    assert.deepEqual(M(r.body).unrequestedChanges, ['c1']);
+    assert.deepEqual(M(r.body).items.R7.changeIds, ['c7'], 'the grouped copyright change linked by R7');
+    assert.deepEqual(r.body.usage.pages, 1);
     assert.equal(model.calls, 1); assert.equal(model.logged[0].feature, 'html_content_check_match'); assert.equal(model.logged[0].userId, A);
     let round = (await call(A, 'GET', `/jobs/${job.id}/rounds/1`)).body;
-    assert.deepEqual(round.results.matches.items.R3.changeIds, ['c3']);
-    assert.ok(round.results.diff, 'the changes are still there');
+    assert.deepEqual(round.pages[0].results.matches.items.R3.changeIds, ['c3']);
+    assert.ok(round.pages[0].results.diff, 'the changes are still there');
 
     // ---- by hand ----
-    r = await call(A, 'PUT', `/jobs/${job.id}/rounds/1/matches/R6`, { changeIds: ['c1'] });
-    assert.equal(r.status, 200); assert.equal(r.body.matches.items.R6.by, 'person'); assert.deepEqual(r.body.matches.unrequestedChanges, []);
-    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/1/matches/R6`, { changeIds: ['c99'] })).status, 400);
-    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/1/matches/R99`, { changeIds: [] })).status, 400);
+    r = await call(A, 'PUT', `/jobs/${job.id}/rounds/1/pages/${job.pages[0].id}/matches/R6`, { changeIds: ['c1'] });
+    assert.equal(r.status, 200); assert.equal(M(r.body).items.R6.by, 'person'); assert.deepEqual(M(r.body).unrequestedChanges, []); assert.equal(status(r.body).R6, 'linked');
+    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/1/pages/${job.pages[0].id}/matches/R6`, { changeIds: ['c99'] })).status, 400);
+    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/1/pages/${job.pages[0].id}/matches/R99`, { changeIds: [] })).status, 400);
 
     // ---- another member ----
     assert.equal((await call(B, 'POST', `/jobs/${job.id}/rounds/1/match`)).status, 404);
-    assert.equal((await call(B, 'PUT', `/jobs/${job.id}/rounds/1/matches/R1`, { changeIds: [] })).status, 404);
+    assert.equal((await call(B, 'PUT', `/jobs/${job.id}/rounds/1/pages/${job.pages[0].id}/matches/R1`, { changeIds: [] })).status, 404);
     assert.equal(model.calls, 1, 'no model call for them');
 
     // ---- the model fails: a plain message, the stored links unchanged ----
@@ -99,13 +104,13 @@ function serve() {
     assert.equal(r.status, 502); assert.ok(!/x-api-key/.test(r.body.error));
     model.fail = false;
     round = (await call(A, 'GET', `/jobs/${job.id}/rounds/1`)).body;
-    assert.equal(round.results.matches.items.R6.by, 'person', 'kept');
+    assert.equal(round.pages[0].results.matches.items.R6.by, 'person', 'kept');
 
     // ---- the request lines edited after matching: R8 removed ----
     const items = job.items.filter((i) => i.ref !== 'R8').map((i) => ({ id: i.id, lineText: i.lineText }));
     await call(A, 'PUT', `/jobs/${job.id}/items`, { items });
     round = (await call(A, 'GET', `/jobs/${job.id}/rounds/1`)).body;
-    assert.deepEqual(round.results.matches.unmatchedItems, [], 'R8 is gone, R6 is linked by hand');
+    assert.ok(!Object.values(status(round)).some((x) => x === 'noChange' || x === 'unreadable'), 'R8 is gone, R6 is linked by hand');
 
     // ---- a comparison has no request ----
     net.plain = BEFORE;
@@ -121,11 +126,11 @@ function serve() {
     net.plain = BEFORE; net.browser = FULL; net.calls = [];
     r = await call(A, 'POST', `/jobs/${big.id}/rounds`);
     assert.deepEqual(net.calls, ['plain', 'browser']);
-    assert.equal(r.body.round.fetchedVia, 'browser'); assert.deepEqual(r.body.round.fetchNote, { retriedInBrowser: true }, 'the browser had the text: not flagged');
+    assert.equal(rr(r.body).fetchedVia, 'browser'); assert.deepEqual(rr(r.body).fetchNote, { retriedInBrowser: true }, 'the browser had the text: not flagged');
     net.plain = BEFORE; net.browser = BEFORE; net.calls = [];
     r = await call(A, 'POST', `/jobs/${big.id}/rounds`);
-    assert.equal(r.body.round.fetchedVia, 'plain');
-    assert.deepEqual(r.body.round.fetchNote, { lessText: { expected: big.rounds[0].words, got: 82 }, retriedInBrowser: true });
+    assert.equal(rr(r.body).fetchedVia, 'plain');
+    assert.deepEqual(rr(r.body).fetchNote, { lessText: { expected: big.rounds[0].words, got: 82 }, retriedInBrowser: true });
     const summary = r.body.job.rounds.find((x) => x.number === 2);
     assert.deepEqual(summary.fetchNote.lessText.got, 82, 'the flag reaches the round list');
     assert.ok(summary.sincePrevious, 'its changes are still worked out, to look at with the warning');
@@ -139,8 +144,8 @@ function serve() {
     assert.ok(payload.rounds.some((x) => x.results?.matches), 'the links are kept');
     await bin.restoreItem(A, r.body.binId);
     round = (await call(A, 'GET', `/jobs/${job.id}/rounds/1`)).body;
-    assert.deepEqual(round.results.matches.items.R3.changeIds, ['c3']);
-    assert.equal(round.results.diff.vsBaseline.changes.find((c) => c.id === 'c3').after.text, 'Dorothy Stoner in her Fitzroy studio, about 1952', 'c3 is the same change again');
+    assert.deepEqual(round.pages[0].results.matches.items.R3.changeIds, ['c3']);
+    assert.equal(round.pages[0].results.diff.vsBaseline.changes.find((c) => c.id === 'c3').after.text, 'Dorothy Stoner in her Fitzroy studio, about 1952', 'c3 is the same change again');
 
     console.log('htmlContentCheck.match.db.test.js: all checks passed');
   } finally {

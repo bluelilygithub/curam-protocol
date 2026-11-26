@@ -3619,6 +3619,9 @@
   "PATCH /api/html-content-check/jobs/:id": {
    "class": "authed"
   },
+  "PUT /api/html-content-check/jobs/:id/pages": {
+   "class": "authed"
+  },
   "PUT /api/html-content-check/jobs/:id/items": {
    "class": "authed"
   },
@@ -3631,7 +3634,7 @@
   "POST /api/html-content-check/jobs/:id/rounds/:number/match": {
    "class": "authed"
   },
-  "PUT /api/html-content-check/jobs/:id/rounds/:number/matches/:ref": {
+  "PUT /api/html-content-check/jobs/:id/rounds/:number/pages/:pageId/matches/:ref": {
    "class": "authed"
   },
   "DELETE /api/html-content-check/jobs/:id": {

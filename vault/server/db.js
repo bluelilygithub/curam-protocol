@@ -6356,6 +6356,33 @@ async function initSchema() {
   // failed round has no snapshot, only its error.
   await pool.query(`ALTER TABLE content_check_rounds ADD COLUMN IF NOT EXISTS "rawHtml" BYTEA`);
   await pool.query(`ALTER TABLE content_check_rounds ALTER COLUMN snapshot DROP NOT NULL`);
+  // Milestone 4b: a job holds several pages (one change request often covers several pages of a site). Each existing job's address
+  // becomes its page 1. A round reads every page: one row per page in content_check_rounds, sharing the round number, each with its own
+  // snapshot, changes and links. Request lines may belong to a page (or to none: matched against every page) and carry the "Under …"
+  // label they were pasted under; their kind is request_line, held_over (shown, never checked) or keep (warned if the text changes).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_pages (
+      id              SERIAL PRIMARY KEY,
+      "jobId"         INTEGER NOT NULL REFERENCES content_check_jobs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      url             TEXT NOT NULL,
+      label           TEXT,
+      position        INTEGER NOT NULL DEFAULT 0,
+      "fetchMode"     TEXT NOT NULL DEFAULT 'auto',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS content_check_pages_job_idx ON content_check_pages ("jobId", position)`);
+  await pool.query(`INSERT INTO content_check_pages ("jobId", "userId", url, position, "fetchMode")
+                    SELECT j.id, j."userId", j.url, 0, j."fetchMode" FROM content_check_jobs j
+                     WHERE NOT EXISTS (SELECT 1 FROM content_check_pages p WHERE p."jobId" = j.id)`);
+  await pool.query(`ALTER TABLE content_check_items ADD COLUMN IF NOT EXISTS "pageId" INTEGER REFERENCES content_check_pages(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE content_check_items ADD COLUMN IF NOT EXISTS section TEXT`);
+  await pool.query(`ALTER TABLE content_check_rounds ADD COLUMN IF NOT EXISTS "pageId" INTEGER REFERENCES content_check_pages(id) ON DELETE CASCADE`);
+  await pool.query(`UPDATE content_check_rounds r SET "pageId" = (SELECT p.id FROM content_check_pages p WHERE p."jobId" = r."jobId" ORDER BY p.position, p.id LIMIT 1)
+                     WHERE r."pageId" IS NULL`);
+  await pool.query(`ALTER TABLE content_check_rounds DROP CONSTRAINT IF EXISTS "content_check_rounds_jobId_number_key"`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS content_check_rounds_job_number_page_idx ON content_check_rounds ("jobId", number, "pageId")`);
 
   console.log('[db] Schema ready');
 }

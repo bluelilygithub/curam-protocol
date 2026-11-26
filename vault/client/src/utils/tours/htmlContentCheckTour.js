@@ -89,7 +89,7 @@ export function startHtmlContentCheckTour(goTool) {
     '[data-tour="html-content-check-menu"]', null, 'right');
 
   step('hcc-new', 'New job',
-    'Enter the page address and paste the change request as you received it. Create job reads the page now, as round 0 (the starting point), and splits the request into numbered lines R1, R2 ...',
+    'Add the page, or several pages of the same site, each with a name and address, and paste the change request as you received it. Create job reads every page now, as round 0 (the starting point), and splits the request into numbered lines R1, R2 ...; lines under a heading such as "Under The Artist" go on the page with that name.',
     '[data-guide="new"]', 'new', 'top');
 
   step('hcc-copy', 'Pages that are hard to reach',
@@ -97,7 +97,7 @@ export function startHtmlContentCheckTour(goTool) {
     '[data-guide="saved-copy"]', 'new', 'top');
 
   step('hcc-lines', 'Request lines',
-    'The request as numbered lines beside the text as pasted. Split a line that asks for two things, join two that belong together, reorder, add or remove, then Save.',
+    'The request as numbered lines beside the text as pasted. Split a line that asks for two things, join two that belong together or a flagged repeat, and give each line its page and kind: Normal, Held over (shown, never checked) or Keep (warned if the text changes). Then Save.',
     MAIN, 'lines', 'top');
 
   step('hcc-rounds', 'Rounds: before and after',
@@ -105,7 +105,7 @@ export function startHtmlContentCheckTour(goTool) {
     MAIN, 'rounds', 'top');
 
   step('hcc-changes', 'Changes, word by word',
-    'Every change in reading order: removed words struck through in red, added words underlined in green, and where on the page it is. Switch between since the starting point and since the last round.',
+    'Every change in reading order: removed words struck through in red, added words underlined in green, and where on the page it is. With several pages, a tab per page. Switch between since the starting point and since the last round.',
     MAIN, 'changes', 'top');
 
   step('hcc-self', 'Changes that happen by themselves',
