@@ -50,7 +50,18 @@ function removeClutter(root: Document | Element): void {
 const BLOCK_TAGS = new Set(['ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DETAILS', 'DD', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'HGROUP', 'HR', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE', 'SECTION', 'TABLE', 'UL', 'SUMMARY', 'CAPTION', 'TBODY', 'THEAD', 'TFOOT', 'TR', 'TD', 'TH', 'BODY']);
 const headingLevel = (e: Element) => Number(e.getAttribute('data-dc-h') ?? (/^H([1-6])$/.exec(e.tagName)?.[1] ?? 0));
 
-interface Ctx { base?: string; table: number; list?: { depth: number; kind: string }; quote?: boolean }
+interface Ctx { base?: string; table: number; list?: { depth: number; kind: string }; quote?: boolean; full?: boolean }
+interface Img { alt: string; src?: string }
+// An element's child elements from childNodes, not `.children`: in jsdom each index of that HTMLCollection is also looked up by name
+// across the whole list, so reading a long list's items took time growing with the square of their number (HTML Content Check, M4).
+const childElements = (e: Element): Element[] => Array.from(e.childNodes).filter((n): n is Element => n.nodeType === 1);
+
+/** An image block. Its address is kept only in full mode (HTML Content Check), absolute, http(s) only; DocCompare keeps alt text only. */
+function imageBlock(img: Img, ctx: Ctx): RawBlock {
+  let src: string | undefined;
+  if (ctx.full && img.src) { try { const u = new URL(img.src.trim(), ctx.base); if (/^https?:$/.test(u.protocol)) src = u.toString(); } catch { /* relative with no base, or malformed */ } }
+  return { type: 'image', text: img.alt, runs: [], ...(src ? { src } : {}) };
+}
 
 function href(a: Element, base?: string): string | undefined {
   const raw = (a.getAttribute('data-dc-href') ?? a.getAttribute('href'))?.trim(); // as the page wrote it (see extract)
@@ -62,14 +73,14 @@ function href(a: Element, base?: string): string | undefined {
 }
 
 /** Inline content to runs; images met on the way are returned so the caller can add an image block after the text. */
-function inline(node: Node, fmt: Fmt, out: Run[], imgs: string[], ctx: Ctx): void {
+function inline(node: Node, fmt: Fmt, out: Run[], imgs: Img[], ctx: Ctx): void {
   for (const n of Array.from(node.childNodes)) {
     if (n.nodeType === 3) { out.push({ ...fmt, text: (n.textContent ?? '').replace(/[ \t\n\r\f]+/g, ' ') }); continue; }
     if (n.nodeType !== 1) continue;
     const e = n as Element;
     switch (e.tagName) {
       case 'BR': out.push({ ...fmt, text: '\n' }); break;
-      case 'IMG': imgs.push((e.getAttribute('alt') ?? '').trim()); break;
+      case 'IMG': imgs.push({ alt: (e.getAttribute('alt') ?? '').trim(), src: e.getAttribute('src') ?? undefined }); break;
       case 'B': case 'STRONG': inline(e, { ...fmt, bold: true }, out, imgs, ctx); break;
       case 'I': case 'EM': case 'CITE': case 'DFN': inline(e, { ...fmt, italic: true }, out, imgs, ctx); break;
       case 'U': inline(e, { ...fmt, underline: true }, out, imgs, ctx); break;
@@ -113,11 +124,11 @@ function walk(el: Element, out: RawBlock[], ctx: Ctx): void {
     flush();
     const level = headingLevel(e);
     if (level) {
-      const runs: Run[] = [], imgs: string[] = [];
+      const runs: Run[] = [], imgs: Img[] = [];
       inline(e, { bold: true }, runs, imgs, ctx);
       const r = tidy(runs);
       if (textOf(r).trim()) out.push({ type: 'heading', level, text: textOf(r), runs: r });
-      imgs.forEach((alt) => out.push({ type: 'image', text: alt, runs: [] }));
+      imgs.forEach((img) => out.push(imageBlock(img, ctx)));
       continue;
     }
     switch (e.tagName) {
@@ -128,7 +139,7 @@ function walk(el: Element, out: RawBlock[], ctx: Ctx): void {
         const depth = (ctx.list?.depth ?? 0) + 1;
         const ordered = e.tagName === 'OL';
         let num = Number(e.getAttribute('start') ?? 1) || 1;
-        for (const li of Array.from(e.children).filter((c) => c.tagName === 'LI')) {
+        for (const li of childElements(e).filter((c) => c.tagName === 'LI')) {
           const first = out.length;
           walk(li, out, { ...ctx, list: { depth, kind: ordered ? 'ordered list' : 'bullet list' } });
           if (ordered && out[first]?.type === 'listItem') out[first].number = `${num}.`;
@@ -139,16 +150,17 @@ function walk(el: Element, out: RawBlock[], ctx: Ctx): void {
       case 'TABLE': {
         const t = ctx.table++;
         const rows = Array.from(e.querySelectorAll('tr')).filter((tr) => tr.closest('table') === e);
-        rows.forEach((tr, r) => Array.from(tr.children).filter((c) => c.tagName === 'TD' || c.tagName === 'TH').forEach((cell, c) => {
-          const runs: Run[] = [], imgs: string[] = [];
+        rows.forEach((tr, r) => childElements(tr).filter((c) => c.tagName === 'TD' || c.tagName === 'TH').forEach((cell, c) => {
+          const runs: Run[] = [], imgs: Img[] = [];
           inline(cell, cell.tagName === 'TH' ? { bold: true } : {}, runs, imgs, ctx);
           const rr = tidy(runs);
           out.push({ type: 'tableCell', text: textOf(rr), runs: rr, location: { table: { t, r, c } } });
-          imgs.forEach((alt) => out.push({ type: 'image', text: alt, runs: [] }));
+          imgs.forEach((img) => out.push(imageBlock(img, ctx)));
         }));
         break;
       }
-      case 'HR': case 'NAV': break;
+      case 'HR': break;
+      case 'NAV': if (ctx.full) walk(e, out, ctx); break; // full mode keeps menus: edits are often made there
       default: walk(e, out, ctx); // div, section, article, figure, main ...
     }
   }
@@ -156,7 +168,7 @@ function walk(el: Element, out: RawBlock[], ctx: Ctx): void {
 }
 
 function para(e: Element, out: RawBlock[], ctx: Ctx): void {
-  const runs: Run[] = [], imgs: string[] = [];
+  const runs: Run[] = [], imgs: Img[] = [];
   inline(e, {}, runs, imgs, ctx);
   const r = tidy(runs);
   const text = textOf(r);
@@ -164,15 +176,29 @@ function para(e: Element, out: RawBlock[], ctx: Ctx): void {
     if (ctx.list) out.push({ type: 'listItem', level: ctx.list.depth, style: ctx.list.kind, text, runs: r });
     else out.push({ type: 'paragraph', ...(ctx.quote ? { style: 'Quote' } : {}), text, runs: r });
   }
-  imgs.forEach((alt) => out.push({ type: 'image', text: alt, runs: [] }));
+  imgs.forEach((img) => out.push(imageBlock(img, ctx)));
 }
 
 const words = (e: Element | null | undefined) => countWords(e?.textContent ?? '');
 const meta = (doc: Document, sel: string) => doc.querySelector(sel)?.getAttribute('content')?.trim() || undefined;
 const date = (s?: string) => { const d = s ? new Date(s) : undefined; return d && !Number.isNaN(d.getTime()) ? d : undefined; };
 
+/** Full mode (HTML Content Check): only what a browser never shows is dropped; nav, header, footer, sidebars, captions and banners stay. */
+const FULL_DROP = 'script, style, noscript, template, [hidden]';
+function removeInvisible(root: Document): void {
+  root.querySelectorAll(FULL_DROP).forEach((e) => e.remove());
+  root.querySelectorAll('[style]').forEach((e) => { if (/display\s*:\s*none|visibility\s*:\s*hidden/i.test(e.getAttribute('style') ?? '')) e.remove(); });
+}
+
+export interface ExtractOptions {
+  /** 'main' (DocCompare, the default): the main content only, clutter removed. 'full': the whole visible page, for HTML Content Check. */
+  mode?: 'main' | 'full';
+  /** The address the page was fetched from, used to make links and image addresses absolute when the page does not say its own. */
+  baseUrl?: string;
+}
+
 /** The page's main content as blocks, plus how it was found. Exported for tests. */
-export function extract(html: string): { blocks: RawBlock[]; method: string; url?: string; title?: string; author?: string; published?: Date; modified?: Date; generator?: string } {
+export function extract(html: string, opts: ExtractOptions = {}): { blocks: RawBlock[]; method: string; url?: string; title?: string; author?: string; published?: Date; modified?: Date; generator?: string } {
   const parse = (s: string) => new DOMParser().parseFromString(s, 'text/html');
   const doc = parse(html);
   const url = pageUrl(html, doc);
@@ -189,6 +215,13 @@ export function extract(html: string): { blocks: RawBlock[]; method: string; url
   doc.querySelectorAll('a[href]').forEach((a) => a.setAttribute('data-dc-href', a.getAttribute('href') ?? ''));
   // Readability turns <h1> into <h2>: remember every heading's real level first
   doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => h.setAttribute('data-dc-h', h.tagName.slice(1)));
+  if (opts.mode === 'full') {
+    removeInvisible(doc);
+    const fullCtx: Ctx = { base: opts.baseUrl ?? url, table: 0, full: true };
+    const blocks: RawBlock[] = [];
+    if (doc.body) walk(doc.body, blocks, fullCtx);
+    return { ...info, blocks, method: 'The whole page (everything visible)' };
+  }
   removeClutter(doc);
   const ctx: Ctx = { base: url, table: 0 };
   const toBlocks = (root: Element) => { const out: RawBlock[] = []; walk(root, out, ctx); return out; };

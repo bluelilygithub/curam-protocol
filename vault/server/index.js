@@ -244,6 +244,8 @@ app.use('/api/route-tutor', requireFeature('routeTracer'), aiLimiter, require('.
 app.use('/api/contract-review-tutor', requireFeature('contractReview'), aiLimiter, require('./routes/contractReviewTutor')); // the Contract Review guide chat (sees no contract or review)
 app.use('/api/doc-compare-tutor', requireFeature('docCompare'), aiLimiter, require('./routes/docCompareTutor')); // the DocCompare guide chat (the app itself runs in the browser and calls no API)
 app.use('/api/doc-compare/fetch', requireFeature('docCompare'), require('./routes/docCompareFetch')); // "Fetch a web page": returns one public page's HTML (SSRF-guarded); Vault's page calls it for the app, never with a file
+app.use('/api/html-content-check-tutor', requireFeature('htmlContentCheck'), aiLimiter, require('./routes/htmlContentCheckTutor')); // the HTML Content Check guide chat (sees no job, page or result); before /api/html-content-check
+app.use('/api/html-content-check', requireFeature('htmlContentCheck'), require('./routes/htmlContentCheck')); // was a change request made to a web page? (docs/html-content-check.md); aiLimiter sits on its one model route inside the file
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
@@ -437,6 +439,10 @@ async function start() {
     const v = process.env[k];
     console.log(`[env] ${k}: ${v ? `set (${v.slice(0,4)}…)` : 'NOT SET'}`);
   });
+
+  // HTML Content Check's bundled page reader (scripts/buildHtmlContentCheckLib.js): a missing or broken bundle raises a Suggestions-inbox
+  // alert for the admin instead of failing quietly the first time someone fetches a page.
+  require('./services/htmlContentCheck/lib').bootCheck().catch((err) => console.error('[html-content-check] boot check:', err.message));
 
   // Contract Review enum sync — contracts.contractType / contract_parties.role's
   // CHECK constraint values (server/db.js) must exactly match

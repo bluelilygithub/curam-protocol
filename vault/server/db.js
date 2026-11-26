@@ -6278,6 +6278,85 @@ async function initSchema() {
                       "errorMessage" = 'Stopped part-way because the server restarted (usually a Vault update). The countries already done are kept.'
                     WHERE status = 'running'`);
 
+  // HTML Content Check (docs/html-content-check.md): was a requested set of edits made to a web page? A job is one page (and, for kind
+  // 'request', the change request split into lines); round 0 is the page as first fetched, each later round one re-check. Kinds and
+  // statuses are checked in code (server/services/htmlContentCheck/jobs.js), not by CHECK, so later kinds need no migration.
+  // Refs (R1, R2...) follow the list order until the first client report freezes them ("refsLockedAt"); after that a ref is never changed
+  // or reused, and "refCounter" (the highest number ever issued) gives the next one.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_jobs (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL DEFAULT 'request',
+      name            TEXT NOT NULL,
+      url             TEXT NOT NULL,
+      "requestText"   TEXT,
+      "previousText"  TEXT,
+      "clientId"      INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+      "ticketId"      INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
+      "fetchMode"     TEXT NOT NULL DEFAULT 'auto',
+      status          TEXT NOT NULL DEFAULT 'open',
+      settings        JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "refCounter"    INTEGER NOT NULL DEFAULT 0,
+      "refsLockedAt"  TIMESTAMPTZ,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS content_check_jobs_user_idx ON content_check_jobs ("userId", "updatedAt" DESC)`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_items (
+      id              SERIAL PRIMARY KEY,
+      "jobId"         INTEGER NOT NULL REFERENCES content_check_jobs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ref             TEXT NOT NULL,
+      kind            TEXT NOT NULL DEFAULT 'request_line',
+      "lineText"      TEXT NOT NULL,
+      source          TEXT NOT NULL DEFAULT 'request',
+      position        INTEGER NOT NULL DEFAULT 0,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE ("jobId", ref)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_rounds (
+      id              SERIAL PRIMARY KEY,
+      "jobId"         INTEGER NOT NULL REFERENCES content_check_jobs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      number          INTEGER NOT NULL,
+      "fetchedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "finalUrl"      TEXT,
+      "fetchedVia"    TEXT NOT NULL,
+      snapshot        JSONB NOT NULL,
+      results         JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status          TEXT NOT NULL DEFAULT 'ready',
+      error           TEXT,
+      UNIQUE ("jobId", number)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_client_notes (
+      id              SERIAL PRIMARY KEY,
+      "jobId"         INTEGER NOT NULL REFERENCES content_check_jobs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "roundNumber"   INTEGER NOT NULL,
+      "itemId"        INTEGER REFERENCES content_check_items(id) ON DELETE SET NULL,
+      ref             TEXT,
+      text            TEXT NOT NULL,
+      "newWording"    TEXT,
+      source          TEXT NOT NULL,
+      confirmed       BOOLEAN NOT NULL DEFAULT FALSE,
+      status          TEXT NOT NULL DEFAULT 'open',
+      "attachmentId"  INTEGER REFERENCES attachments(id) ON DELETE SET NULL,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS content_check_client_notes_job_idx ON content_check_client_notes ("jobId")`);
+  // Milestone 2: the page as fetched, gzipped, so a better reader can re-read an old round (never put in the recycle-bin copy); and a
+  // failed round has no snapshot, only its error.
+  await pool.query(`ALTER TABLE content_check_rounds ADD COLUMN IF NOT EXISTS "rawHtml" BYTEA`);
+  await pool.query(`ALTER TABLE content_check_rounds ALTER COLUMN snapshot DROP NOT NULL`);
+
   console.log('[db] Schema ready');
 }
 

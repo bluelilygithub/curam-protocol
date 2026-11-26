@@ -31,6 +31,7 @@ export interface Block {
   id: string;
   type: BlockType; // an 'image' block's text is its alt text (web pages, DOCX), not counted as words
   level?: number; // heading level / list depth
+  src?: string; // web pages read in full mode (HTML Content Check): an image's address, made absolute
   style?: string; // block-level style: DOCX paragraph style name, Markdown list kind / code language
   text: string;
   runs: Run[];

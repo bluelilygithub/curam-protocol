@@ -47,6 +47,7 @@ const GUIDES = {
   'serp-tracker': { name: 'SERP Tracker guide', endpoint: '/api/serp-tracker-tutor' },
   memory: { name: 'Memory guide', endpoint: '/api/memory-tutor' },
   'doc-compare': { name: 'DocCompare guide', endpoint: '/api/doc-compare-tutor' },
+  'html-content-check': { name: 'HTML Content Check guide', endpoint: '/api/html-content-check-tutor' },
   'contract-review': { name: 'Contract Review guide', endpoint: '/api/contract-review-tutor' },
   'code-map': { name: 'Code Map guide', endpoint: '/api/code-map-tutor' },
   'skill-scan': { name: 'Skill Scanner guide', endpoint: '/api/skill-scan-tutor' },
