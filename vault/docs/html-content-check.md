@@ -12,6 +12,7 @@
 - **Milestone 4b (done, 2026-11-26), from the owner's real Dorothy Stoner request:** a job holds several pages; a round reads them all and changes are per page; request lines carry their "Under …" heading, belong to a page or to none, and are Normal, Held over or Keep; matching runs per page; repeats are flagged. See "Several pages".
 - **Milestone 5 (done, 2026-11-27):** the person approves request lines per round (Approve / Needs work); Make the client report downloads a fillable PDF of the approved lines, grouped by page. Also: a page counter ("3 of 12 pages", "Page 2 of 3", "Add a page (9 left)") and the mic inside the page name box. See "Approving and the client report".
 - **Review by line (done, 2026-11-27), from the owner's UX feedback:** Changes opens on one list of request lines, page by page, with a bar that stays on screen (progress, Next undecided, the client report, the list for the developer), keys, folding of approved lines, and a note on each Needs work line. See "Review by line".
+- **Simpler flow and a date-rule fix (2026-11-27), from the owner's one-word test:** after Create job the screen is Rounds ("Waiting for the edits"), not Request lines, unless a line looks like a repeat; Check again on a change request matches the request when something changed and opens Review by line; a Check again with no change says so and stays on Rounds; Rounds never reads "0 changes" when the only change is in the self-changing group; Request lines says when there is nothing to save. The date rule no longer files an added filler word ("a", "just", "on", "now") in a sentence that mentions a month as a date updating itself (`DIFF_VERSION` 2, so stored rounds are worked out again when next opened).
 - Not yet: returned reports (M6, M7).
 
 ## Where it lives
@@ -81,6 +82,15 @@ One change request often covers several pages of a site (the Dorothy Stoner requ
 - **Where each line stands** (`summary.js`, in every round response as `lines`): linked (with the pages and changes), no change found, could not be read, not matched yet, held, or a Keep state. A line with no page counts as linked when any page links it; a line on a page only counts that page. "Lines with no change found" is across all pages; "Changes nobody asked for" is per page.
 - **Screens.** New job and Job details have a pages editor. Rounds lists each round's pages, with Upload a saved copy on a page that failed. Changes has a tab per page with its count, and the request beside it shows that page's lines and the lines on All pages, with each line's state across the round.
 - **Cost and time.** Matching is one call per page with changes; a round of six pages, read one after another, can take a minute or two (more with a real browser).
+
+## The flow after Create job (2026-11-27)
+
+The owner's one-line test (add one word to a paragraph) showed the steps were in the way: Request lines opened with a greyed-out Save, a first Check again before the edit made an empty round, the added word was filed under "may have changed by itself" so Rounds said 0, and matching was a separate press on another screen. Now:
+
+- **After Create job** the page goes to Rounds, with a "Waiting for the edits" box (the starting point is kept; press Check again when the developer says the edits are live). Request lines opens first only when the splitter flagged a likely repeat. Opening a job from Your jobs goes to Changes once a round after the starting point exists.
+- **Check again** reads the pages; when anything differs from the starting point on a change request with normal lines, it runs Match to request (one AI call per page with changes) and opens Changes on Review by line. When nothing changed it stays on Rounds and says "Nothing has changed on the page yet". If matching fails the round is still kept and the toast says to press Match to request.
+- **Counts.** A round whose only changes look automatic says "1 change that may have changed by itself: check it", never "0 changes".
+- **The date rule** (`diff.js` `isDate`): every changed word must be a date word *and* at least one must be a date part itself (a number, a month, today / yesterday / tomorrow). Before, a single added "a", "just", "on" or "now" in a sentence that mentioned a month counted as a date updating itself.
 
 ## Review by line
 

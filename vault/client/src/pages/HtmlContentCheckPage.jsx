@@ -106,12 +106,15 @@ export default function HtmlContentCheckPage() {
   const setNew = (k) => (v) => setNewForm((f) => ({ ...f, [k]: v }));
   const setEdit = (k) => (v) => setEditForm((f) => ({ ...f, [k]: v }));
   // After a job opens, a job flow moves on to its next step; otherwise the request lines (or details, for a comparison) come first.
+  // the splitter flagged a likely repeat: worth a look on Request lines before the edits are checked
+  const linesNeedALook = (j) => j.kind === 'request' && j.items.some((it) => it.likelyDuplicateOf);
   const afterOpen = (opened) => {
     let g = goalRef.current;
     // the person switched kind on the New job form: that job flow no longer fits (a comparison has no request lines)
     if (g?.kind && g.kind !== opened.kind) { g = null; setGoal(null); }
     const at = stepIndex(g, 'new');
-    setTool(g && at >= 0 && g.steps[at + 1] ? g.steps[at + 1].tool : (opened.kind === 'request' ? 'lines' : 'rounds'));
+    const next = g && at >= 0 && g.steps[at + 1] ? g.steps[at + 1].tool : 'rounds';
+    setTool(next === 'lines' && !linesNeedALook(opened) ? 'rounds' : next);
   };
 
   const run = async (fn) => {
@@ -121,7 +124,7 @@ export default function HtmlContentCheckPage() {
   const openJob = (id) => run(async () => {
     const j = await readJson(await api.get(`/api/html-content-check/jobs/${id}`));
     setJob(j);
-    setTool(j.kind === 'request' ? 'lines' : 'rounds');
+    setTool(j.rounds.some((r) => r.number > 0 && r.sincePrevious) ? 'changes' : linesNeedALook(j) ? 'lines' : 'rounds');
   });
   // Fetching can take a while (a real browser up to half a minute), so it runs behind the processing overlay.
   const fetchRound = (label, call) => run(async () => {
@@ -150,7 +153,22 @@ export default function HtmlContentCheckPage() {
   });
   const checkAgain = () => fetchRound(job.pages.length > 1 ? `Reading all ${job.pages.length} pages again…` : 'Fetching the page again…', async () => {
     const d = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds`, {}));
-    setJob(d.job); loadJobs(); roundToast(d.round);
+    setJob(d.job); loadJobs();
+    const n = d.round.number;
+    const changed = d.job.rounds.some((r) => r.number === n && (r.sinceBaseline?.total || 0) > 0);
+    if (!changed) { if (d.round.pages.some((p) => p.status === 'failed') || !d.round.pages.some((p) => p.status === 'ready')) roundToast(d.round); else addToast('Nothing has changed on the page yet. Press Check again once the developer says the edits are live.', 'warn'); return; }
+    if (d.job.kind === 'request' && d.job.items.some((it) => (it.kind || 'request_line') === 'request_line')) {
+      stopProcessing();
+      startProcessing('Matching the request to the changes…', 'The AI suggests which changes answer each request line. You judge each edit.');
+      try {
+        const m = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds/${n}/match`, {}));
+        const none = m.lines.filter((l) => l.status === 'noChange' || l.status === 'unreadable').length;
+        addToast(`Round ${n}: changes found and matched to the request${none ? `; ${none} line${none === 1 ? '' : 's'} with no change found` : ''}. Approve each one.`, 'success');
+      } catch (e) {
+        addToast(`Round ${n} kept, but matching failed: ${e.message} Press Match to request on Changes.`, 'error');
+      }
+    } else roundToast(d.round);
+    showChanges(n);
   });
   const loadRound = async (number) => readJson(await api.get(`/api/html-content-check/jobs/${job.id}/rounds/${number}`));
   const showChanges = (number, pageId = null) => { setChangesRound(number); setChangesPage(pageId); setTool('changes'); };

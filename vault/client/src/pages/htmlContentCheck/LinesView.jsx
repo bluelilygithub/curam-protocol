@@ -65,6 +65,7 @@ export default function LinesView({ job, getIcon, saveItems, resplit }) {
           <div className="flex flex-wrap gap-2">
             <SecondaryButton tip="Throw away the changes you have not saved." disabled={!dirty} onClick={() => setDraft(toDraft(job.items))}>Discard</SecondaryButton>
             <PrimaryButton tip={blank ? 'A line is empty: type something in it or remove it.' : 'Save the lines. Until a client report is made, the R numbers follow the order of the list.'} disabled={!dirty || blank} onClick={() => saveItems(draft)}>Save</PrimaryButton>
+            {!dirty && <span className="text-xs self-center" style={{ color: 'var(--color-muted)' }}>Nothing to save: the lines are ready as they are.</span>}
           </div>
         </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
