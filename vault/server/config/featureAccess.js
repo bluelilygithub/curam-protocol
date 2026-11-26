@@ -53,6 +53,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   routeTracer: true,
   // compares an original document with an AI-edited version, entirely in the browser (docs/doc-compare.md)
   docCompare: true,
+  // checks a requested set of edits was made to a web page (docs/html-content-check.md); built milestone by milestone: off until an admin switches it on
+  htmlContentCheck: false,
   // a work in progress with unverified values: off until an admin switches it on (Settings -> Feature Access)
   cellarPlanner: false,
   // being built milestone by milestone (docs/topic-research.md): off until an admin switches it on
@@ -101,6 +103,7 @@ const FEATURE_LIFECYCLE = {
   plans: 'preview',           // new: plans with dates, dependencies and a Gantt; not yet used on Railway
   liveTv: 'preview',          // new: streams come and go, and most will not play in a browser; not yet run on Railway
   docCompare: 'preview',      // new: tested on generated documents only; not yet run on Railway or on real AI edits
+  htmlContentCheck: 'preview', // built milestone by milestone (docs/html-content-check-brief.md); milestone 1 has jobs and request lines, no fetching yet
   presentations: 'preview',   // new: model generation + PPTX/PDF/PNG export not yet run on Railway
   geoCheck: 'preview',        // built milestone by milestone; not yet run against a real proxy
 };

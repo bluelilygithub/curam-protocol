@@ -28,3 +28,4 @@ require('./skillScan'); // Skill Scanner scans (admin)
 require('./tickets'); // Tickets (with their comments and history)
 require('./dnsLookup'); // DNS Lookup saved answers
 require('./geoCheck'); // Geo-check runs (with their captures; pictures removed on discard)
+require('./htmlContentCheck'); // HTML Content Check jobs (with their request lines, rounds and client notes)

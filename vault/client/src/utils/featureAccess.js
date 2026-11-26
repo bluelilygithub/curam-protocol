@@ -43,6 +43,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   gardenPlanner: true,
   routeTracer: true,
   docCompare: true,
+  htmlContentCheck: false, // keep in step with server/config/featureAccess.js
   cellarPlanner: false,
   measurements: true,
   fitness: true,
@@ -75,6 +76,7 @@ export const FEATURE_LIFECYCLE = {
   plans: 'preview',
   liveTv: 'preview',
   docCompare: 'preview',
+  htmlContentCheck: 'preview',
   presentations: 'preview',
   geoCheck: 'preview',
 };
@@ -96,6 +98,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'bip', label: 'Business Profiler' },
       { key: 'html', label: 'Page speed' },
       { key: 'aiVisibility', label: 'AI Visibility' },
+      { key: 'htmlContentCheck', label: 'HTML Content Check' },
       { key: 'webExtractor', label: 'Web Extractor' },
     ],
   },

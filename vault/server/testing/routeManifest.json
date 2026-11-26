@@ -3604,6 +3604,24 @@
   "POST /api/doc-compare/fetch": {
    "class": "authed"
   },
+  "GET /api/html-content-check/jobs": {
+   "class": "authed"
+  },
+  "POST /api/html-content-check/jobs": {
+   "class": "authed"
+  },
+  "GET /api/html-content-check/jobs/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/html-content-check/jobs/:id": {
+   "class": "authed"
+  },
+  "PUT /api/html-content-check/jobs/:id/items": {
+   "class": "authed"
+  },
+  "DELETE /api/html-content-check/jobs/:id": {
+   "class": "authed"
+  },
   "POST /api/contract-review-tutor": {
    "class": "authed"
   },

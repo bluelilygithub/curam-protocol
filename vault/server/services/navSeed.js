@@ -9,6 +9,7 @@
 const NEW_NAV_ITEMS = [
   { id: 'docCompare', after: 'contractReview' },
   { id: 'knowledgeGraph', after: 'codeMap' },
+  { id: 'htmlContentCheck', after: 'aiVisibility' },
 ];
 
 /** Pure: returns { layout, placed } with each not-yet-seeded, not-yet-placed item put after its neighbour. Does not mutate the input. */

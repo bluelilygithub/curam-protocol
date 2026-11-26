@@ -81,6 +81,7 @@ import RoomPlannerPage from './pages/RoomPlannerPage';
 import GardenPlannerPage from './pages/GardenPlannerPage';
 import RouteTracerPage from './pages/RouteTracerPage';
 import DocComparePage from './pages/DocComparePage';
+import HtmlContentCheckPage from './pages/HtmlContentCheckPage';
 import CellarPlannerPage from './pages/CellarPlannerPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
 import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
@@ -273,6 +274,7 @@ function App() {
               <Route path="/garden-planner" element={<GardenPlannerPage />} />
               <Route path="/route-tracer" element={<RouteTracerPage />} />
               <Route path="/doc-compare" element={<FeatureRoute feature="docCompare"><DocComparePage /></FeatureRoute>} />
+              <Route path="/html-content-check" element={<FeatureRoute feature="htmlContentCheck"><HtmlContentCheckPage /></FeatureRoute>} />
               <Route path="/cellar-planner" element={<CellarPlannerPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
