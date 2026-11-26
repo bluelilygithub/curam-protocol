@@ -64,6 +64,28 @@ function stubs({ plain, browser, browserOk = true }) {
   await assert.rejects(loadPage(url, 'auto', s.deps), (e) => /not allowed/.test(e.message) && e.fetchedVia === 'plain');
   assert.equal(s.calls.browser, 0, 'no browser for a refused address');
 
+  // far less text than the starting point (a site rebuilt to draw itself with JavaScript): auto reads it again in the real browser
+  const { lessTextOf } = require('./fetchPage');
+  const FULL = `<html><body>${Array.from({ length: 40 }, (_, i) => `<p>Paragraph ${i} about the artist and her long career in painting.</p>`).join('')}</body></html>`; // 400 words
+  s = stubs({ plain: { html: PAGE, finalUrl: url }, browser: { html: FULL, finalUrl: url } }); // PAGE has about 80 words
+  r = await loadPage(url, 'auto', s.deps, { expectWords: 400 });
+  assert.deepEqual(s.calls, { plain: 1, browser: 1 }); assert.equal(r.fetchedVia, 'browser'); assert.equal(r.retried, true);
+  assert.equal(lessTextOf(r.snapshot, 400), null, 'the browser copy has the text: no flag');
+  s = stubs({ plain: { html: PAGE, finalUrl: url }, browser: { html: PAGE, finalUrl: url } });
+  r = await loadPage(url, 'auto', s.deps, { expectWords: 400 });
+  assert.equal(r.fetchedVia, 'plain', 'the browser was no better: the plain copy is kept'); assert.equal(r.retried, true);
+  assert.deepEqual(lessTextOf(r.snapshot, 400), { expected: 400, got: r.snapshot.meta.words }, 'and flagged');
+  s = stubs({ plain: { html: PAGE, finalUrl: url }, browser: pub('Server returned 403') });
+  r = await loadPage(url, 'auto', s.deps, { expectWords: 400 });
+  assert.equal(r.fetchedVia, 'plain', 'a browser failure keeps the plain copy, not a failed round');
+  s = stubs({ plain: { html: PAGE, finalUrl: url }, browser: { html: FULL, finalUrl: url } });
+  await loadPage(url, 'plain', s.deps, { expectWords: 400 });
+  assert.equal(s.calls.browser, 0, 'plain mode never uses the browser');
+  s = stubs({ plain: { html: PAGE, finalUrl: url }, browser: { html: FULL, finalUrl: url } });
+  await loadPage(url, 'auto', s.deps, { expectWords: 150 });
+  assert.equal(s.calls.browser, 0, 'about half the text is not "far less"');
+  assert.equal(lessTextOf(r.snapshot, 60), null, 'a small starting point is never flagged');
+
   // a page over the size cap fails in any mode
   const huge = `<html><body>${Array.from({ length: 60 }, () => `<p>${'abcdefgh '.repeat(1000)}</p>`).join('')}</body></html>`;
   s = stubs({ plain: { html: huge, finalUrl: url } });

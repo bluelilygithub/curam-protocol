@@ -43,7 +43,27 @@ const brief = (b) => ({ blockId: b.id, type: b.type, text: b.text, section: b.se
 
 /** The word diff of a changed block: [{ op: '=' | '-' | '+', text }], from the original texts (what the person sees). */
 function wordDiff(before, after) {
-  return lib.diffWordsWithSpace(before, after).map((p) => ({ op: p.added ? '+' : p.removed ? '-' : '=', text: p.value }));
+  const parts = lib.diffWordsWithSpace(before, after, { timeout: WORDS_MS });
+  if (!parts) return [{ op: '-', text: before }, { op: '+', text: after }]; // too long to compare word by word in time: shown whole
+  return parts.map((p) => ({ op: p.added ? '+' : p.removed ? '-' : '=', text: p.value }));
+}
+
+// Lining up blocks costs time growing with blocks × differences, so a huge page that changed almost everywhere could take minutes
+// (20,000 blocks all different: 110 s). The unchanged start and end are taken off first; the rest gets ALIGN_MS. If that runs out, the
+// middle is treated as replaced (in order), and the result says `rough` so the page can say the line-up was approximate.
+const ALIGN_MS = 1500;
+const WORDS_MS = 200;
+const PAIR_BUDGET = 250000; // "most alike" comparisons allowed in one stretch of changes; past it, unpaired blocks stay added / removed
+function align(ka, kb) {
+  let pre = 0;
+  while (pre < ka.length && pre < kb.length && ka[pre] === kb[pre]) pre++;
+  let suf = 0;
+  while (suf < ka.length - pre && suf < kb.length - pre && ka[ka.length - 1 - suf] === kb[kb.length - 1 - suf]) suf++;
+  const midA = ka.slice(pre, ka.length - suf);
+  const midB = kb.slice(pre, kb.length - suf);
+  const lined = midA.length && midB.length ? lib.diffArrays(midA, midB, { timeout: ALIGN_MS }) : null;
+  const middle = lined || [{ removed: true, count: midA.length }, { added: true, count: midB.length }];
+  return { parts: [{ count: pre }, ...middle, { count: suf }].filter((p) => p.count), rough: Boolean(midA.length && midB.length && !lined) };
 }
 
 // ---- content that changes by itself ----
@@ -98,7 +118,8 @@ function diffSnapshots(from, to, { goneTexts = null } = {}) {
   const ops = [];
   let ia = 0;
   let ib = 0;
-  for (const part of lib.diffArrays(ka, kb)) {
+  const { parts, rough } = align(ka, kb);
+  for (const part of parts) {
     for (let n = 0; n < part.count; n++) {
       if (part.added) ops.push({ kind: 'added', b: B[ib++] });
       else if (part.removed) ops.push({ kind: 'removed', a: A[ia++] });
@@ -135,7 +156,8 @@ function diffSnapshots(from, to, { goneTexts = null } = {}) {
       removed.forEach((r, k) => { pairOf.set(added[k], r); r.paired = true; });
       from0 = added.length;
     }
-    for (const r of removed) {
+    const budget = removed.length * added.length <= PAIR_BUDGET;
+    for (const r of budget ? removed : []) {
       if (r.paired) continue;
       let best = -1;
       let bestScore = PAIR_MIN;
@@ -162,7 +184,7 @@ function diffSnapshots(from, to, { goneTexts = null } = {}) {
     i = j;
   }
 
-  const stats = { added: 0, removed: 0, changed: 0, moved: 0, volatile: 0, total: changes.length };
+  const stats = { added: 0, removed: 0, changed: 0, moved: 0, volatile: 0, total: changes.length, ...(rough ? { rough: true } : {}) };
   changes.forEach((c, n) => {
     c.id = `c${n + 1}`;
     const why = volatileReason(c, goneTexts);

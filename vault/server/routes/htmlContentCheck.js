@@ -1,7 +1,7 @@
 'use strict';
 
 // HTML Content Check: was a requested set of edits made to a web page? Mounted at /api/html-content-check behind requireAuth and
-// requireFeature('htmlContentCheck'). Milestone 1: jobs and their request lines only (no fetching yet). Every query filters by "userId"
+// requireFeature("htmlContentCheck"). Only the match route calls a model, and only it sits behind aiLimiter (reads and fetches do not count). Every query filters by "userId"
 // and every id from the request is checked against its owner. Logs never carry page content or request text. See docs/html-content-check.md.
 
 const zlib = require('zlib');
@@ -13,12 +13,15 @@ const bin = require('../services/recycleBin');
 const { loadFeatureAccess } = require('../middleware/auth');
 const { getLogger } = require('../middleware/requestContext');
 const { splitRequest } = require('../services/htmlContentCheck/splitRequest');
-const { loadPage, readUpload, DEFAULT_DEPS } = require('../services/htmlContentCheck/fetchPage');
+const { loadPage, readUpload, lessTextOf, DEFAULT_DEPS } = require('../services/htmlContentCheck/fetchPage');
 const { MAX_UPLOAD_BYTES } = require('../services/htmlContentCheck/config');
 const { ensureDiffs } = require('../services/htmlContentCheck/roundDiff');
+const { matchRound, setByPerson, summarize } = require('../services/htmlContentCheck/match');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 let pageDeps = DEFAULT_DEPS; // tests swap the fetchers (no live site in automated tests)
+let matchDeps = {}; // tests swap the model (no live model in automated tests)
 
 // Fetching and rendering are slow and reach outside sites: their own modest limit, on the DocCompare fetch pattern. Reads are not counted.
 const fetchLimit = rateLimit({
@@ -116,8 +119,8 @@ async function jobDetail(db, userId, id) {
     db.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error,
                      snapshot->'meta'->>'title' AS title, (snapshot->'meta'->>'words')::int AS words, (snapshot->'meta'->>'chars')::int AS chars,
                      jsonb_array_length(COALESCE(snapshot->'blocks', '[]'::jsonb)) AS blocks,
-                     results->'diff'->'vsPrevious'->'stats' AS "sincePrevious", results->'diff'->'vsBaseline'->'stats' AS "sinceBaseline",
-                     (results->'diff'->>'previousNumber')::int AS "previousNumber"
+                     results->'diff'->'vsPrevious'->'stats' AS "sincePrevious", COALESCE(results->'diff'->'vsBaseline', results->'diff'->'vsPrevious')->'stats' AS "sinceBaseline",
+                     (results->'diff'->>'previousNumber')::int AS "previousNumber", results->'fetch' AS "fetchNote"
                 FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 ORDER BY number`, [job.id, userId]),
     job.clientId ? db.query('SELECT name FROM clients WHERE id = $1 AND "userId" = $2', [job.clientId, userId]) : { rows: [] },
     job.ticketId ? db.query('SELECT title FROM tickets WHERE id = $1', [job.ticketId]) : { rows: [] },
@@ -183,12 +186,15 @@ async function runRound(userId, job, { buffer } = {}) {
   // themselves (share buttons, "Log in", lazy-loaded pictures), which would look like edits. So in auto mode, a starting point that
   // needed the real browser makes later rounds use it too.
   let mode = job.fetchMode;
-  if (!buffer && mode === 'auto') {
-    const { rows } = await pool.query(`SELECT "fetchedVia" FROM content_check_rounds WHERE "jobId" = $1 AND status = 'ready' ORDER BY number LIMIT 1`, [job.id]);
-    if (rows[0]?.fetchedVia === 'browser') mode = 'browser';
-  }
+  const { rows: base } = await pool.query(`SELECT "fetchedVia", (snapshot->'meta'->>'words')::int AS words FROM content_check_rounds
+                                             WHERE "jobId" = $1 AND status = 'ready' ORDER BY number LIMIT 1`, [job.id]);
+  if (!buffer && mode === 'auto' && base[0]?.fetchedVia === 'browser') mode = 'browser';
+  const expectWords = base[0]?.words || 0;
+  let fetchNote = null; // results.fetch: far less text than the starting point (a rebuilt site?), and whether the browser was tried
   try {
-    page = buffer ? readUpload(buffer) : await loadPage(job.url, mode, pageDeps);
+    page = buffer ? readUpload(buffer) : await loadPage(job.url, mode, pageDeps, { expectWords });
+    const lessText = lessTextOf(page.snapshot, expectWords);
+    if (lessText || page.retried) fetchNote = { ...(lessText ? { lessText } : {}), ...(page.retried ? { retriedInBrowser: true } : {}) };
   } catch (err) {
     if (!err.isPublic) getLogger().error({ err, jobId: job.id }, '[html-content-check] round');
     failure = { message: err.isPublic ? err.message : 'The page could not be read. Try again, or upload a saved copy.', via: err.fetchedVia || (buffer ? 'upload' : mode === 'browser' ? 'browser' : 'plain') };
@@ -200,10 +206,10 @@ async function runRound(userId, job, { buffer } = {}) {
     const number = !last ? 0 : last.status === 'failed' ? last.number : last.number + 1;
     if (last?.status === 'failed') await db.query('DELETE FROM content_check_rounds WHERE "jobId" = $1 AND number = $2', [job.id, last.number]);
     const { rows: made } = await db.query(`
-      INSERT INTO content_check_rounds ("jobId", "userId", number, "finalUrl", "fetchedVia", snapshot, "rawHtml", status, error)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, number, status, error, "fetchedVia", "finalUrl", "fetchedAt"`,
+      INSERT INTO content_check_rounds ("jobId", "userId", number, "finalUrl", "fetchedVia", snapshot, "rawHtml", status, error, results)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, number, status, error, "fetchedVia", "finalUrl", "fetchedAt", results->'fetch' AS "fetchNote"`,
     [job.id, userId, number, page?.finalUrl || null, page ? page.fetchedVia : failure.via, page ? JSON.stringify(page.snapshot) : null,
-      page ? zlib.gzipSync(page.html) : null, page ? 'ready' : 'failed', failure?.message || null]);
+      page ? zlib.gzipSync(page.html) : null, page ? 'ready' : 'failed', failure?.message || null, JSON.stringify(fetchNote ? { fetch: fetchNote } : {})]);
     if (made[0].status === 'ready') await ensureDiffs(db, userId, job.id, number); // what changed, kept with the round
     await db.query('UPDATE content_check_jobs SET "updatedAt" = NOW() WHERE id = $1', [job.id]);
     return made[0];
@@ -325,17 +331,66 @@ router.post('/jobs/:id/rounds', fetchLimit, uploadOne, async (req, res) => {
   } catch (err) { fail(res, err, 'round'); }
 });
 
+// One round (owner-checked), with its changes worked out if they were not yet, and the job's current request lines.
+async function loadRound(userId, rawJobId, rawNumber) {
+  const job = await ownJob(pool, userId, rawJobId);
+  const n = idOf(rawNumber);
+  if (n === null) throw bad(404, 'Not found');
+  await ensureDiffs(pool, userId, job.id, n); // rounds kept before changes were worked out get theirs now
+  const { rows } = await pool.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error, snapshot, results
+                                       FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 AND number = $3`, [job.id, userId, n]);
+  if (!rows[0]) throw bad(404, 'Not found');
+  const diff = rows[0].results?.diff;
+  if (diff && !diff.vsBaseline) diff.vsBaseline = diff.vsPrevious; // stored once when the round before is the starting point
+  const items = (await pool.query('SELECT id, ref, "lineText" FROM content_check_items WHERE "jobId" = $1 AND "userId" = $2 ORDER BY position, id', [job.id, userId])).rows;
+  return { job, round: rows[0], items };
+}
+const matchable = ({ job, round }) => {
+  if (job.kind !== 'request') throw bad(400, 'A page comparison has no request to match.');
+  if (round.status !== 'ready' || !round.results?.diff) throw bad(400, 'Round 0 is the starting point: check the page again after the edits, then match that round.');
+  return round.results.diff.vsBaseline.changes;
+};
+const saveMatches = (userId, jobId, number, matches) => pool.query(
+  `UPDATE content_check_rounds SET results = COALESCE(results, '{}'::jsonb) || jsonb_build_object('matches', $4::jsonb)
+    WHERE "jobId" = $1 AND "userId" = $2 AND number = $3`, [jobId, userId, number, JSON.stringify(matches)]);
+
 router.get('/jobs/:id/rounds/:number', async (req, res) => {
   try {
-    const job = await ownJob(pool, req.user.id, req.params.id);
-    const n = idOf(req.params.number);
-    if (n === null) throw bad(404, 'Not found');
-    await ensureDiffs(pool, req.user.id, job.id, n); // rounds kept before changes were worked out get theirs now
-    const { rows } = await pool.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error, snapshot, results
-                                         FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 AND number = $3`, [job.id, req.user.id, n]);
-    if (!rows[0]) throw bad(404, 'Not found');
-    res.json(rows[0]);
+    const { round, items } = await loadRound(req.user.id, req.params.id, req.params.number);
+    // request lines may have been edited since matching: the lines with no change and the unasked changes follow the current lines
+    if (round.results?.matches && round.results?.diff) round.results.matches = summarize(round.results.matches, items, round.results.diff.vsBaseline.changes);
+    res.json(round);
   } catch (err) { fail(res, err, 'get round'); }
+});
+
+// Match to request: the AI labels which changes (since the starting point) look like they answer which request line. The only route
+// that calls a model, so the only one behind aiLimiter. Lines the person linked by hand are kept.
+router.post('/jobs/:id/rounds/:number/match', aiLimiter, async (req, res) => {
+  try {
+    const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
+    const changes = matchable(loaded);
+    let matches;
+    try {
+      matches = await matchRound(req.user.id, { items: loaded.items, changes, previous: loaded.round.results.matches }, matchDeps);
+    } catch (err) {
+      if (err.cause) getLogger().error({ err: err.cause, jobId: loaded.job.id }, '[html-content-check] match model call');
+      throw err;
+    }
+    await saveMatches(req.user.id, loaded.job.id, loaded.round.number, matches);
+    getLogger().info({ jobId: loaded.job.id, round: loaded.round.number, ...matches.usage }, '[html-content-check] matched');
+    res.json({ matches });
+  } catch (err) { fail(res, err, 'match'); }
+});
+
+// Link or unlink by hand: `changeIds` replaces that request line's links (by: 'person').
+router.put('/jobs/:id/rounds/:number/matches/:ref', async (req, res) => {
+  try {
+    const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
+    const changes = matchable(loaded);
+    const matches = setByPerson(loaded.round.results.matches, loaded.items, changes, String(req.params.ref), req.body?.changeIds);
+    await saveMatches(req.user.id, loaded.job.id, loaded.round.number, matches);
+    res.json({ matches });
+  } catch (err) { fail(res, err, 'link'); }
 });
 
 router.delete('/jobs/:id', async (req, res) => {
@@ -343,9 +398,10 @@ router.delete('/jobs/:id', async (req, res) => {
     const binId = await inTx(async (db) => {
       const job = await ownJob(db, req.user.id, req.params.id, { lock: true });
       const q = (table, cols = '*') => db.query(`SELECT ${cols} FROM ${table} WHERE "jobId" = $1 AND "userId" = $2 ORDER BY id`, [job.id, req.user.id]).then((r) => r.rows);
-      // the gzipped page ("rawHtml") stays out of the bin copy: it is only for re-reading old rounds, and would crowd the 25 MB limit
+      // the gzipped page ("rawHtml") and the worked-out changes stay out of the bin copy: the page is only for re-reading old rounds,
+      // and the changes are worked out again on read with the same ids (so AI and hand links still fit); both would crowd the 25 MB limit
       const [items, rounds, notes] = [await q('content_check_items'),
-        await q('content_check_rounds', 'id, "jobId", "userId", number, "fetchedAt", "finalUrl", "fetchedVia", snapshot, results, status, error'),
+        await q('content_check_rounds', `id, "jobId", "userId", number, "fetchedAt", "finalUrl", "fetchedVia", snapshot, results - 'diff' AS results, status, error`),
         await q('content_check_client_notes')];
       let id;
       try {
@@ -367,4 +423,5 @@ router.delete('/jobs/:id', async (req, res) => {
 
 module.exports = router;
 module.exports.LIMITS = LIMITS;
+module.exports._setMatchDeps = (deps) => { matchDeps = deps || {}; }; // tests only
 module.exports._setPageDeps = (deps) => { pageDeps = deps ? { ...DEFAULT_DEPS, ...deps } : DEFAULT_DEPS; }; // tests only

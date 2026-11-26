@@ -3625,6 +3625,12 @@
   "GET /api/html-content-check/jobs/:id/rounds/:number": {
    "class": "authed"
   },
+  "POST /api/html-content-check/jobs/:id/rounds/:number/match": {
+   "class": "authed"
+  },
+  "PUT /api/html-content-check/jobs/:id/rounds/:number/matches/:ref": {
+   "class": "authed"
+  },
   "DELETE /api/html-content-check/jobs/:id": {
    "class": "authed"
   },

@@ -118,6 +118,22 @@ export default function HtmlContentCheckPage() {
   });
   const loadRound = async (number) => readJson(await api.get(`/api/html-content-check/jobs/${job.id}/rounds/${number}`));
   const showChanges = (number) => { setChangesRound(number); setTool('changes'); };
+  // Match to request (the one AI call): returns the round's new links, or null when it failed (the error shows above the screen).
+  const matchRound = async (number) => {
+    let out = null;
+    await run(async () => {
+      startProcessing('Matching the request to the changes…', 'The AI suggests which changes answer each request line. You judge each edit.');
+      try { out = (await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds/${number}/match`, {}))).matches; } finally { stopProcessing(); }
+      const n = out.unmatchedItems.length;
+      addToast(n ? `Matched. ${n} line${n === 1 ? '' : 's'} with no change found.` : 'Matched: every line has a change linked.', 'success');
+    });
+    return out;
+  };
+  const linkChanges = async (number, ref, changeIds) => {
+    let out = null;
+    await run(async () => { out = (await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/matches/${encodeURIComponent(ref)}`, { changeIds }))).matches; });
+    return out;
+  };
   const uploadCopy = (file) => fetchRound('Reading the saved copy…', async () => {
     const form = new FormData(); form.append('file', file);
     const d = await readJson(await api.postForm(`/api/html-content-check/jobs/${job.id}/rounds`, form));
@@ -257,7 +273,7 @@ export default function HtmlContentCheckPage() {
 
                   {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} onShowChanges={showChanges} />}
 
-                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} onAllRounds={() => setTool('rounds')} />}
+                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} busy={busy} />}
 
                   {tool === 'details' && job && editForm && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">

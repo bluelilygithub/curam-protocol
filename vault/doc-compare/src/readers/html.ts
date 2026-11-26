@@ -52,6 +52,9 @@ const headingLevel = (e: Element) => Number(e.getAttribute('data-dc-h') ?? (/^H(
 
 interface Ctx { base?: string; table: number; list?: { depth: number; kind: string }; quote?: boolean; full?: boolean }
 interface Img { alt: string; src?: string }
+// An element's child elements from childNodes, not `.children`: in jsdom each index of that HTMLCollection is also looked up by name
+// across the whole list, so reading a long list's items took time growing with the square of their number (HTML Content Check, M4).
+const childElements = (e: Element): Element[] => Array.from(e.childNodes).filter((n): n is Element => n.nodeType === 1);
 
 /** An image block. Its address is kept only in full mode (HTML Content Check), absolute, http(s) only; DocCompare keeps alt text only. */
 function imageBlock(img: Img, ctx: Ctx): RawBlock {
@@ -136,7 +139,7 @@ function walk(el: Element, out: RawBlock[], ctx: Ctx): void {
         const depth = (ctx.list?.depth ?? 0) + 1;
         const ordered = e.tagName === 'OL';
         let num = Number(e.getAttribute('start') ?? 1) || 1;
-        for (const li of Array.from(e.children).filter((c) => c.tagName === 'LI')) {
+        for (const li of childElements(e).filter((c) => c.tagName === 'LI')) {
           const first = out.length;
           walk(li, out, { ...ctx, list: { depth, kind: ordered ? 'ordered list' : 'bullet list' } });
           if (ordered && out[first]?.type === 'listItem') out[first].number = `${num}.`;
@@ -147,7 +150,7 @@ function walk(el: Element, out: RawBlock[], ctx: Ctx): void {
       case 'TABLE': {
         const t = ctx.table++;
         const rows = Array.from(e.querySelectorAll('tr')).filter((tr) => tr.closest('table') === e);
-        rows.forEach((tr, r) => Array.from(tr.children).filter((c) => c.tagName === 'TD' || c.tagName === 'TH').forEach((cell, c) => {
+        rows.forEach((tr, r) => childElements(tr).filter((c) => c.tagName === 'TD' || c.tagName === 'TH').forEach((cell, c) => {
           const runs: Run[] = [], imgs: Img[] = [];
           inline(cell, cell.tagName === 'TH' ? { bold: true } : {}, runs, imgs, ctx);
           const rr = tidy(runs);

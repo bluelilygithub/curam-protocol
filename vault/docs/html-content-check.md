@@ -7,7 +7,8 @@
 - **Milestone 1 (done, 2026-11-26):** jobs, request lines, the page and the recycle bin.
 - **Milestone 2 (done, 2026-11-26):** fetching and reading the page. Round 0 is read when a job is made; **Check again** keeps a new round; a saved copy can be uploaded instead; failed rounds keep their reason; the Rounds screen lists them.
 - **Milestone 3 (done, 2026-11-26):** what changed between rounds. Each round keeps its changes against the starting point and the round before; the Changes screen shows them word by word beside the request; content that changes by itself is grouped; the Rounds timeline shows the counts; comparison jobs work end to end.
-- Not yet: AI matching (M4), the client report PDF (M5), returned reports (M6, M7), the (i) box, tour and guide chat (M8).
+- **Milestone 4 (done, 2026-11-26):** matching the request. **Match to request** asks the standard model which changes look like they answer each line; code checks its answer and lists the lines with no change found and the changes nobody asked for; the person links and unlinks by hand. A self-changing change a line links to moves into the main list. A later round with far less text than the starting point is read again in the real browser and flagged. Diff speed tested near the size cap; two worst-case slowdowns fixed.
+- Not yet: the client report PDF (M5), returned reports (M6, M7), the (i) box, tour and guide chat (M8).
 
 ## Where it lives
 
@@ -16,11 +17,12 @@
 | Tables | `server/db.js`: `content_check_jobs`, `content_check_items`, `content_check_rounds` (with `"rawHtml"`), `content_check_client_notes` |
 | API | `server/routes/htmlContentCheck.js`, mounted at `/api/html-content-check` behind `requireAuth` and `requireFeature('htmlContentCheck')`. No model call yet, so no `aiLimiter`. Fetching has its own limit (30 per person per 10 minutes). |
 | Reading a page | `server/services/htmlContentCheck/`: `lib/` (loads the bundled reader, jsdom, boot check), `extract.js` (snapshot, `normalizeText`), `fetchPage.js` (plain fetch, real browser, saved copy), `config.js` (limits) |
+| Matching | `server/services/htmlContentCheck/match.js` (prompt, checking the reply, batching, `matchRound`, `setByPerson`, `summarize`) |
 | What changed | `server/services/htmlContentCheck/diff.js` (pure: `diffSnapshots`, the self-changing rules) and `roundDiff.js` (`ensureDiffs`: stores `results.diff`, fills in rounds that lack one) |
 | The bundled reader | `scripts/buildHtmlContentCheckLib.js` makes `dist/html-content-check-lib/index.cjs` from `server/services/htmlContentCheck/lib/entry.mjs`; run by `scripts/buildDocCompare.js` |
 | Request splitter | `server/services/htmlContentCheck/splitRequest.js` (pure, no model) |
 | Recycle bin | `server/services/recycleBin/adapters/htmlContentCheck.js`, kind `html-content-check-job` |
-| Page | `client/src/pages/HtmlContentCheckPage.jsx` + `client/src/pages/htmlContentCheck/` (tools list `htmlContentCheckTools.mjs`, `JobForm.jsx`, `JobsView.jsx`, `LinesView.jsx`, `RoundsView.jsx`, `ChangesView.jsx`, `shared.jsx`) |
+| Page | `client/src/pages/HtmlContentCheckPage.jsx` + `client/src/pages/htmlContentCheck/` (tools list `htmlContentCheckTools.mjs`, `JobForm.jsx`, `JobsView.jsx`, `LinesView.jsx`, `RoundsView.jsx`, `ChangesView.jsx`, `RequestPanel.jsx`, `shared.jsx`) |
 | Menu | `client/src/config/appNavigation.js` (Web & SEO, after AI Visibility; `navSeed.js` places it once in a saved layout) |
 
 ## Tests
@@ -31,11 +33,14 @@ No automated test calls a live site or a model.
 - `node server/services/htmlContentCheck/lib.test.js`: the bundle loads and reads; a hostile page makes no request to a local server and runs no script or handler; a missing bundle is reported by the boot check.
 - `node server/services/htmlContentCheck/extract.test.js`: on `fixtures/artist-before.html` and `artist-after.html`, edits in the menu, heading, caption, list, sidebar and footer all survive; hidden, script, `noscript` and `template` content is dropped; ids, section paths, absolute addresses; normalisation; the size cap fails.
 - `node server/services/htmlContentCheck/diff.test.js`: the fixture pages before and after; added, removed, changed, moved; case and dash changes reported; whitespace, non-breaking spaces, soft hyphens and curly quotes ignored; stable change ids; link, picture and heading changes; which changes count as changing by themselves, and which real edits (a phone number, an opening day, a price, a year in a sentence) must not.
+- `node server/services/htmlContentCheck/match.test.js`: matching with a stand-in model and a fixed reply (`fixtures/match-reply.json`, hand-written in the shape the prompt asks for, since no live model was available): injected instructions stay data and cannot close the data block; unknown ids and refs dropped, an unreadable line marked; lines with no change and changes nobody asked for; the person's links kept over a new run; batching, the cap and one token log per call.
+- `node server/services/htmlContentCheck/diff.speed.test.js`: reading and comparing a page near the size cap (458,000 characters, 978 blocks: read 0.4 s, diff 20 ms with a few edits, 0.13 s with 441 changes), and the worst case, 20,000 short list items all different (read 1.7 s, diff 1.8 s, marked rough). Prints its timings.
+- `DATABASE_URL=… node server/routes/htmlContentCheck.match.db.test.js`: the match and link routes (stand-in fetchers and model): stored links, round 0 and comparisons refused, another member refused, a model failure leaves the links as they were, edited lines re-summarised, links still fitting after a recycle-bin restore, and the far-less-text retry and flag.
 - `DATABASE_URL=… node server/services/htmlContentCheck/bootCheck.db.test.js`: a broken bundle files one inbox alert however many times the server starts; a working one files none.
 - `node server/services/htmlContentCheck/fetchPage.test.js`: when the real browser is and is not used; a real redirect through `safeFetch` to a local test site is stored as `finalUrl`; saved copies.
 - `DATABASE_URL=… node server/routes/htmlContentCheck.db.test.js` (jobs, lines, ownership, refs, bin) and `DATABASE_URL=… node server/routes/htmlContentCheck.rounds.db.test.js` (rounds with stand-in fetchers: round 0 on create, Check again, failed rounds replaced, uploads, no `rawHtml` in the bin copy, another member refused; stored changes and their counts, a round without changes filled in on read, a browser-read starting point keeping later rounds on the browser).
 - The cross-user tests cover the eight routes (`ownershipBindings.json` maps `/jobs/:id` to `content_check_jobs`).
-- **Node 20**: the pure tests above (`lib`, `extract`, `fetchPage`, `splitRequest`, `diff`) were run inside the production base image (`ghcr.io/bluelilygithub/curam-vault-base:latest`, Node 20.20.2), after building the bundle there with the image's own Linux `esbuild`. How: mount the repo read-only, copy `server/`, `scripts/` and `doc-compare/src/` into the container, link `node_modules` and `doc-compare/node_modules` to `/app`'s, run `node scripts/buildHtmlContentCheckLib.js`, then the tests with `NODE_ENV=production`.
+- **Node 20**: the pure tests above (`lib`, `extract`, `fetchPage`, `splitRequest`, `diff`, `match`, `diff.speed`) were run inside the production base image (`ghcr.io/bluelilygithub/curam-vault-base:latest`, Node 20.20.2), after building the bundle there with the image's own Linux `esbuild`. How: mount the repo read-only, copy `server/`, `scripts/` and `doc-compare/src/` into the container, link `node_modules` and `doc-compare/node_modules` to `/app`'s, run `node scripts/buildHtmlContentCheckLib.js`, then the tests with `NODE_ENV=production`.
 
 ## API
 
@@ -48,7 +53,9 @@ No automated test calls a live site or a model.
 | `PUT /jobs/:id/items` | `{ items: [{ id?, lineText }] }` replaces the lines in that order; an `id` must be one of this job's lines. Or `{ resplit: true }` splits the stored request again (refused with 409 once refs are locked). |
 | `POST /jobs/:id/rounds` | Check again: reads the page the way the job's fetch mode says, or, with a multipart field `file`, an uploaded saved copy (`.html`/`.htm`, 5 MB at most). Returns `{ round, job }`. |
 | `GET /jobs/:id/rounds/:number` | One round with its snapshot and results (`results.diff`, see Changes). The stored page is never sent back. |
-| `DELETE /jobs/:id` | Moves the job with its lines, rounds and client notes to the recycle bin (25 MB at most; a bigger job answers 413). |
+| `POST /jobs/:id/rounds/:number/match` | Match to request (behind `aiLimiter`; the only route that calls a model). Links the job's request lines to the round's changes since the starting point. Returns `{ matches }`. Round 0 and comparison jobs answer 400. |
+| `PUT /jobs/:id/rounds/:number/matches/:ref` | `{ changeIds }` replaces that line's links, by the person. |
+| `DELETE /jobs/:id` | Moves the job with its lines, rounds and client notes to the recycle bin (25 MB at most; a bigger job answers 413). The stored pages and the worked-out changes are left out of the bin copy (changes are worked out again on read, with the same ids). |
 
 Limits: 200 lines a job, 5,000 characters a line, 50,000 for the request, 200,000 for the previous text, 5 MB of page HTML, **500,000 characters of extracted text per round** (`MAX_SNAPSHOT_CHARS` in `server/services/htmlContentCheck/config.js`). Over a limit is refused with a plain message, never cut. A client must be in the caller's CRM; a ticket needs Tickets switched on for the caller (tickets are shared across the workspace by design). Logs never carry request text or page content.
 
@@ -69,6 +76,8 @@ How a page is read (`fetchPage.js`, brief decision 6):
 - **`auto`** (the default): a plain fetch through `safeFetch.fetchPublicFile` (Vault's SSRF guard; 5 MB, 10 s of silence or 20 s in all, HTML only, 5 redirects at most, each checked). The real browser (`server/services/restyle/renderPage.js`, every request SSRF-checked) is used instead when the plain copy has almost no text (under 30 words, DocCompare's `THIN_WORDS`), or the site turns the plain fetch away (HTTP 403, 406, 429, 503). Never for an address the guard refused.
 - **`plain`**: the plain fetch only. **`browser`** ("Load in a real browser"): the real browser only.
 - **A saved copy** (`fetchedVia: 'upload'`): its own address, from the browser's "saved from url" comment, `<base>`, canonical or `og:url`, is used as `finalUrl`.
+
+**Far less text than the starting point** (under 40% of its words, when it had 100 or more): usually a site rebuilt to draw itself with JavaScript, or one blocking the check, not the client deleting most of the page. In `auto` mode the page is read again in the real browser and the fuller copy kept. Whatever is kept, if it still has far less text, the round is flagged (`results.fetch.lessText`, `retriedInBrowser`) on Rounds and Changes ("the removals below may not be real"), so it is not read as mass removal. Before milestone 4 only an almost empty copy (under 30 words) went to the browser.
 
 **Later rounds are read the same way as the starting point where they can be**: in `auto` mode, a starting point that needed the real browser makes every later round use it. A plain copy and a browser copy of the same page differ by themselves (see Live checks), and that would look like edits. A round read differently from the round it is compared with (a saved copy, or `plain`/`browser` set by hand) is flagged on Rounds and Changes.
 
@@ -113,6 +122,10 @@ stats:  { added, removed, changed, moved, volatile, total }
 3. Between unchanged blocks, as many blocks replaced as put in, in the same place, are paired in order as **changed** (so "1921-2008" to "1921–2008" is one change, however short); otherwise a removed block is paired with the most alike added block (word overlap 40% or more). The rest are **added** or **removed**. A changed block carries a word diff of the original text (`diffWordsWithSpace`), a changed link address, or a note that a paragraph became a heading.
 4. Change ids follow reading order, so the same two snapshots always give the same ids.
 
+**Speed on big pages.** Lining up blocks costs time growing with blocks × differences. The unchanged start and end are taken off first; the rest gets 1.5 s (`ALIGN_MS`), and if that runs out the middle is treated as replaced, in order, and the result says `stats.rough` (the screen says the line-up was rough). The most-alike pairing is skipped for a stretch over 250,000 comparisons, and each word diff gets 200 ms (then the two texts are shown whole). Measured in `diff.speed.test.js`. Milestone 4 also fixed DocCompare's reader: it read a list's items through jsdom's `.children`, which looks every index up by name across the whole list, so 20,000 list items took about 50 s to read; it now uses `childNodes` (1.7 s). DocCompare's 246 tests still pass.
+
+`vsBaseline` is stored as null when the round before is the starting point (the same diff, not stored twice) and filled back in when a round is read.
+
 Worked out when a round is kept, inside the same transaction, and filled in for any round without one (rounds kept in milestone 2) when the job or the round is read (`ensureDiffs`, in round order). A newer `DIFF_VERSION` recomputes old rounds the same way.
 
 ### Content that changes by itself
@@ -127,6 +140,36 @@ Marked with `volatile` and grouped, closed, under the real changes on the Change
 | `rotating` | The new wording is wording that left the page in an earlier round and has come back, as a rotating panel or carousel does. (A change made in one round and changed again in the next is **not** marked: that is the normal edit-and-revise cycle. An edit put back exactly as it was before would be marked, and is still shown in the group.) |
 
 Not marked: carousels whose slides have not yet come back, and news boxes or "latest posts" lists. Those wait for the ignore list (Future 6) if the real pages need it (see Live checks).
+
+## Matching the request
+
+`matchRound` in `match.js`, from `POST /jobs/:id/rounds/:number/match`. Stored on the round as `results.matches`:
+
+```
+{ v: 1, basis: 'vsBaseline', model, at, usage: { calls, inputTokens, outputTokens, changesSent, changesLeftOut },
+  items: { R1: { changeIds, reason, by: 'ai' | 'person', model?, at, unreadable? } },
+  unmatchedItems: ['R6'], unrequestedChanges: ['c1'] }      // worked out by code, again on every read against the current lines
+```
+
+- **Model**: `getModelsForUser(userId).standard` (Settings → Models; no id in code). 503 with a plain message when none is set up. Each call is logged with its tokens (`logUsage`, feature `html_content_check_match`), so Usage & Cost shows it; the route also logs the totals (calls, tokens, changes sent and left out), never the text.
+- **Against what**: the round's changes **since the starting point**, because the request describes the page before the edits. The Changes screen opens on "Since the starting point" for request jobs.
+- **The prompt**: the system prompt says the model only links lines to changes with one short reason, never judges whether an edit is right or done, uses only the refs and ids given, and ignores any instructions inside the data. The request lines and the changes go in as JSON inside `<request_lines>` and `<page_changes>` blocks, with every `<` written as `\u003c` so text cannot close a block.
+- **Checking the reply** (`parseReply`): only the first JSON object is read; an unknown ref or change id is dropped; a repeated ref keeps its first answer; a line missing from the reply, or whose ids are not a list, is marked `unreadable` and shown as "Could not read this line"; no JSON at all makes every line unreadable.
+- **Big pages**: changes go in batches of 120, real ones before self-changing ones, 600 at most (`BATCH_SIZE`, `MAX_CHANGES`); the rest are counted (`changesLeftOut`) and the screen says so. Each change's text is shortened to 400 characters in the prompt only. Answers from the batches are merged per line. Output is capped at 300 + 80 tokens a line (4,000 at most).
+- **By hand**: clicking a line highlights its changes; **Change links for R3** puts Link / Unlink on every change (`PUT …/matches/:ref`, `by: 'person'`). A line linked or unlinked by hand keeps the person's choice when matching again.
+- **Self-changing changes**: one that a line links to moves out of the "May have changed by itself" group into the main list, marked "Asked for: R7". Unlinked ones stay in the group and are never counted as "Changes nobody asked for".
+- **Filters**: All changes / Asked for / Nobody asked for. The panel lists the lines with no change found and how many changes nobody asked for.
+
+### A real matching run on Railway (after the deploy)
+
+1. As an admin, Settings → Feature Access: switch **HTML Content Check** on (admins can open it anyway).
+2. Settings → Models: check the default model (the `standard` slot) is one with a working key on Railway.
+3. HTML Content Check → **Check a change request**: a real page address and its change request → **Create job** (round 0 is read).
+4. After the edits are on the page (or for a first try, any page that has changed since round 0): **Rounds → Check again**.
+5. **Changes → Match to request.** Read each line's reason; open a few linked changes; try **Change links** on one line.
+6. **Usage & Cost** → By feature: `html_content_check_match` shows the tokens and cost of that run. Railway's log has one `[html-content-check] matched` line with the calls, tokens and changes sent.
+
+**Cost to expect** (input + output tokens, at the prices in `costCalculator.js`): a page like the Dorothy Stoner fixture (about 10 changes, 7 lines: about 850 input tokens measured, a few hundred out) costs **under 1 cent** on `claude-sonnet-5-5` ($2 / $10 per million) and about 1 to 2 cents on `claude-opus-5-5` ($4 / $20). A busy page (about 60 changes, 15 lines: about 8,000 in, 800 out) is about 2.5 cents on Sonnet 5.5, 5 cents on Opus 5.5. The worst case, 600 changes in 5 calls of about 30,000 input tokens each (measured for 120 long paragraphs), is about 150,000 in and up to 7,500 out: about **38 cents** on Sonnet 5.5, 75 cents on Opus 5.5. Each Match again costs the same again.
 
 ## Live checks (2026-11-26)
 

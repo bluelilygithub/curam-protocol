@@ -53,6 +53,15 @@ export default function RoundsView({ job, busy, checkAgain, uploadCopy, onShowCh
             {r.sincePrevious && viaOf(r.previousNumber) && viaOf(r.previousNumber) !== r.fetchedVia && (
               <p className="text-xs" style={{ color: '#b45309' }}>Read differently from round {r.previousNumber} ({VIA[viaOf(r.previousNumber)]}), so some differences may come from that, not from edits.</p>
             )}
+            {r.fetchNote?.lessText && (
+              <p className="text-xs" style={{ color: '#b45309' }}>
+                Far less text than the starting point ({r.fetchNote.lessText.got.toLocaleString('en-AU')} words against {r.fetchNote.lessText.expected.toLocaleString('en-AU')}){r.fetchNote.retriedInBrowser ? ', even in a real browser' : ''}. The site may have been rebuilt or be blocking the check: check the page yourself before trusting the removals.
+              </p>
+            )}
+            {r.fetchNote?.retriedInBrowser && !r.fetchNote.lessText && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>A plain fetch found far less text than the starting point, so this round was read in a real browser.</p>
+            )}
+            {r.sincePrevious?.rough && <p className="text-xs" style={{ color: '#b45309' }}>So much changed that the changes were lined up roughly.</p>}
           </li>
         ))}
       </ol>

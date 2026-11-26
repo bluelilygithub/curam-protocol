@@ -1,7 +1,8 @@
 'use strict';
 
 // Stores each round's changes in results.diff (docs/html-content-check.md, "Changes"):
-//   { v, baselineNumber, previousNumber, vsBaseline: { changes, stats }, vsPrevious: { changes, stats } }
+//   { v, baselineNumber, previousNumber, vsBaseline: { changes, stats } | null, vsPrevious: { changes, stats } }
+// vsBaseline is null when the round before IS the starting point (the same diff, not stored twice); reading a round fills it back in.
 // against the starting point (the first round that was read) and against the round before (the last earlier round that was read; failed
 // rounds are skipped). Worked out when a round is kept, and filled in later for any round that has none or an older version (rounds kept
 // before milestone 3), in round order so the 'rotating' check sees what earlier rounds took off the page.
@@ -29,7 +30,7 @@ async function ensureDiffs(db, userId, jobId, upTo = null) {
     let diff = cur.results?.diff;
     if (!diff || diff.v !== DIFF_VERSION) {
       const vsPrevious = diffSnapshots(prev.snapshot, cur.snapshot, { goneTexts: gone });
-      const vsBaseline = prev === base ? vsPrevious : diffSnapshots(base.snapshot, cur.snapshot, { goneTexts: gone });
+      const vsBaseline = prev === base ? null : diffSnapshots(base.snapshot, cur.snapshot, { goneTexts: gone });
       diff = { v: DIFF_VERSION, baselineNumber: base.number, previousNumber: prev.number, vsBaseline, vsPrevious };
       await db.query(`UPDATE content_check_rounds SET results = COALESCE(results, '{}'::jsonb) || jsonb_build_object('diff', $3::jsonb)
                        WHERE "jobId" = $1 AND number = $2`, [jobId, cur.number, JSON.stringify(diff)]);
