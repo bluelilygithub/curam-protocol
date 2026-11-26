@@ -23,7 +23,11 @@ function run(args, label) {
 
 try {
   if (!fs.existsSync(dir)) throw new Error('doc-compare/ folder not found');
-  if (!fs.existsSync(path.join(dir, 'node_modules', 'vite'))) run(['install', '--include=dev', '--no-audit', '--no-fund'], 'doc-compare install');
+  // Install when any declared package is missing, not only vite: right after a dependency change Railway deploys on the old base image
+  // (docs/deploy-speed.md), whose doc-compare/node_modules lacks the new package. Usually nothing is missing and this costs nothing.
+  const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+  const missing = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((d) => !fs.existsSync(path.join(dir, 'node_modules', d, 'package.json')));
+  if (missing.length) run(['install', '--include=dev', '--no-audit', '--no-fund'], `doc-compare install (missing: ${missing.join(', ')})`);
   run(['run', 'build'], 'doc-compare build');
   console.log('[doc-compare] built into dist/doc-compare-app');
 } catch (e) {

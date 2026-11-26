@@ -3601,6 +3601,9 @@
   "POST /api/doc-compare-tutor": {
    "class": "authed"
   },
+  "POST /api/doc-compare/fetch": {
+   "class": "authed"
+  },
   "POST /api/contract-review-tutor": {
    "class": "authed"
   },

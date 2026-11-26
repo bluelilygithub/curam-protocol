@@ -82,6 +82,10 @@ describe('Gate 1', () => {
   });
 });
 
+// The privacy rule: the app makes no network request at all. The one exception, "Fetch a web page" inside Vault, is not a request from
+// the app either: when the person presses Fetch, the app posts the typed address (and nothing else) to Vault's page, which calls
+// /api/doc-compare/fetch. Web pages (which need a DOM) are covered in tests/webPages.test.ts: reading and comparing them and making the
+// Word file call nothing and post nothing; a fetch posts exactly { type, id, url }; a hostile page runs no script and loads nothing.
 describe('privacy', () => {
   afterEach(() => vi.unstubAllGlobals());
   it('makes no network calls during a comparison', async () => {

@@ -209,6 +209,11 @@ fieldset { border: 1px solid var(--color-border); border-radius: 10px; display: 
 .label-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
 .label-row .field { flex: 1; min-width: 240px; max-width: 520px; }
 .label-row .field input { max-width: none; width: 100%; box-sizing: border-box; }
+/* Fetch a web page (inside Vault): the address field fills the box, the button keeps its size */
+.fetch-page { margin-top: 12px; }
+.fetch-page .row { flex-wrap: nowrap; }
+.fetch-page input { flex: 1; min-width: 0; max-width: none; }
+.fetch-page p { margin: 6px 0 0; }
 .saved { display: flex; flex-direction: column; gap: 10px; }
 .saved-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .saved-bar input[type="search"] { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); flex: 1; min-width: 220px; max-width: 420px; }

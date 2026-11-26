@@ -28,7 +28,7 @@ export function compareDocs(a: NormalizedDoc, b: NormalizedDoc, settings: Settin
   for (const s of compareTableShapes(a, b)) changes.push({ category: 'formatting', severity: SEVERITY.structure, location: `Table ${s.table}`, detail: `Table shape ${s.from} → ${s.to} (rows × columns)` });
   changes.push(...runPostChecks(a, b, ops, settings, changes));
   const counted = (d: NormalizedDoc) => ({ ...d.metadata, referenceCount: referenceCount(d), noteCount: (d.notes ?? []).filter((n) => n.kind !== 'link').length });
-  const meta = compareMetadata(counted(a), counted(b), settings);
+  const meta = compareMetadata(counted(a), counted(b), settings, a.sourceType !== b.sourceType);
   return { changes: numbered([...changes, ...meta.changes]), trivialCount, metadata: meta.rows, words: wordCounts(a, b, settings), ...(versions ? { sections: sectionGroups(a, b) } : {}) };
 }
 

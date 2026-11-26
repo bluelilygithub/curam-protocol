@@ -16,8 +16,7 @@ export function finalize(file: File, sourceType: string, raw: RawBlock[], meta: 
     else if (b.type !== 'pageBreak') para++;
     if (b.type === 'image') images++;
     if (b.location?.table) tables.add(b.location.table.t);
-    words += countWords(b.text);
-    chars += b.text.length;
+    if (b.type !== 'image') { words += countWords(b.text); chars += b.text.length; } // an image's text is its alt text, not body text
     return { ...b, id: `b${index}`, location: { ...b.location, index, section: b.type === 'heading' ? undefined : section, para: b.type === 'heading' ? undefined : para } };
   });
   return {

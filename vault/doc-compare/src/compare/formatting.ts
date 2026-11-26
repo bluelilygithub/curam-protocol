@@ -37,7 +37,10 @@ function charMap(runs: Run[]) {
   return { chars, fmt, raw, text: runs.map((r) => mapQuotes(r.text.normalize('NFC'))).join('') };
 }
 
-const val = (r: Run, k: Key) => (BOOL_KEYS as readonly string[]).includes(k) ? !!r[k] : r[k];
+// Word marks every link with its "Hyperlink" character style; the link itself is compared as `link`, so that style counts as none
+const val = (r: Run, k: Key) => (BOOL_KEYS as readonly string[]).includes(k) ? !!r[k] : k === 'style' && r.style === 'Hyperlink' ? undefined : r[k];
+/** A list item's kind whatever the reader calls it: a style that says so, else a displayed number means numbered. */
+const listKind = (b: Block) => (/bullet/i.test(b.style ?? '') ? 'bullet' : /ordered|number/i.test(b.style ?? '') || b.number ? 'numbered' : 'bullet');
 const show = (k: Key, v: unknown) => (v === undefined || v === '' ? 'none' : k === 'sizePt' ? `${v}pt` : k === 'color' ? `#${v}` : String(v));
 
 export interface FormatDiff { structural: string[]; inline: string[] }
@@ -47,8 +50,9 @@ export function compareFormatting(a: Block, b: Block): FormatDiff {
   const structural: string[] = [];
   const inline: string[] = [];
   const la = blockLabel(a), lb = blockLabel(b);
-  if (la !== lb) structural.push(`${la} → ${lb}`);
-  else if (a.style !== undefined && b.style !== undefined && a.style !== b.style) inline.push(`paragraph style ${a.style} → ${b.style}`);
+  const sameList = a.type === 'listItem' && b.type === 'listItem' && (a.level ?? 1) === (b.level ?? 1) && listKind(a) === listKind(b); // a web page's "Bullet list" and Word's list paragraph
+  if (la !== lb && !sameList) structural.push(`${la} → ${lb}`);
+  else if (la === lb && a.style !== undefined && b.style !== undefined && a.style !== b.style) inline.push(`paragraph style ${a.style} → ${b.style}`);
 
   const ma = charMap(a.runs), mb = charMap(b.runs);
   if (!ma.chars.length || !mb.chars.length) return { structural, inline };

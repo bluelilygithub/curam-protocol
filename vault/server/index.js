@@ -243,6 +243,7 @@ app.use('/api/route-tracks', requireFeature('routeTracer'), require('./routes/ro
 app.use('/api/route-tutor', requireFeature('routeTracer'), aiLimiter, require('./routes/routeTutor')); // the Route Tracer guide chat
 app.use('/api/contract-review-tutor', requireFeature('contractReview'), aiLimiter, require('./routes/contractReviewTutor')); // the Contract Review guide chat (sees no contract or review)
 app.use('/api/doc-compare-tutor', requireFeature('docCompare'), aiLimiter, require('./routes/docCompareTutor')); // the DocCompare guide chat (the app itself runs in the browser and calls no API)
+app.use('/api/doc-compare/fetch', requireFeature('docCompare'), require('./routes/docCompareFetch')); // "Fetch a web page": returns one public page's HTML (SSRF-guarded); Vault's page calls it for the app, never with a file
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
