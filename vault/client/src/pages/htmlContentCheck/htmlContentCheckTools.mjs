@@ -24,11 +24,11 @@ export const GROUP_TIPS = {
 };
 
 export const TOOL_TIPS = {
-  new: 'Give the page address and paste the change request you were sent. The page is fetched as its starting point, and the request is split into numbered lines (R1, R2 ...) you can fix. Or just keep a page to compare over time. A saved copy of the page can be used instead of fetching.',
+  new: 'Add the page or pages (each with a name and address) and paste the change request you were sent. The page is fetched as its starting point, and the request is split into numbered lines (R1, R2 ...) you can fix. Or just keep a page to compare over time. A saved copy of the page can be used instead of fetching.',
   jobs: 'Every page you are checking, newest first, with its request lines and status. Search by name or address, open one, or delete it (it goes to the recycle bin for 30 days).',
   rounds: 'Every time the page was read: the starting point (round 0), then each Check again. When, how (plain fetch, real browser or saved copy), and why a fetch failed.',
   changes: 'What changed on the page, word by word, since the round before or since the starting point. Cookie banners, dates, counters and rotating panels that may change by themselves are grouped at the end.',
-  lines: 'The change request as numbered lines. Edit, split, join, reorder, add or remove lines, then press Save. The numbers become fixed once a client report has been made.',
+  lines: 'The change request as numbered lines. Edit, split, join, reorder, add or remove lines, give each its kind (Normal, Held over, Keep) and page, then press Save. The numbers become fixed once a client report has been made.',
   details: 'The job\'s name, page address, the request as pasted, the text from before the edits, the CRM client and ticket, its status, and Delete.',
   returns: 'Upload the PDF report your client filled in and sent back; their notes land against the right R numbers. Not built yet.',
 };
@@ -85,6 +85,8 @@ export const KIND_LABELS = { request: 'Change request', compare: 'Page compariso
 export const HOW_IT_WORKS = [
   ['What it is for', 'A client sent a list of edits for a web page, and the developer says they are done. HTML Content Check reads the page before and after, shows every change word by word, and lines each change up against the request, so you can see what was done, what was not, and what changed that nobody asked for. Or just keep a page and see what changes on it over time.'],
   ['Where to start', 'Pick a job on the "What do you want to do?" screen ("Check a change request" or "Just compare a page") and it walks you through, or pick a tool in the list on the left. Tools under This job need a job open first. Hover any tool or button for a short explanation. The compass beside the title runs a guided tour (also in Settings, HTML Content Check Tour), and the round button at the bottom right is a guide you can ask in your own words.'],
+  ['Several pages', 'One change request often covers several pages of a site. A job holds up to 12 pages, each with a name and address. Name them as the request does: a line pasted under "Under The Artist" goes on the page named The Artist, and a line with no heading is matched against every page. Every round reads all the pages, and changes are shown page by page.'],
+  ['Kinds of request line', 'Normal lines are edits to check. A Held over line (the request says "hold over") is shown but never checked. A Keep line (the request says "Keep: …") is text that must stay as it is: code checks it is still on its page, word for word, and warns if it changed. Lines that look like repeats of an earlier line are flagged so you can join them.'],
   ['Rounds: before and after', 'Creating a job reads the page as round 0, the starting point. When the developer says the edits are done, press Check again on Rounds: that is round 1, and so on. An unchanged page is still kept as a round, so a check that found nothing done is on record. A round that failed shows why and is replaced by the next check.'],
   ['How the page is read', 'Everything a visitor can see is read: the menu, headings, text, lists, tables, captions, sidebars and footer, but not scripts or hidden parts. A plain fetch comes first; a real browser is used for pages that build themselves with JavaScript, or when you tick Load in a real browser. For a staging site or a page behind a login, save it from your browser and use a saved copy. Later rounds are read the same way as the starting point, so the way of reading does not show up as changes.'],
   ['What counts as a change', 'Changes are worked out by comparing the text: added, removed, changed (word by word) and moved. Spaces, non-breaking spaces and curly or straight quotes are ignored; a different capital letter or dash counts. Cookie banners, dates, counters and rotating panels that can change by themselves are grouped under "May have changed by itself", never thrown away. If a round has far less text than the starting point (a rebuilt site, or one blocking the check), it is flagged so the removals are not taken at face value.'],
@@ -96,13 +98,16 @@ export const HOW_IT_WORKS = [
 // scrolls to data-guide="<id>" when that part exists. 'info' and 'tour' open the (i) box and the tour.
 export const GUIDE_TOOLS = [
   { id: 'new', label: 'New job', tool: 'new' },
+  { id: 'pages', label: 'Pages', tool: 'new' },
   { id: 'saved-copy', label: 'Use a saved copy instead', tool: 'new' },
   { id: 'real-browser', label: 'Load in a real browser', tool: 'new' },
   { id: 'jobs', label: 'Your jobs', tool: 'jobs' },
   { id: 'lines', label: 'Request lines', tool: 'lines' },
+  { id: 'line-kinds', label: 'Kinds of line', tool: 'lines' },
   { id: 'rounds', label: 'Rounds', tool: 'rounds' },
   { id: 'check-again', label: 'Check again', tool: 'rounds' },
   { id: 'changes', label: 'Changes', tool: 'changes' },
+  { id: 'page-tabs', label: 'Page tabs', tool: 'changes' },
   { id: 'self-changing', label: 'May have changed by itself', tool: 'changes' },
   { id: 'match', label: 'Match to request', tool: 'changes' },
   { id: 'change-links', label: 'Change links', tool: 'changes' },
@@ -111,3 +116,23 @@ export const GUIDE_TOOLS = [
   { id: 'info', label: 'How HTML Content Check works', tool: 'new' },
   { id: 'tour', label: 'Guided tour', tool: 'new' },
 ];
+
+// Milestone 4b: several pages per job, and kinds of request line (keep in step with server/routes/htmlContentCheck.js LIMITS.pages).
+export const MAX_PAGES = 12;
+export const LINE_KINDS = {
+  request_line: { label: 'Normal', tip: 'An edit to check: it is matched to the changes on its page (or every page, when it has none).' },
+  held_over: { label: 'Held over', tip: 'Not decided yet ("I will have to think about this"): shown as held, never checked or matched.' },
+  keep: { label: 'Keep', tip: 'Text that must stay exactly as it is: you are warned if it is changed or removed from its page.' },
+};
+// Where a request line stands in a round (server/services/htmlContentCheck/summary.js), in plain words.
+export const LINE_STATUS = {
+  linked: 'Changes linked',
+  noChange: 'No change found',
+  unreadable: 'Could not read this line in the AI\'s answer',
+  notMatched: 'Not matched yet',
+  held: 'Held over: not checked',
+  kept: 'Kept: still on the page as it was',
+  keepChanged: 'Changed or removed: it was meant to stay',
+  keepNotOnStartingPage: 'Not found on the starting page, so it cannot be checked (the wording may differ)',
+  keepNotRead: 'Its page was not read in this round',
+};

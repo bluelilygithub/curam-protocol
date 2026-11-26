@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
-import { CARD, FIELD_CLASS, FIELD_STYLE, SecondaryButton, Badge, formatDate } from './shared';
+import { CARD, FIELD_CLASS, FIELD_INLINE, FIELD_STYLE, SecondaryButton, Badge, formatDate } from './shared';
 import RequestPanel from './RequestPanel';
 
 // What changed in one round, in reading order, against the starting point or the round before. Worked out by code on the server
@@ -81,17 +81,21 @@ function ChangeCard({ c, askedBy = [], highlight, linkRef, onToggleLink }) {
   );
 }
 
-export default function ChangesView({ job, getIcon, fetchRound, roundNumber, setRoundNumber, onAllRounds, matchRound, linkChanges, busy }) {
-  const comparable = job.rounds.filter((r) => r.status === 'ready').slice(1); // every round read after the starting point
+export default function ChangesView({ job, getIcon, fetchRound, roundNumber, setRoundNumber, pageId, setPageId, onAllRounds, matchRound, linkChanges, busy }) {
+  // rounds with something to compare: a page row that has changes worked out (not every page's starting point)
+  const numbers = [...new Set(job.rounds.filter((r) => r.sincePrevious).map((r) => r.number))].sort((a, b) => a - b);
   const request = job.kind === 'request';
+  const pages = job.pages || [];
+  const multi = pages.length > 1;
+  const pageName = (id) => { const i = pages.findIndex((p) => p.id === id); return i < 0 ? 'A removed page' : (pages[i].label || `Page ${i + 1}`); };
   const [basis, setBasis] = useState(request ? 'baseline' : 'previous'); // the request is matched against the starting point
-  const [round, setRound] = useState(null);
+  const [round, setRound] = useState(null); // the round view: { number, fetchedAt, pages: [row], lines }
   const [error, setError] = useState('');
   const [showVolatile, setShowVolatile] = useState(false);
   const [selected, setSelected] = useState(null); // a request line's ref
   const [editing, setEditing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | asked | unasked
-  const number = comparable.some((r) => r.number === roundNumber) ? roundNumber : comparable[comparable.length - 1]?.number;
+  const number = numbers.includes(roundNumber) ? roundNumber : numbers[numbers.length - 1];
 
   useEffect(() => {
     if (number == null) return undefined;
@@ -99,18 +103,21 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
     setRound(null); setError('');
     fetchRound(number).then((r) => { if (live) setRound(r); }).catch((e) => { if (live) setError(e.message); });
     return () => { live = false; };
-  }, [job.id, number, job.rounds.length, job.items.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [job.id, number, job.rounds.length, job.items.length, job.pages.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!selected) setEditing(false); }, [selected]);
+  useEffect(() => { setSelected(null); setFilter('all'); }, [pageId]);
 
-  if (!comparable.length) {
-    return <EmptyState icon="history" title="Nothing to compare yet" body="Round 0 is the page before the edits. Once the developer says they are done, press Check again on Rounds; the changes show here." />;
+  if (!numbers.length) {
+    return <EmptyState icon="history" title="Nothing to compare yet" body="Round 0 is the pages before the edits. Once the developer says they are done, press Check again on Rounds; the changes show here." />;
   }
-  const diff = round?.results?.diff;
+  const rows = round?.pages || [];
+  const row = rows.find((r) => r.pageId === pageId) || rows.find((r) => r.results?.diff) || rows[0];
+  const diff = row?.results?.diff;
   const sameBasis = diff && diff.previousNumber === diff.baselineNumber;
   const onBaseline = basis === 'baseline' || sameBasis; // links are to the changes since the starting point
   const d = diff ? (onBaseline ? diff.vsBaseline : diff.vsPrevious) : null;
-  const matches = round?.results?.matches || null;
-  const askedBy = new Map(); // change id -> refs that link it
+  const matches = row?.results?.matches || null;
+  const askedBy = new Map(); // change id -> refs that link it (on this page)
   if (onBaseline && matches) for (const it of job.items) for (const id of matches.items?.[it.ref]?.changeIds || []) askedBy.set(id, [...(askedBy.get(id) || []), it.ref]);
   const unasked = new Set(onBaseline ? matches?.unrequestedChanges || [] : []);
   const all = d?.changes || [];
@@ -118,18 +125,18 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
   const real = all.filter((c) => !c.volatile || askedBy.has(c.id)).filter((c) => filter === 'all' || (filter === 'asked' ? askedBy.has(c.id) : unasked.has(c.id)));
   const self = all.filter((c) => c.volatile && !askedBy.has(c.id));
   const fromRound = diff ? (onBaseline ? diff.baselineNumber : diff.previousNumber) : null;
-  const viaOf = (n) => job.rounds.find((r) => r.number === n)?.fetchedVia;
-  const readDifferently = diff && round && viaOf(fromRound) && viaOf(fromRound) !== round.fetchedVia;
-  const lessText = round?.results?.fetch?.lessText;
+  const viaOf = (n) => job.rounds.find((r) => r.number === n && r.pageId === row?.pageId)?.fetchedVia;
+  const readDifferently = diff && row && viaOf(fromRound) && viaOf(fromRound) !== row.fetchedVia;
+  const lessText = row?.results?.fetch?.lessText;
   const realCount = all.filter((c) => !c.volatile || askedBy.has(c.id)).length;
   const highlightOf = (id) => Boolean(selected && askedBy.get(id)?.includes(selected));
+  const countOf = (r) => { const s = r.results?.diff?.vsBaseline?.stats; return s ? s.total - (s.volatile || 0) : null; };
 
-  const setRoundMatches = (m) => setRound((r) => ({ ...r, results: { ...r.results, matches: m } }));
-  const runMatch = async () => { const m = await matchRound(number); if (m) { setRoundMatches(m); setBasis('baseline'); } };
+  const runMatch = async () => { const v = await matchRound(number); if (v) { setRound(v); setBasis('baseline'); } };
   const toggleLink = async (id, on) => {
     const current = matches?.items?.[selected]?.changeIds || [];
-    const m = await linkChanges(number, selected, on ? [...current, id] : current.filter((x) => x !== id));
-    if (m) setRoundMatches(m);
+    const v = await linkChanges(number, row.pageId, selected, on ? [...current, id] : current.filter((x) => x !== id));
+    if (v) setRound(v);
   };
   const card = (c) => <ChangeCard key={c.id} c={c} askedBy={askedBy.get(c.id)} highlight={highlightOf(c.id)} linkRef={editing && onBaseline ? selected : null} onToggleLink={toggleLink} />;
 
@@ -137,13 +144,13 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
       <section className="rounded-2xl border p-6 space-y-4" style={CARD}>
         <div className="flex flex-wrap items-center gap-3">
-          <Tooltip text="Which round to look at. Each round is one time the page was read.">
-            <select value={number} onChange={(e) => setRoundNumber(Number(e.target.value))} aria-label="Round" className={`${FIELD_CLASS} w-auto`} style={FIELD_STYLE}>
-              {[...comparable].reverse().map((r) => <option key={r.number} value={r.number}>Round {r.number} · {formatDate(r.fetchedAt)}</option>)}
+          <Tooltip text="Which round to look at. Each round is one time the pages were read.">
+            <select value={number} onChange={(e) => setRoundNumber(Number(e.target.value))} aria-label="Round" className={FIELD_INLINE} style={FIELD_STYLE}>
+              {[...numbers].reverse().map((n) => <option key={n} value={n}>Round {n} · {formatDate(job.rounds.find((r) => r.number === n)?.fetchedAt)}</option>)}
             </select>
           </Tooltip>
           <div className="flex gap-1" role="radiogroup" aria-label="Compare with">
-            {[['baseline', 'Since the starting point', 'Everything that differs from round 0, the page before the edits. The request is matched against these.'], ['previous', 'Since last round', 'What changed since the round before this one.']].map(([k, label, tip]) => (
+            {[['baseline', 'Since the starting point', 'Everything that differs from the page before the edits. The request is matched against these.'], ['previous', 'Since last round', 'What changed since the round before this one.']].map(([k, label, tip]) => (
               <Tooltip key={k} text={sameBasis ? 'This is the first round after the starting point, so both are the same.' : tip}>
                 <button type="button" role="radio" aria-checked={basis === k} disabled={sameBasis && k === 'previous'} onClick={() => setBasis(k)}
                   className="px-3 py-1.5 rounded-lg border text-sm transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
@@ -155,7 +162,7 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
           </div>
           {request && matches?.at && onBaseline && (
             <Tooltip text="Show every change, only the ones linked to the request, or only the ones nobody asked for.">
-              <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Which changes" className={`${FIELD_CLASS} w-auto`} style={FIELD_STYLE}>
+              <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Which changes" className={FIELD_INLINE} style={FIELD_STYLE}>
                 <option value="all">All changes</option>
                 <option value="asked">Asked for</option>
                 <option value="unasked">Nobody asked for ({unasked.size})</option>
@@ -163,22 +170,42 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
             </Tooltip>
           )}
         </div>
+        {multi && rows.length > 0 && (
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Pages" data-guide="page-tabs">
+            {rows.map((r) => {
+              const on = r === row;
+              const n = countOf(r);
+              const note = r.status === 'failed' ? 'could not be read' : n == null ? 'starting point' : `${n} change${n === 1 ? '' : 's'}`;
+              return (
+                <Tooltip key={r.pageId} text={r.status === 'failed' ? `This page could not be read in this round: ${r.error}` : n == null ? 'This page was first read in this round, so it is its starting point: nothing to compare yet.' : `Show the changes on ${pageName(r.pageId)}.`}>
+                  <button type="button" role="tab" aria-selected={on} onClick={() => setPageId(r.pageId)}
+                    className="px-3 py-1.5 rounded-lg border text-sm transition-opacity duration-200 hover:opacity-70"
+                    style={on ? { background: 'var(--color-primary)', color: 'var(--color-on-primary)', borderColor: 'var(--color-primary)' } : { borderColor: r.status === 'failed' ? '#fca5a5' : 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}>
+                    {pageName(r.pageId)} <span className="text-xs opacity-80">· {note}</span>
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </div>
+        )}
         {error && <p role="alert" className="text-sm" style={{ color: '#991b1b' }}>{error}</p>}
         {!round && !error && <Skeleton lines={6} />}
+        {row && row.status === 'failed' && <p className="text-sm rounded-xl border p-3" style={{ borderColor: '#fca5a5', background: '#fff1f2', color: '#991b1b' }}>{multi ? `${pageName(row.pageId)} c` : 'C'}ould not be read in this round: {row.error} Upload a saved copy for it on Rounds.</p>}
+        {row && row.status === 'ready' && !diff && <EmptyState icon="history" title="This page's starting point" body="It was first read in this round, so there is nothing to compare it with yet. Its changes show from the next round." />}
         {d && (
           <>
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              Round {round.number} against round {fromRound}{fromRound === diff.baselineNumber ? ' (the starting point)' : ''}: {realCount} change{realCount === 1 ? '' : 's'}
+              {multi ? `${pageName(row.pageId)}: ` : ''}round {round.number} against round {fromRound}{fromRound === diff.baselineNumber ? ' (the starting point)' : ''}: {realCount} change{realCount === 1 ? '' : 's'}
               {self.length ? `, and ${self.length} that may have changed by itself` : ''}. Worked out by comparing the text; whether each edit is right is for you to judge.
             </p>
             {lessText && (
               <p role="alert" className="text-sm rounded-xl border p-3" style={WARN}>
-                This round has far less text than the starting point ({lessText.got.toLocaleString('en-AU')} words against {lessText.expected.toLocaleString('en-AU')}){round.results.fetch.retriedInBrowser ? ', even after trying a real browser' : ''}. The site may have been rebuilt or be blocking the check, so the removals below may not be real. Open the page in your browser before trusting them, or upload a saved copy on Rounds.
+                This page has far less text than its starting point ({lessText.got.toLocaleString('en-AU')} words against {lessText.expected.toLocaleString('en-AU')}){row.results.fetch.retriedInBrowser ? ', even after trying a real browser' : ''}. The site may have been rebuilt or be blocking the check, so the removals below may not be real. Open the page in your browser before trusting them, or upload a saved copy on Rounds.
               </p>
             )}
             {readDifferently && (
               <p className="text-sm rounded-xl border p-3" style={WARN}>
-                These two rounds were read differently ({VIA[viaOf(fromRound)]} against {VIA[round.fetchedVia]}). Some differences, such as share buttons, sign-in links or picture addresses, may come from that rather than from edits.
+                These two rounds were read differently ({VIA[viaOf(fromRound)]} against {VIA[row.fetchedVia]}). Some differences, such as share buttons, sign-in links or picture addresses, may come from that rather than from edits.
               </p>
             )}
             {d.stats.rough && (
@@ -205,17 +232,18 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
 
       <div className="space-y-4">
         {request ? (
-          <RequestPanel job={job} matches={matches} selected={selected} setSelected={setSelected} editing={editing} setEditing={setEditing}
-            onMatch={runMatch} canMatch={Boolean(diff)} busy={busy} linkedCount={askedBy.size} unasked={unasked.size} />
+          <RequestPanel job={job} pageId={row?.pageId} pageName={multi && row ? pageName(row.pageId) : null} lines={round?.lines || []} matches={matches}
+            selected={selected} setSelected={setSelected} editing={editing} setEditing={setEditing}
+            onMatch={runMatch} canMatch={rows.some((r) => r.results?.diff)} canLink={Boolean(diff)} busy={busy} linkedCount={askedBy.size} unasked={unasked.size} />
         ) : (
           <section className="rounded-2xl border p-6 space-y-3" style={CARD}>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>About this comparison</h2>
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>A page comparison has no request: it shows what changed between the times the page was read. Press Check again on Rounds to add a round.</p>
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>A page comparison has no request: it shows what changed between the times the pages were read. Press Check again on Rounds to add a round.</p>
           </section>
         )}
         <section className="rounded-2xl border p-4 space-y-2" style={CARD}>
-          {round && <p className="text-xs break-all" style={{ color: 'var(--color-muted)' }}>Round {round.number} was read {formatDate(round.fetchedAt)} by {VIA[round.fetchedVia]}{round.finalUrl ? ` from ${round.finalUrl}` : ''}.</p>}
-          <SecondaryButton tip="See every round, when each was read and how." onClick={onAllRounds}>All rounds</SecondaryButton>
+          {row && <p className="text-xs break-all" style={{ color: 'var(--color-muted)' }}>{multi ? `${pageName(row.pageId)} was` : 'The page was'} read {formatDate(row.fetchedAt)} by {VIA[row.fetchedVia]}{row.finalUrl ? ` from ${row.finalUrl}` : ''}.</p>}
+          <SecondaryButton tip="See every round, when each page was read and how." onClick={onAllRounds}>All rounds</SecondaryButton>
         </section>
       </div>
     </div>

@@ -28,6 +28,7 @@ export default function JobsView({ jobs, search, setSearch, openJob, deleteJob, 
                 <span className="flex flex-wrap gap-1.5 mt-2">
                   <Badge>{KIND_LABELS[j.kind] || j.kind}</Badge>
                   <Badge>{STATUS_LABELS[j.status] || j.status}</Badge>
+                  {j.pageCount > 1 && <Badge>{j.pageCount} pages</Badge>}
                   {j.kind === 'request' && <Badge>{j.itemCount} line{j.itemCount === 1 ? '' : 's'}</Badge>}
                   <Badge>{j.roundCount ? `${j.roundCount} round${j.roundCount === 1 ? '' : 's'}, last ${formatDate(j.lastFetchedAt)}` : 'Not fetched yet'}</Badge>
                   {j.openNotes > 0 && <Badge>{j.openNotes} open client note{j.openNotes === 1 ? '' : 's'}</Badge>}

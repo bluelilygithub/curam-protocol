@@ -31,11 +31,14 @@ const MENU = GROUPS.map((g) => ({
   label: g, tip: GROUP_TIPS[g],
   tools: HCC_TOOLS.filter((t) => t.group === g).map((t) => ({ ...t, tip: TOOL_TIPS[t.id], hint: NOT_BUILT[t.id] })),
 }));
-const EMPTY_FORM = { kind: 'request', url: '', name: '', requestText: '', previousText: '', clientId: '', ticketId: '', fetchMode: 'auto' };
+const newPage = () => ({ key: `n${Date.now()}${Math.random()}`, url: '', label: '', fetchMode: 'auto' });
+const EMPTY_FORM = { kind: 'request', pages: [newPage()], name: '', requestText: '', previousText: '', clientId: '', ticketId: '' };
 const formOf = (job) => ({
-  kind: job.kind, url: job.url, name: job.name, requestText: job.requestText || '', previousText: job.previousText || '',
-  clientId: job.clientId ? String(job.clientId) : '', ticketId: job.ticketId ? String(job.ticketId) : '', status: job.status, fetchMode: job.fetchMode,
+  kind: job.kind, pages: job.pages.map((pg) => ({ id: pg.id, url: pg.url, label: pg.label || '', fetchMode: pg.fetchMode })), name: job.name,
+  requestText: job.requestText || '', previousText: job.previousText || '',
+  clientId: job.clientId ? String(job.clientId) : '', ticketId: job.ticketId ? String(job.ticketId) : '', status: job.status,
 });
+const pagesBody = (pages) => pages.filter((pg) => pg.url.trim()).map((pg) => ({ ...(pg.id ? { id: pg.id } : {}), url: pg.url, label: pg.label, fetchMode: pg.fetchMode }));
 
 export default function HtmlContentCheckPage() {
   const getIcon = useIcon();
@@ -45,6 +48,7 @@ export default function HtmlContentCheckPage() {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [newFile, setNewFile] = useState(null); // a saved copy to use as round 0 instead of fetching
   const [changesRound, setChangesRound] = useState(null); // the round Changes shows (null: the latest)
+  const [changesPage, setChangesPage] = useState(null); // the page Changes shows (null: the first with changes)
   const [tool, setTool] = useState('start'); // 'start' is the job screen; every other value is a tool id
   const [goal, setGoal] = useState(null);
   const [jobs, setJobs] = useState(null); // null while loading
@@ -69,7 +73,7 @@ export default function HtmlContentCheckPage() {
     api.get('/api/tickets').then((r) => (r.ok ? r.json() : null)).then((d) => setTickets(Array.isArray(d?.tickets) ? d.tickets : null)).catch(() => setTickets(null));
   }, []);
   useEffect(() => { setEditForm(job ? formOf(job) : null); setConfirmDelete(false); }, [job]);
-  useEffect(() => { setChangesRound(null); }, [job?.id, job?.rounds?.length]); // another job, or a new round: Changes shows the latest
+  useEffect(() => { setChangesRound(null); setChangesPage(null); }, [job?.id, job?.rounds?.length]); // another job, or a new round: Changes shows the latest
 
   const startGoal = (g) => {
     setGoal(g);
@@ -124,11 +128,15 @@ export default function HtmlContentCheckPage() {
     startProcessing(label, 'The page is read as it is now and kept as a round.');
     try { return await call(); } finally { stopProcessing(); }
   });
-  const roundToast = (round) => (round.status === 'failed'
-    ? addToast(`Round ${round.number} failed: ${round.error}`, 'error')
-    : addToast(`Round ${round.number} kept.`, 'success'));
+  // a round is one row per page: say how many pages could not be read (each one's reason shows on Rounds)
+  const roundToast = (round) => {
+    const failed = round.pages.filter((pg) => pg.status === 'failed');
+    if (!failed.length) addToast(`Round ${round.number} kept.`, 'success');
+    else if (failed.length === round.pages.length) addToast(round.pages.length === 1 ? `Round ${round.number} failed: ${failed[0].error}` : `Round ${round.number}: no page could be read. The reasons are on Rounds.`, 'error');
+    else addToast(`Round ${round.number} kept, but ${failed.length} of ${round.pages.length} pages could not be read. The reasons are on Rounds.`, 'error');
+  };
   const createJob = () => fetchRound(newFile ? 'Reading the saved copy…' : 'Fetching the page…', async () => {
-    let j = await readJson(await api.post('/api/html-content-check/jobs', { ...newForm, fetch: !newFile }));
+    let j = await readJson(await api.post('/api/html-content-check/jobs', { ...newForm, pages: pagesBody(newForm.pages), fetch: !newFile }));
     if (newFile) {
       const form = new FormData(); form.append('file', newFile);
       j = (await readJson(await api.postForm(`/api/html-content-check/jobs/${j.id}/rounds`, form))).job;
@@ -137,45 +145,47 @@ export default function HtmlContentCheckPage() {
     const r0 = j.rounds[0];
     const lines = j.kind === 'request' ? ` and the request split into ${j.items.length} line${j.items.length === 1 ? '' : 's'}` : '';
     if (r0?.status === 'failed') addToast(`Job created, but the page could not be read: ${r0.error}`, 'error');
-    else addToast(`Job created: the page was read${lines}.`, 'success');
+    else addToast(`Job created: ${j.pages.length > 1 ? `${j.pages.length} pages were read` : "the page was read"}${lines}.`, 'success');
     afterOpen(j);
   });
-  const checkAgain = () => fetchRound('Fetching the page again…', async () => {
+  const checkAgain = () => fetchRound(job.pages.length > 1 ? `Reading all ${job.pages.length} pages again…` : 'Fetching the page again…', async () => {
     const d = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds`, {}));
     setJob(d.job); loadJobs(); roundToast(d.round);
   });
   const loadRound = async (number) => readJson(await api.get(`/api/html-content-check/jobs/${job.id}/rounds/${number}`));
-  const showChanges = (number) => { setChangesRound(number); setTool('changes'); };
+  const showChanges = (number, pageId = null) => { setChangesRound(number); setChangesPage(pageId); setTool('changes'); };
   // Match to request (the one AI call): returns the round's new links, or null when it failed (the error shows above the screen).
   const matchRound = async (number) => {
     let out = null;
     await run(async () => {
       startProcessing('Matching the request to the changes…', 'The AI suggests which changes answer each request line. You judge each edit.');
-      try { out = (await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds/${number}/match`, {}))).matches; } finally { stopProcessing(); }
-      const n = out.unmatchedItems.length;
-      addToast(n ? `Matched. ${n} line${n === 1 ? '' : 's'} with no change found.` : 'Matched: every line has a change linked.', 'success');
+      try { out = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds/${number}/match`, {})); } finally { stopProcessing(); }
+      const n = out.lines.filter((l) => l.status === 'noChange' || l.status === 'unreadable').length;
+      const pg = out.usage?.pages || 0;
+      addToast(`Matched ${pg} page${pg === 1 ? '' : 's'}. ${n ? `${n} line${n === 1 ? '' : 's'} with no change found.` : 'Every line that was checked has a change linked.'}`, 'success');
     });
     return out;
   };
-  const linkChanges = async (number, ref, changeIds) => {
+  const linkChanges = async (number, pageId, ref, changeIds) => {
     let out = null;
-    await run(async () => { out = (await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/matches/${encodeURIComponent(ref)}`, { changeIds }))).matches; });
+    await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/pages/${pageId}/matches/${encodeURIComponent(ref)}`, { changeIds })); });
     return out;
   };
-  const uploadCopy = (file) => fetchRound('Reading the saved copy…', async () => {
-    const form = new FormData(); form.append('file', file);
+  const uploadCopy = (file, pageId) => fetchRound('Reading the saved copy…', async () => {
+    const form = new FormData(); if (pageId) form.append('pageId', String(pageId)); form.append('file', file);
     const d = await readJson(await api.postForm(`/api/html-content-check/jobs/${job.id}/rounds`, form));
     setJob(d.job); loadJobs(); roundToast(d.round);
   });
   const saveDetails = () => run(async () => {
-    const body = { ...editForm };
-    if (job.rounds.length) delete body.url;
+    const { pages, kind, ...body } = editForm; // eslint-disable-line no-unused-vars
+    const wanted = pagesBody(pages);
+    if (JSON.stringify(wanted) !== JSON.stringify(pagesBody(formOf(job).pages))) await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/pages`, { pages: wanted }));
     setJob(await readJson(await api.patch(`/api/html-content-check/jobs/${job.id}`, body)));
     loadJobs();
     addToast('Saved.', 'success');
   });
   const saveItems = (draft) => run(async () => {
-    setJob(await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/items`, { items: draft.map((d) => (d.id ? { id: d.id, lineText: d.lineText } : { lineText: d.lineText })) })));
+    setJob(await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/items`, { items: draft.map((d) => ({ ...(d.id ? { id: d.id } : {}), lineText: d.lineText, kind: d.kind, pageId: d.pageId, section: d.section })) })));
     loadJobs();
     addToast('Request lines saved.', 'success');
   });
@@ -191,7 +201,7 @@ export default function HtmlContentCheckPage() {
   });
 
   const needsJob = JOB_TOOL_IDS.includes(tool);
-  const newValid = newForm.url.trim() && (newForm.kind === 'compare' || newForm.requestText.trim());
+  const newValid = newForm.pages.some((pg) => pg.url.trim()) && (newForm.kind === 'compare' || newForm.requestText.trim());
 
   return (
     <div style={{ background: 'var(--color-bg)', color: 'var(--color-text)', minHeight: '100dvh' }}>
@@ -248,7 +258,8 @@ export default function HtmlContentCheckPage() {
                       <h2 className="text-lg font-semibold mr-1" style={{ color: 'var(--color-text)' }}>{job.name}</h2>
                       <Badge>{KIND_LABELS[job.kind]}</Badge>
                       <Badge>{STATUS_LABELS[job.status]}</Badge>
-                      <Tooltip text="Open the page in a new browser tab."><a href={job.url} target="_blank" rel="noopener noreferrer" className="text-xs underline truncate max-w-full transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{job.url}</a></Tooltip>
+                      {job.pages.length > 1 && <Badge>{job.pages.length} pages</Badge>}
+                      <Tooltip text={job.pages.length > 1 ? 'Open page 1 in a new browser tab. Every page is listed in Job details.' : 'Open the page in a new browser tab.'}><a href={job.url} target="_blank" rel="noopener noreferrer" className="text-xs underline truncate max-w-full transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{job.url}</a></Tooltip>
                     </div>
                   )}
 
@@ -266,7 +277,7 @@ export default function HtmlContentCheckPage() {
                             </Tooltip>
                           ))}
                         </div>
-                        <JobForm form={newForm} set={setNew} clients={clients} tickets={tickets} isNew />
+                        <JobForm form={newForm} set={setNew} clients={clients} tickets={tickets} isNew getIcon={getIcon} />
                         <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }} data-guide="saved-copy">
                           <Tooltip text="For a staging site, a page behind a login, or one that refuses to be fetched: open it in your browser, save it with File > Save Page As (Webpage, HTML only), then choose the file. It becomes the starting point instead of fetching.">
                             <label className="px-3 py-1.5 rounded-lg border cursor-pointer transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -283,7 +294,7 @@ export default function HtmlContentCheckPage() {
                             </span>
                           )}
                         </div>
-                        <PrimaryButton tip={newValid ? 'Create the job: the page is read as its starting point (round 0), and a change request is split into numbered lines.' : 'Enter the page address (and the change request, for a change-request job) first.'} disabled={!newValid || busy} onClick={createJob}>Create job</PrimaryButton>
+                        <PrimaryButton tip={newValid ? 'Create the job: every page is read as its starting point (round 0), and a change request is split into numbered lines, each on the page its heading names.' : 'Enter at least one page address (and the change request, for a change-request job) first.'} disabled={!newValid || busy} onClick={createJob}>Create job</PrimaryButton>
                       </section>
                       <section className="rounded-2xl border p-6 space-y-2 text-sm leading-relaxed" style={{ ...CARD, color: 'var(--color-muted)' }}>
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>What happens</h2>
@@ -303,12 +314,12 @@ export default function HtmlContentCheckPage() {
 
                   {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} onShowChanges={showChanges} />}
 
-                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} busy={busy} />}
+                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} pageId={changesPage} setPageId={setChangesPage} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} busy={busy} />}
 
                   {tool === 'details' && job && editForm && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
                       <section className="rounded-2xl border p-6 space-y-4" style={CARD}>
-                        <JobForm form={editForm} set={setEdit} clients={clients} tickets={tickets} urlLocked={job.rounds.length > 0} />
+                        <JobForm form={editForm} set={setEdit} clients={clients} tickets={tickets} getIcon={getIcon} readIds={new Set(job.rounds.filter((x) => x.status === 'ready').map((x) => x.pageId))} />
                         <PrimaryButton tip="Save the changes to this job." disabled={busy} onClick={saveDetails}>Save</PrimaryButton>
                       </section>
                       <section className="rounded-2xl border p-6 space-y-3 text-sm" style={CARD}>

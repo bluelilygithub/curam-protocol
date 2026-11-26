@@ -127,7 +127,7 @@ function serve(users) {
     for (const body of [{ status: 'done' }, { name: '' }, { settings: [] }, { url: 'javascript:alert(1)' }, { requestText: '' }]) {
       assert.equal((await call(A, 'PATCH', `/jobs/${job.id}`, body)).status, 400, JSON.stringify(body));
     }
-    await pool.query(`INSERT INTO content_check_rounds ("jobId", "userId", number, "fetchedVia", snapshot) VALUES ($1, $2, 0, 'plain', $3)`, [job.id, A, JSON.stringify({ v: 1, blocks: [] })]);
+    await pool.query(`INSERT INTO content_check_rounds ("jobId", "userId", "pageId", number, "fetchedVia", snapshot) VALUES ($1, $2, $3, 0, 'plain', $4)`, [job.id, A, job.pages[0].id, JSON.stringify({ v: 1, blocks: [] })]);
     assert.equal((await call(A, 'PATCH', `/jobs/${job.id}`, { url: 'https://example.com/other' })).status, 409, 'address fixed once fetched');
     assert.equal((await call(A, 'PATCH', `/jobs/${job.id}`, { url: job.url })).status, 200, 'the same address is fine');
 
