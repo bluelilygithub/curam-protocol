@@ -61,15 +61,17 @@ To be covered before a removal brief is written. Items marked *decide* go beyond
 6. **Rounds and a timeline**: the fetched page as a dated original, later fetches as rounds, an unchanged page refused as "the same file". *M2/M3.* (Whether an unchanged page should be refused or stored as a round with no changes: *decide*; storing it is more useful for "nothing was done".)
 7. **Comparing without a request.** *M3 (`compare` jobs).*
 8. **Review PDF for the author** (must fix / please review / minor, with word diffs). *M5's client report covers the request lines; *decide* whether changes nobody asked for also go in it.*
-9. **Word export** of the page (`docx` package, image placeholders, reads back identically), so a copywriter can edit the page in Word and check the Word file as round 1. *Decide.* The `docx` package is only in DocCompare's folder.
-10. **A web page compared with a Word file** (the copywriter's edited .docx as a round). *Decide*; only useful with item 9.
+9. **Word export** of the page (`docx` package, image placeholders, reads back identically). **Dropped** (owner, 2026-11-26): not part of HTML Content Check, and not needed for parity.
+10. **A web page compared with a Word file** (the copywriter's edited .docx as a round). **Dropped with item 9**, since it only served the Word workflow.
 11. **The document checks on web pages**: new claims, quotes, links, references, numbering, spelling, terms, word limits, required headings, formatting. *Decide*; out of scope for the smaller version.
 12. **Verdict, Accept / Fix later decisions and the accepted state.** *Out of scope by the brief* (the future checklist engine, Future 1 and 2).
 13. **Project export / import** (`.doccompare`). Not needed: jobs live on the server.
 
-## Proposals (waiting for the owner's OK before milestone 2)
+## Proposals (approved by the owner, 2026-11-26)
 
-**A. Extract on the server by bundling DocCompare's reader at build time.** A small script (`scripts/buildHtmlContentCheckLib.js`, run from `scripts/buildDocCompare.js`) uses the `esbuild` already in `doc-compare/node_modules` to bundle `doc-compare/src/readers/html.ts` (with a new `mode: 'full'` option; DocCompare's default unchanged) and `diff` into one CommonJS file under `dist/`, which the server loads with `jsdom`'s `DOMParser`. Cost: no `package.json` change, no base-image rebuild, under a second of build time. Risk: if that build step fails, fetching in this tool fails (with a plain message) until the next deploy; locally the script must be run once before fetching works. This is a build change, so it needs your yes (docs/deploy-speed.md). The alternative is extracting in the browser and posting the snapshot, which rules out scheduled re-checks (Future 4).
+All of A to H were approved, with extraction on the server by bundling (A). Milestone 2 builds on them as written below. Still open from the parity list: item 6 (store an unchanged page as a round, or refuse it), item 8 (changes nobody asked for in the client report) and item 11 (DocCompare's document checks); they are not needed before milestone 2.
+
+**A. Extract on the server by bundling DocCompare's reader at build time.** A small script (`scripts/buildHtmlContentCheckLib.js`, run from `scripts/buildDocCompare.js`) uses the `esbuild` already in `doc-compare/node_modules` to bundle `doc-compare/src/readers/html.ts` (with a new `mode: 'full'` option; DocCompare's default unchanged) and `diff` into one CommonJS file under `dist/`, which the server loads with `jsdom`'s `DOMParser`. Cost: no `package.json` change, no base-image rebuild, under a second of build time. Risk: if that build step fails, fetching in this tool fails (with a plain message) until the next deploy; locally the script must be run once before fetching works. This is a build change (docs/deploy-speed.md); approved. The alternative is extracting in the browser and posting the snapshot, which rules out scheduled re-checks (Future 4).
 
 **B. Snapshot shape: DocCompare's blocks, not the brief's.** The reader already returns blocks of type `heading`, `paragraph`, `listItem`, `tableCell`, `image` with `level`, `style` (`Quote`, `Code`, list kind), `runs` (formatting and link addresses), `number` and table position. Proposal: store those as they are, plus `id` and `section` (the heading path) added by this tool, under `{ v: 1, meta, blocks }`. The brief's `quote` is `style: 'Quote'`, `link` stays inside runs, and `caption` would be a paragraph; full mode also adds `src` to image blocks (DocCompare ignores it), needed for thumbnails and image fingerprints.
 
@@ -99,4 +101,4 @@ To be covered before a removal brief is written. Items marked *decide* go beyond
 5. **Image fingerprints**: a `sharp` perceptual hash per image block under `results.images`, so a new address for the same picture is not reported (needs `src` in the snapshot, proposal B).
 6. **Ignore rules**: per-job `settings.ignore` (text patterns or sections) applied by the diff before display, for dates and news boxes.
 7. **Client shared link**: a shared-link route before `requireAuth`, on Vault's shared-link pattern, instead of the PDF.
-8. **Word export**: parity item 9.
+8. ~~**Word export**~~: dropped by the owner on 2026-11-26 (parity item 9).
