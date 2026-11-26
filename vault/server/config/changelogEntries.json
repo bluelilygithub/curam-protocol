@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "9ee05900",
+   "fullHash": "9ee059004cbd0f630bd354f4ebecb64ba8c800d4",
+   "committedAt": "2026-11-26T13:36:59+10:00",
+   "author": "mrb",
+   "area": "HTML Content Check",
+   "subject": "HTML Content Check: record approved proposals, drop Word export",
+   "filesChanged": 1,
+   "insertions": 7,
+   "deletions": 5,
+   "goal": "Write down the owner's decisions on the milestone 1 proposals so milestone 2 builds on them.",
+   "whatChanged": "docs/html-content-check.md: proposals A to H marked approved, with page extraction on the server by bundling DocCompare's reader at build time (A). Word export (parity item 9) dropped, and with it comparing a web page with a Word file (item 10); Future 8 struck out. Parity items 6, 8 and 11 noted as still open.",
+   "filesImpacted": [
+    "vault/docs/html-content-check.md"
+   ],
+   "benefit": "One written record of what was agreed, so the next session does not re-ask or rebuild Word export.",
+   "concerns": "Docs only. The brief file (docs/html-content-check-brief.md) still lists Word export in its parity checklist; the decision is recorded in docs/html-content-check.md, not in the owner's brief."
+  },
+  {
    "commit": "e656dd14",
    "fullHash": "e656dd141e64619479172a752b75e689d0e082ed",
    "committedAt": "2026-11-26T13:34:05+10:00",
