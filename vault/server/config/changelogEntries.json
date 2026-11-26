@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4a0bf002",
+   "fullHash": "4a0bf002958709a16fd49be8ba80ad9255bb73db",
+   "committedAt": "2026-11-26T14:46:31+10:00",
+   "author": "mrb",
+   "area": "HTML Content Check",
+   "subject": "HTML Content Check M3: what changed between rounds",
+   "filesChanged": 14,
+   "insertions": 706,
+   "deletions": 36,
+   "goal": "Milestone 3 of docs/html-content-check-brief.md: show what changed on the page between rounds, against the starting point and the round before, with self-changing content (cookie banners, dates, counters, rotating panels) kept from swamping the real edits; and test the real-browser fallback on live Wix, Squarespace and JavaScript-built pages.",
+   "whatChanged": "New pure server/services/htmlContentCheck/diff.js: lines up blocks by type, level, compared text, link and picture addresses (longest common subsequence from the bundled diff package); a block taken out and put back elsewhere is one moved change; in-place replacements are paired in order, otherwise by 40% word overlap; word diffs of the original text; link, picture and paragraph-to-heading changes; ids in reading order. Changes that look like content changing by itself get volatile: cookie (banner wording), date (only date words changed and the line has a date shape, or a copyright year), counter (only numbers changed in a short counting line), rotating (wording that left in an earlier round and came back). roundDiff.js stores results.diff (vsBaseline, vsPrevious, stats) when a round is kept and fills in rounds that lack it on read. Round summaries carry the counts. In auto mode later rounds reuse a browser-read starting point's way of reading. Client: ChangesView.jsx (round picker, since last round / since the starting point, word diffs, the self-changing group closed under the real changes, the request beside it, a warning when two rounds were read differently), Rounds timeline counts and Show changes, Changes in the tool list and both job flows. Boot check switched to SuggestionService.captureIf; bootCheck.db.test.js proves repeated broken boots file one inbox item. docs/html-content-check.md gains Changes, the self-changing rules and the live-check results; brief parity items for rounds and compare jobs ticked.",
+   "filesImpacted": [
+    "vault/client/src/pages/HtmlContentCheckPage.jsx",
+    "vault/client/src/pages/htmlContentCheck/ChangesView.jsx",
+    "vault/client/src/pages/htmlContentCheck/RoundsView.jsx",
+    "vault/client/src/pages/htmlContentCheck/htmlContentCheckTools.mjs",
+    "vault/docs/html-content-check-brief.md",
+    "vault/docs/html-content-check.md",
+    "vault/docs/key-files.md",
+    "vault/server/routes/htmlContentCheck.js",
+    "vault/server/routes/htmlContentCheck.rounds.db.test.js",
+    "vault/server/services/htmlContentCheck/bootCheck.db.test.js",
+    "vault/server/services/htmlContentCheck/diff.js",
+    "vault/server/services/htmlContentCheck/diff.test.js",
+    "vault/server/services/htmlContentCheck/lib/index.js",
+    "vault/server/services/htmlContentCheck/roundDiff.js"
+   ],
+   "benefit": "The tool now shows what the developer actually changed, word by word, beside the request, with banners and counters out of the way but still visible. Live checks showed the main source of false changes (reading the same page two different ways) and the tool now avoids it.",
+   "concerns": "The self-changing rules are deliberately narrow and heuristic: a real edit that matches one (an edit put back exactly as it was two rounds ago, a copyright year the client asked to change, a count in a short line) lands in the closed group, where it is still listed but easy to miss until milestone 4 links request lines to changes. Carousels whose slides have not come back yet, and news boxes, are not grouped; whether an ignore list is needed is left to the real Dorothy Stoner page. Footer text after the last heading carries that heading's section path. Diffs are worked out while the job row is locked; untested on pages near the 500,000-character cap for speed. Live checks were run by hand from this PC (one Squarespace blog post, two Wix pages, one JavaScript-only app), not on Railway. Tested: diff and boot-check tests; both database tests; all pure tests again under Node 20.20.2 in the production base image; client build; a Playwright run on a local dev server (saved copies before and after, the Changes screen and group, the timeline; a live JavaScript-built page read through the real browser twice), no browser errors. Not tried with a member account."
+  },
+  {
    "commit": "1fd3e15c",
    "fullHash": "1fd3e15c309acd85c172f6a54dd639f6630ff16c",
    "committedAt": "2026-11-26T14:16:43+10:00",
