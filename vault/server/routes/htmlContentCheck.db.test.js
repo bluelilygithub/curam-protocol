@@ -47,6 +47,7 @@ function serve(users) {
   const server = await serve({ [A]: 'admin', [B]: 'member' });
   const base = `http://127.0.0.1:${server.address().port}/api/html-content-check`;
   const call = async (user, method, path, body) => {
+    if (method === 'POST' && path === '/jobs') body = { fetch: false, ...body }; // milestone 1's checks: no round 0 (rounds: htmlContentCheck.rounds.db.test.js)
     const res = await fetch(base + path, { method, headers: { 'x-test-user': String(user), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     return { status: res.status, body: await res.json() };
   };

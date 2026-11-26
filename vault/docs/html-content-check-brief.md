@@ -326,15 +326,19 @@ Each milestone goes on its own branch, is tested, gets its Changelog entry, and 
 
 ## 9. Parity checklist (needed before DocCompare's web mode can be removed later)
 
-M1 makes this exact from DocCompare's code. HTML Content Check must cover each item before a removal brief is written:
+Made exact in M1 from DocCompare's code, updated with the owner's decisions of 2026-11-26 (kept in step with `docs/html-content-check.md`). HTML Content Check must cover each open item before a removal brief is written:
 
-- [ ] Fetch a page by URL (SSRF-guarded)
-- [ ] HTML reader output at least as complete as DocCompare's
-- [ ] Page rounds and timeline
-- [ ] Comparing without a request (`compare` jobs)
-- [ ] Review PDF for the author or developer (the client report covers this; confirm)
-- [ ] Word export (DocCompare has one; build it or agree to drop it)
-- [ ] Anything else M1 finds
+- [x] Fetch a page by URL (SSRF-guarded, the same limits as DocCompare) (M2)
+- [x] Open a saved page (`.html`/`.htm`) instead of fetching (M2)
+- [x] HTML reader output at least as complete as DocCompare's: the same reader, in full mode (M2)
+- [x] Page details: title, author, dates, generator, the page's own address (M2)
+- [x] Almost-no-text pages: real browser first, then a clear failure with advice to upload a saved copy (M2)
+- [ ] Page rounds and timeline: rounds stored and listed (M2); the timeline with change counts (M3). An unchanged page is stored as a round, not refused.
+- [ ] Comparing without a request (`compare` jobs) (M3)
+- [ ] Review PDF for the author or developer: the client report (M5); changes nobody asked for are left out by default, with an "Include changes nobody asked for" option
+- Dropped: Word export, and with it comparing a web page with a Word file
+- Not carried over: DocCompare's document checks (claims, quotes, spelling, terms, numbering, limits); spelling on changed text is a future idea
+- Out of scope: verdict, Accept / Fix later and the accepted state (the future checklist engine); project export / import (jobs live on the server)
 
 ---
 

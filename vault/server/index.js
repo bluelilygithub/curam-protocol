@@ -439,6 +439,10 @@ async function start() {
     console.log(`[env] ${k}: ${v ? `set (${v.slice(0,4)}…)` : 'NOT SET'}`);
   });
 
+  // HTML Content Check's bundled page reader (scripts/buildHtmlContentCheckLib.js): a missing or broken bundle raises a Suggestions-inbox
+  // alert for the admin instead of failing quietly the first time someone fetches a page.
+  require('./services/htmlContentCheck/lib').bootCheck().catch((err) => console.error('[html-content-check] boot check:', err.message));
+
   // Contract Review enum sync — contracts.contractType / contract_parties.role's
   // CHECK constraint values (server/db.js) must exactly match
   // server/services/contractReview/playbooks.js's keys. Surfaced loudly on

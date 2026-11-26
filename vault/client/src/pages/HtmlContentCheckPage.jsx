@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useToastStore from '../store/toastStore';
+import useProcessingStore from '../store/processingStore';
 import { offerUndo } from '../utils/binUndo';
 import Tooltip from '../components/Tooltip';
 import ToolSidebar from '../components/ToolSidebar';
@@ -13,11 +14,12 @@ import { CARD, PrimaryButton, SecondaryButton, Badge, readJson } from './htmlCon
 import JobForm from './htmlContentCheck/JobForm';
 import JobsView from './htmlContentCheck/JobsView';
 import LinesView from './htmlContentCheck/LinesView';
+import RoundsView from './htmlContentCheck/RoundsView';
 
 /**
  * HTML Content Check (docs/html-content-check.md): was a requested set of edits made to a web page? Laid out like Contract Review and
  * DocCompare: the tool list on the left, the "What do you want to do?" job screen, and a job bar. This file owns the state and every
- * API call. Built milestone by milestone: milestone 1 has jobs and their request lines; fetching the page comes next.
+ * API call. Built milestone by milestone: jobs, request lines and rounds (fetching the page) so far; comparing rounds comes next.
  */
 const labelFor = (id) => HCC_TOOLS.find((t) => t.id === id)?.label || id;
 const MENU = GROUPS.map((g) => ({
@@ -33,6 +35,8 @@ const formOf = (job) => ({
 export default function HtmlContentCheckPage() {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
+  const [newFile, setNewFile] = useState(null); // a saved copy to use as round 0 instead of fetching
   const [tool, setTool] = useState('start'); // 'start' is the job screen; every other value is a tool id
   const [goal, setGoal] = useState(null);
   const [jobs, setJobs] = useState(null); // null while loading
@@ -68,9 +72,11 @@ export default function HtmlContentCheckPage() {
   const setEdit = (k) => (v) => setEditForm((f) => ({ ...f, [k]: v }));
   // After a job opens, a job flow moves on to its next step; otherwise the request lines (or details, for a comparison) come first.
   const afterOpen = (opened) => {
-    const g = goalRef.current;
+    let g = goalRef.current;
+    // the person switched kind on the New job form: that job flow no longer fits (a comparison has no request lines)
+    if (g?.kind && g.kind !== opened.kind) { g = null; setGoal(null); }
     const at = stepIndex(g, 'new');
-    setTool(g && at >= 0 && g.steps[at + 1] ? g.steps[at + 1].tool : (opened.kind === 'request' ? 'lines' : 'details'));
+    setTool(g && at >= 0 && g.steps[at + 1] ? g.steps[at + 1].tool : (opened.kind === 'request' ? 'lines' : 'rounds'));
   };
 
   const run = async (fn) => {
@@ -80,13 +86,37 @@ export default function HtmlContentCheckPage() {
   const openJob = (id) => run(async () => {
     const j = await readJson(await api.get(`/api/html-content-check/jobs/${id}`));
     setJob(j);
-    setTool(j.kind === 'request' ? 'lines' : 'details');
+    setTool(j.kind === 'request' ? 'lines' : 'rounds');
   });
-  const createJob = () => run(async () => {
-    const j = await readJson(await api.post('/api/html-content-check/jobs', newForm));
-    setJob(j); setNewForm(EMPTY_FORM); loadJobs();
-    addToast(j.kind === 'request' ? `Job created: the request was split into ${j.items.length} line${j.items.length === 1 ? '' : 's'}.` : 'Job created.', 'success');
+  // Fetching can take a while (a real browser up to half a minute), so it runs behind the processing overlay.
+  const fetchRound = (label, call) => run(async () => {
+    startProcessing(label, 'The page is read as it is now and kept as a round.');
+    try { return await call(); } finally { stopProcessing(); }
+  });
+  const roundToast = (round) => (round.status === 'failed'
+    ? addToast(`Round ${round.number} failed: ${round.error}`, 'error')
+    : addToast(`Round ${round.number} kept.`, 'success'));
+  const createJob = () => fetchRound(newFile ? 'Reading the saved copy…' : 'Fetching the page…', async () => {
+    let j = await readJson(await api.post('/api/html-content-check/jobs', { ...newForm, fetch: !newFile }));
+    if (newFile) {
+      const form = new FormData(); form.append('file', newFile);
+      j = (await readJson(await api.postForm(`/api/html-content-check/jobs/${j.id}/rounds`, form))).job;
+    }
+    setJob(j); setNewForm(EMPTY_FORM); setNewFile(null); loadJobs();
+    const r0 = j.rounds[0];
+    const lines = j.kind === 'request' ? ` and the request split into ${j.items.length} line${j.items.length === 1 ? '' : 's'}` : '';
+    if (r0?.status === 'failed') addToast(`Job created, but the page could not be read: ${r0.error}`, 'error');
+    else addToast(`Job created: the page was read${lines}.`, 'success');
     afterOpen(j);
+  });
+  const checkAgain = () => fetchRound('Fetching the page again…', async () => {
+    const d = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds`, {}));
+    setJob(d.job); loadJobs(); roundToast(d.round);
+  });
+  const uploadCopy = (file) => fetchRound('Reading the saved copy…', async () => {
+    const form = new FormData(); form.append('file', file);
+    const d = await readJson(await api.postForm(`/api/html-content-check/jobs/${job.id}/rounds`, form));
+    setJob(d.job); loadJobs(); roundToast(d.round);
   });
   const saveDetails = () => run(async () => {
     const body = { ...editForm };
@@ -132,7 +162,7 @@ export default function HtmlContentCheckPage() {
                 <div style={{ color: 'var(--color-muted)' }}>Open job</div>
                 <div className="flex items-center gap-1">
                   <Tooltip text={`Show this job: ${job.name}`}>
-                    <button type="button" onClick={() => setTool(job.kind === 'request' ? 'lines' : 'details')} className="font-medium truncate flex-1 text-left transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-text)' }}>{job.name}</button>
+                    <button type="button" onClick={() => setTool(job.kind === 'request' ? 'lines' : 'rounds')} className="font-medium truncate flex-1 text-left transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-text)' }}>{job.name}</button>
                   </Tooltip>
                   <Tooltip text="Close this job and go back to Your jobs.">
                     <button type="button" aria-label="Close this job" onClick={() => { setJob(null); setTool('jobs'); }} className="transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 12 })}</button>
@@ -186,12 +216,29 @@ export default function HtmlContentCheckPage() {
                           ))}
                         </div>
                         <JobForm form={newForm} set={setNew} clients={clients} tickets={tickets} isNew />
-                        <PrimaryButton tip={newValid ? 'Create the job. A change request is split into numbered lines you can check next.' : 'Enter the page address (and the change request, for a change-request job) first.'} disabled={!newValid || busy} onClick={createJob}>Create job</PrimaryButton>
+                        <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                          <Tooltip text="For a staging site, a page behind a login, or one that refuses to be fetched: open it in your browser, save it with File > Save Page As (Webpage, HTML only), then choose the file. It becomes the starting point instead of fetching.">
+                            <label className="px-3 py-1.5 rounded-lg border cursor-pointer transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                              Use a saved copy instead
+                              <input type="file" accept=".html,.htm,text/html" className="sr-only" aria-label="Saved copy of the page" onChange={(e) => { setNewFile(e.target.files?.[0] || null); e.target.value = ''; }} />
+                            </label>
+                          </Tooltip>
+                          {newFile && (
+                            <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                              {newFile.name}
+                              <Tooltip text="Fetch the page instead of using this file.">
+                                <button type="button" aria-label="Remove the saved copy" onClick={() => setNewFile(null)} className="transition-opacity duration-200 hover:opacity-60">{getIcon('x', { size: 12 })}</button>
+                              </Tooltip>
+                            </span>
+                          )}
+                        </div>
+                        <PrimaryButton tip={newValid ? 'Create the job: the page is read as its starting point (round 0), and a change request is split into numbered lines.' : 'Enter the page address (and the change request, for a change-request job) first.'} disabled={!newValid || busy} onClick={createJob}>Create job</PrimaryButton>
                       </section>
                       <section className="rounded-2xl border p-6 space-y-2 text-sm leading-relaxed" style={{ ...CARD, color: 'var(--color-muted)' }}>
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>What happens</h2>
                         <p>The change request is split into numbered lines (R1, R2 ...). Check them on Request lines: split a line that asks for two things, join two that belong together.</p>
-                        <p>Coming in the next updates: the page is fetched as its starting point, fetched again after the developer's changes, and every difference is shown against the request lines, ready for a fillable PDF report to the client.</p>
+                        <p>The page is read now, as its starting point (round 0): everything a visitor can see, including the menu, sidebars, captions and footer. After the developer's changes, press Check again on Rounds.</p>
+                        <p>Coming in the next updates: every difference between rounds shown against the request lines, and a fillable PDF report for the client.</p>
                         <p>The AI never decides an edit is done: the differences are worked out by code, and you judge them.</p>
                       </section>
                     </div>
@@ -203,6 +250,8 @@ export default function HtmlContentCheckPage() {
                     ? <LinesView job={job} getIcon={getIcon} saveItems={saveItems} resplit={resplit} />
                     : <EmptyState icon="columns" title="This job has no request" body="It only compares the page over time, so there are no request lines." />)}
 
+                  {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} />}
+
                   {tool === 'details' && job && editForm && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
                       <section className="rounded-2xl border p-6 space-y-4" style={CARD}>
@@ -213,7 +262,7 @@ export default function HtmlContentCheckPage() {
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>About this job</h2>
                         <p style={{ color: 'var(--color-muted)' }}>
                           {job.kind === 'request' ? `${job.items.length} request line${job.items.length === 1 ? '' : 's'}. ` : ''}
-                          {job.rounds.length ? `${job.rounds.length} round${job.rounds.length === 1 ? '' : 's'} fetched.` : 'The page has not been fetched yet: fetching arrives in the next update.'}
+                          {job.rounds.length ? `${job.rounds.length} round${job.rounds.length === 1 ? '' : 's'} kept.` : 'The page has not been read yet: press Check again on Rounds.'}
                           {job.clientName ? ` Client: ${job.clientName}.` : ''}{job.ticketTitle ? ` Ticket: T-${job.ticketId} ${job.ticketTitle}.` : ''}
                         </p>
                         {confirmDelete ? (

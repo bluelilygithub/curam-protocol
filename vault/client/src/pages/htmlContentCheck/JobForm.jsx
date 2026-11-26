@@ -32,7 +32,7 @@ export default function JobForm({ form, set, clients, tickets, isNew, urlLocked 
         </div>
       )}
       <div>
-        <Label hint="Optional. Text from before the edits, if you have it (an old copy, the approved draft). It is kept with the job; the page itself is always fetched as the starting point.">Text from before the edits</Label>
+        <Label hint="Optional. Text from before the edits, if you have it (an old copy, the approved draft). It is kept with the job; the page itself is always read as the starting point.">Text from before the edits</Label>
         <Tooltip text="Paste the page text as it was before the developer made the changes, if you have it.">
           <VoiceInput type="textarea" append rows={4} value={form.previousText} onChange={set('previousText')} label="Text from before the edits" className={FIELD_CLASS} style={FIELD_STYLE} />
         </Tooltip>
@@ -75,7 +75,7 @@ export default function JobForm({ form, set, clients, tickets, isNew, urlLocked 
         <Tooltip text="Use this for pages built with JavaScript, which show almost no text to a plain fetch. Slower. Without the tick, a real browser is still used when a plain fetch finds almost no text.">
           <input type="checkbox" className="mt-0.5" checked={form.fetchMode === 'browser'} onChange={(e) => set('fetchMode')(e.target.checked ? 'browser' : 'auto')} />
         </Tooltip>
-        <span>Load in a real browser<span className="block text-xs" style={{ color: 'var(--color-muted)' }}>Fetching the page arrives in the next update; this choice is kept with the job.</span></span>
+        <span>Load in a real browser<span className="block text-xs" style={{ color: 'var(--color-muted)' }}>For pages that build themselves with JavaScript. Slower; without the tick a real browser is still used when a plain fetch finds almost no text.</span></span>
       </label>
     </div>
   );

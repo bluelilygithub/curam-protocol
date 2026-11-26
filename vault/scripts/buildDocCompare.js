@@ -33,3 +33,13 @@ try {
 } catch (e) {
   console.warn(`\n[doc-compare] WARNING: ${e.message}. Vault build continues without DocCompare.\n`);
 }
+
+// HTML Content Check's server bundle of DocCompare's HTML reader (scripts/buildHtmlContentCheckLib.js). Separate from the app build, so a
+// failed DocCompare app still leaves the reader working. Not fatal either: the server checks the bundle on boot and raises a
+// Suggestions-inbox alert when it is missing or broken (docs/html-content-check.md).
+try {
+  require('./buildHtmlContentCheckLib').build();
+  console.log('[html-content-check] reader bundled into dist/html-content-check-lib');
+} catch (e) {
+  console.error(`\n[html-content-check] ERROR: the reader bundle failed (${e.message}). HTML Content Check cannot fetch pages until the next good build; an alert is raised on boot.\n`);
+}

@@ -6352,6 +6352,10 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS content_check_client_notes_job_idx ON content_check_client_notes ("jobId")`);
+  // Milestone 2: the page as fetched, gzipped, so a better reader can re-read an old round (never put in the recycle-bin copy); and a
+  // failed round has no snapshot, only its error.
+  await pool.query(`ALTER TABLE content_check_rounds ADD COLUMN IF NOT EXISTS "rawHtml" BYTEA`);
+  await pool.query(`ALTER TABLE content_check_rounds ALTER COLUMN snapshot DROP NOT NULL`);
 
   console.log('[db] Schema ready');
 }

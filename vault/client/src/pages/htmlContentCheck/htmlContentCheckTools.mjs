@@ -6,24 +6,26 @@ export const HCC_TOOLS = [
   { id: 'new', label: 'New job', group: 'Jobs', icon: 'plus' },
   { id: 'jobs', label: 'Your jobs', group: 'Jobs', icon: 'list-checks' },
   { id: 'lines', label: 'Request lines', group: 'This job', icon: 'clipboard-list' },
+  { id: 'rounds', label: 'Rounds', group: 'This job', icon: 'history' },
   { id: 'details', label: 'Job details', group: 'This job', icon: 'edit' },
   { id: 'returns', label: 'Returned report', group: 'From the client', icon: 'inbox' },
 ];
 
 /** The tools that work on one open job. */
-export const JOB_TOOL_IDS = ['lines', 'details'];
+export const JOB_TOOL_IDS = ['lines', 'rounds', 'details'];
 
 export const GROUPS = ['Jobs', 'This job', 'From the client'];
 
 export const GROUP_TIPS = {
   Jobs: 'Start a new check of a web page, or open one you started before.',
-  'This job': 'The job you have open: the change request split into numbered lines, and its name, address, client and ticket.',
+  'This job': 'The job you have open: the change request split into numbered lines, each time the page was fetched, and its name, address, client and ticket.',
   'From the client': 'Read the report your client sent back, with their notes against each R number.',
 };
 
 export const TOOL_TIPS = {
-  new: 'Give the page address and paste the change request you were sent. It is split into numbered lines (R1, R2 ...) you can fix before anything is checked. Or just keep an address to compare the page over time.',
+  new: 'Give the page address and paste the change request you were sent. The page is fetched as its starting point, and the request is split into numbered lines (R1, R2 ...) you can fix. Or just keep a page to compare over time. A saved copy of the page can be used instead of fetching.',
   jobs: 'Every page you are checking, newest first, with its request lines and status. Search by name or address, open one, or delete it (it goes to the recycle bin for 30 days).',
+  rounds: 'Every time the page was read: the starting point (round 0), then each Check again. When, how (plain fetch, real browser or saved copy), and why a fetch failed.',
   lines: 'The change request as numbered lines. Edit, split, join, reorder, add or remove lines, then press Save. The numbers become fixed once a client report has been made.',
   details: 'The job\'s name, page address, the request as pasted, the text from before the edits, the CRM client and ticket, its status, and Delete.',
   returns: 'Upload the PDF report your client filled in and sent back; their notes land against the right R numbers. Not built yet.',
@@ -33,6 +35,7 @@ export const TOOL_BLURBS = {
   new: 'Check a change request on a web page, or keep a page to compare over time.',
   jobs: 'Open a page you are checking, or tidy up the list.',
   lines: 'The change request as numbered lines you can fix before checking.',
+  rounds: 'Each time the page was read, and Check again.',
   details: 'Name, address, client, ticket and status of this job.',
   returns: 'Read the report your client sent back.',
 };
@@ -50,6 +53,7 @@ export const HCC_GOALS = [
     steps: [
       { tool: 'new', note: 'Enter the page address and paste the change request, then press Create job.' },
       { tool: 'lines', note: 'Check the request was split into the right lines. Fix, split or join them, then press Save.' },
+      { tool: 'rounds', note: 'Round 0 is the page before the edits. Once the developer says they are done, press Check again.' },
     ],
   },
   {
@@ -57,7 +61,7 @@ export const HCC_GOALS = [
     blurb: 'Keep a page\'s address and see what changed on it between checks, with no request to tick off.',
     steps: [
       { tool: 'new', note: 'Choose "Just compare the page", enter the address, then press Create job.' },
-      { tool: 'details', note: 'The job keeps the address. Fetching the page and comparing rounds come in the next update.' },
+      { tool: 'rounds', note: 'Round 0 is the page now. Press Check again whenever you want to see it again; what changed is shown in the next update.' },
     ],
   },
   {

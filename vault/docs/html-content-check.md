@@ -4,32 +4,49 @@
 
 ## Status
 
-**Milestone 1 (done, 2026-11-26):** jobs, request lines, the page and the recycle bin. No page is fetched yet; that is milestone 2. Not yet started: fetch and extraction (M2), diff and the Changes screen (M3), AI matching (M4), the client report PDF (M5), returned reports (M6, M7), the DocCompare pointer, (i) box, tour and guide chat (M8).
+- **Milestone 1 (done, 2026-11-26):** jobs, request lines, the page and the recycle bin.
+- **Milestone 2 (done, 2026-11-26):** fetching and reading the page. Round 0 is read when a job is made; **Check again** keeps a new round; a saved copy can be uploaded instead; failed rounds keep their reason; the Rounds screen lists them.
+- Not yet: what changed between rounds (M3), AI matching (M4), the client report PDF (M5), returned reports (M6, M7), the (i) box, tour and guide chat (M8).
 
 ## Where it lives
 
 | Piece | Where |
 |---|---|
-| Tables | `server/db.js`: `content_check_jobs`, `content_check_items`, `content_check_rounds`, `content_check_client_notes` |
-| API | `server/routes/htmlContentCheck.js`, mounted at `/api/html-content-check` behind `requireAuth` and `requireFeature('htmlContentCheck')`. No model call yet, so no `aiLimiter` on it. |
+| Tables | `server/db.js`: `content_check_jobs`, `content_check_items`, `content_check_rounds` (with `"rawHtml"`), `content_check_client_notes` |
+| API | `server/routes/htmlContentCheck.js`, mounted at `/api/html-content-check` behind `requireAuth` and `requireFeature('htmlContentCheck')`. No model call yet, so no `aiLimiter`. Fetching has its own limit (30 per person per 10 minutes). |
+| Reading a page | `server/services/htmlContentCheck/`: `lib/` (loads the bundled reader, jsdom, boot check), `extract.js` (snapshot, `normalizeText`), `fetchPage.js` (plain fetch, real browser, saved copy), `config.js` (limits) |
+| The bundled reader | `scripts/buildHtmlContentCheckLib.js` makes `dist/html-content-check-lib/index.cjs` from `server/services/htmlContentCheck/lib/entry.mjs`; run by `scripts/buildDocCompare.js` |
 | Request splitter | `server/services/htmlContentCheck/splitRequest.js` (pure, no model) |
 | Recycle bin | `server/services/recycleBin/adapters/htmlContentCheck.js`, kind `html-content-check-job` |
-| Page | `client/src/pages/HtmlContentCheckPage.jsx` + `client/src/pages/htmlContentCheck/` (tools list `htmlContentCheckTools.mjs`, `JobForm.jsx`, `JobsView.jsx`, `LinesView.jsx`, `shared.jsx`) |
+| Page | `client/src/pages/HtmlContentCheckPage.jsx` + `client/src/pages/htmlContentCheck/` (tools list `htmlContentCheckTools.mjs`, `JobForm.jsx`, `JobsView.jsx`, `LinesView.jsx`, `RoundsView.jsx`, `shared.jsx`) |
 | Menu | `client/src/config/appNavigation.js` (Web & SEO, after AI Visibility; `navSeed.js` places it once in a saved layout) |
-| Tests | `node server/services/htmlContentCheck/splitRequest.test.js`; `DATABASE_URL=… node server/routes/htmlContentCheck.db.test.js` (routes, ownership, refs, bin restore); the cross-user tests cover the six routes (`ownershipBindings.json` maps `/jobs/:id` to `content_check_jobs`) |
 
-## API (milestone 1)
+## Tests
+
+No automated test calls a live site or a model.
+
+- `node server/services/htmlContentCheck/splitRequest.test.js`: the splitter on fixtures.
+- `node server/services/htmlContentCheck/lib.test.js`: the bundle loads and reads; a hostile page makes no request to a local server and runs no script or handler; a missing bundle is reported by the boot check.
+- `node server/services/htmlContentCheck/extract.test.js`: on `fixtures/artist-before.html` and `artist-after.html`, edits in the menu, heading, caption, list, sidebar and footer all survive; hidden, script, `noscript` and `template` content is dropped; ids, section paths, absolute addresses; normalisation; the size cap fails.
+- `node server/services/htmlContentCheck/fetchPage.test.js`: when the real browser is and is not used; a real redirect through `safeFetch` to a local test site is stored as `finalUrl`; saved copies.
+- `DATABASE_URL=… node server/routes/htmlContentCheck.db.test.js` (jobs, lines, ownership, refs, bin) and `DATABASE_URL=… node server/routes/htmlContentCheck.rounds.db.test.js` (rounds with stand-in fetchers: round 0 on create, Check again, failed rounds replaced, uploads, no `rawHtml` in the bin copy, another member refused).
+- The cross-user tests cover the eight routes (`ownershipBindings.json` maps `/jobs/:id` to `content_check_jobs`).
+- **Node 20**: the four pure tests above were run inside the production base image (`ghcr.io/bluelilygithub/curam-vault-base:latest`, Node 20.20.2), after building the bundle there with the image's own Linux `esbuild`. How: mount the repo read-only, copy `server/`, `scripts/` and `doc-compare/src/` into the container, link `node_modules` and `doc-compare/node_modules` to `/app`'s, run `node scripts/buildHtmlContentCheckLib.js`, then the tests with `NODE_ENV=production`.
+
+## API
 
 | Route | Does |
 |---|---|
 | `GET /jobs?q=` | The caller's jobs, newest first, with counts of lines, rounds and open client notes, and the last fetch time. `q` searches name and address as one phrase. |
-| `POST /jobs` | `{ kind: 'request'|'compare', url, name?, requestText, previousText?, clientId?, ticketId?, fetchMode? }`. An address without a scheme gets `https://`; only http and https. A missing name becomes the address. A `request` job's text is split into lines R1, R2 …; a `compare` job keeps no request. |
-| `GET /jobs/:id` | The job with its lines, round summaries, client name, ticket title and open-note count. |
+| `POST /jobs` | `{ kind: 'request'|'compare', url, name?, requestText, previousText?, clientId?, ticketId?, fetchMode?, fetch? }`. An address without a scheme gets `https://`; only http and https. A missing name becomes the address. A `request` job's text is split into lines R1, R2 …; a `compare` job keeps no request. Then round 0 is read, unless `fetch: false` (the page then uploads a saved copy). A failed first fetch still makes the job, with round 0 stored as failed. |
+| `GET /jobs/:id` | The job with its lines, round summaries (number, when, how, final address, status, error, title, words, blocks), client name, ticket title and open-note count. |
 | `PATCH /jobs/:id` | Name, address (refused with 409 once a round exists), request text, previous text, client, ticket, status (`open`/`with_client`/`closed`), fetch mode (`auto`/`plain`/`browser`), settings (an object, 20 KB at most). Changing the request text does not change the lines. |
 | `PUT /jobs/:id/items` | `{ items: [{ id?, lineText }] }` replaces the lines in that order; an `id` must be one of this job's lines. Or `{ resplit: true }` splits the stored request again (refused with 409 once refs are locked). |
+| `POST /jobs/:id/rounds` | Check again: reads the page the way the job's fetch mode says, or, with a multipart field `file`, an uploaded saved copy (`.html`/`.htm`, 5 MB at most). Returns `{ round, job }`. |
+| `GET /jobs/:id/rounds/:number` | One round with its snapshot and results. The stored page is never sent back. |
 | `DELETE /jobs/:id` | Moves the job with its lines, rounds and client notes to the recycle bin (25 MB at most; a bigger job answers 413). |
 
-Limits: 200 lines a job, 5,000 characters a line, 50,000 for the request and 200,000 for the previous text. Over a limit is refused with a plain message, never cut. A client must be in the caller's CRM; a ticket needs Tickets switched on for the caller (tickets are shared across the workspace by design). Logs never carry request text or page content.
+Limits: 200 lines a job, 5,000 characters a line, 50,000 for the request, 200,000 for the previous text, 5 MB of page HTML, **500,000 characters of extracted text per round** (`MAX_SNAPSHOT_CHARS` in `server/services/htmlContentCheck/config.js`). Over a limit is refused with a plain message, never cut. A client must be in the caller's CRM; a ticket needs Tickets switched on for the caller (tickets are shared across the workspace by design). Logs never carry request text or page content.
 
 ## R numbers
 
@@ -39,57 +56,87 @@ Until the first client report is made, the lines are renumbered R1, R2 … in li
 
 A bullet or number (`-`, `*`, `•`, `1.`, `2)`, `a)`, `(iv)`) starts a line and a plain line straight after it continues it; a blank line ends a line, so paragraphs separated by blank lines are one line each (wrapped email text stays together); with no bullets and no blank lines every line is its own. Nothing is dropped: an intro such as "Hi, please make these changes:" becomes a line the person deletes.
 
-## Answers to the brief's open questions (milestone 1)
+## Rounds and fetching
 
-**1. Where DocCompare's HTML reader runs.** In the browser only. It is `doc-compare/src/readers/html.ts`, TypeScript inside DocCompare's own Vite app, using the browser's `DOMParser` and `@mozilla/readability`. Readability and `diff` are only in `doc-compare/package.json`; Vault's root has `jsdom` (which provides a `DOMParser`) but neither of those. Vault's server cannot load the `.ts` file as it is: production runs Node 20 (`node:20-slim` in `Dockerfile.base`), which cannot run TypeScript (this PC runs Node 24, which can, so it would work locally and fail on Railway). DocCompare's `node_modules` (with `esbuild`, `diff` and Readability) are installed in the base image, though. So server-side extraction is possible **without a `package.json` change** by bundling the reader at build time (proposal A below). Full mode would not need Readability at all.
+Round 0 is the starting point every later round is compared with. Numbers run 0, 1, 2 … without gaps: a failed round is stored with its reason (and how it was tried) and the next attempt replaces it. **An unchanged page is still stored as a round**, so a check that found nothing done is on record.
 
-**2. The word-diff code.** `doc-compare/src/compare/content.ts` (`diffWordsWithSpace` from the `diff` package, plus DocCompare's `normalize.ts` and `textSim.ts`), and `align.ts` (`diffArrays`) for lining up blocks. The `diff` package is only in `doc-compare/package.json`, not in Vault's root, so Vault's server cannot `require('diff')` today. The same bundle (proposal A) would include it.
+How a page is read (`fetchPage.js`, brief decision 6):
 
-**3. The fillable-PDF code.** `server/routes/pdf.js` in PDF Tools, on `pdf-lib`: `POST /api/pdf/addfields` creates text fields, checkboxes and dropdowns (`form.createTextField` / `createCheckBox` / `createDropdown`, with its standard-font and typography helpers), and `POST /api/pdf/inspect` reads every field's value back with the same library (`getText`, `isChecked`, `getSelected`). So yes, one library writes and reads. The helpers live inside the route file and are not exported; milestone 5 would move the few it needs into a small shared module. Note: `pdf-lib`'s standard fonts are Latin-1 only, so curly quotes print but non-Latin text would not; DocCompare solved this with bundled Liberation fonts (`doc-compare/src/report/pdfFonts.ts`), which needs `@pdf-lib/fontkit` (not in Vault's root: to be checked in M5 before relying on it).
+- **`auto`** (the default): a plain fetch through `safeFetch.fetchPublicFile` (Vault's SSRF guard; 5 MB, 10 s of silence or 20 s in all, HTML only, 5 redirects at most, each checked). The real browser (`server/services/restyle/renderPage.js`, every request SSRF-checked) is used instead when the plain copy has almost no text (under 30 words, DocCompare's `THIN_WORDS`), or the site turns the plain fetch away (HTTP 403, 406, 429, 503). Never for an address the guard refused.
+- **`plain`**: the plain fetch only. **`browser`** ("Load in a real browser"): the real browser only.
+- **A saved copy** (`fetchedVia: 'upload'`): its own address, from the browser's "saved from url" comment, `<base>`, canonical or `og:url`, is used as `finalUrl`.
 
-**4. DocCompare's web-page features**, from `doc-compare/src/` and `docs/doc-compare.md`, are the parity list below.
+Each round records `fetchedVia` (`plain`, `browser`, `upload`) and `finalUrl` (after redirects). The page's HTML is kept gzipped in `"rawHtml"` (usually 20 to 150 KB), so a better reader can re-read an old round later; it is never sent to the browser and is **left out of the recycle-bin copy** (a restored job's rounds have their snapshots but no stored page).
+
+## The bundled reader
+
+DocCompare's reader (`doc-compare/src/readers/html.ts`) is TypeScript in a browser app; production runs Node 20, which cannot load TypeScript, and Vault's own `package.json` has neither `diff` nor Readability. So `scripts/buildHtmlContentCheckLib.js` bundles the reader and `diff` into `dist/html-content-check-lib/index.cjs` (about 30 KB, under a second) with the `esbuild` in `doc-compare/node_modules`, which the base image installs. Readability is **left out**: full mode never uses it, and an alias puts a stand-in that refuses to run in its place (`lib/noReadability.mjs`). This matters: the base image of 2026-11-26 has no Readability in `doc-compare/node_modules` (it predates DocCompare's web-page update), and the bundle failed to build there until Readability was taken out.
+
+- **When it is built**: by `scripts/buildDocCompare.js` during `npm run build` (its own step, so a failed DocCompare app still leaves the reader), by hand, and by the server outside production whenever the bundle is missing or older than its sources (`lib/index.js`), so local dev and tests always use the current reader.
+- **When it fails**: the build log shows `[html-content-check] ERROR`, the deploy goes ahead (a preview tool must not block every deploy), and on boot the server checks the bundle by reading a tiny page (`lib.bootCheck()`, called from `server/index.js`). If that fails it logs an error and files a Suggestions-inbox alert for the first admin ("HTML Content Check cannot read pages", source `html-content-check`). Fetches then fail with a plain message.
+- **jsdom** is used only for its `DOMParser`, with jsdom's own defaults kept on purpose: no `runScripts` (scripts never run) and no `resources` (nothing a page names is fetched). `lib.test.js` proves it on a hostile page.
+
+Full mode (`extract(html, { mode: 'full', baseUrl })`, added to DocCompare's reader; DocCompare's own default is unchanged and its 246 tests still pass) drops only `script`, `style`, `noscript`, `template`, `[hidden]` and inline `display:none` / `visibility:hidden`. It keeps nav (DocCompare's main mode skips it), header, footer, sidebars, captions and banners, and adds each picture's address, made absolute (http and https only; `data:` pictures and relative addresses with no base are left without one). Content hidden by a style sheet (closed tabs, accordions) is still included, as in DocCompare.
+
+## Snapshot
+
+```
+{ v: 1,
+  meta: { title, finalUrl, fetchedVia, chars, words, pageUrl, author, published, modified, generator },
+  blocks: [{ id: 'b1', type, level?, style?, number?, text, runs?, src?, table?: { t, r, c }, section: ['Dorothy Stoner', 'Exhibitions'] }] }
+```
+
+Block types are DocCompare's: `heading`, `paragraph` (style `Quote` or `Code` for quotes and code; captions are paragraphs), `listItem` (style `bullet list` / `ordered list`, `level` = depth, `number` as shown), `tableCell`, `image` (text = alt text). Links stay inside `runs` (with bold, italic, underline, strikethrough); `runs` is stored only when some run carries formatting or a link. `section` is the heading path in reading order (a heading resets deeper levels); text after the last heading keeps that heading's path, footer included. `chars` and `words` leave out alt text. The original text is stored as shown; `normalizeText()` (`extract.js`) is applied only when comparing: invisible characters and soft hyphens removed, non-breaking and other spaces made plain, curly quotes made straight, whitespace collapsed. **Case and dashes are left alone**, so they still count as changes.
+
+## Decisions (owner, 2026-11-26)
+
+- Proposals A to H (below) approved, with extraction on the server by bundling.
+- An unchanged page is stored as a round with no changes.
+- Changes nobody asked for are **left out of the client report by default**, with an **Include changes nobody asked for** option when making the report (milestone 5).
+- DocCompare's document checks (claims, quotes, spelling, terms, numbering and so on) are **not** carried over. Spelling on changed text is noted as a future idea (Future 9).
+- Size cap: 500,000 characters of extracted text per round.
+- DocCompare import (milestone 8): **the address only**, no change to DocCompare.
+- Word export dropped, and with it comparing a web page with a Word file.
 
 ## Parity with DocCompare's web-page mode
 
-To be covered before a removal brief is written. Items marked *decide* go beyond the smaller version of this tool, and need the owner's call: build, or agree to drop.
+To be covered before a removal brief is written.
 
-1. **Fetch a page by address**, through `safeFetch.fetchPublicFile` (http/https, ports 80/443, every address checked public, redirects re-checked, at most 5), 5 MB at most, 10 s of silence or 20 s in all, HTML only, its own user agent, 30 fetches per person per 10 minutes. *M2.*
-2. **Open a saved page** (`.html`/`.htm` from File > Save Page As) for staging sites and pages behind a login. *M2 (saved-copy upload).*
-3. **Reader output**: character set from the BOM or `<meta charset>`; headings with levels; paragraphs; bullet and numbered lists (shown numbers, `start` respected, nesting depth); tables as cells with table/row/column; block quotes; `pre` as code; links made absolute (`javascript:` dropped); pictures as image blocks with alt text; bold, italic, underline and strikethrough. *M2, in full mode (no clutter removal, no Readability).*
-4. **Page details**: title, author, published and modified dates, generator, the page's own address (saved-from comment, `<base>`, canonical, `og:url`) and where the content was taken from. *M2 (snapshot `meta`).*
-5. **Almost-no-text refusal** (under 30 words) with advice to save the page from a browser. *M2: here it triggers the real-browser fallback first.*
-6. **Rounds and a timeline**: the fetched page as a dated original, later fetches as rounds, an unchanged page refused as "the same file". *M2/M3.* (Whether an unchanged page should be refused or stored as a round with no changes: *decide*; storing it is more useful for "nothing was done".)
-7. **Comparing without a request.** *M3 (`compare` jobs).*
-8. **Review PDF for the author** (must fix / please review / minor, with word diffs). *M5's client report covers the request lines; *decide* whether changes nobody asked for also go in it.*
-9. **Word export** of the page (`docx` package, image placeholders, reads back identically). **Dropped** (owner, 2026-11-26): not part of HTML Content Check, and not needed for parity.
-10. **A web page compared with a Word file** (the copywriter's edited .docx as a round). **Dropped with item 9**, since it only served the Word workflow.
-11. **The document checks on web pages**: new claims, quotes, links, references, numbering, spelling, terms, word limits, required headings, formatting. *Decide*; out of scope for the smaller version.
-12. **Verdict, Accept / Fix later decisions and the accepted state.** *Out of scope by the brief* (the future checklist engine, Future 1 and 2).
-13. **Project export / import** (`.doccompare`). Not needed: jobs live on the server.
+1. **Fetch a page by address** through `safeFetch.fetchPublicFile`, the same limits as DocCompare. *Done (M2).*
+2. **Open a saved page** (`.html`/`.htm`). *Done (M2): upload a saved copy, on New job or Rounds.*
+3. **Reader output**: character set, headings with levels, paragraphs, lists (numbers, `start`, depth), tables, block quotes, code, absolute links, pictures with alt text, bold/italic/underline/strikethrough. *Done (M2): the same reader, in full mode.*
+4. **Page details**: title, author, dates, generator, the page's own address. *Done (M2): snapshot `meta`.*
+5. **Almost-no-text refusal**. *Done (M2): the real browser is tried first, then the round fails with advice to upload a saved copy.*
+6. **Rounds and a timeline**. *Rounds stored and listed (M2); the full timeline with change counts is M3. An unchanged page is a round (not refused as in DocCompare).*
+7. **Comparing without a request** (`compare` jobs). *M3.*
+8. **Review PDF for the author**. *M5's client report covers the request lines; changes nobody asked for are an option when making it.*
+9. ~~Word export~~. *Dropped.*
+10. ~~A web page compared with a Word file~~. *Dropped with 9.*
+11. ~~The document checks on web pages~~. *Not carried over (spelling on changed text: Future 9).*
+12. ~~Verdict, Accept / Fix later and the accepted state~~. *Out of scope by the brief (Future 1 and 2).*
+13. ~~Project export / import~~. *Not needed: jobs live on the server.*
 
 ## Proposals (approved by the owner, 2026-11-26)
 
-All of A to H were approved, with extraction on the server by bundling (A). Milestone 2 builds on them as written below. Still open from the parity list: item 6 (store an unchanged page as a round, or refuse it), item 8 (changes nobody asked for in the client report) and item 11 (DocCompare's document checks); they are not needed before milestone 2.
+**A. Extract on the server by bundling DocCompare's reader at build time.** Built in M2: see "The bundled reader".
 
-**A. Extract on the server by bundling DocCompare's reader at build time.** A small script (`scripts/buildHtmlContentCheckLib.js`, run from `scripts/buildDocCompare.js`) uses the `esbuild` already in `doc-compare/node_modules` to bundle `doc-compare/src/readers/html.ts` (with a new `mode: 'full'` option; DocCompare's default unchanged) and `diff` into one CommonJS file under `dist/`, which the server loads with `jsdom`'s `DOMParser`. Cost: no `package.json` change, no base-image rebuild, under a second of build time. Risk: if that build step fails, fetching in this tool fails (with a plain message) until the next deploy; locally the script must be run once before fetching works. This is a build change (docs/deploy-speed.md); approved. The alternative is extracting in the browser and posting the snapshot, which rules out scheduled re-checks (Future 4).
+**B. Snapshot shape: DocCompare's blocks, not the brief's**, plus `id`, `section` and `src`. Built in M2: see "Snapshot".
 
-**B. Snapshot shape: DocCompare's blocks, not the brief's.** The reader already returns blocks of type `heading`, `paragraph`, `listItem`, `tableCell`, `image` with `level`, `style` (`Quote`, `Code`, list kind), `runs` (formatting and link addresses), `number` and table position. Proposal: store those as they are, plus `id` and `section` (the heading path) added by this tool, under `{ v: 1, meta, blocks }`. The brief's `quote` is `style: 'Quote'`, `link` stays inside runs, and `caption` would be a paragraph; full mode also adds `src` to image blocks (DocCompare ignores it), needed for thumbnails and image fingerprints.
+**C. Full mode drops only what a browser never shows.** `aria-hidden` is kept (it hides from screen readers, not from the eye). Built in M2.
 
-**C. Full mode removes less than the brief says, on one point.** It drops scripts, styles, `noscript`, `template`, `[hidden]` and inline `display:none` / `visibility:hidden`, and keeps nav, header, footer, aside, cookie banners and forms' visible text. `aria-hidden` is kept (it hides from screen readers, not from the eye). Content hidden by a style sheet (closed tabs, accordions) is still included, as in DocCompare.
+**D. Size cap.** 500,000 characters (the owner's figure, not the 2,000,000 proposed). A job too big for the recycle bin's 25 MB still answers 413 on delete; with `rawHtml` kept out of the bin copy, that needs many rounds near the cap.
 
-**D. Size cap: 2,000,000 characters of extracted text per round** (`MAX_SNAPSHOT_CHARS` in `server/services/htmlContentCheck/config.js`), on top of the 5 MB fetch cap. Over it, the round fails and says so. A job with many large rounds can exceed the recycle bin's 25 MB: today that refuses the delete (413); proposal: offer "Delete for good" after a typed confirmation.
+**E. Keep the fetched HTML, compressed, with each round.** Built in M2 (`"rawHtml"`).
 
-**E. Keep the fetched HTML, compressed, with each round** (`"rawHtml" BYTEA`, gzip, usually 20–150 KB). Then a better reader can re-extract old rounds without fetching again, and a disputed result can be shown from the page as it was. Not in the brief's schema; say no and only the snapshot is kept.
+**F. Schema changes made in milestone 1**: `"refCounter"` and `"refsLockedAt"` on jobs; real foreign keys for `"clientId"`, `"ticketId"` and `"attachmentId"` (`ON DELETE SET NULL`) and every `"userId"` (`ON DELETE CASCADE`); no `CHECK` on kind or status. Milestone 2 added `"rawHtml"` and made `snapshot` nullable (a failed round has none).
 
-**F. Schema changes already made in milestone 1** (against the brief's sketch): `"refCounter"` and `"refsLockedAt"` on jobs (R numbers above); real foreign keys for `"clientId"`, `"ticketId"` and `"attachmentId"` (`ON DELETE SET NULL`) and for every `"userId"` (`ON DELETE CASCADE`), as the neighbouring tables do; no `CHECK` on kind or status (checked in code, so later kinds need no migration).
+**G. Routes.** `PUT /jobs/:id/items` takes `{ resplit: true }`; `POST /jobs` keeps the job when round 0 fails; downloading the client report (M5) will set `"refsLockedAt"`.
 
-**G. Routes.** `PUT /jobs/:id/items` also takes `{ resplit: true }` rather than a separate route. `POST /jobs` will create the job even when fetching round 0 fails, storing round 0 as failed with its error, so the person can retry or upload a saved copy through `POST /jobs/:id/rounds`. Downloading the client report (M5) sets `"refsLockedAt"`.
-
-**H. Milestone 8's import from DocCompare.** DocCompare's rounds live in the browser's IndexedDB, never on the server. Importing the earliest page round is still possible without a server change: Vault's DocCompare page already receives messages from the app, so the app could hand over the original page's HTML and the page upload it as round 0 (the saved-copy path). That is a small change inside DocCompare, which the brief says to avoid; the fallback is carrying the address only.
+**H. Milestone 8's import from DocCompare**: the address only (decided).
 
 ## Conflicts with the house docs (noted, not acted on)
 
-- `client/DESIGN.md` ("Every new tool") wants the (i) box, tour and guide chat on every tool; the brief puts them in milestone 8. Milestone 1 follows the brief, so the page has none yet, and Code Map may flag it until then.
+- `client/DESIGN.md` ("Every new tool") wants the (i) box, tour and guide chat on every tool; the brief puts them in milestone 8, so the page has none yet, and Code Map may flag it until then.
 - The brief's job tiles include "Read a client's returned report", which is milestone 6: the tile and the tool exist and say plainly they are not built yet.
 
 ## Future (designed for, not built)
@@ -97,8 +144,9 @@ All of A to H were approved, with extraction on the server by bundling (A). Mile
 1. **Checklist engine**: new `content_check_items.kind` values (`remove`, `replace`, `insert`, `image`, `held_over`) with `oldText`, `newText`, `section` columns; a pure `server/services/htmlContentCheck/checks/` with `runChecks({ baseline, previous, current, items })`, stored under `results.checks`. Old text must be in the baseline; new text must not be; a close match counts only when nearer the new text than the old; case- and quote-only differences compared strictly.
 2. **Accept and broken-again**: a `content_check_acceptances` table (item, round, by, at); re-checks compare against accepted rounds.
 3. **Learned rules**: a per-person `content_check_rules` table with admin sharing, fed into the matching prompt, capped in count and length.
-4. **Scheduled re-checks**: a cron in `withCronLock` fetching new rounds for open jobs, raising "page changed since approval" through `SuggestionService.captureIf()`. This is why extraction should run on the server.
-5. **Image fingerprints**: a `sharp` perceptual hash per image block under `results.images`, so a new address for the same picture is not reported (needs `src` in the snapshot, proposal B).
+4. **Scheduled re-checks**: a cron in `withCronLock` fetching new rounds for open jobs, raising "page changed since approval" through `SuggestionService.captureIf()`. Possible because extraction runs on the server.
+5. **Image fingerprints**: a `sharp` perceptual hash per image block under `results.images`, so a new address for the same picture is not reported (the snapshot has `src`).
 6. **Ignore rules**: per-job `settings.ignore` (text patterns or sections) applied by the diff before display, for dates and news boxes.
 7. **Client shared link**: a shared-link route before `requireAuth`, on Vault's shared-link pattern, instead of the PDF.
-8. ~~**Word export**~~: dropped by the owner on 2026-11-26 (parity item 9).
+8. ~~**Word export**~~: dropped by the owner on 2026-11-26.
+9. **Spelling on changed text**: flag likely misspellings in the words a round added or changed (not the whole page). DocCompare's `checks/spelling.ts` only compares Australian and American forms, so this would need a real word list.

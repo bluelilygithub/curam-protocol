@@ -4,14 +4,37 @@
 // requireFeature('htmlContentCheck'). Milestone 1: jobs and their request lines only (no fetching yet). Every query filters by "userId"
 // and every id from the request is checked against its owner. Logs never carry page content or request text. See docs/html-content-check.md.
 
+const zlib = require('zlib');
 const express = require('express');
+const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const bin = require('../services/recycleBin');
 const { loadFeatureAccess } = require('../middleware/auth');
 const { getLogger } = require('../middleware/requestContext');
 const { splitRequest } = require('../services/htmlContentCheck/splitRequest');
+const { loadPage, readUpload, DEFAULT_DEPS } = require('../services/htmlContentCheck/fetchPage');
+const { MAX_UPLOAD_BYTES } = require('../services/htmlContentCheck/config');
 
 const router = express.Router();
+let pageDeps = DEFAULT_DEPS; // tests swap the fetchers (no live site in automated tests)
+
+// Fetching and rendering are slow and reach outside sites: their own modest limit, on the DocCompare fetch pattern. Reads are not counted.
+const fetchLimit = rateLimit({
+  windowMs: 10 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  message: { error: 'Too many pages fetched in a short time. Wait a few minutes and try again.' },
+});
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => cb(/\.(html?|xhtml)$/i.test(file.originalname || '') ? null : Object.assign(new Error('Choose a saved web page (.html or .htm).'), { isPublic: true, status: 400 }), true),
+});
+const uploadOne = (req, res, next) => upload.single('file')(req, res, (err) => {
+  if (!err) return next();
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `That file is bigger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.` });
+  return res.status(err.status || 400).json({ error: err.isPublic ? err.message : 'That file could not be read.' });
+});
 
 const KINDS = ['request', 'compare'];
 const STATUSES = ['open', 'with_client', 'closed'];
@@ -88,7 +111,10 @@ async function jobDetail(db, userId, id) {
   const job = await ownJob(db, userId, id);
   const [items, rounds, client, ticket, notes] = await Promise.all([
     db.query('SELECT id, ref, kind, "lineText", source, position FROM content_check_items WHERE "jobId" = $1 AND "userId" = $2 ORDER BY position, id', [job.id, userId]),
-    db.query('SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 ORDER BY number', [job.id, userId]),
+    db.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error,
+                     snapshot->'meta'->>'title' AS title, (snapshot->'meta'->>'words')::int AS words, (snapshot->'meta'->>'chars')::int AS chars,
+                     jsonb_array_length(COALESCE(snapshot->'blocks', '[]'::jsonb)) AS blocks
+                FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 ORDER BY number`, [job.id, userId]),
     job.clientId ? db.query('SELECT name FROM clients WHERE id = $1 AND "userId" = $2', [job.clientId, userId]) : { rows: [] },
     job.ticketId ? db.query('SELECT title FROM tickets WHERE id = $1', [job.ticketId]) : { rows: [] },
     db.query(`SELECT COUNT(*) AS n FROM content_check_client_notes WHERE "jobId" = $1 AND "userId" = $2 AND status = 'open'`, [job.id, userId]),
@@ -144,6 +170,33 @@ function cleanLines(rawItems, existingIds) {
   });
 }
 
+// One round: fetch (or read the upload) first, outside any transaction, then store it. Numbers run 0, 1, 2 ...; round 0 is the baseline.
+// A failed round is stored with its error, and the next attempt replaces it (same number), so the numbers stay without gaps.
+async function runRound(userId, job, { buffer } = {}) {
+  let page = null;
+  let failure = null;
+  try {
+    page = buffer ? readUpload(buffer) : await loadPage(job.url, job.fetchMode, pageDeps);
+  } catch (err) {
+    if (!err.isPublic) getLogger().error({ err, jobId: job.id }, '[html-content-check] round');
+    failure = { message: err.isPublic ? err.message : 'The page could not be read. Try again, or upload a saved copy.', via: err.fetchedVia || (buffer ? 'upload' : job.fetchMode === 'browser' ? 'browser' : 'plain') };
+  }
+  return inTx(async (db) => {
+    await ownJob(db, userId, job.id, { lock: true });
+    const { rows } = await db.query('SELECT number, status FROM content_check_rounds WHERE "jobId" = $1 ORDER BY number DESC LIMIT 1', [job.id]);
+    const last = rows[0];
+    const number = !last ? 0 : last.status === 'failed' ? last.number : last.number + 1;
+    if (last?.status === 'failed') await db.query('DELETE FROM content_check_rounds WHERE "jobId" = $1 AND number = $2', [job.id, last.number]);
+    const { rows: made } = await db.query(`
+      INSERT INTO content_check_rounds ("jobId", "userId", number, "finalUrl", "fetchedVia", snapshot, "rawHtml", status, error)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, number, status, error, "fetchedVia", "finalUrl", "fetchedAt"`,
+    [job.id, userId, number, page?.finalUrl || null, page ? page.fetchedVia : failure.via, page ? JSON.stringify(page.snapshot) : null,
+      page ? zlib.gzipSync(page.html) : null, page ? 'ready' : 'failed', failure?.message || null]);
+    await db.query('UPDATE content_check_jobs SET "updatedAt" = NOW() WHERE id = $1', [job.id]);
+    return made[0];
+  });
+}
+
 // ── Jobs ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 router.get('/jobs', async (req, res) => {
@@ -162,7 +215,9 @@ router.get('/jobs', async (req, res) => {
   } catch (err) { fail(res, err, 'list'); }
 });
 
-router.post('/jobs', async (req, res) => {
+// Creates the job, then fetches round 0 (the baseline) unless `fetch: false` (the page then uploads a saved copy as round 0). A failed
+// fetch still leaves the job, with round 0 stored as failed and its reason, so the person can try again or upload a copy.
+router.post('/jobs', fetchLimit, async (req, res) => {
   const b = req.body || {};
   try {
     const kind = b.kind == null ? 'request' : b.kind;
@@ -184,6 +239,7 @@ router.post('/jobs', async (req, res) => {
       await writeItems(db, rows[0], req.user.id, lines);
       return rows[0].id;
     });
+    if (b.fetch !== false) await runRound(req.user.id, await ownJob(pool, req.user.id, id));
     res.status(201).json(await jobDetail(pool, req.user.id, id));
   } catch (err) { fail(res, err, 'create'); }
 });
@@ -245,12 +301,38 @@ router.put('/jobs/:id/items', async (req, res) => {
   } catch (err) { fail(res, err, 'items'); }
 });
 
+// ── Rounds ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// Check again: fetch the page as the job says (plain, real browser, or plain then browser), or read an uploaded saved copy (field `file`).
+router.post('/jobs/:id/rounds', fetchLimit, uploadOne, async (req, res) => {
+  try {
+    const job = await ownJob(pool, req.user.id, req.params.id);
+    const round = await runRound(req.user.id, job, req.file ? { buffer: req.file.buffer } : {});
+    res.status(201).json({ round, job: await jobDetail(pool, req.user.id, job.id) });
+  } catch (err) { fail(res, err, 'round'); }
+});
+
+router.get('/jobs/:id/rounds/:number', async (req, res) => {
+  try {
+    const job = await ownJob(pool, req.user.id, req.params.id);
+    const n = idOf(req.params.number);
+    if (n === null) throw bad(404, 'Not found');
+    const { rows } = await pool.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error, snapshot, results
+                                         FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 AND number = $3`, [job.id, req.user.id, n]);
+    if (!rows[0]) throw bad(404, 'Not found');
+    res.json(rows[0]);
+  } catch (err) { fail(res, err, 'get round'); }
+});
+
 router.delete('/jobs/:id', async (req, res) => {
   try {
     const binId = await inTx(async (db) => {
       const job = await ownJob(db, req.user.id, req.params.id, { lock: true });
-      const q = (table) => db.query(`SELECT * FROM ${table} WHERE "jobId" = $1 AND "userId" = $2 ORDER BY id`, [job.id, req.user.id]).then((r) => r.rows);
-      const [items, rounds, notes] = [await q('content_check_items'), await q('content_check_rounds'), await q('content_check_client_notes')];
+      const q = (table, cols = '*') => db.query(`SELECT ${cols} FROM ${table} WHERE "jobId" = $1 AND "userId" = $2 ORDER BY id`, [job.id, req.user.id]).then((r) => r.rows);
+      // the gzipped page ("rawHtml") stays out of the bin copy: it is only for re-reading old rounds, and would crowd the 25 MB limit
+      const [items, rounds, notes] = [await q('content_check_items'),
+        await q('content_check_rounds', 'id, "jobId", "userId", number, "fetchedAt", "finalUrl", "fetchedVia", snapshot, results, status, error'),
+        await q('content_check_client_notes')];
       let id;
       try {
         id = await bin.moveToBin(db, {
@@ -271,3 +353,4 @@ router.delete('/jobs/:id', async (req, res) => {
 
 module.exports = router;
 module.exports.LIMITS = LIMITS;
+module.exports._setPageDeps = (deps) => { pageDeps = deps ? { ...DEFAULT_DEPS, ...deps } : DEFAULT_DEPS; }; // tests only
