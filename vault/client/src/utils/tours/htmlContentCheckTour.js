@@ -117,7 +117,7 @@ export function startHtmlContentCheckTour(goTool) {
     MAIN, 'changes', 'top');
 
   step('hcc-report', 'Approve, then the client report',
-    'Under each line, Approve the edits you checked and found right, or mark Needs work to send them back to the developer. Make the client report then downloads a fillable PDF, page by page, with only the approved lines, for the client to tick and note. Changes nobody asked for are left out unless you tick to include them.',
+    'Changes opens on Review by line: each request line with its changes, page by page. Approve the edits you checked and found right (key A), or mark Needs work (key N) with a note; J and K move between lines. The bar at the top counts what is left, holds Make the client report (a fillable PDF of the approved lines) and copies the Needs work list for the developer. All changes is where you link changes by hand.',
     MAIN, 'changes', 'top');
 
   step('hcc-details', 'Job details and your jobs',

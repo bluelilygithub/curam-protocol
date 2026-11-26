@@ -172,9 +172,9 @@ export default function HtmlContentCheckPage() {
     return out;
   };
   // The person's verdict on a line in this round (approved / needs_work / null): only approved lines go on the client report.
-  const approveLine = async (number, ref, status) => {
+  const approveLine = async (number, ref, status, note) => {
     let out = null;
-    await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/approvals/${encodeURIComponent(ref)}`, { status })); });
+    await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/approvals/${encodeURIComponent(ref)}`, { status, note })); });
     return out;
   };
   // The client report: a fillable PDF of the approved lines, grouped by page. The first one fixes the R numbers, so the job is reloaded.

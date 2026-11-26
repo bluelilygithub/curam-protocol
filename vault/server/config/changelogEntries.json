@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "74a34158",
+   "fullHash": "74a34158ac2f34a1cb1f13dcc22f412e3338645b",
+   "committedAt": "2026-11-27T07:55:42+10:00",
+   "author": "mrb",
+   "area": "HTML Content Check",
+   "subject": "HTML Content Check: Review by line on Changes, keys, developer list",
+   "filesChanged": 10,
+   "insertions": 366,
+   "deletions": 6,
+   "goal": "The owner found the Changes screen cumbersome (read a change on the left, find its line on the right, scroll to approve) and asked for five improvements: one review list, a progress bar with the report button always on screen, keyboard review, folding settled lines, and a list of the Needs work lines for the developer.",
+   "whatChanged": "New client/src/pages/htmlContentCheck/ReviewView.jsx: the default view on Changes for change requests, with request lines grouped by page (lines with no page under their first linked page, else \"Across the site\"), each with its linked changes (the shared ChangeCard, now exported from ChangesView.jsx) and Approve / Needs work; a sticky bar with progress, Next undecided, Show all, Include changes nobody asked for, Make the client report, Copy for the developer and Email it (mailto); keys J/K/A/N/U (ignored while typing); approved lines fold; Keep, held-over and unasked changes at the end. A Needs work line gets a note (VoiceInput) saved through the existing approval route (HtmlContentCheckPage.jsx now sends note). New reviewList.mjs (grouping and the developer text) with reviewList.test.mjs. ChangesView.jsx gains a Review by line / All changes switch. Guide catalogue (review-mode, developer), tour step, (i) box, step text and docs updated.",
+   "filesImpacted": [
+    "vault/client/src/pages/HtmlContentCheckPage.jsx",
+    "vault/client/src/pages/htmlContentCheck/ChangesView.jsx",
+    "vault/client/src/pages/htmlContentCheck/ReviewView.jsx",
+    "vault/client/src/pages/htmlContentCheck/htmlContentCheckTools.mjs",
+    "vault/client/src/pages/htmlContentCheck/reviewList.mjs",
+    "vault/client/src/pages/htmlContentCheck/reviewList.test.mjs",
+    "vault/client/src/utils/tours/htmlContentCheckTour.js",
+    "vault/docs/html-content-check.md",
+    "vault/docs/key-files.md",
+    "vault/server/services/htmlContentCheckTutor.js"
+   ],
+   "benefit": "A job is reviewed top to bottom once, by keyboard if wanted, with progress always visible, and the lines that need fixing can be handed to the developer in one paste.",
+   "concerns": "Client-only; no server or database change. The note on a Needs work line saves when the box loses focus, so a note dictated with the mic and never left may not save until you click elsewhere. Email it uses a mailto link, which some browsers cut off for very long lists. The keys act on the highlighted line; they are off while typing in any box. Tested: reviewList.test.mjs, the guide tests, report and pages database tests, client build, and a Playwright run on a local dev server with stand-in pages and model (bar counts, J/A/J/N keys, a note including typing \"a\" that did not approve, folding, Next undecided, the copied developer list, report download, All changes tabs, a hand-linked change shown under its line), no browser errors. Not tried on a phone, on Railway or with a member account."
+  },
+  {
    "commit": "534555eb",
    "fullHash": "534555eb4b2b51ee829ebbe1857a6c0a2c3e4fea",
    "committedAt": "2026-11-27T07:30:32+10:00",

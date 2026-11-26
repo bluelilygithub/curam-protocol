@@ -5,6 +5,7 @@ import EmptyState from '../../components/EmptyState';
 import { CARD, FIELD_CLASS, FIELD_INLINE, FIELD_STYLE, SecondaryButton, Badge, formatDate } from './shared';
 import RequestPanel from './RequestPanel';
 import ReportBox from './ReportBox';
+import ReviewView from './ReviewView';
 
 // What changed in one round, in reading order, against the starting point or the round before. Worked out by code on the server
 // (results.diff); nothing here decides whether an edit was done. Changes that look like content changing by itself (cookie banners,
@@ -37,7 +38,7 @@ function Picture({ side }) {
   );
 }
 
-function ChangeCard({ c, askedBy = [], highlight, linkRef, onToggleLink }) {
+export function ChangeCard({ c, askedBy = [], highlight, linkRef, onToggleLink }) {
   const t = TYPE[c.type];
   const side = c.after || c.before;
   const linked = linkRef && askedBy.includes(linkRef);
@@ -96,6 +97,7 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
   const [selected, setSelected] = useState(null); // a request line's ref
   const [editing, setEditing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | asked | unasked
+  const [mode, setMode] = useState(request ? 'review' : 'changes'); // review: one list by request line (ReviewView); changes: the page's changes
   const number = numbers.includes(roundNumber) ? roundNumber : numbers[numbers.length - 1];
 
   useEffect(() => {
@@ -140,9 +142,37 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
     const v = await linkChanges(number, row.pageId, selected, on ? [...current, id] : current.filter((x) => x !== id));
     if (v) setRound(v);
   };
+  const modeSwitch = request && (
+    <div className="flex gap-1" role="radiogroup" aria-label="How to show this round" data-guide="review-mode">
+      {[['review', 'Review by line', 'One list of request lines, page by page, each with its changes: approve or send back each one.'], ['changes', 'All changes', 'Every change on each page in reading order, with the request beside it. Link or unlink changes by hand here.']].map(([k, label, tip]) => (
+        <Tooltip key={k} text={tip}>
+          <button type="button" role="radio" aria-checked={mode === k} onClick={() => setMode(k)}
+            className="px-3 py-1.5 rounded-lg border text-sm transition-opacity duration-200 hover:opacity-70"
+            style={mode === k ? { background: 'var(--color-primary)', color: 'var(--color-on-primary)', borderColor: 'var(--color-primary)' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}>
+            {label}
+          </button>
+        </Tooltip>
+      ))}
+    </div>
+  );
+  if (request && mode === 'review') {
+    return (
+      <div className="space-y-3">
+        {modeSwitch}
+        {error && <p role="alert" className="text-sm" style={{ color: '#991b1b' }}>{error}</p>}
+        {!round && !error ? <Skeleton lines={6} /> : round && (
+          <ReviewView job={job} round={round} number={number} numbers={numbers} setRoundNumber={setRoundNumber} busy={busy} pageName={pageName}
+            setVerdict={async (ref, status, note) => { const v = await approveLine(number, ref, status, note); if (v) setRound(v); }}
+            onMatch={runMatch} downloadReport={downloadReport} />
+        )}
+      </div>
+    );
+  }
   const card = (c) => <ChangeCard key={c.id} c={c} askedBy={askedBy.get(c.id)} highlight={highlightOf(c.id)} linkRef={editing && onBaseline ? selected : null} onToggleLink={toggleLink} />;
 
   return (
+    <div className="space-y-3">
+    {modeSwitch}
     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
       <section className="rounded-2xl border p-6 space-y-4" style={CARD}>
         <div className="flex flex-wrap items-center gap-3">
@@ -252,6 +282,7 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
           <SecondaryButton tip="See every round, when each page was read and how." onClick={onAllRounds}>All rounds</SecondaryButton>
         </section>
       </div>
+    </div>
     </div>
   );
 }
