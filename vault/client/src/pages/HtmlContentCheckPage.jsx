@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useToastStore from '../store/toastStore';
@@ -9,7 +10,10 @@ import ToolSidebar from '../components/ToolSidebar';
 import EmptyState from '../components/EmptyState';
 import { JobStart, JobBar, BackToJobs, stepIndex } from '../components/JobStart';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
-import { HCC_TOOLS, JOB_TOOL_IDS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, NOT_BUILT, HCC_GOALS, KIND_LABELS, STATUS_LABELS } from './htmlContentCheck/htmlContentCheckTools.mjs';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import { startHtmlContentCheckTour, TOUR_KEY } from '../utils/tours/htmlContentCheckTour';
+import HtmlContentCheckTutorChat from './htmlContentCheck/HtmlContentCheckTutorChat';
+import { HCC_TOOLS, JOB_TOOL_IDS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, NOT_BUILT, HCC_GOALS, KIND_LABELS, STATUS_LABELS, HOW_IT_WORKS, GUIDE_TOOLS } from './htmlContentCheck/htmlContentCheckTools.mjs';
 import { CARD, PrimaryButton, SecondaryButton, Badge, readJson } from './htmlContentCheck/shared';
 import JobForm from './htmlContentCheck/JobForm';
 import JobsView from './htmlContentCheck/JobsView';
@@ -20,7 +24,7 @@ import ChangesView from './htmlContentCheck/ChangesView';
 /**
  * HTML Content Check (docs/html-content-check.md): was a requested set of edits made to a web page? Laid out like Contract Review and
  * DocCompare: the tool list on the left, the "What do you want to do?" job screen, and a job bar. This file owns the state and every
- * API call. Built milestone by milestone: jobs, request lines and rounds (fetching the page) so far; comparing rounds comes next.
+ * API call. Help follows the Video Tools conventions: a Tooltip on every control, the (i) box, the compass tour and the guide chat.
  */
 const labelFor = (id) => HCC_TOOLS.find((t) => t.id === id)?.label || id;
 const MENU = GROUPS.map((g) => ({
@@ -35,6 +39,8 @@ const formOf = (job) => ({
 
 export default function HtmlContentCheckPage() {
   const getIcon = useIcon();
+  const info = useToolInfoModal('vault_html_content_check_info_seen');
+  const [searchParams, setSearchParams] = useSearchParams();
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [newFile, setNewFile] = useState(null); // a saved copy to use as round 0 instead of fetching
@@ -71,6 +77,28 @@ export default function HtmlContentCheckPage() {
     setTool(g.steps[0].tool);
   };
   const backToStart = () => { setGoal(null); setTool('start'); };
+  // the guided tour switches tools the same way the list does ('start' = the job screen)
+  const startTour = () => {
+    info.close();
+    try { localStorage.removeItem(TOUR_KEY); } catch { /* ignore */ }
+    startHtmlContentCheckTour((id) => { if (id === 'start') backToStart(); else setTool(id); });
+  };
+  // Settings -> HTML Content Check Tour opens /html-content-check?tour=1
+  useEffect(() => {
+    if (!searchParams.get('tour')) return;
+    const next = new URLSearchParams(searchParams); next.delete('tour');
+    setSearchParams(next, { replace: true });
+    setTimeout(startTour, 400);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the guide's Open buttons: the (i) box and the tour are ours; otherwise show the tool and scroll to the part (data-guide="<id>")
+  const openGuideTool = (id) => {
+    if (id === 'info') { info.open(); return; }
+    if (id === 'tour') { startTour(); return; }
+    const target = GUIDE_TOOLS.find((g) => g.id === id);
+    if (!target) return;
+    setTool(target.tool);
+    setTimeout(() => document.querySelector(`[data-guide="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+  };
   const setNew = (k) => (v) => setNewForm((f) => ({ ...f, [k]: v }));
   const setEdit = (k) => (v) => setEditForm((f) => ({ ...f, [k]: v }));
   // After a job opens, a job flow moves on to its next step; otherwise the request lines (or details, for a comparison) come first.
@@ -169,7 +197,9 @@ export default function HtmlContentCheckPage() {
     <div style={{ background: 'var(--color-bg)', color: 'var(--color-text)', minHeight: '100dvh' }}>
       <VoiceInputProvider lang="en-AU">
         <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-5rem)]">
-          <ToolSidebar title="HTML Content Check" icon="list-checks" groups={MENU} current={tool} onSelect={setTool}>
+          <ToolSidebar title="HTML Content Check" icon="list-checks" groups={MENU} current={tool} onSelect={setTool}
+            onInfo={info.open} infoTip="How HTML Content Check works: rounds, how the page is read, what counts as a change, and what the AI does and does not do."
+            onTour={startTour} tourTip="Take the guided tour of HTML Content Check: the jobs, each tool, matching and the guide.">
             <Tooltip text="Go back to the list of jobs (check a change request, just compare a page, read a returned report).">
               <button type="button" onClick={backToStart}
                 className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity duration-200 hover:opacity-70"
@@ -193,10 +223,10 @@ export default function HtmlContentCheckPage() {
             )}
           </ToolSidebar>
 
-          <div className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }}>
+          <div className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="html-content-check-main">
             <div className="max-w-[1700px] space-y-4">
               {tool === 'start' && (
-                <JobStart goals={HCC_GOALS} labelFor={labelFor} onPick={startGoal} appName="HTML Content Check"
+                <JobStart goals={HCC_GOALS} labelFor={labelFor} onPick={startGoal} appName="HTML Content Check" tourId="html-content-check-jobs"
                   intro="Check that the edits a client asked for were made to a web page. Pick a job and it walks you through, or choose a tool on the left." />
               )}
 
@@ -218,13 +248,13 @@ export default function HtmlContentCheckPage() {
                       <h2 className="text-lg font-semibold mr-1" style={{ color: 'var(--color-text)' }}>{job.name}</h2>
                       <Badge>{KIND_LABELS[job.kind]}</Badge>
                       <Badge>{STATUS_LABELS[job.status]}</Badge>
-                      <a href={job.url} target="_blank" rel="noopener noreferrer" className="text-xs underline truncate max-w-full transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{job.url}</a>
+                      <Tooltip text="Open the page in a new browser tab."><a href={job.url} target="_blank" rel="noopener noreferrer" className="text-xs underline truncate max-w-full transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{job.url}</a></Tooltip>
                     </div>
                   )}
 
                   {tool === 'new' && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
-                      <section className="rounded-2xl border p-6 space-y-4" style={CARD}>
+                      <section className="rounded-2xl border p-6 space-y-4" style={CARD} data-guide="new">
                         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Kind of job">
                           {[['request', 'Check a change request', 'You have a list of edits to check on the page.'], ['compare', 'Just compare the page', 'No request: keep the page and see what changes between checks.']].map(([k, label, tip]) => (
                             <Tooltip key={k} text={tip}>
@@ -237,7 +267,7 @@ export default function HtmlContentCheckPage() {
                           ))}
                         </div>
                         <JobForm form={newForm} set={setNew} clients={clients} tickets={tickets} isNew />
-                        <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                        <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }} data-guide="saved-copy">
                           <Tooltip text="For a staging site, a page behind a login, or one that refuses to be fetched: open it in your browser, save it with File > Save Page As (Webpage, HTML only), then choose the file. It becomes the starting point instead of fetching.">
                             <label className="px-3 py-1.5 rounded-lg border cursor-pointer transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                               Use a saved copy instead
@@ -309,7 +339,21 @@ export default function HtmlContentCheckPage() {
             </div>
           </div>
         </div>
+        <HtmlContentCheckTutorChat currentTool={tool === 'start' ? 'new' : tool} onOpenTool={openGuideTool} />
       </VoiceInputProvider>
+
+      {info.show && (
+        <ToolInfoModal title="How HTML Content Check Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Check that the edits a client asked for were made to a web page. Pick a job on the start screen or a tool in the list on the left; hover any tool for a plain explanation. Not sure where to start? Press the round button at the bottom right and tell the guide what you want to check.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
     </div>
   );
 }

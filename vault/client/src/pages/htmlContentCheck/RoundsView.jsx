@@ -23,7 +23,7 @@ export default function RoundsView({ job, busy, checkAgain, uploadCopy, onShowCh
         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Rounds ({job.rounds.length})</h2>
         <div className="flex flex-wrap gap-2">
           <SecondaryButton tip="For a staging site, a page behind a login, or one that refuses to be fetched: open it in your browser, save it with File > Save Page As (Webpage, HTML only), then choose the file here." disabled={busy} onClick={() => fileRef.current?.click()}>Upload a saved copy</SecondaryButton>
-          <PrimaryButton tip={job.fetchMode === 'browser' ? 'Load the page again in a real browser and keep it as the next round.' : 'Fetch the page again and keep it as the next round. A real browser is used if the plain copy has almost no text.'} disabled={busy} onClick={checkAgain}>Check again</PrimaryButton>
+          <span data-guide="check-again"><PrimaryButton tip={job.fetchMode === 'browser' ? 'Load the page again in a real browser and keep it as the next round.' : 'Fetch the page again and keep it as the next round. A real browser is used if the plain copy has almost no text.'} disabled={busy} onClick={checkAgain}>Check again</PrimaryButton></span>
           <input ref={fileRef} type="file" accept=".html,.htm,text/html" className="hidden" aria-label="Saved copy of the page"
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCopy(f); }} />
         </div>

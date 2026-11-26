@@ -8,6 +8,7 @@
 - **Milestone 2 (done, 2026-11-26):** fetching and reading the page. Round 0 is read when a job is made; **Check again** keeps a new round; a saved copy can be uploaded instead; failed rounds keep their reason; the Rounds screen lists them.
 - **Milestone 3 (done, 2026-11-26):** what changed between rounds. Each round keeps its changes against the starting point and the round before; the Changes screen shows them word by word beside the request; content that changes by itself is grouped; the Rounds timeline shows the counts; comparison jobs work end to end.
 - **Milestone 4 (done, 2026-11-26):** matching the request. **Match to request** asks the standard model which changes look like they answer each line; code checks its answer and lists the lines with no change found and the changes nobody asked for; the person links and unlinks by hand. A self-changing change a line links to moves into the main list. A later round with far less text than the starting point is read again in the real browser and flagged. Diff speed tested near the size cap; two worst-case slowdowns fixed.
+- **Help (2026-11-26, before the owner's first test):** the page now follows the Video Tools / PDF Tools conventions: a Tooltip on every control, the (i) "How HTML Content Check Works" box (opens once per browser, and from the (i) beside the title), a 12-step compass tour (also Settings → HTML Content Check Tour, or `/html-content-check?tour=1`) and the guide chat. Code Map scores the tool 100.
 - Not yet: the client report PDF (M5), returned reports (M6, M7), the (i) box, tour and guide chat (M8).
 
 ## Where it lives
@@ -23,6 +24,7 @@
 | Request splitter | `server/services/htmlContentCheck/splitRequest.js` (pure, no model) |
 | Recycle bin | `server/services/recycleBin/adapters/htmlContentCheck.js`, kind `html-content-check-job` |
 | Page | `client/src/pages/HtmlContentCheckPage.jsx` + `client/src/pages/htmlContentCheck/` (tools list `htmlContentCheckTools.mjs`, `JobForm.jsx`, `JobsView.jsx`, `LinesView.jsx`, `RoundsView.jsx`, `ChangesView.jsx`, `RequestPanel.jsx`, `shared.jsx`) |
+| Help | The (i) text `HOW_IT_WORKS` and the guide's Open buttons `GUIDE_TOOLS` in `htmlContentCheckTools.mjs`; the tour `client/src/utils/tours/htmlContentCheckTour.js` (key `vault_tour_html_content_check_completed`); the guide `server/services/htmlContentCheckTutor.js` (on `guideCore.js`) + `server/routes/htmlContentCheckTutor.js`, `POST /api/html-content-check-tutor` behind `requireFeature('htmlContentCheck')` and `aiLimiter`, wrapper `client/src/pages/htmlContentCheck/HtmlContentCheckTutorChat.jsx`, registry id `html-content-check`. Parts the guide and tour point at carry `data-guide` (new, saved-copy, real-browser, check-again, self-changing, match, change-links) and `data-tour` (html-content-check-main, -jobs, -menu). |
 | Menu | `client/src/config/appNavigation.js` (Web & SEO, after AI Visibility; `navSeed.js` places it once in a saved layout) |
 
 ## Tests
@@ -33,6 +35,7 @@ No automated test calls a live site or a model.
 - `node server/services/htmlContentCheck/lib.test.js`: the bundle loads and reads; a hostile page makes no request to a local server and runs no script or handler; a missing bundle is reported by the boot check.
 - `node server/services/htmlContentCheck/extract.test.js`: on `fixtures/artist-before.html` and `artist-after.html`, edits in the menu, heading, caption, list, sidebar and footer all survive; hidden, script, `noscript` and `template` content is dropped; ids, section paths, absolute addresses; normalisation; the size cap fails.
 - `node server/services/htmlContentCheck/diff.test.js`: the fixture pages before and after; added, removed, changed, moved; case and dash changes reported; whitespace, non-breaking spaces, soft hyphens and curly quotes ignored; stable change ids; link, picture and heading changes; which changes count as changing by themselves, and which real edits (a phone number, an opening day, a price, a year in a sentence) must not.
+- `node server/services/htmlContentCheckTutor.test.js`: the guide (with `guideTestKit.js`): its catalogue matches the page's tools and Open buttons, every tool has a tip and blurb, the (i) text exists, the jobs' steps are real tools, and the rules and prompt say it never judges an edit and cannot see the jobs. No model is called.
 - `node server/services/htmlContentCheck/match.test.js`: matching with a stand-in model and a fixed reply (`fixtures/match-reply.json`, hand-written in the shape the prompt asks for, since no live model was available): injected instructions stay data and cannot close the data block; unknown ids and refs dropped, an unreadable line marked; lines with no change and changes nobody asked for; the person's links kept over a new run; batching, the cap and one token log per call.
 - `node server/services/htmlContentCheck/diff.speed.test.js`: reading and comparing a page near the size cap (458,000 characters, 978 blocks: read 0.4 s, diff 20 ms with a few edits, 0.13 s with 441 changes), and the worst case, 20,000 short list items all different (read 1.7 s, diff 1.8 s, marked rough). Prints its timings.
 - `DATABASE_URL=… node server/routes/htmlContentCheck.match.db.test.js`: the match and link routes (stand-in fetchers and model): stored links, round 0 and comparisons refused, another member refused, a model failure leaves the links as they were, edited lines re-summarised, links still fitting after a recycle-bin restore, and the far-less-text retry and flag.
@@ -237,7 +240,7 @@ To be covered before a removal brief is written.
 
 ## Conflicts with the house docs (noted, not acted on)
 
-- `client/DESIGN.md` ("Every new tool") wants the (i) box, tour and guide chat on every tool; the brief puts them in milestone 8, so the page has none yet, and Code Map may flag it until then.
+- `client/DESIGN.md` ("Every new tool") wants the (i) box, tour and guide chat on every tool; the brief put them in milestone 8. Done early, on the owner's request (2026-11-26), before the first test. Milestone 8 now only adds the DocCompare pointer and the real-page check, and updates the guide, tour and (i) text as later milestones add tools.
 - The brief's job tiles include "Read a client's returned report", which is milestone 6: the tile and the tool exist and say plainly they are not built yet.
 
 ## Future (designed for, not built)

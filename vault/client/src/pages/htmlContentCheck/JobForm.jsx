@@ -71,7 +71,7 @@ export default function JobForm({ form, set, clients, tickets, isNew, urlLocked 
           </div>
         )}
       </div>
-      <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+      <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }} data-guide="real-browser">
         <Tooltip text="Use this for pages built with JavaScript, which show almost no text to a plain fetch. Slower. Without the tick, a real browser is still used when a plain fetch finds almost no text.">
           <input type="checkbox" className="mt-0.5" checked={form.fetchMode === 'browser'} onChange={(e) => set('fetchMode')(e.target.checked ? 'browser' : 'auto')} />
         </Tooltip>

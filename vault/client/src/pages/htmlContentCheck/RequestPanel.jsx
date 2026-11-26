@@ -8,7 +8,7 @@ import { PrimaryButton, SecondaryButton, formatDate } from './shared';
 export default function RequestPanel({ job, matches, selected, setSelected, editing, setEditing, onMatch, canMatch, busy, linkedCount, unasked }) {
   const line = (it) => matches?.items?.[it.ref];
   return (
-    <section className="rounded-2xl border p-6 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+    <section className="rounded-2xl border p-6 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-guide="match">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>The request</h2>
         <PrimaryButton disabled={!canMatch || busy} onClick={onMatch}
@@ -54,9 +54,9 @@ export default function RequestPanel({ job, matches, selected, setSelected, edit
         </div>
       )}
       {selected && (
-        editing
+        <div data-guide="change-links">{editing
           ? <SecondaryButton tip="Stop changing links." onClick={() => setEditing(false)}>Done linking</SecondaryButton>
-          : <SecondaryButton tip={`Link or unlink changes for ${selected} by hand. Your links are kept when matching again.`} onClick={() => setEditing(true)}>Change links for {selected}</SecondaryButton>
+          : <SecondaryButton tip={`Link or unlink changes for ${selected} by hand. Your links are kept when matching again.`} onClick={() => setEditing(true)}>Change links for {selected}</SecondaryButton>}</div>
       )}
     </section>
   );

@@ -244,6 +244,7 @@ app.use('/api/route-tutor', requireFeature('routeTracer'), aiLimiter, require('.
 app.use('/api/contract-review-tutor', requireFeature('contractReview'), aiLimiter, require('./routes/contractReviewTutor')); // the Contract Review guide chat (sees no contract or review)
 app.use('/api/doc-compare-tutor', requireFeature('docCompare'), aiLimiter, require('./routes/docCompareTutor')); // the DocCompare guide chat (the app itself runs in the browser and calls no API)
 app.use('/api/doc-compare/fetch', requireFeature('docCompare'), require('./routes/docCompareFetch')); // "Fetch a web page": returns one public page's HTML (SSRF-guarded); Vault's page calls it for the app, never with a file
+app.use('/api/html-content-check-tutor', requireFeature('htmlContentCheck'), aiLimiter, require('./routes/htmlContentCheckTutor')); // the HTML Content Check guide chat (sees no job, page or result); before /api/html-content-check
 app.use('/api/html-content-check', requireFeature('htmlContentCheck'), require('./routes/htmlContentCheck')); // was a change request made to a web page? (docs/html-content-check.md); aiLimiter sits on its one model route inside the file
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));

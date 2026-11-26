@@ -80,3 +80,34 @@ export const HCC_GOALS = [
 
 export const STATUS_LABELS = { open: 'Open', with_client: 'With the client', closed: 'Closed' };
 export const KIND_LABELS = { request: 'Change request', compare: 'Page comparison' };
+
+// The (i) "How HTML Content Check works" box: [heading, text].
+export const HOW_IT_WORKS = [
+  ['What it is for', 'A client sent a list of edits for a web page, and the developer says they are done. HTML Content Check reads the page before and after, shows every change word by word, and lines each change up against the request, so you can see what was done, what was not, and what changed that nobody asked for. Or just keep a page and see what changes on it over time.'],
+  ['Where to start', 'Pick a job on the "What do you want to do?" screen ("Check a change request" or "Just compare a page") and it walks you through, or pick a tool in the list on the left. Tools under This job need a job open first. Hover any tool or button for a short explanation. The compass beside the title runs a guided tour (also in Settings, HTML Content Check Tour), and the round button at the bottom right is a guide you can ask in your own words.'],
+  ['Rounds: before and after', 'Creating a job reads the page as round 0, the starting point. When the developer says the edits are done, press Check again on Rounds: that is round 1, and so on. An unchanged page is still kept as a round, so a check that found nothing done is on record. A round that failed shows why and is replaced by the next check.'],
+  ['How the page is read', 'Everything a visitor can see is read: the menu, headings, text, lists, tables, captions, sidebars and footer, but not scripts or hidden parts. A plain fetch comes first; a real browser is used for pages that build themselves with JavaScript, or when you tick Load in a real browser. For a staging site or a page behind a login, save it from your browser and use a saved copy. Later rounds are read the same way as the starting point, so the way of reading does not show up as changes.'],
+  ['What counts as a change', 'Changes are worked out by comparing the text: added, removed, changed (word by word) and moved. Spaces, non-breaking spaces and curly or straight quotes are ignored; a different capital letter or dash counts. Cookie banners, dates, counters and rotating panels that can change by themselves are grouped under "May have changed by itself", never thrown away. If a round has far less text than the starting point (a rebuilt site, or one blocking the check), it is flagged so the removals are not taken at face value.'],
+  ['What the AI does, and does not do', 'Match to request is the only AI step. It suggests which changes look like they answer each request line, with a one-line reason; code then lists the lines with no change found and the changes nobody asked for. It never says an edit is right or done: you judge that, and you can link or unlink any change by hand. Each match uses the workspace\'s AI model and costs a little (under a cent for a typical page).'],
+  ['Not built yet', 'The client report (a fillable PDF to send the client) and reading the report they send back come in later updates.'],
+];
+
+// The guide's Open buttons (server/services/htmlContentCheckTutor.js CATALOG has the same ids): `tool` is the tool to show; the page then
+// scrolls to data-guide="<id>" when that part exists. 'info' and 'tour' open the (i) box and the tour.
+export const GUIDE_TOOLS = [
+  { id: 'new', label: 'New job', tool: 'new' },
+  { id: 'saved-copy', label: 'Use a saved copy instead', tool: 'new' },
+  { id: 'real-browser', label: 'Load in a real browser', tool: 'new' },
+  { id: 'jobs', label: 'Your jobs', tool: 'jobs' },
+  { id: 'lines', label: 'Request lines', tool: 'lines' },
+  { id: 'rounds', label: 'Rounds', tool: 'rounds' },
+  { id: 'check-again', label: 'Check again', tool: 'rounds' },
+  { id: 'changes', label: 'Changes', tool: 'changes' },
+  { id: 'self-changing', label: 'May have changed by itself', tool: 'changes' },
+  { id: 'match', label: 'Match to request', tool: 'changes' },
+  { id: 'change-links', label: 'Change links', tool: 'changes' },
+  { id: 'details', label: 'Job details', tool: 'details' },
+  { id: 'returns', label: 'Returned report', tool: 'returns' },
+  { id: 'info', label: 'How HTML Content Check works', tool: 'new' },
+  { id: 'tour', label: 'Guided tour', tool: 'new' },
+];

@@ -31,7 +31,7 @@ function Picture({ side }) {
   return (
     <span className="block text-sm">
       {side.text ? `"${side.text}"` : 'A picture with no description'}
-      {side.src && <a href={side.src} target="_blank" rel="noopener noreferrer" className="block text-xs break-all underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{side.src}</a>}
+      {side.src && <Tooltip text="Open the picture in a new browser tab."><a href={side.src} target="_blank" rel="noopener noreferrer" className="block text-xs break-all underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>{side.src}</a></Tooltip>}
     </span>
   );
 }
@@ -189,7 +189,7 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
             {all.length > 0 && real.length === 0 && filter !== 'all' && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No change fits that filter.</p>}
             <ol className="space-y-2">{real.map(card)}</ol>
             {self.length > 0 && filter === 'all' && (
-              <div className="space-y-2">
+              <div className="space-y-2" data-guide="self-changing">
                 <Tooltip text="Cookie banners, dates and times, counters and rotating panels can change without anyone editing the page. They are kept here, not thrown away, in case one of them is a real edit; one that a request line is linked to moves up into the main list.">
                   <button type="button" onClick={() => setShowVolatile((v) => !v)} aria-expanded={showVolatile}
                     className="flex items-center gap-1.5 text-sm font-medium transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-text)' }}>
