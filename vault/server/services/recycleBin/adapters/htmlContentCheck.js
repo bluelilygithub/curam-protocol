@@ -32,6 +32,9 @@ register('html-content-check-job', {
     for (const n of list(payload.notes)) {
       await insertRow(db, 'content_check_client_notes', n, { userId, override: { jobId, itemId: itemIds.get(n.itemId) ?? null } });
     }
+    for (const ap of list(payload.approvals)) {
+      if (itemIds.has(ap.itemId)) await insertRow(db, 'content_check_approvals', ap, { userId, override: { jobId, itemId: itemIds.get(ap.itemId) } });
+    }
     return { entityId: jobId };
   },
 });

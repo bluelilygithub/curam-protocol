@@ -299,7 +299,7 @@ Each milestone goes on its own branch, is tested, gets its Changelog entry, and 
 
 **M4b: Several pages (added by the owner, 2026-11-26, from the real Dorothy Stoner request).** Done. A job holds several pages (`content_check_pages`: job, address, label, order, reading method); each existing job's address became its page 1. A round reads all of a job's pages; diffs are per page. Request lines belong to a page or to none (none: matched against all pages); "Under …" lines become page or section labels, not request lines; lines can be assigned to pages on review. Matching runs per page with that page's lines and changes only. Line kinds: Normal, Held over (never checked, shown as held) and Keep (warned if its text changed or disappeared). Likely duplicate lines are flagged to merge. The Changes and Rounds screens show pages. The fixed splitter test is the owner's request. Details: `docs/html-content-check.md`, "Several pages".
 
-**M5: Client report.**
+**M5: Client report.** Done (2026-11-27). The owner added: the person approves per line first (Approve / Needs work; only approved lines go on the report), and each client row has Looks right / Needs a change ticks plus a note. Details: `docs/html-content-check.md`, "Approving and the client report".
 - Fillable PDF with the agreed layout and field names, using Vault's existing fillable-PDF code.
 
 *Tests:* create a report, fill it programmatically, read it back, and check the round trip of every field. Hidden fields present; nothing flattened.

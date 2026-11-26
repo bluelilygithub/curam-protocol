@@ -116,6 +116,10 @@ export function startHtmlContentCheckTour(goTool) {
     'The AI suggests which changes answer each request line, with a short reason. Code then lists the lines with no change found and the changes nobody asked for. Click a line to highlight its changes, and Change links to link or unlink by hand. You judge every edit.',
     MAIN, 'changes', 'top');
 
+  step('hcc-report', 'Approve, then the client report',
+    'Under each line, Approve the edits you checked and found right, or mark Needs work to send them back to the developer. Make the client report then downloads a fillable PDF, page by page, with only the approved lines, for the client to tick and note. Changes nobody asked for are left out unless you tick to include them.',
+    MAIN, 'changes', 'top');
+
   step('hcc-details', 'Job details and your jobs',
     'Job details holds the name, address, client, ticket and status, and Delete. Your jobs lists every job with its rounds; a deleted job stays in the recycle bin for 30 days.',
     MAIN, 'details', 'top');

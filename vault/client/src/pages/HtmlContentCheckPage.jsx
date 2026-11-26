@@ -171,6 +171,28 @@ export default function HtmlContentCheckPage() {
     await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/pages/${pageId}/matches/${encodeURIComponent(ref)}`, { changeIds })); });
     return out;
   };
+  // The person's verdict on a line in this round (approved / needs_work / null): only approved lines go on the client report.
+  const approveLine = async (number, ref, status) => {
+    let out = null;
+    await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/approvals/${encodeURIComponent(ref)}`, { status })); });
+    return out;
+  };
+  // The client report: a fillable PDF of the approved lines, grouped by page. The first one fixes the R numbers, so the job is reloaded.
+  const downloadReport = (number, unasked) => run(async () => {
+    startProcessing('Making the client report…', 'A fillable PDF of the lines you approved, page by page.');
+    try {
+      const res = await api.get(`/api/html-content-check/jobs/${job.id}/rounds/${number}/report${unasked ? '?unasked=1' : ''}`);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not make the report.');
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (/filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '') || [])[1] || 'client-report.pdf';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } finally { stopProcessing(); }
+    setJob(await readJson(await api.get(`/api/html-content-check/jobs/${job.id}`)));
+    addToast('Report made. Send it to the client; the R numbers on it are now fixed.', 'success');
+  });
   const uploadCopy = (file, pageId) => fetchRound('Reading the saved copy…', async () => {
     const form = new FormData(); if (pageId) form.append('pageId', String(pageId)); form.append('file', file);
     const d = await readJson(await api.postForm(`/api/html-content-check/jobs/${job.id}/rounds`, form));
@@ -298,9 +320,10 @@ export default function HtmlContentCheckPage() {
                       </section>
                       <section className="rounded-2xl border p-6 space-y-2 text-sm leading-relaxed" style={{ ...CARD, color: 'var(--color-muted)' }}>
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>What happens</h2>
-                        <p>The change request is split into numbered lines (R1, R2 ...). Check them on Request lines: split a line that asks for two things, join two that belong together.</p>
-                        <p>The page is read now, as its starting point (round 0): everything a visitor can see, including the menu, sidebars, captions and footer. After the developer's changes, press Check again on Rounds.</p>
-                        <p>Coming in the next updates: every difference between rounds shown against the request lines, and a fillable PDF report for the client.</p>
+                        <p>Add each page the request covers, named as the request names it. Only these pages are checked, never the rest of the site.</p>
+                        <p>Every page is read now, as its starting point (round 0): everything a visitor can see, including the menu, sidebars, captions and footer. So create the job before the developer starts the edits.</p>
+                        <p>The request is split into numbered lines (R1, R2 ...), each on the page its heading names. Check them on Request lines: split, join, set Held over or Keep.</p>
+                        <p>After the developer's changes, press Check again on Rounds, then Match to request on Changes.</p>
                         <p>The AI never decides an edit is done: the differences are worked out by code, and you judge them.</p>
                       </section>
                     </div>
@@ -314,7 +337,7 @@ export default function HtmlContentCheckPage() {
 
                   {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} onShowChanges={showChanges} />}
 
-                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} pageId={changesPage} setPageId={setChangesPage} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} busy={busy} />}
+                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} pageId={changesPage} setPageId={setChangesPage} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} approveLine={approveLine} downloadReport={downloadReport} busy={busy} />}
 
                   {tool === 'details' && job && editForm && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
@@ -343,7 +366,7 @@ export default function HtmlContentCheckPage() {
                   )}
 
                   {tool === 'returns' && (
-                    <EmptyState icon="inbox" title="Not built yet" body="Reading a report your client filled in and sent back comes in a later update. The report itself (a fillable PDF) comes first." />
+                    <EmptyState icon="inbox" title="Not built yet" body="Reading a report your client filled in and sent back comes in a later update. Make the report itself on Changes." />
                   )}
                 </>
               )}

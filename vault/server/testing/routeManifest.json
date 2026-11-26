@@ -3637,6 +3637,12 @@
   "PUT /api/html-content-check/jobs/:id/rounds/:number/pages/:pageId/matches/:ref": {
    "class": "authed"
   },
+  "PUT /api/html-content-check/jobs/:id/rounds/:number/approvals/:ref": {
+   "class": "authed"
+  },
+  "GET /api/html-content-check/jobs/:id/rounds/:number/report": {
+   "class": "authed"
+  },
   "DELETE /api/html-content-check/jobs/:id": {
    "class": "authed"
   },

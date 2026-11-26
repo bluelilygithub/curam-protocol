@@ -22,8 +22,9 @@ checkGuide({
     ['saved-copy', 'notes', /behind a login/, 'a saved copy is the way in for staging and logins'],
     ['self-changing', 'notes', /never thrown away/, 'self-changing changes are kept'],
     ['details', 'notes', /cannot change once the page has been read/, 'the address is fixed after round 0'],
+    ['approve', 'notes', /never the AI/, "approval is the person's own"],
   ],
-  gaps: [/Making the edits on the website/, /client report/, /cannot see them/],
+  gaps: [/Making the edits on the website/, /report the client filled in and sent back/, /cannot see them/],
   rules: [/never says an edit is right|says an edit is right, complete or done/, /only AI step/, /need a job open first/, /saved copy/],
   system: [/Never say an edit is correct or done/, /Never state or guess what a page says/],
 }).then((tools) => {

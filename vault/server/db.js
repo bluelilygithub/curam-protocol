@@ -6383,6 +6383,21 @@ async function initSchema() {
                      WHERE r."pageId" IS NULL`);
   await pool.query(`ALTER TABLE content_check_rounds DROP CONSTRAINT IF EXISTS "content_check_rounds_jobId_number_key"`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS content_check_rounds_job_number_page_idx ON content_check_rounds ("jobId", number, "pageId")`);
+  // Milestone 5: the person's own approval of a request line in a round (never the AI's): approved (goes on the client report) or
+  // needs_work (back to the developer). One per line per round; a later round starts with none.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_approvals (
+      id              SERIAL PRIMARY KEY,
+      "jobId"         INTEGER NOT NULL REFERENCES content_check_jobs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "roundNumber"   INTEGER NOT NULL,
+      "itemId"        INTEGER NOT NULL REFERENCES content_check_items(id) ON DELETE CASCADE,
+      status          TEXT NOT NULL,
+      note            TEXT,
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE ("jobId", "roundNumber", "itemId")
+    )
+  `);
 
   console.log('[db] Schema ready');
 }

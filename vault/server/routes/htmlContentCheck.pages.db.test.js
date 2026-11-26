@@ -7,11 +7,14 @@
 //   - line states across pages: linked, held, kept, and a Keep line whose text changed;
 //   - the pages list: rename, a read page's address is fixed, add and remove (its lines lose their page), limits;
 //   - an uploaded saved copy fills a page's failed place in the latest round;
-//   - another member cannot touch the pages or links; the recycle bin brings pages, lines and rounds back together.
+//   - milestone 5: the person approves lines per round; the client report (a fillable PDF) holds only the approved lines, grouped by page,
+//     with field names that carry the job and round; the first report fixes the R numbers;
+//   - another member cannot touch the pages, links, approvals or report; the recycle bin brings pages, lines, rounds and approvals back.
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const { PDFDocument } = require('pdf-lib');
 
 if (!process.env.DATABASE_URL) { console.log('SKIP htmlContentCheck.pages.db.test.js: DATABASE_URL is not set'); process.exit(0); }
 
@@ -138,6 +141,35 @@ function serve() {
     assert.equal(status(round).R3, 'keepChanged');
     assert.deepEqual(round.lines.find((l) => l.ref === 'R3').pageIds, [artist.id]);
 
+    // ---- milestone 5: approve lines in round 1, then the client report ----
+    const getPdf = (u, q = '') => fetch(`${base}/jobs/${job.id}/rounds/1/report${q}`, { headers: { 'x-test-user': String(u) } });
+    let pdfRes = await getPdf(A);
+    assert.equal(pdfRes.status, 400, 'nothing approved yet');
+    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/0/approvals/R2`, { status: 'approved' })).status, 400, 'not on the starting point');
+    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R3`, { status: 'approved' })).status, 400, 'a Keep line has no verdict');
+    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R2`, { status: 'done' })).status, 400);
+    await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R2`, { status: 'approved' });
+    await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R4`, { status: 'approved' });
+    r = await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R1`, { status: 'needs_work', note: 'Wrong number' });
+    assert.deepEqual(r.body.approvals, { R1: { status: 'needs_work', note: 'Wrong number' }, R2: { status: 'approved', note: null }, R4: { status: 'approved', note: null } });
+    assert.deepEqual((await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body.approvals, {}, 'a later round starts with no verdicts');
+    assert.equal((await call(B, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R2`, { status: null })).status, 404, 'another member');
+    assert.equal((await getPdf(B)).status, 404, 'another member gets no report');
+    pdfRes = await getPdf(A);
+    assert.equal(pdfRes.status, 200);
+    assert.equal(pdfRes.headers.get('content-type'), 'application/pdf');
+    assert.match(pdfRes.headers.get('content-disposition'), /round 1\.pdf"$/);
+    let names = (await PDFDocument.load(await pdfRes.arrayBuffer())).getForm().getFields().map((f) => f.getName());
+    const b = `hcc_${job.id}_r1`;
+    for (const n of [`${b}_R2_ok`, `${b}_R2_change`, `${b}_R2_note`, `${b}_R4_note`, `${b}_change1_ref`, `${b}_change8_wording`, `${b}_approved`, `${b}_name`, `${b}_date`, 'hcc_job', 'hcc_round']) assert.ok(names.includes(n), `field ${n}`);
+    assert.ok(!names.some((n) => n.startsWith(`${b}_R1_`)), 'a line that needs work is not on the report');
+    assert.ok(!names.some((n) => n.startsWith(`${b}_R3_`) || n.startsWith(`${b}_R5_`)), 'Keep and Held over lines have no tick boxes');
+    assert.ok(names.indexOf(`${b}_R2_ok`) < names.indexOf(`${b}_R4_ok`), 'The Artist before Events');
+    assert.ok(!names.some((n) => n.startsWith(`${b}_p`)), 'changes nobody asked for are left out by default');
+    names = (await PDFDocument.load(await (await getPdf(A, '?unasked=1')).arrayBuffer())).getForm().getFields().map((f) => f.getName());
+    assert.ok(names.some((n) => n.startsWith(`${b}_p${artist.id}_c`)), 'and in with "Include changes nobody asked for"');
+    assert.equal((await call(A, 'PUT', `/jobs/${job.id}/items`, { resplit: true })).status, 409, 'the report fixed the R numbers');
+
     // ---- an upload fills a page's failed place in the latest round ----
     net.pages = { [ARTIST]: ARTIST_AFTER, [EVENTS]: Object.assign(new Error('Could not fetch the page (HTTP 500)'), { isPublic: true }) };
     r = await call(A, 'POST', `/jobs/${job.id}/rounds`);
@@ -187,6 +219,7 @@ function serve() {
     assert.deepEqual(back.pages.map((p) => [p.id, p.label]), before.pages.map((p) => [p.id, p.label]));
     assert.deepEqual(back.items.map((i) => [i.ref, i.kind, i.pageId]), before.items.map((i) => [i.ref, i.kind, i.pageId]));
     assert.deepEqual(back.rounds.map((x) => [x.number, x.pageId, x.status]), before.rounds.map((x) => [x.number, x.pageId, x.status]));
+    assert.deepEqual(Object.keys((await call(A, 'GET', `/jobs/${job.id}/rounds/1`)).body.approvals).sort(), ['R1', 'R2', 'R4'], 'approvals came back too');
 
     console.log('htmlContentCheck.pages.db.test.js: all checks passed');
   } finally {
