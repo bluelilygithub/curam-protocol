@@ -13,15 +13,25 @@ function PagesEditor({ pages, onChange, readIds, getIcon }) {
   const move = (i, by) => { const n = [...pages]; [n[i], n[i + by]] = [n[i + by], n[i]]; onChange(n); };
   return (
     <div className="space-y-2" data-guide="pages">
-      <Label hint="One job can cover several pages of the same site. Name each page as the request does (for example The Artist): lines pasted under that heading go on that page.">Pages</Label>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <Label hint="One job can cover several pages of the same site. Name each page as the request does (for example The Artist): lines pasted under that heading go on that page.">Pages</Label>
+        <Tooltip text={`Each Check again reads every page in this list. A job can have up to ${MAX_PAGES} pages.`}>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full border" tabIndex={0} style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+            {pages.length} of {MAX_PAGES} pages
+          </span>
+        </Tooltip>
+      </div>
       {pages.map((p, i) => {
         const locked = p.id && readIds.has(p.id);
         return (
           <div key={p.key || p.id} className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>Page {i + 1} of {pages.length}</div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <Tooltip text="The page's name, as the request calls it (for example The Artist or Events). Optional.">
-                <VoiceInput value={p.label || ''} onChange={(v) => update(i, { label: v })} label={`Name of page ${i + 1}`} placeholder={`Page ${i + 1} name`} className={`${FIELD_CLASS} sm:w-56`} style={FIELD_STYLE} />
-              </Tooltip>
+              <div className="sm:w-64 shrink-0">{/* the width is on this wrapper, so the mic sits inside the box */}
+                <Tooltip text="The page's name, as the request calls it (for example The Artist or Events). Optional.">
+                  <VoiceInput value={p.label || ''} onChange={(v) => update(i, { label: v })} label={`Name of page ${i + 1}`} placeholder={`Page ${i + 1} name`} className={FIELD_CLASS} style={FIELD_STYLE} />
+                </Tooltip>
+              </div>
               <Tooltip text={locked ? 'This page has been read, so its address is fixed. Remove it and add the new address as another page.' : 'The page\'s address. Only public pages can be fetched; use a saved copy for anything else.'}>
                 <VoiceInput value={p.url} onChange={(v) => update(i, { url: v })} label={`Address of page ${i + 1}`} placeholder="https://" className={FIELD_CLASS} style={FIELD_STYLE} disabled={locked} />
               </Tooltip>
@@ -51,8 +61,9 @@ function PagesEditor({ pages, onChange, readIds, getIcon }) {
         );
       })}
       {pages.length < MAX_PAGES && (
-        <SecondaryButton tip={`Add another page of the site to this job (${MAX_PAGES} at most).`} onClick={() => onChange([...pages, { key: `n${Date.now()}`, url: '', label: '', fetchMode: 'auto' }])}>Add a page</SecondaryButton>
+        <SecondaryButton tip={`Add another page of the site to this job (${MAX_PAGES} at most).`} onClick={() => onChange([...pages, { key: `n${Date.now()}`, url: '', label: '', fetchMode: 'auto' }])}>Add a page ({MAX_PAGES - pages.length} left)</SecondaryButton>
       )}
+      {pages.length >= MAX_PAGES && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This job has the most pages it can hold ({MAX_PAGES}). Start another job for more pages.</p>}
     </div>
   );
 }

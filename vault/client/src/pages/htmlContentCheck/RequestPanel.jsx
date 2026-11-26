@@ -10,7 +10,7 @@ import { LINE_STATUS } from './htmlContentCheckTools.mjs';
 // AI run). Nothing here says an edit is right or done.
 const TONE = { noChange: '#991b1b', unreadable: '#b45309', keepChanged: '#991b1b', keepNotOnStartingPage: '#b45309' };
 
-export default function RequestPanel({ job, pageId, pageName, lines, matches, selected, setSelected, editing, setEditing, onMatch, canMatch, canLink, busy, linkedCount, unasked }) {
+export default function RequestPanel({ job, pageId, pageName, lines, matches, selected, setSelected, editing, setEditing, onMatch, canMatch, canLink, busy, linkedCount, unasked, approvals, setVerdict }) {
   const byRef = Object.fromEntries(lines.map((l) => [l.ref, l]));
   const multi = (job.pages || []).length > 1;
   const scope = job.items.filter((it) => it.pageId == null || it.pageId === pageId);
@@ -59,8 +59,9 @@ export default function RequestPanel({ job, pageId, pageName, lines, matches, se
               </span>
             </>
           );
+          const verdict = approvals?.[it.ref]?.status || null;
           return (
-            <li key={it.id}>
+            <li key={it.id} className="space-y-1">
               {pickable ? (
                 <Tooltip text={on ? 'Show every change again.' : 'Highlight the changes on this page linked to this line.'}>
                   <button type="button" onClick={() => setSelected(on ? null : it.ref)} aria-pressed={on}
@@ -71,6 +72,21 @@ export default function RequestPanel({ job, pageId, pageName, lines, matches, se
                 <Tooltip text={kind === 'held_over' ? 'Held over: the client has not decided yet, so this line is shown but never checked.' : 'Keep: this text must stay as it is. Code checks it is still on the page, word for word.'}>
                   <div className="rounded-xl border p-2.5" tabIndex={0} style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', opacity: kind === 'held_over' ? 0.75 : 1 }}>{body}</div>
                 </Tooltip>
+              )}
+              {pickable && approvals && (
+                <span className="flex flex-wrap items-center gap-1.5 pl-10" data-guide="approve">
+                  {[['approved', 'Approve', 'You checked this edit and it is right: it goes on the client report.'], ['needs_work', 'Needs work', 'The edit is missing or wrong: it stays off the client report, for the developer to fix before the next round.']].map(([v, label, tip]) => (
+                    <Tooltip key={v} text={verdict === v ? 'Press again to clear.' : tip}>
+                      <button type="button" disabled={busy} aria-pressed={verdict === v} onClick={() => setVerdict(it.ref, verdict === v ? null : v)}
+                        className="text-xs px-2.5 py-1 rounded-full border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                        style={verdict === v
+                          ? { background: v === 'approved' ? '#166534' : '#991b1b', borderColor: 'transparent', color: '#fff' }
+                          : { borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                        {verdict === v ? `${label}d`.replace('Needs workd', 'Needs work') : label}
+                      </button>
+                    </Tooltip>
+                  ))}
+                </span>
               )}
             </li>
           );

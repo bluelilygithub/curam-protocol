@@ -91,7 +91,8 @@ export const HOW_IT_WORKS = [
   ['How the page is read', 'Everything a visitor can see is read: the menu, headings, text, lists, tables, captions, sidebars and footer, but not scripts or hidden parts. A plain fetch comes first; a real browser is used for pages that build themselves with JavaScript, or when you tick Load in a real browser. For a staging site or a page behind a login, save it from your browser and use a saved copy. Later rounds are read the same way as the starting point, so the way of reading does not show up as changes.'],
   ['What counts as a change', 'Changes are worked out by comparing the text: added, removed, changed (word by word) and moved. Spaces, non-breaking spaces and curly or straight quotes are ignored; a different capital letter or dash counts. Cookie banners, dates, counters and rotating panels that can change by themselves are grouped under "May have changed by itself", never thrown away. If a round has far less text than the starting point (a rebuilt site, or one blocking the check), it is flagged so the removals are not taken at face value.'],
   ['What the AI does, and does not do', 'Match to request is the only AI step. It suggests which changes look like they answer each request line, with a one-line reason; code then lists the lines with no change found and the changes nobody asked for. It never says an edit is right or done: you judge that, and you can link or unlink any change by hand. Each match uses the workspace\'s AI model and costs a little (under a cent for a typical page).'],
-  ['Not built yet', 'The client report (a fillable PDF to send the client) and reading the report they send back come in later updates.'],
+  ['Approving and the client report', 'On Changes, in a round after the starting point, mark each request line Approve (you checked it and it is right) or Needs work (back to the developer). Make the client report then gives a fillable PDF, page by page: each approved line with its changes and a Looks right / Needs a change tick and notes, Keep and held-over lines listed, a Further changes table and a sign-off. Changes nobody asked for are left out unless you tick to include them. The first report fixes the R numbers.'],
+  ['Not built yet', 'Reading the report the client fills in and sends back comes in a later update.'],
 ];
 
 // The guide's Open buttons (server/services/htmlContentCheckTutor.js CATALOG has the same ids): `tool` is the tool to show; the page then
@@ -111,6 +112,8 @@ export const GUIDE_TOOLS = [
   { id: 'self-changing', label: 'May have changed by itself', tool: 'changes' },
   { id: 'match', label: 'Match to request', tool: 'changes' },
   { id: 'change-links', label: 'Change links', tool: 'changes' },
+  { id: 'approve', label: 'Approve or Needs work', tool: 'changes' },
+  { id: 'report', label: 'Client report', tool: 'changes' },
   { id: 'details', label: 'Job details', tool: 'details' },
   { id: 'returns', label: 'Returned report', tool: 'returns' },
   { id: 'info', label: 'How HTML Content Check works', tool: 'new' },

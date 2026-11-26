@@ -4,6 +4,7 @@ import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { CARD, FIELD_CLASS, FIELD_INLINE, FIELD_STYLE, SecondaryButton, Badge, formatDate } from './shared';
 import RequestPanel from './RequestPanel';
+import ReportBox from './ReportBox';
 
 // What changed in one round, in reading order, against the starting point or the round before. Worked out by code on the server
 // (results.diff); nothing here decides whether an edit was done. Changes that look like content changing by itself (cookie banners,
@@ -81,7 +82,7 @@ function ChangeCard({ c, askedBy = [], highlight, linkRef, onToggleLink }) {
   );
 }
 
-export default function ChangesView({ job, getIcon, fetchRound, roundNumber, setRoundNumber, pageId, setPageId, onAllRounds, matchRound, linkChanges, busy }) {
+export default function ChangesView({ job, getIcon, fetchRound, roundNumber, setRoundNumber, pageId, setPageId, onAllRounds, matchRound, linkChanges, approveLine, downloadReport, busy }) {
   // rounds with something to compare: a page row that has changes worked out (not every page's starting point)
   const numbers = [...new Set(job.rounds.filter((r) => r.sincePrevious).map((r) => r.number))].sort((a, b) => a - b);
   const request = job.kind === 'request';
@@ -132,6 +133,7 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
   const highlightOf = (id) => Boolean(selected && askedBy.get(id)?.includes(selected));
   const countOf = (r) => { const s = r.results?.diff?.vsBaseline?.stats; return s ? s.total - (s.volatile || 0) : null; };
 
+  const setVerdict = async (ref, status) => { const v = await approveLine(number, ref, status); if (v) setRound(v); };
   const runMatch = async () => { const v = await matchRound(number); if (v) { setRound(v); setBasis('baseline'); } };
   const toggleLink = async (id, on) => {
     const current = matches?.items?.[selected]?.changeIds || [];
@@ -234,8 +236,12 @@ export default function ChangesView({ job, getIcon, fetchRound, roundNumber, set
         {request ? (
           <RequestPanel job={job} pageId={row?.pageId} pageName={multi && row ? pageName(row.pageId) : null} lines={round?.lines || []} matches={matches}
             selected={selected} setSelected={setSelected} editing={editing} setEditing={setEditing}
-            onMatch={runMatch} canMatch={rows.some((r) => r.results?.diff)} canLink={Boolean(diff)} busy={busy} linkedCount={askedBy.size} unasked={unasked.size} />
-        ) : (
+            onMatch={runMatch} canMatch={rows.some((r) => r.results?.diff)} canLink={Boolean(diff)} busy={busy} linkedCount={askedBy.size} unasked={unasked.size}
+            approvals={number > 0 ? round?.approvals || {} : null} setVerdict={setVerdict} />
+        ) : null}
+        {request && number > 0 && round ? (
+          <ReportBox approvals={round.approvals || {}} onDownload={(unasked) => downloadReport(number, unasked)} busy={busy} locked={Boolean(job.refsLockedAt)} />
+        ) : !request && (
           <section className="rounded-2xl border p-6 space-y-3" style={CARD}>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>About this comparison</h2>
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>A page comparison has no request: it shows what changed between the times the pages were read. Press Check again on Rounds to add a round.</p>

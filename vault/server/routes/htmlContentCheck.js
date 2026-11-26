@@ -22,6 +22,7 @@ const { matchRound, setByPerson, summarize } = require('../services/htmlContentC
 const { keepStatus } = require('../services/htmlContentCheck/keeps');
 const { lineStatuses, scopedItems } = require('../services/htmlContentCheck/summary');
 const { aiLimiter } = require('../middleware/aiRateLimit');
+const { buildReportModel, renderReportPdf } = require('../services/htmlContentCheck/report');
 
 const router = express.Router();
 let pageDeps = DEFAULT_DEPS; // tests swap the fetchers (no live site in automated tests)
@@ -359,8 +360,10 @@ async function roundView(userId, loaded) {
     keepOf = (it) => keepStatus(it.lineText, it.pageId, inputs);
   }
   const ready = rows.filter((r) => r.status === 'ready').map((r) => ({ pageId: r.pageId, matches: r.results?.matches || null }));
+  const { rows: ap } = await pool.query(`SELECT i.ref, a.status, a.note FROM content_check_approvals a JOIN content_check_items i ON i.id = a."itemId"
+                                           WHERE a."jobId" = $1 AND a."userId" = $2 AND a."roundNumber" = $3`, [job.id, userId, number]);
   return {
-    number, fetchedAt: rows[0].fetchedAt,
+    number, fetchedAt: rows[0].fetchedAt, approvals: Object.fromEntries(ap.map((a) => [a.ref, { status: a.status, note: a.note }])),
     pages: rows.map((r) => {
       const page = pages.find((p) => p.id === r.pageId);
       return { ...r, label: page?.label || null, url: page?.url || null };
@@ -556,6 +559,48 @@ router.put('/jobs/:id/rounds/:number/pages/:pageId/matches/:ref', async (req, re
   } catch (err) { fail(res, err, 'link'); }
 });
 
+// The person's own verdict on a request line in this round (never the AI's): approved (goes on the client report), needs_work (back to the
+// developer) or null (clear). Held over and Keep lines have no verdict: the report lists them as they are.
+router.put('/jobs/:id/rounds/:number/approvals/:ref', async (req, res) => {
+  try {
+    const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
+    if (loaded.job.kind !== 'request') throw bad(400, 'A page comparison has no request lines to approve.');
+    if (loaded.number === 0) throw bad(400, 'Round 0 is the starting point: approve lines in a later round.');
+    const it = loaded.items.find((x) => x.ref === String(req.params.ref));
+    if (!it) throw bad(404, 'No such request line.');
+    if ((it.kind || 'request_line') !== 'request_line') throw bad(400, 'Held over and Keep lines are not approved: the report lists them as they are.');
+    const status = req.body?.status ?? null;
+    if (status !== null && status !== 'approved' && status !== 'needs_work') throw bad(400, 'The status must be approved, needs_work or empty.');
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, LIMITS.lineText) || null : null;
+    if (status === null) await pool.query('DELETE FROM content_check_approvals WHERE "jobId" = $1 AND "userId" = $2 AND "roundNumber" = $3 AND "itemId" = $4', [loaded.job.id, req.user.id, loaded.number, it.id]);
+    else await pool.query(`INSERT INTO content_check_approvals ("jobId", "userId", "roundNumber", "itemId", status, note) VALUES ($1, $2, $3, $4, $5, $6)
+                           ON CONFLICT ("jobId", "roundNumber", "itemId") DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note, "updatedAt" = NOW()`,
+      [loaded.job.id, req.user.id, loaded.number, it.id, status, note]);
+    res.json(await roundView(req.user.id, loaded));
+  } catch (err) { fail(res, err, 'approve'); }
+});
+
+// The client report: a fillable PDF of this round's approved lines, grouped by page (report.js). ?unasked=1 adds the changes nobody
+// asked for. The first report fixes the R numbers (refsLockedAt), so the client's answers keep pointing at the same lines.
+router.get('/jobs/:id/rounds/:number/report', async (req, res) => {
+  try {
+    const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
+    if (loaded.job.kind !== 'request') throw bad(400, 'A page comparison has no request to report on.');
+    if (loaded.number === 0) throw bad(400, 'Round 0 is the starting point: make the report from a later round.');
+    const view = await roundView(req.user.id, loaded);
+    if (!Object.values(view.approvals).some((a) => a.status === 'approved')) throw bad(400, 'Approve at least one request line on Changes first.');
+    const model = buildReportModel({ job: loaded.job, pages: loaded.pages, items: loaded.items, view, approvals: view.approvals, includeUnasked: req.query.unasked === '1' });
+    const pdf = await renderReportPdf(model);
+    await pool.query(`UPDATE content_check_jobs SET "refsLockedAt" = COALESCE("refsLockedAt", NOW()),
+                        "refCounter" = GREATEST("refCounter", (SELECT COALESCE(MAX(NULLIF(regexp_replace(ref, '[^0-9]', '', 'g'), '')::int), 0) FROM content_check_items WHERE "jobId" = $1))
+                      WHERE id = $1 AND "userId" = $2`, [loaded.job.id, req.user.id]);
+    const name = `${(loaded.job.name || 'report').replace(/[^\w .-]+/g, '').trim().slice(0, 60) || 'report'} - round ${loaded.number}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.send(Buffer.from(pdf));
+  } catch (err) { fail(res, err, 'report'); }
+});
+
 router.delete('/jobs/:id', async (req, res) => {
   try {
     const binId = await inTx(async (db) => {
@@ -563,15 +608,15 @@ router.delete('/jobs/:id', async (req, res) => {
       const q = (table, cols = '*') => db.query(`SELECT ${cols} FROM ${table} WHERE "jobId" = $1 AND "userId" = $2 ORDER BY id`, [job.id, req.user.id]).then((r) => r.rows);
       // the gzipped page ("rawHtml") and the worked-out changes stay out of the bin copy: the page is only for re-reading old rounds,
       // and the changes are worked out again on read with the same ids (so AI and hand links still fit); both would crowd the 25 MB limit
-      const [pages, items, rounds, notes] = [await q('content_check_pages'), await q('content_check_items'),
+      const [pages, items, rounds, notes, approvals] = [await q('content_check_pages'), await q('content_check_items'),
         await q('content_check_rounds', `id, "jobId", "userId", "pageId", number, "fetchedAt", "finalUrl", "fetchedVia", snapshot, results - 'diff' AS results, status, error`),
-        await q('content_check_client_notes')];
+        await q('content_check_client_notes'), await q('content_check_approvals')];
       let id;
       try {
         id = await bin.moveToBin(db, {
           userId: req.user.id, type: 'html-content-check-job', id: job.id, title: job.name,
           detail: `HTML Content Check: ${pages.length} page${pages.length === 1 ? '' : 's'}, ${job.kind === 'compare' ? 'page comparison' : `${items.length} request line${items.length === 1 ? '' : 's'}`}, ${new Set(rounds.map((r) => r.number)).size} round${new Set(rounds.map((r) => r.number)).size === 1 ? '' : 's'}`,
-          payload: { job, pages, items, rounds, notes }, maxBytes: BIN_MAX_BYTES,
+          payload: { job, pages, items, rounds, notes, approvals }, maxBytes: BIN_MAX_BYTES,
         });
       } catch (err) {
         if (err.code === 'TOO_LARGE') throw bad(413, 'This job is too big to keep in the recycle bin.');
