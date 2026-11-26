@@ -8,10 +8,13 @@ import { CARD, PrimaryButton, SecondaryButton, Badge, formatDate } from './share
 const VIA = { plain: 'Plain fetch', browser: 'Real browser', upload: 'Saved copy' };
 
 const real = (s) => s.total - (s.volatile || 0);
+// Never "0 changes" when something did change: changes that look automatic (dates, counters…) are counted, and named, on their own.
+const auto = (v) => `${v} change${v === 1 ? '' : 's'} that may have changed by itself: check ${v === 1 ? 'it' : 'them'}`;
 function countLine(s, since) {
   const n = real(s);
-  const self = s.volatile ? ` (and ${s.volatile} that may have changed by itself)` : '';
-  return n || s.volatile ? `${n} change${n === 1 ? '' : 's'} ${since}${self}` : `No changes ${since}`;
+  if (!n && !s.volatile) return `No changes ${since}`;
+  if (!n) return `${auto(s.volatile)} (${since})`;
+  return `${n} change${n === 1 ? '' : 's'} ${since}${s.volatile ? `, and ${auto(s.volatile)}` : ''}`;
 }
 
 export default function RoundsView({ job, busy, checkAgain, uploadCopy, onShowChanges }) {
@@ -38,6 +41,15 @@ export default function RoundsView({ job, busy, checkAgain, uploadCopy, onShowCh
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCopy(f, uploadFor); }} />
         </div>
       </div>
+      {numbers.length === 1 && rowsOf(numbers[0]).some((r) => r.status === 'ready') && (
+        <div className="rounded-xl border p-4 space-y-1" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)' }} data-guide="waiting">
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Waiting for the edits</p>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            The {multi ? 'pages are' : 'page is'} kept as {multi ? 'they are' : 'it is'} now (round 0, the starting point). Send the request to the developer; when they say the edits are live, press Check again. {job.kind === 'request' ? 'The request is then matched to what changed and you approve each line.' : 'What changed is then shown on Changes.'}
+          </p>
+          {job.kind === 'request' && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>The request was split into {job.items.length} line{job.items.length === 1 ? '' : 's'}; {job.items.length === 1 ? 'it is ready as it is. To fix it' : 'they are ready as they are. To fix one'}, open Request lines.</p>}
+        </div>
+      )}
       {numbers.length === 0 && <EmptyState icon="history" title="No rounds yet" body="Press Check again to read the pages as their starting point, or upload a saved copy." />}
       <ol className="space-y-3">
         {numbers.map((n) => (
@@ -64,7 +76,7 @@ export default function RoundsView({ job, busy, checkAgain, uploadCopy, onShowCh
                   {r.sincePrevious && (
                     <p className="text-sm" style={{ color: 'var(--color-text)' }}>
                       {countLine(r.sincePrevious, r.previousNumber === firstRead(r.pageId) ? 'since the starting point' : `since round ${r.previousNumber}`)}
-                      {r.previousNumber !== firstRead(r.pageId) && r.sinceBaseline ? `; ${real(r.sinceBaseline)} since the starting point` : ''}
+                      {r.previousNumber !== firstRead(r.pageId) && r.sinceBaseline ? `; ${real(r.sinceBaseline)}${r.sinceBaseline.volatile ? ` (+${r.sinceBaseline.volatile} possibly automatic)` : ''} since the starting point` : ''}
                     </p>
                   )}
                   {r.sincePrevious && viaOf(r.pageId, r.previousNumber) && viaOf(r.pageId, r.previousNumber) !== r.fetchedVia && (

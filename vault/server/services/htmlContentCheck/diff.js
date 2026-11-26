@@ -15,7 +15,7 @@
 const lib = require('./lib');
 const { normalizeText } = require('./extract');
 
-const DIFF_VERSION = 1;
+const DIFF_VERSION = 2; // 2: filler words ("a", "just", "on") no longer count as a date changing by itself
 const PAIR_MIN = 0.4;
 
 const linksOf = (b) => (b.runs || []).filter((r) => r.link).map((r) => r.link);
@@ -75,10 +75,14 @@ const NUMBER_WORD = /^[~≈]?[$€£]?\d[\d,.]*[kmb%+]?$/i;
 const COUNTING = /\b(results?|members?|views?|visitors?|followers?|subscribers?|likes?|comments?|reviews?|ratings?|items?|people|users?|downloads?|sold|left|in stock|online|shares?|votes?|signups?|bookings?)\b/i;
 // A date that changes by itself needs a date's shape, not just a number or a weekday (a new phone number or opening day is an edit):
 // a month, a time of day, a numeric date, or a relative time ("3 hours ago", "updated today").
+const DATE_CORE = new RegExp(`^(\\d.*|${MONTHS}|today|yesterday|tomorrow)$`, 'i'); // a changed word that is itself a date part
 const DATE_SHAPE = new RegExp(`^(${MONTHS}|\\d{1,2}[:.]\\d{2}([:.]\\d{2})?|\\d{1,4}[-/.]\\d{1,2}([-/.]\\d{1,4})?|today|yesterday|tomorrow|ago|now)$`, 'i');
 // every changed word is a date word, and the line has a date's shape somewhere ("Updated 3 hours ago" -> "5 hours ago" changes only the number)
 const lineWords = (t) => String(t).split(/[\s,()]+/).map((x) => x.replace(/^[^\w]+|[^\w%]+$/g, '')).filter(Boolean);
-const isDate = (w, text) => w.length > 0 && w.every((x) => DATE_WORD.test(x)) && [...w, ...lineWords(text)].some((x) => DATE_SHAPE.test(x));
+// and a changed word is itself a number or a date ("3" -> "5", "today" -> "yesterday"): adding "just", "a" or "on" to a sentence that
+// mentions a month is an edit, not a date updating itself (owner's test, 2026-11-27)
+const isDate = (w, text) => w.length > 0 && w.every((x) => DATE_WORD.test(x)) && w.some((x) => DATE_CORE.test(x))
+  && [...w, ...lineWords(text)].some((x) => DATE_SHAPE.test(x));
 // only the year changed, next to a copyright sign: footers that update themselves every January
 const isCopyrightYear = (w, text) => w.length > 0 && w.every((x) => /^(19|20)\d\d$/.test(x)) && /©|\(c\)|copyright/i.test(text);
 const changedWords = (words) => words.filter((p) => p.op !== '=').flatMap((p) => p.text.split(/[\s,()]+/)).map((w) => w.replace(/^[^\w$€£~≈]+|[^\w%+]+$/g, '')).filter(Boolean);

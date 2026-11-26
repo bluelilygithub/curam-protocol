@@ -68,6 +68,13 @@ assert.equal(vol('Last updated 24 November 2026', 'Last updated 26 November 2026
 assert.equal(vol('Sale ends 10:42', 'Sale ends 10:57'), 'date');
 assert.equal(vol('1,204 members', '1,231 members'), 'counter');
 assert.equal(vol('© 2024 Example Gallery', '© 2025 Example Gallery'), 'date', 'a copyright year');
+// one added word in a sentence that mentions a date is an edit (owner's test, 2026-11-27)
+for (const [before, after] of [
+  ['Her work is on show in Hobart until May 2027.', 'Her work is now on show in Hobart until May 2027.'],
+  ['Open from 10:00 most days.', 'Open from 10:00 on most days.'],
+  ['The exhibition opens in March with a talk.', 'The exhibition opens in March with just a talk.'],
+]) assert.equal(vol(before, after), null, after);
+assert.equal(vol('Posted 3 days ago', 'Posted 4 days ago'), 'date', 'a relative date still counts');
 assert.equal(vol('Open Tuesday to Sunday', 'Open Wednesday to Sunday'), null, 'a changed opening day is an edit');
 assert.equal(vol('Phone 03 9000 0000', 'Phone 03 9000 1111'), null, 'a new phone number is an edit');
 assert.equal(vol('Prints from $49', 'Prints from $59'), null, 'a new price is an edit');

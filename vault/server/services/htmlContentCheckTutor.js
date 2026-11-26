@@ -35,7 +35,7 @@ const CATALOG = [
     does: 'Every time the pages were read: round 0 (the starting point), then each Check again. Each round lists every page with when and how it was read (plain fetch, real browser or saved copy), its title and word count, how many changes since the round before and since its starting point, and Show changes. A page that could not be read has Upload a saved copy, which takes its place in that round.',
     notes: 'An unchanged page is still kept as a round. A failed round shows its reason and is replaced by the next check. Later rounds are read the same way as the starting point where possible.' },
   { id: 'check-again', label: 'Check again', group: 'This job',
-    does: 'The button on Rounds that reads every page again now and keeps them as the next round, then works out what changed. Pages are read one after another, so several pages can take a minute.' },
+    does: 'The button on Rounds that reads every page again now and keeps them as the next round, then works out what changed. On a change request where something changed, it then matches the request to the changes (the AI step, a small cost) and opens Changes on Review by line, ready to approve. If nothing changed yet it stays on Rounds and says so. Pages are read one after another, so several pages can take a minute.' },
   { id: 'changes', label: 'Changes', group: 'This job',
     does: 'What changed on the page, word by word (removed words struck through in red, added words underlined in green), in reading order: added, removed, changed and moved text, with where on the page it is. Pick a round, and Since the starting point or Since last round.',
     notes: 'Worked out by comparing the text. It never says an edit is right or done: you judge that.' },

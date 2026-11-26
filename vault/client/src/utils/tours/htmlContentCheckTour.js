@@ -101,7 +101,7 @@ export function startHtmlContentCheckTour(goTool) {
     MAIN, 'lines', 'top');
 
   step('hcc-rounds', 'Rounds: before and after',
-    'Round 0 is the page before the edits. When the developer says they are done, press Check again: that is round 1. Each round shows when and how it was read and how many changes it has. An unchanged page is still kept, and a failed check says why.',
+    'Round 0 is the page before the edits; after Create job you wait here. Check again reads the pages, matches the request when something changed and opens Changes. When the developer says they are done, press Check again: that is round 1. Each round shows when and how it was read and how many changes it has. An unchanged page is still kept, and a failed check says why.',
     MAIN, 'rounds', 'top');
 
   step('hcc-changes', 'Changes, word by word',

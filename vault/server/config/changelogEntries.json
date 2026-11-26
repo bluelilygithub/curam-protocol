@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "d47ea79f",
+   "fullHash": "d47ea79faf568b2418b9a7919e245512f0298e6c",
+   "committedAt": "2026-11-27T08:55:22+10:00",
+   "author": "mrb",
+   "area": "HTML Content Check",
+   "subject": "HTML Content Check: simpler flow after Create job; date rule no longer hides added words",
+   "filesChanged": 9,
+   "insertions": 65,
+   "deletions": 13,
+   "goal": "The owner tested one added word and found the process cumbersome: Request lines looked like a required step, Rounds said \"0 changes\" because the added word was filed as a date changing by itself, and matching was a separate press on another screen.",
+   "whatChanged": "diff.js: isDate now needs a changed word that is itself a date part (a number, a month, today/yesterday/tomorrow), so an added \"a\", \"just\", \"on\" or \"now\" in a sentence mentioning a month is a real edit; DIFF_VERSION 2 so stored rounds are re-worked when next opened; diff.test.js cases added. HtmlContentCheckPage.jsx: after Create job go to Rounds unless a line is flagged as a likely repeat; opening a job goes to Changes once a later round exists; Check again matches the request when anything changed since the starting point and opens Changes (Review by line), or says nothing has changed yet. RoundsView.jsx: a \"Waiting for the edits\" box after round 0; counts never read 0 when the only changes look automatic. LinesView.jsx: \"Nothing to save: the lines are ready as they are.\" Step notes, guide, (i) box, tour and docs updated.",
+   "filesImpacted": [
+    "vault/client/src/pages/HtmlContentCheckPage.jsx",
+    "vault/client/src/pages/htmlContentCheck/LinesView.jsx",
+    "vault/client/src/pages/htmlContentCheck/RoundsView.jsx",
+    "vault/client/src/pages/htmlContentCheck/htmlContentCheckTools.mjs",
+    "vault/client/src/utils/tours/htmlContentCheckTour.js",
+    "vault/docs/html-content-check.md",
+    "vault/server/services/htmlContentCheck/diff.js",
+    "vault/server/services/htmlContentCheck/diff.test.js",
+    "vault/server/services/htmlContentCheckTutor.js"
+   ],
+   "benefit": "From Create job to approving is now: wait, Check again, approve. A one-word edit is counted and shown as a change, not hidden as automatic.",
+   "concerns": "Check again on a change request now spends an AI call (one per page with changes) every time something changed, without a separate press. The date rule is narrower, so a self-updating line that changes only filler words (\"just now\" to \"an hour ago\" still counts, via the number) may now show as a real change; it is shown, not hidden. Changing DIFF_VERSION re-works every stored round once, on next open (a short delay on big jobs; change ids are worked out the same way, so links are kept). The owner's actual page was not available, so the cause on that page is inferred from the rule, not confirmed. Tested: diff, diff speed, match tests, rounds/match/pages database tests, guide tests, client build, and a Playwright run of the owner's flow on a local dev server with a stand-in page and model (waiting box, a Check again with no change, a Check again after adding one word that matched and opened Review by line, Rounds counting 1 change), no browser errors."
+  },
+  {
    "commit": "74a34158",
    "fullHash": "74a34158ac2f34a1cb1f13dcc22f412e3338645b",
    "committedAt": "2026-11-27T07:55:42+10:00",
