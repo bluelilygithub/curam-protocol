@@ -333,8 +333,8 @@ Made exact in M1 from DocCompare's code, updated with the owner's decisions of 2
 - [x] HTML reader output at least as complete as DocCompare's: the same reader, in full mode (M2)
 - [x] Page details: title, author, dates, generator, the page's own address (M2)
 - [x] Almost-no-text pages: real browser first, then a clear failure with advice to upload a saved copy (M2)
-- [ ] Page rounds and timeline: rounds stored and listed (M2); the timeline with change counts (M3). An unchanged page is stored as a round, not refused.
-- [ ] Comparing without a request (`compare` jobs) (M3)
+- [x] Page rounds and timeline, with change counts (M2, M3). An unchanged page is stored as a round, not refused.
+- [x] Comparing without a request (`compare` jobs) (M3)
 - [ ] Review PDF for the author or developer: the client report (M5); changes nobody asked for are left out by default, with an "Include changes nobody asked for" option
 - Dropped: Word export, and with it comparing a web page with a Word file
 - Not carried over: DocCompare's document checks (claims, quotes, spelling, terms, numbering, limits); spelling on changed text is a future idea

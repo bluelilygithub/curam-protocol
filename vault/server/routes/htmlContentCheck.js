@@ -15,6 +15,7 @@ const { getLogger } = require('../middleware/requestContext');
 const { splitRequest } = require('../services/htmlContentCheck/splitRequest');
 const { loadPage, readUpload, DEFAULT_DEPS } = require('../services/htmlContentCheck/fetchPage');
 const { MAX_UPLOAD_BYTES } = require('../services/htmlContentCheck/config');
+const { ensureDiffs } = require('../services/htmlContentCheck/roundDiff');
 
 const router = express.Router();
 let pageDeps = DEFAULT_DEPS; // tests swap the fetchers (no live site in automated tests)
@@ -109,11 +110,14 @@ async function ownJob(db, userId, rawId, { lock = false } = {}) {
 
 async function jobDetail(db, userId, id) {
   const job = await ownJob(db, userId, id);
+  await ensureDiffs(db, userId, job.id); // one small query when every round already has its changes
   const [items, rounds, client, ticket, notes] = await Promise.all([
     db.query('SELECT id, ref, kind, "lineText", source, position FROM content_check_items WHERE "jobId" = $1 AND "userId" = $2 ORDER BY position, id', [job.id, userId]),
     db.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error,
                      snapshot->'meta'->>'title' AS title, (snapshot->'meta'->>'words')::int AS words, (snapshot->'meta'->>'chars')::int AS chars,
-                     jsonb_array_length(COALESCE(snapshot->'blocks', '[]'::jsonb)) AS blocks
+                     jsonb_array_length(COALESCE(snapshot->'blocks', '[]'::jsonb)) AS blocks,
+                     results->'diff'->'vsPrevious'->'stats' AS "sincePrevious", results->'diff'->'vsBaseline'->'stats' AS "sinceBaseline",
+                     (results->'diff'->>'previousNumber')::int AS "previousNumber"
                 FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 ORDER BY number`, [job.id, userId]),
     job.clientId ? db.query('SELECT name FROM clients WHERE id = $1 AND "userId" = $2', [job.clientId, userId]) : { rows: [] },
     job.ticketId ? db.query('SELECT title FROM tickets WHERE id = $1', [job.ticketId]) : { rows: [] },
@@ -175,11 +179,19 @@ function cleanLines(rawItems, existingIds) {
 async function runRound(userId, job, { buffer } = {}) {
   let page = null;
   let failure = null;
+  // Read every round the same way as the starting point where we can: a plain copy and a browser copy of the same page differ by
+  // themselves (share buttons, "Log in", lazy-loaded pictures), which would look like edits. So in auto mode, a starting point that
+  // needed the real browser makes later rounds use it too.
+  let mode = job.fetchMode;
+  if (!buffer && mode === 'auto') {
+    const { rows } = await pool.query(`SELECT "fetchedVia" FROM content_check_rounds WHERE "jobId" = $1 AND status = 'ready' ORDER BY number LIMIT 1`, [job.id]);
+    if (rows[0]?.fetchedVia === 'browser') mode = 'browser';
+  }
   try {
-    page = buffer ? readUpload(buffer) : await loadPage(job.url, job.fetchMode, pageDeps);
+    page = buffer ? readUpload(buffer) : await loadPage(job.url, mode, pageDeps);
   } catch (err) {
     if (!err.isPublic) getLogger().error({ err, jobId: job.id }, '[html-content-check] round');
-    failure = { message: err.isPublic ? err.message : 'The page could not be read. Try again, or upload a saved copy.', via: err.fetchedVia || (buffer ? 'upload' : job.fetchMode === 'browser' ? 'browser' : 'plain') };
+    failure = { message: err.isPublic ? err.message : 'The page could not be read. Try again, or upload a saved copy.', via: err.fetchedVia || (buffer ? 'upload' : mode === 'browser' ? 'browser' : 'plain') };
   }
   return inTx(async (db) => {
     await ownJob(db, userId, job.id, { lock: true });
@@ -192,6 +204,7 @@ async function runRound(userId, job, { buffer } = {}) {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, number, status, error, "fetchedVia", "finalUrl", "fetchedAt"`,
     [job.id, userId, number, page?.finalUrl || null, page ? page.fetchedVia : failure.via, page ? JSON.stringify(page.snapshot) : null,
       page ? zlib.gzipSync(page.html) : null, page ? 'ready' : 'failed', failure?.message || null]);
+    if (made[0].status === 'ready') await ensureDiffs(db, userId, job.id, number); // what changed, kept with the round
     await db.query('UPDATE content_check_jobs SET "updatedAt" = NOW() WHERE id = $1', [job.id]);
     return made[0];
   });
@@ -317,6 +330,7 @@ router.get('/jobs/:id/rounds/:number', async (req, res) => {
     const job = await ownJob(pool, req.user.id, req.params.id);
     const n = idOf(req.params.number);
     if (n === null) throw bad(404, 'Not found');
+    await ensureDiffs(pool, req.user.id, job.id, n); // rounds kept before changes were worked out get theirs now
     const { rows } = await pool.query(`SELECT id, number, "fetchedAt", "fetchedVia", "finalUrl", status, error, snapshot, results
                                          FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 AND number = $3`, [job.id, req.user.id, n]);
     if (!rows[0]) throw bad(404, 'Not found');

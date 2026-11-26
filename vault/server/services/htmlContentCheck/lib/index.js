@@ -42,6 +42,8 @@ function extractFull(html, baseUrl) {
 const decodeHtml = (bytes) => load().decodeHtml(bytes);
 const countWords = (s) => load().countWords(s);
 const thinWords = () => load().THIN_WORDS;
+const diffArrays = (a, b, opts) => load().diffArrays(a, b, opts);
+const diffWordsWithSpace = (a, b, opts) => load().diffWordsWithSpace(a, b, opts);
 
 /** Is the reader usable? Loads it and reads a tiny page. Returns null when fine, else the error message. */
 function check() {
@@ -54,24 +56,25 @@ function check() {
   }
 }
 
-/** On boot: a missing or broken bundle files a Suggestions-inbox alert for the admin, so it is noticed before someone needs the tool. */
+/** On boot: a missing or broken bundle files ONE Suggestions-inbox alert for the admin (the fingerprint makes a later boot update that
+ *  item, not add another; once the admin marks it Ignore it stays quiet). The check reads the short page written in check() above, so
+ *  nothing outside is ever fetched. */
 async function bootCheck() {
   const problem = check();
-  if (!problem) return true;
-  const { getLogger } = require('../../../middleware/requestContext');
-  getLogger().error({ problem }, '[html-content-check] reader bundle unusable');
-  const { capture, makeFingerprint, getPrimaryAdminUserId } = require('../../SuggestionService');
-  const adminId = await getPrimaryAdminUserId();
-  if (adminId) {
-    await capture({
-      userId: adminId, source: 'html-content-check', category: 'alert',
-      fingerprint: makeFingerprint('html-content-check', 'reader-bundle'),
-      title: 'HTML Content Check cannot read pages',
-      body: `The bundled page reader (${path.relative(path.join(__dirname, '../../../..'), builder.OUT)}) is missing or broken: ${problem}. Pages cannot be fetched until it is rebuilt. Check the build log for "[html-content-check]" and run node scripts/buildHtmlContentCheckLib.js.`,
-      context: 'server boot / server/services/htmlContentCheck/lib',
-    });
+  if (problem) {
+    const { getLogger } = require('../../../middleware/requestContext');
+    getLogger().error({ problem }, '[html-content-check] reader bundle unusable');
   }
-  return false;
+  const { captureIf, makeFingerprint, getPrimaryAdminUserId } = require('../../SuggestionService');
+  const adminId = problem ? await getPrimaryAdminUserId() : null;
+  await captureIf(Boolean(problem && adminId), {
+    userId: adminId, source: 'html-content-check', category: 'alert',
+    fingerprint: makeFingerprint('html-content-check', 'reader-bundle'),
+    title: 'HTML Content Check cannot read pages',
+    body: `The bundled page reader (${path.relative(path.join(__dirname, '../../../..'), builder.OUT)}) is missing or broken: ${problem}. Pages cannot be fetched until it is rebuilt. Check the build log for "[html-content-check]" and run node scripts/buildHtmlContentCheckLib.js.`,
+    context: 'server boot / server/services/htmlContentCheck/lib',
+  });
+  return !problem;
 }
 
-module.exports = { extractFull, decodeHtml, countWords, thinWords, check, bootCheck, _reset: () => { lib = null; } };
+module.exports = { extractFull, decodeHtml, countWords, thinWords, diffArrays, diffWordsWithSpace, check, bootCheck, _reset: () => { lib = null; } };

@@ -6,9 +6,17 @@ import { CARD, PrimaryButton, SecondaryButton, Badge, formatDate } from './share
 // point every later round is compared with (milestone 3). A failed round keeps its reason until the next check replaces it.
 const VIA = { plain: 'Plain fetch', browser: 'Real browser', upload: 'Saved copy' };
 
-export default function RoundsView({ job, busy, checkAgain, uploadCopy }) {
+const real = (s) => s.total - (s.volatile || 0);
+function countLine(s, since) {
+  const n = real(s);
+  const self = s.volatile ? ` (and ${s.volatile} that may have changed by itself)` : '';
+  return n || s.volatile ? `${n} change${n === 1 ? '' : 's'} ${since}${self}` : `No changes ${since}`;
+}
+
+export default function RoundsView({ job, busy, checkAgain, uploadCopy, onShowChanges }) {
   const fileRef = useRef(null);
   const rounds = [...job.rounds].reverse();
+  const viaOf = (n) => job.rounds.find((x) => x.number === n)?.fetchedVia;
   return (
     <section className="rounded-2xl border p-6 space-y-4" style={CARD}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -33,10 +41,22 @@ export default function RoundsView({ job, busy, checkAgain, uploadCopy }) {
               ? <p className="text-sm" style={{ color: '#991b1b' }}>Failed: {r.error}</p>
               : <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{r.title ? `"${r.title}" · ` : ''}{(r.words || 0).toLocaleString('en-AU')} words in {r.blocks} blocks</p>}
             {r.finalUrl && r.finalUrl !== job.url && <p className="text-xs break-all" style={{ color: 'var(--color-muted)' }}>Read from {r.finalUrl}</p>}
+            {r.sincePrevious && (
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                  {countLine(r.sincePrevious, r.previousNumber === 0 ? 'since the starting point' : `since round ${r.previousNumber}`)}
+                  {r.previousNumber !== 0 && r.sinceBaseline ? `; ${real(r.sinceBaseline)} since the starting point` : ''}
+                </p>
+                <SecondaryButton tip="Show what changed in this round, word by word." onClick={() => onShowChanges(r.number)}>Show changes</SecondaryButton>
+              </div>
+            )}
+            {r.sincePrevious && viaOf(r.previousNumber) && viaOf(r.previousNumber) !== r.fetchedVia && (
+              <p className="text-xs" style={{ color: '#b45309' }}>Read differently from round {r.previousNumber} ({VIA[viaOf(r.previousNumber)]}), so some differences may come from that, not from edits.</p>
+            )}
           </li>
         ))}
       </ol>
-      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>An unchanged page is still kept as a round, so a check that found nothing done is on record. A failed round is replaced by the next check. What changed between rounds is shown in the next update.</p>
+      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>An unchanged page is still kept as a round, so a check that found nothing done is on record. A failed round is replaced by the next check. Later rounds are read the same way as the starting point where possible, so the way of reading does not show up as changes.</p>
     </section>
   );
 }

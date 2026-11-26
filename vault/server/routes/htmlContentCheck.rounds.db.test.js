@@ -111,6 +111,24 @@ function serve() {
     assert.equal(r.body.round.number, 3); assert.equal(r.body.round.status, 'ready', 'success replaces the failed round');
     assert.deepEqual(r.body.job.rounds.map((x) => `${x.number}:${x.status}`), ['0:ready', '1:ready', '2:ready', '3:ready']);
 
+    // ---- milestone 3: each round keeps what changed, against the starting point and the round before ----
+    const rounds = r.body.job.rounds;
+    assert.equal(rounds[0].sincePrevious, null, 'the starting point has nothing to compare with');
+    assert.equal(rounds[1].sincePrevious.total, 0, 'the unchanged page: a round with no changes');
+    assert.equal(rounds[2].sincePrevious.total, 7); assert.equal(rounds[2].sincePrevious.volatile, 1);
+    assert.equal(rounds[3].sincePrevious.total, 0, 'round 3 is the same page as round 2');
+    assert.equal(rounds[3].sinceBaseline.total, 7, 'but still differs from the starting point');
+    assert.equal(rounds[3].previousNumber, 2);
+    let full = (await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body;
+    assert.equal(full.results.diff.baselineNumber, 0);
+    assert.ok(full.results.diff.vsPrevious.changes.some((c) => c.type === 'removed' && c.before.text === '1998: Retrospective, Example Gallery'));
+    // a round kept before changes were worked out (milestone 2) gets them when read
+    await pool.query(`UPDATE content_check_rounds SET results = '{}'::jsonb WHERE "jobId" = $1 AND number = 2`, [job.id]);
+    full = (await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body;
+    assert.equal(full.results.diff.vsPrevious.stats.total, 7, 'filled in on read');
+    // the round before a failed one is skipped: compare with the last round that was read
+    // (round 3 replaced the failed attempts, so its "before" is round 2)
+
     // ---- near-empty plain copy: the real browser, recorded as such ----
     net.plain = { html: '<html><body><div id="app"></div></body></html>', finalUrl: 'https://gallery.example/app' };
     net.browser = { html: AFTER, finalUrl: 'https://gallery.example/app/' };
@@ -128,6 +146,17 @@ function serve() {
     assert.equal(r.status, 201);
     assert.deepEqual(r.body.rounds.map((x) => [x.number, x.status, x.error]), [[0, 'failed', 'That address is not allowed']]);
     assert.equal((await call(A, 'GET', `/jobs/${r.body.id}/rounds/0`)).body.snapshot, null, 'a failed round has no snapshot');
+
+    // ---- a starting point that needed the real browser: later rounds use it too, so the two ways of reading do not look like edits ----
+    net.plain = { html: '<html><body><div id="root"></div></body></html>', finalUrl: 'https://js.example/' };
+    net.browser = { html: BEFORE, finalUrl: 'https://js.example/' };
+    r = await call(A, 'POST', '/jobs', { kind: 'compare', url: 'https://js.example/' });
+    assert.equal(r.body.rounds[0].fetchedVia, 'browser');
+    net.plain = { html: BEFORE, finalUrl: 'https://js.example/' }; // the plain copy would now be readable, but is not used
+    net.calls = [];
+    const next = await call(A, 'POST', `/jobs/${r.body.id}/rounds`);
+    assert.deepEqual(net.calls.map((c) => c[0]), ['browser']);
+    assert.equal(next.body.round.fetchedVia, 'browser'); assert.equal(next.body.job.rounds[1].sincePrevious.total, 0);
 
     // ---- a saved copy instead of fetching ----
     r = await call(A, 'POST', '/jobs', { kind: 'compare', url: 'https://staging.example/page', fetch: false });

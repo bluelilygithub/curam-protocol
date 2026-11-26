@@ -15,6 +15,7 @@ import JobForm from './htmlContentCheck/JobForm';
 import JobsView from './htmlContentCheck/JobsView';
 import LinesView from './htmlContentCheck/LinesView';
 import RoundsView from './htmlContentCheck/RoundsView';
+import ChangesView from './htmlContentCheck/ChangesView';
 
 /**
  * HTML Content Check (docs/html-content-check.md): was a requested set of edits made to a web page? Laid out like Contract Review and
@@ -37,6 +38,7 @@ export default function HtmlContentCheckPage() {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [newFile, setNewFile] = useState(null); // a saved copy to use as round 0 instead of fetching
+  const [changesRound, setChangesRound] = useState(null); // the round Changes shows (null: the latest)
   const [tool, setTool] = useState('start'); // 'start' is the job screen; every other value is a tool id
   const [goal, setGoal] = useState(null);
   const [jobs, setJobs] = useState(null); // null while loading
@@ -61,6 +63,7 @@ export default function HtmlContentCheckPage() {
     api.get('/api/tickets').then((r) => (r.ok ? r.json() : null)).then((d) => setTickets(Array.isArray(d?.tickets) ? d.tickets : null)).catch(() => setTickets(null));
   }, []);
   useEffect(() => { setEditForm(job ? formOf(job) : null); setConfirmDelete(false); }, [job]);
+  useEffect(() => { setChangesRound(null); }, [job?.id, job?.rounds?.length]); // another job, or a new round: Changes shows the latest
 
   const startGoal = (g) => {
     setGoal(g);
@@ -113,6 +116,8 @@ export default function HtmlContentCheckPage() {
     const d = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds`, {}));
     setJob(d.job); loadJobs(); roundToast(d.round);
   });
+  const loadRound = async (number) => readJson(await api.get(`/api/html-content-check/jobs/${job.id}/rounds/${number}`));
+  const showChanges = (number) => { setChangesRound(number); setTool('changes'); };
   const uploadCopy = (file) => fetchRound('Reading the saved copy…', async () => {
     const form = new FormData(); form.append('file', file);
     const d = await readJson(await api.postForm(`/api/html-content-check/jobs/${job.id}/rounds`, form));
@@ -250,7 +255,9 @@ export default function HtmlContentCheckPage() {
                     ? <LinesView job={job} getIcon={getIcon} saveItems={saveItems} resplit={resplit} />
                     : <EmptyState icon="columns" title="This job has no request" body="It only compares the page over time, so there are no request lines." />)}
 
-                  {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} />}
+                  {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} onShowChanges={showChanges} />}
+
+                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} onAllRounds={() => setTool('rounds')} />}
 
                   {tool === 'details' && job && editForm && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
