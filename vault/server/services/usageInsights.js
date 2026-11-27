@@ -11,7 +11,7 @@ const { calculateCost, hasPricing } = require('./costCalculator');
 // Features that are small, well-defined jobs (sort a task, tag an email, summarise a feed, answer a how-to question): a light model does them well.
 const LIGHT_JOB_RE = /^(tasks|goals|mood|calendar_nlp|talk_summary|pinned_urls|gmail_intel|news_digest|shares_news|shelf_extract|student_quiz|seo_negatives|seo_keywords|property_scenario_parse|notes_ai_.*|.*_guide|recipes_.*|translate_(chunk|one|glossary)|topic_research_(relevance|suggest|brief))$/;
 // Features where the answer is a judgement the owner acts on (money, shares, writing that is sent on): worth a stronger model.
-const JUDGEMENT_RE = /^(shares_observation.*|property_scenario_insight|translate_review|topic_research_(draft|review)|contract_review.*|finance.*|invoice.*)$/;
+const JUDGEMENT_RE = /^(shares_observation.*|shares_watchlist_research|property_scenario_insight|translate_review|topic_research_(draft|review)|contract_review.*|finance.*|invoice.*)$/;
 
 const MIN_SAVING = 0.0001; // dollars; below this a "saving" is noise
 const TINY_CALL_TOKENS = 400;

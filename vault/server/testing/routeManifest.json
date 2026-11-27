@@ -4657,6 +4657,24 @@
   "DELETE /api/shares/thesis/:id": {
    "class": "authed"
   },
+  "GET /api/shares/watchlist": {
+   "class": "authed"
+  },
+  "POST /api/shares/watchlist": {
+   "class": "authed"
+  },
+  "PUT /api/shares/watchlist/:id": {
+   "class": "authed"
+  },
+  "GET /api/shares/watchlist/:id/reports": {
+   "class": "authed"
+  },
+  "POST /api/shares/watchlist/:id/research": {
+   "class": "authed"
+  },
+  "DELETE /api/shares/watchlist/:id": {
+   "class": "authed"
+  },
   "GET /api/shares/compliance/reports": {
    "class": "admin"
   },

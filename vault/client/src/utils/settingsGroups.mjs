@@ -22,7 +22,7 @@ export const SETTINGS_GROUPS = [
     { id: 'Topic Research', tip: 'Which AI model writes Topic Research briefs.' },
     { id: 'Email Follow-Up', tip: 'Which AI model answers Email Follow-Up summaries and questions.' },
     { id: 'PDF Tools', tip: 'Which AI model PDF → HTML uses (it needs one that can look at pictures).' },
-    { id: 'Shares', tip: 'Share portfolio alerts, and how many days of daily news briefings and Portfolio Notes to keep.' },
+    { id: 'Shares', tip: 'Share portfolio alerts, how many days of daily news briefings and Portfolio Notes to keep, and your investor profile for Watchlist reports.' },
     { id: 'Integrations', tip: 'Connect Gmail, Calendar and Drive.' },
   ] },
   { id: 'workspace', label: 'Workspace', admin: true, tabs: [

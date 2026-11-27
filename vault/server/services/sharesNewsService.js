@@ -1984,4 +1984,5 @@ module.exports = {
   getDateInTz,
   sectorBenchmarkFor,
   clampRetentionDays,
+  webSearch, // also used by the Watchlist research report (sharesWatchlist.js)
 };

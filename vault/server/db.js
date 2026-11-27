@@ -4089,6 +4089,35 @@ async function initSchema() {
       UNIQUE ("userId", source, symbol, exchange, "calledOn")
     )
   `);
+  // Watchlist (docs/shares-watchlist.md): companies being researched but not held, each with dated research reports.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_watchlist (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      symbol        TEXT NOT NULL,
+      exchange      TEXT NOT NULL,
+      name          TEXT NOT NULL DEFAULT '',
+      note          TEXT NOT NULL DEFAULT '',
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE ("userId", symbol, exchange)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_research_reports (
+      id            SERIAL PRIMARY KEY,
+      "watchId"     INTEGER NOT NULL REFERENCES share_watchlist(id) ON DELETE CASCADE,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      markdown      TEXT NOT NULL DEFAULT '',
+      sources       JSONB NOT NULL DEFAULT '[]',
+      "priceAtReport" TEXT NOT NULL DEFAULT '',
+      model         TEXT,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_research_reports_watch
+      ON share_research_reports ("watchId", "createdAt" DESC)
+  `);
 
   // ── Precious metals ───────────────────────────────────────────────────────
   await pool.query(`

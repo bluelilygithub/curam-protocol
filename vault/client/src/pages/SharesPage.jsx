@@ -10,6 +10,7 @@ import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 import SharesPackTab from '../components/shares/SharesPackTab';
 import SharesThesisTab from '../components/shares/SharesThesisTab';
+import SharesWatchlistTab from '../components/shares/SharesWatchlistTab';
 import SharesComplianceTab from '../components/shares/SharesComplianceTab';
 import Tooltip from '../components/Tooltip';
 import ToolSidebar from '../components/ToolSidebar';
@@ -30,6 +31,7 @@ const TABS = [
   { id: 'news', label: 'News' },
   { id: 'questions', label: 'Questions' },
   { id: 'thesis', label: 'Thesis' },
+  { id: 'watchlist', label: 'Watchlist' },
   { id: 'compliance', label: 'Compliance' },
   { id: 'metals', label: 'Metals' },
 ];
@@ -47,6 +49,7 @@ const MENU_GROUPS = [
     { id: 'news', label: 'News', icon: 'news', tip: 'Daily AI briefings per holding and the market, plus monthly summaries.' },
     { id: 'questions', label: 'Questions', icon: 'help-circle', tip: 'Ask about your own portfolio in plain words.' },
     { id: 'thesis', label: 'Thesis', icon: 'lightbulb', tip: 'Why you own each share, in revisions, with a check and feedback on the latest one.' },
+    { id: 'watchlist', label: 'Watchlist', icon: 'eye', tip: 'Companies you do not hold yet, with dated AI research reports that fit your profile. Information, not advice.' },
   ] },
   { label: 'Tax & records', tip: 'Capital gains, broker statements and the pack for your accountant. Working records, not tax advice.', tools: [
     { id: 'cgt', label: 'CGT', icon: 'calculator', tip: 'Capital gains parcel by parcel for a financial year.' },
@@ -376,6 +379,7 @@ export default function SharesPage() {
   const canUseShares = isAdmin || featureAccess.shares !== false;
 
   const [tab, setTab] = useState('portfolio');
+  const [thesisStart, setThesisStart] = useState(null); // Watchlist → "Write a thesis" opens the Thesis editor for that company
   // The guided tour: from the link by the title, or from Settings -> Tours (/shares?tour=1)
   const [tourParams, setTourParams] = useSearchParams();
   const startTour = () => {
@@ -871,6 +875,7 @@ export default function SharesPage() {
                   <p style={{ color: 'var(--color-text)' }}><strong>News</strong> — daily AI-generated briefings per holding (bullish/bearish/watch/neutral signals) plus End of month trend summaries. Auto-generates at 4 AM; "Send Portfolio Note" triggers the same analyst-note email manually.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Questions</strong> is free-text Q&amp;A over your actual portfolio data — "What's my largest position?", "How would selling everything today perform?" — archived so you can revisit past answers.</p>
                   <p style={{ color: 'var(--color-text)' }}><strong>Thesis</strong> is a journal of why you own each share: your assumptions, the red lines that would prove you wrong and what you think it is worth. Save each rethink as a new <em>revision</em> so earlier ones stay to review. <em>Check &amp; review</em> tests the latest revision against your stored trades, news briefings and, for US shares, reported figures from Finnhub (after a bear case and a bull case argue both sides), says whether the thesis is intact, weakening or broken, and gives feedback that refers to your earlier revisions, your portfolio and the market briefings. It never says to buy or sell, and it cannot read company filings, so thin evidence shows as "not enough evidence". The <em>Track record</em> card shows how past news signals and thesis verdicts turned out against the index 30 and 90 days later.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Watchlist</strong> keeps companies you are looking at but do not hold. <em>Research</em> writes a dated report from a web search, the live quote, reported figures (US shares only), your holdings and your investor profile (Settings → Shares): what the company sells, its moat, figures, valuation, risks, bear/base/bull cases, what would change the view and how it fits you. It quotes other people's price targets with their source but never gives its own, and never says whether to buy, sell or hold, or how much. <em>Write a thesis</em> carries the company over to the Thesis tab.</p>
                   {isAdmin && <p style={{ color: 'var(--color-text)' }}><strong>Compliance</strong> is an admin-only monthly check of a fixed ATO page list. It keeps an in-app note of updates that may matter for your share records, with source links, Markdown and PDF export, and reports you can delete to the recycle bin. It is general information, not tax or legal advice.</p>}
                   <p style={{ color: 'var(--color-text)' }}><strong>Metals</strong> tracks physical precious-metals purchases separately from share holdings, with live spot price lookup.</p>
                 </div>
@@ -1412,7 +1417,8 @@ export default function SharesPage() {
 
             {tab === 'questions' && <QuestionsTab />}
 
-            {tab === 'thesis' && <SharesThesisTab />}
+            {tab === 'thesis' && <SharesThesisTab startFor={thesisStart} />}
+            {tab === 'watchlist' && <SharesWatchlistTab onWriteThesis={(symbol, exchange) => { setThesisStart({ symbol, exchange, at: Date.now() }); setTab('thesis'); }} />}
 
             {tab === 'compliance' && isAdmin && <SharesComplianceTab />}
 

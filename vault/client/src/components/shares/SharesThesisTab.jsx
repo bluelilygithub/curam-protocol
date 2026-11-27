@@ -45,7 +45,7 @@ function Pill({ verdict, score }) {
   );
 }
 
-export default function SharesThesisTab({ onAskGuide }) {
+export default function SharesThesisTab({ onAskGuide, startFor }) {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
@@ -124,6 +124,13 @@ export default function SharesThesisTab({ onAskGuide }) {
   };
 
   const startNew = (symbol, exchange) => { setDraft(emptyDraft(symbol, exchange)); setSelected(null); };
+
+  // From the Watchlist: open that company's thesis if there is one, else a new one.
+  useEffect(() => {
+    if (!startFor || loading) return;
+    const found = theses.find((t) => keyOf(t) === keyOf(startFor));
+    if (found) { setSelected(keyOf(found)); setDraft(null); } else startNew(startFor.symbol, startFor.exchange);
+  }, [startFor, loading]); // eslint-disable-line react-hooks/exhaustive-deps
   const startEdit = () => {
     if (!current) return;
     setDraft({

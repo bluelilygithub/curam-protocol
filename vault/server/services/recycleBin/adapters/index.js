@@ -15,6 +15,7 @@ require('./youtube'); // saved lists, follows, favourites
 require('./serpTracker'); // saved SERP Tracker lookups
 require('./serpSite'); // SERP Tracker sites (with their saved lookups)
 require('./sharesThesis'); // Shares theses (with their check history)
+require('./sharesWatchlist'); // Shares watchlist companies (with their research reports)
 require('./sharesCompliance'); // Shares compliance reports (with their source snapshots)
 require('./financeCompliance'); // Finance compliance reports (with their source snapshots)
 require('./drawings'); // saved Excalidraw drawings

@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { VoiceInputProvider, VoiceInput } from '../components/voiceInput/VoiceInput';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
@@ -197,6 +198,7 @@ function SettingsPage() {
   // Shares alerts
   const [sharesDropAlertPct, setSharesDropAlertPct] = useState('0');
   const [sharesBriefingDays, setSharesBriefingDays] = useState('45');
+  const [investorProfile, setInvestorProfile] = useState({ horizon: '', drawdown: '', goals: '', avoid: '' }); // Shares → Watchlist reports read it
 
   // Amazon Search
   const [productScoutAmazonDomain, setProductScoutAmazonDomain] = useState('amazon.com.au');
@@ -378,6 +380,7 @@ function SettingsPage() {
       if (data.expense_review_priority_domains) setExpensePriorityDomains(data.expense_review_priority_domains);
       if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
       if (data.shares_briefing_retention_days != null) setSharesBriefingDays(String(data.shares_briefing_retention_days));
+      if (data.shares_investor_profile) { try { setInvestorProfile((p) => ({ ...p, ...JSON.parse(data.shares_investor_profile) })); } catch {} }
       if (data.translate_language_order) {
         try {
           const parsed = JSON.parse(data.translate_language_order);
@@ -2677,6 +2680,37 @@ function SettingsPage() {
             {`About ${Math.round((Number(sharesBriefingDays) || 45) / 30)} month${Math.round((Number(sharesBriefingDays) || 45) / 30) === 1 ? '' : 's'} of briefings`}
           </span>
         </div>
+
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1 mt-8" style={{ color: 'var(--color-muted)' }}>
+          Investor Profile
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Watchlist research reports read this to say how a company fits you, alongside your current holdings. Only you see it.
+          Saved when you leave each field. The reports still never say what to buy or how much.
+        </p>
+        <VoiceInputProvider lang="en-AU">
+        <div className="grid gap-3 sm:grid-cols-2 max-w-4xl">
+          {[
+            ['horizon', 'Time horizon', 'e.g. 10+ years, no need to sell for income'],
+            ['drawdown', 'Fall you can sit through without selling', 'e.g. 40% on one share, 25% on the whole portfolio'],
+            ['goals', 'Goals', 'e.g. long-term growth, some dividend income, prefer profitable businesses'],
+            ['avoid', 'Things to avoid', 'e.g. tobacco, highly indebted companies, single-product biotech'],
+          ].map(([k, label, ph]) => (
+            <div key={k} className="text-xs font-medium space-y-1" style={{ color: 'var(--color-muted)' }}>
+              <p>{label}</p>
+              <VoiceInput
+                type="textarea"
+                rows={2}
+                value={investorProfile[k]}
+                onChange={(v) => setInvestorProfile((p) => ({ ...p, [k]: v }))}
+                onBlur={() => api.post('/api/settings', { key: 'shares_investor_profile', value: JSON.stringify(investorProfile) }).catch(() => {})}
+                placeholder={ph}
+                label={label}
+              />
+            </div>
+          ))}
+        </div>
+        </VoiceInputProvider>
       </section>
       )}
 

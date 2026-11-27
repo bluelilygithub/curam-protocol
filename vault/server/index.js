@@ -218,6 +218,7 @@ app.use('/api/shares/statements', requireFeature('shares'), require('./routes/sh
 app.use('/api/shares/documents', requireFeature('shares'), require('./routes/sharesDocuments'));
 app.use('/api/shares/pack', requireFeature('shares'), require('./routes/sharesPack'));
 app.use('/api/shares/thesis', requireFeature('shares'), require('./routes/sharesThesis')); // aiLimiter inside, on the check route only
+app.use('/api/shares/watchlist', requireFeature('shares'), require('./routes/sharesWatchlist')); // aiLimiter inside, on the research route only
 // Shares Compliance Advisory (docs/shares-compliance.md): admin-only, before /api/shares. aiLimiter is inside, on POST only.
 app.use('/api/shares/compliance', requireFeature('shares'), requireAdmin, require('./routes/sharesCompliance'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
