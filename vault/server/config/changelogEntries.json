@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f4738aed",
+   "fullHash": "f4738aede49718b9f4ddfe66af2cd541990ee17a",
+   "committedAt": "2026-11-28T09:34:15+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts: read Portfolio Note dates as YYYY-MM-DD, label the real window",
+   "filesChanged": 3,
+   "insertions": 42,
+   "deletions": 18,
+   "goal": "Make the previous holdings % fix (92728c33) actually take effect, and fix the Portfolio vs benchmarks card claiming \"12 months\" over about six weeks with dates like \"Wed Oct 14 to Sat Nov 28\".",
+   "whatChanged": "server/services/sharesChartData.js: loadObservationHistory used String(r.date).slice(0, 10) on a pg DATE, which is a JS Date, giving \"Wed Oct 14\". Every comparison against it failed: buildHoldingsValueSeries skipped every stored price (so after 92728c33 the tile fell back to compounding the notes and showed −34.60% with no A$), the weekend-repeat rule could not tell the day, and the client could not format the dates. The query now selects date::text; new observationFromRow (exported, tested) turns a Date into YYYY-MM-DD with local getters. client/src/components/shares/SharesChartsTab.jsx: the card title is \"Portfolio vs benchmarks\" without the range; the subtitle and (i) give the real dates with the year (fullDay) and say the card covers only the days with Portfolio Notes, which can be shorter than the chosen range. One new test feeds a Date as pg does.",
+   "filesImpacted": [
+    "vault/server/services/sharesChartData.js",
+    "vault/server/services/sharesChartData.test.js",
+    "vault/client/src/components/shares/SharesChartsTab.jsx"
+   ],
+   "benefit": "The holdings % and A$ come from stored prices as intended, weekend repeats stop compounding into the index figures, and the card says which dates it covers.",
+   "concerns": "The previous fix shipped without this and showed no change on production; its tests used date strings, not the Date objects pg returns, which is how it was missed. Not yet seen on production. The Nasdaq (−31.83%) and SOX (−55.17%) figures on the owner's screen have not been explained: skipping weekend repeats will lower them, but not certainly to a believable level; the daily index moves in the notes have not been looked at. The same String(date).slice(0, 10) pattern is in server/routes/finance.js:4597 (a Finance balance chart) and was not changed. The card still only covers the Portfolio Note retention window (45 days by default)."
+  },
+  {
    "commit": "92728c33",
    "fullHash": "92728c339bc0a8df4f29462c2956557d6efa6985",
    "committedAt": "2026-11-28T09:14:36+10:00",
