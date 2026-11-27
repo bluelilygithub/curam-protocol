@@ -16,7 +16,7 @@ export const GROUP_TIPS = {
 };
 
 export const TOOL_TIPS = {
-  make: 'Make a new throw-away address on your own domain for a sign-up. Choose how long to keep it, or save it later to keep it for good.',
+  make: 'Make a new throw-away address on your own domain for a sign-up. Choose how long to keep it, or Keep for good for an account you will keep.',
   live: 'Every burn that still receives mail, saved ones included, newest first. Search by name, address or number (B-12).',
   saved: 'Only the burns you saved. A saved burn never expires; it stays until you delete it.',
 };
@@ -41,12 +41,13 @@ export function matchesBurn(b, q) {
 
 // The longer text for the (i) "How Burner Mail works" box.
 export const HOW_IT_WORKS = [
-  ['Make a burn', 'Press New burn, type what it is for (optional), choose how long to keep it, and press Make burn. Copy the address and use it on the sign-up form of the other website.'],
+  ['Make a burn', 'Press New burn, type what it is for (optional), choose how long to keep it (Keep for good for an account you will keep), and press Make burn. Copy the address and use it on the sign-up form of the other website.'],
   ['Refer to it by number', 'Every burn has a number like B-12, the same way tickets have T-12. Type the number in the search box of Live burns or Saved burns to find it again.'],
   ['Save the ones you need', 'Press Save on a burn to keep it for good: it never expires and keeps receiving mail until you delete it. Unsave gives it seven more days.'],
   ['Wait for the email', 'An open burn checks for new mail every few seconds. The code appears in large type with a Copy button, and any confirm link is listed first.'],
   ['Links are never opened for you', 'Each link shows its site name. Check it matches the service you signed up for, then Open or Copy link.'],
-  ['What is kept', 'Only the plain text of each email, its codes and its link addresses. Pictures and layout are never kept. An unsaved burn stops working when it expires, and it is removed a day later with its emails. Deleting a burn or an email is permanent.'],
+  ['What is kept', 'Only the plain text of each email, its codes and its link addresses. Pictures and layout are never kept. An unsaved burn stops working when it expires, and its emails are deleted a day later. Deleting a burn or an email is permanent.'],
+  ['Addresses are never reused', 'A deleted or expired address is never given to anyone again, so password resets for an old sign-up can never reach someone else. Only the address, its name and its dates are kept for that.'],
   ['Be patient', 'Some sites take ten minutes or more to send the email. Wait before pressing Resend on the other site; repeated resends can slow it down.'],
   ['Limits', 'Some websites refuse unfamiliar email domains. Addresses only receive mail; they cannot send or reply.'],
 ];

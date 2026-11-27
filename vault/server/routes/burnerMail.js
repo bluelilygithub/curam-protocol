@@ -28,8 +28,9 @@ function slugFromLabel(label) {
   return String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20);
 }
 
-// Live: not yet expired, or saved (a saved burn never expires).
-const LIVE = `(a."expiresAt" > NOW() OR a."savedAt" IS NOT NULL)`;
+// Live: not deleted, and not yet expired or saved (a saved burn never expires).
+// Rows are never removed (see purgeExpired and DELETE), so an address can never be issued to anyone again.
+const LIVE = `(a."deletedAt" IS NULL AND (a."expiresAt" > NOW() OR a."savedAt" IS NOT NULL))`;
 
 const ADDRESS_COLS = `a.id, a.address, a.label, a."createdAt", a."expiresAt", a."lastMessageAt", a."savedAt",
   (SELECT COUNT(*) FROM burner_messages m WHERE m."addressId" = a.id) AS "messageCount"`;
@@ -61,20 +62,21 @@ router.post('/addresses', async (req, res, next) => {
     const d = domain();
     if (!d || !process.env.INBOUND_MAIL_SECRET) return res.status(409).json({ error: 'Burner Mail is not set up yet. The owner needs to add the mail domain and secret (see docs/burner-mail.md).' });
     const label = String(req.body?.label || '').trim().slice(0, 60);
+    const forever = Number(req.body?.days) === 0; // "Keep for good": saved from the start
     const days = LIFETIMES_DAYS.includes(Number(req.body?.days)) ? Number(req.body.days) : DEFAULT_DAYS;
 
-    const { rows: [{ n }] } = await pool.query(`SELECT COUNT(*) AS n FROM burner_addresses WHERE "userId"=$1 AND "expiresAt" > NOW() AND "savedAt" IS NULL`, [req.user.id]);
+    const { rows: [{ n }] } = await pool.query(`SELECT COUNT(*) AS n FROM burner_addresses WHERE "userId"=$1 AND "expiresAt" > NOW() AND "savedAt" IS NULL AND "deletedAt" IS NULL`, [req.user.id]);
     if (Number(n) >= MAX_ADDRESSES) return res.status(409).json({ error: `You already have ${MAX_ADDRESSES} unsaved live burns. Delete some first.` });
 
     const slug = slugFromLabel(label) || 'signup';
     for (let attempt = 0; attempt < 5; attempt++) {
       const address = `${slug}-${crypto.randomBytes(3).toString('hex')}@${d}`;
       const { rows } = await pool.query(
-        `INSERT INTO burner_addresses ("userId", address, label, "expiresAt")
-         VALUES ($1, $2, $3, NOW() + ($4 || ' days')::interval)
+        `INSERT INTO burner_addresses ("userId", address, label, "expiresAt", "savedAt")
+         VALUES ($1, $2, $3, NOW() + ($4 || ' days')::interval, CASE WHEN $5::boolean THEN NOW() END)
          ON CONFLICT (address) DO NOTHING
          RETURNING id`,
-        [req.user.id, address, label || null, String(days)]
+        [req.user.id, address, label || null, String(days), forever]
       );
       if (rows[0]) {
         const { rows: [row] } = await pool.query(`SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a.id=$1`, [rows[0].id]);
@@ -87,7 +89,7 @@ router.post('/addresses', async (req, res, next) => {
 
 router.get('/addresses/:id', async (req, res, next) => {
   try {
-    const { rows: [row] } = await pool.query(`SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a.id=$1 AND a."userId"=$2`, [req.params.id, req.user.id]);
+    const { rows: [row] } = await pool.query(`SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a.id=$1 AND a."userId"=$2 AND a."deletedAt" IS NULL`, [req.params.id, req.user.id]);
     if (!row) return res.status(404).json({ error: 'Burn not found.' });
     res.json(addressRow(row));
   } catch (err) { next(err); }
@@ -103,7 +105,7 @@ router.patch('/addresses/:id', async (req, res, next) => {
     if (b.saved === true) sets.push(`"savedAt"=COALESCE("savedAt", NOW())`);
     if (b.saved === false) sets.push(`"savedAt"=NULL, "expiresAt"=GREATEST("expiresAt", NOW() + INTERVAL '${DEFAULT_DAYS} days')`);
     if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
-    const { rowCount } = await pool.query(`UPDATE burner_addresses SET ${sets.join(', ')} WHERE id=$1 AND "userId"=$2`, vals);
+    const { rowCount } = await pool.query(`UPDATE burner_addresses SET ${sets.join(', ')} WHERE id=$1 AND "userId"=$2 AND "deletedAt" IS NULL`, vals);
     if (!rowCount) return res.status(404).json({ error: 'Burn not found.' });
     const { rows: [row] } = await pool.query(`SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a.id=$1`, [req.params.id]);
     res.json(addressRow(row));
@@ -112,7 +114,12 @@ router.patch('/addresses/:id', async (req, res, next) => {
 
 router.delete('/addresses/:id', async (req, res, next) => {
   try {
-    const { rowCount } = await pool.query(`DELETE FROM burner_addresses WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    // emails go for good; the address row stays as a tombstone so it is never reissued (one statement, so both or neither)
+    const { rowCount } = await pool.query(
+      `WITH gone AS (DELETE FROM burner_messages WHERE "addressId"=$1 AND "userId"=$2)
+       UPDATE burner_addresses SET "deletedAt"=NOW(), "savedAt"=NULL WHERE id=$1 AND "userId"=$2 AND "deletedAt" IS NULL`,
+      [req.params.id, req.user.id]
+    );
     if (!rowCount) return res.status(404).json({ error: 'Address not found.' });
     res.json({ ok: true });
   } catch (err) { next(err); }
@@ -120,7 +127,7 @@ router.delete('/addresses/:id', async (req, res, next) => {
 
 router.get('/addresses/:id/messages', async (req, res, next) => {
   try {
-    const { rows: own } = await pool.query(`SELECT id FROM burner_addresses WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    const { rows: own } = await pool.query(`SELECT id FROM burner_addresses WHERE id=$1 AND "userId"=$2 AND "deletedAt" IS NULL`, [req.params.id, req.user.id]);
     if (!own[0]) return res.status(404).json({ error: 'Address not found.' });
     const { rows } = await pool.query(
       `SELECT id, "fromAddr", subject, "bodyText", codes, links, "receivedAt" FROM burner_messages WHERE "addressId"=$1 ORDER BY id DESC LIMIT $2`,
@@ -199,9 +206,12 @@ inboundRouter.post('/', express.raw({ type: () => true, limit: MAX_RAW_BYTES }),
   }
 });
 
-/** Hourly: remove unsaved addresses past their time (their messages go with them). */
+/** Hourly: delete the emails of unsaved addresses a day past their time. The address row stays (tombstone) so it is never reissued. */
 async function purgeExpired() {
-  const { rowCount } = await pool.query(`DELETE FROM burner_addresses WHERE "expiresAt" < NOW() - INTERVAL '1 day' AND "savedAt" IS NULL`);
+  const { rowCount } = await pool.query(
+    `DELETE FROM burner_messages m USING burner_addresses a
+     WHERE m."addressId"=a.id AND a."expiresAt" < NOW() - INTERVAL '1 day' AND a."savedAt" IS NULL`
+  );
   return rowCount;
 }
 

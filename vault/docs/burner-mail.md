@@ -6,7 +6,8 @@ Laid out like the other tool pages (ToolSidebar on the left): **New burn** (`?vi
 
 ## What it does and does not do
 
-- Makes addresses like `spotify-a1b2c3@yourdomain.xyz`, kept 1, 7 or 30 days (default 7). Expired addresses stop receiving mail; a cron removes them a day later.
+- Makes addresses like `spotify-a1b2c3@yourdomain.xyz`, kept 1, 7 or 30 days (default 7), or **Keep for good** (`days: 0`, saved from the start). Expired addresses stop receiving mail; a cron deletes their emails a day later.
+- **Addresses are never reissued.** No burner_addresses row is ever removed: expiry deletes the emails only, and Delete removes the emails and sets `"deletedAt"` (a tombstone: address, label, dates). `UNIQUE(address)` then stops any later burn, for anyone, getting the same address, so an old sign-up's password resets cannot reach a new owner. Exception: deleting a whole user account cascades and removes their tombstones.
 - **Save** on a burn sets `"savedAt"`: a saved burn is live whatever its `expiresAt`, keeps receiving mail and is never purged. Unsave clears it and sets `expiresAt` to at least 7 days from now. The name can be edited on the burn. API: `GET`/`PATCH /api/burner-mail/addresses/:id` (`{ label?, saved? }`).
 - Pulls out verification codes (4-8 digits, or a short letters-and-digits code near words like "code") and links (confirm-looking ones first). Pure code, no model: `server/services/burnerMail/extract.js`.
 - Stores plain text, codes and link addresses only. Email HTML is never stored or shown.
@@ -14,7 +15,7 @@ Laid out like the other tool pages (ToolSidebar on the left): **New burn** (`?vi
 - Mail to an address that does not exist or has expired is dropped quietly (no bounce, so a stranger cannot learn which addresses exist).
 - Limits: 50 unsaved live burns per person (saved ones do not count), 100 emails kept per address, 6 MB per email.
 - Does not send mail, and does not fill sign-up forms (use Browser Agent for that).
-- Deleting an address or email removes it for good (no recycle bin): the point of the tool is that it is disposable.
+- Deleting a burn or email removes the emails for good (no recycle bin); the burn's address, name and dates stay hidden as a tombstone.
 
 ## One-time setup (owner)
 

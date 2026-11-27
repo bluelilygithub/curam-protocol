@@ -1,7 +1,7 @@
 'use strict';
 
-// Removes burner addresses a day after they expire (their messages go with them). An expired address already stops receiving mail and
-// drops out of the list, so this is a tidy-up, not a dependency. Sends nothing outside Vault, so it runs on every server.
+// Deletes the emails of burner addresses a day after they expire. The address itself is kept (a tombstone) so it is never issued again;
+// an expired address already stops receiving mail and drops out of the list, so this is a tidy-up, not a dependency. Sends nothing outside Vault, so it runs on every server.
 
 const { purgeExpired } = require('../routes/burnerMail');
 
@@ -11,7 +11,7 @@ let timer = null;
 async function run() {
   try {
     const n = await purgeExpired();
-    if (n) console.log(`[burner-mail] removed ${n} expired address${n === 1 ? '' : 'es'}`);
+    if (n) console.log(`[burner-mail] removed ${n} email${n === 1 ? '' : 's'} from expired addresses`);
   } catch (err) {
     console.warn('[burner-mail] clean-up failed:', err.message);
   }

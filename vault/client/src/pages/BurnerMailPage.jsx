@@ -263,9 +263,10 @@ function NewBurn({ status, onMade }) {
               />
             </div>
           </Tooltip>
-          <Tooltip text="How long the address receives mail. You can Save the burn later to keep it for good.">
+          <Tooltip text="How long the address receives mail. Keep for good saves it straight away, for accounts you will keep; you can also Save a burn later.">
             <select className={FIELD} style={FIELD_STYLE} aria-label="How long to keep it" value={days} onChange={(e) => setDays(Number(e.target.value))}>
               {(status?.lifetimes || [1, 7, 30]).map((d) => <option key={d} value={d}>{d === 1 ? 'Keep 1 day' : `Keep ${d} days`}</option>)}
+              <option value={0}>Keep for good</option>
             </select>
           </Tooltip>
           <Tooltip text="Make the address and open the burn, ready to copy.">
@@ -385,7 +386,7 @@ function BurnDetail({ id, onGone }) {
     loadMessages();
   };
 
-  if (error && !burn) return <EmptyState icon="mail" title={error} body="It may have been deleted, or it expired more than a day ago." />;
+  if (error && !burn) return <EmptyState icon="mail" title={error} body="It may have been deleted." />;
   if (!burn) return <Skeleton className="h-24 w-full" />;
   const expired = !burn.savedAt && new Date(burn.expiresAt) < new Date();
 
