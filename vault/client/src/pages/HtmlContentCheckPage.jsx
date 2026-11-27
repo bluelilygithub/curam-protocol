@@ -13,12 +13,13 @@ import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startHtmlContentCheckTour, TOUR_KEY } from '../utils/tours/htmlContentCheckTour';
 import HtmlContentCheckTutorChat from './htmlContentCheck/HtmlContentCheckTutorChat';
-import { HCC_TOOLS, JOB_TOOL_IDS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, NOT_BUILT, HCC_GOALS, KIND_LABELS, STATUS_LABELS, HOW_IT_WORKS, GUIDE_TOOLS } from './htmlContentCheck/htmlContentCheckTools.mjs';
+import { HCC_TOOLS, HIDDEN_TOOLS, JOB_TOOL_IDS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, NOT_BUILT, HCC_GOALS, KIND_LABELS, STATUS_LABELS, HOW_IT_WORKS, GUIDE_TOOLS } from './htmlContentCheck/htmlContentCheckTools.mjs';
 import { CARD, PrimaryButton, SecondaryButton, Badge, readJson } from './htmlContentCheck/shared';
 import JobForm from './htmlContentCheck/JobForm';
 import JobsView from './htmlContentCheck/JobsView';
 import LinesView from './htmlContentCheck/LinesView';
 import RoundsView from './htmlContentCheck/RoundsView';
+import ReviewView from './htmlContentCheck/ReviewView';
 import ChangesView from './htmlContentCheck/ChangesView';
 
 /**
@@ -26,7 +27,7 @@ import ChangesView from './htmlContentCheck/ChangesView';
  * DocCompare: the tool list on the left, the "What do you want to do?" job screen, and a job bar. This file owns the state and every
  * API call. Help follows the Video Tools conventions: a Tooltip on every control, the (i) box, the compass tour and the guide chat.
  */
-const labelFor = (id) => HCC_TOOLS.find((t) => t.id === id)?.label || id;
+const labelFor = (id) => [...HCC_TOOLS, ...HIDDEN_TOOLS].find((t) => t.id === id)?.label || id;
 const MENU = GROUPS.map((g) => ({
   label: g, tip: GROUP_TIPS[g],
   tools: HCC_TOOLS.filter((t) => t.group === g).map((t) => ({ ...t, tip: TOOL_TIPS[t.id], hint: NOT_BUILT[t.id] })),
@@ -113,8 +114,9 @@ export default function HtmlContentCheckPage() {
     // the person switched kind on the New job form: that job flow no longer fits (a comparison has no request lines)
     if (g?.kind && g.kind !== opened.kind) { g = null; setGoal(null); }
     const at = stepIndex(g, 'new');
-    const next = g && at >= 0 && g.steps[at + 1] ? g.steps[at + 1].tool : 'rounds';
-    setTool(next === 'lines' && !linesNeedALook(opened) ? 'rounds' : next);
+    const home = opened.kind === 'request' ? 'changes' : 'rounds';
+    const next = g && at >= 0 && g.steps[at + 1] ? g.steps[at + 1].tool : home;
+    setTool(next === 'lines' && !linesNeedALook(opened) ? home : next);
   };
 
   const run = async (fn) => {
@@ -124,7 +126,7 @@ export default function HtmlContentCheckPage() {
   const openJob = (id) => run(async () => {
     const j = await readJson(await api.get(`/api/html-content-check/jobs/${id}`));
     setJob(j);
-    setTool(j.rounds.some((r) => r.number > 0 && r.sincePrevious) ? 'changes' : linesNeedALook(j) ? 'lines' : 'rounds');
+    setTool(j.kind !== 'request' ? (j.rounds.some((r) => r.number > 0 && r.sincePrevious) ? 'changes' : 'rounds') : linesNeedALook(j) && !j.rounds.some((r) => r.number > 0) ? 'lines' : 'changes');
   });
   // Fetching can take a while (a real browser up to half a minute), so it runs behind the processing overlay.
   const fetchRound = (label, call) => run(async () => {
@@ -153,21 +155,22 @@ export default function HtmlContentCheckPage() {
   });
   const checkAgain = () => fetchRound(job.pages.length > 1 ? `Reading all ${job.pages.length} pages again…` : 'Fetching the page again…', async () => {
     const d = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds`, {}));
-    setJob(d.job); loadJobs();
     const n = d.round.number;
+    const done = () => { setJob(d.job); loadJobs(); }; // after matching, so Review loads the check with its links
     const changed = d.job.rounds.some((r) => r.number === n && (r.sinceBaseline?.total || 0) > 0);
-    if (!changed) { if (d.round.pages.some((p) => p.status === 'failed') || !d.round.pages.some((p) => p.status === 'ready')) roundToast(d.round); else addToast('Nothing has changed on the page yet. Press Check again once the developer says the edits are live.', 'warn'); return; }
+    if (!changed) { if (d.round.pages.some((p) => p.status === 'failed') || !d.round.pages.some((p) => p.status === 'ready')) roundToast(d.round); else addToast('Nothing has changed on the page yet. Press Verify once the edits are live.', 'warn'); done(); return; }
     if (d.job.kind === 'request' && d.job.items.some((it) => (it.kind || 'request_line') === 'request_line')) {
       stopProcessing();
       startProcessing('Matching the request to the changes…', 'The AI suggests which changes answer each request line. You judge each edit.');
       try {
-        const m = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds/${n}/match`, {}));
+        const m = await readJson(await api.post(`/api/html-content-check/jobs/${job.id}/rounds/${n}/match`, { reuse: true }));
         const none = m.lines.filter((l) => l.status === 'noChange' || l.status === 'unreadable').length;
-        addToast(`Round ${n}: changes found and matched to the request${none ? `; ${none} line${none === 1 ? '' : 's'} with no change found` : ''}. Approve each one.`, 'success');
+        addToast(`Check ${n}: changes found and matched to the request${none ? `; ${none} line${none === 1 ? '' : 's'} with no change found` : ''}.`, 'success');
       } catch (e) {
-        addToast(`Round ${n} kept, but matching failed: ${e.message} Press Match to request on Changes.`, 'error');
+        addToast(`Check ${n} kept, but matching failed: ${e.message} Press Verify again in a minute.`, 'error');
       }
     } else roundToast(d.round);
+    done();
     showChanges(n);
   });
   const loadRound = async (number) => readJson(await api.get(`/api/html-content-check/jobs/${job.id}/rounds/${number}`));
@@ -190,6 +193,17 @@ export default function HtmlContentCheckPage() {
     return out;
   };
   // The person's verdict on a line in this round (approved / needs_work / null): only approved lines go on the client report.
+  // Review (rework R2): a request line's Approve / Question, and an unrequested change's Mine / Question / Expected; both return the check's view
+  const decideLine = async (number, ref, status, note) => {
+    let out = null;
+    await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/lines/${encodeURIComponent(ref)}/decision`, { status, note })); });
+    return out;
+  };
+  const decideChange = async (number, pageId, fp, status, note) => {
+    let out = null;
+    await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/pages/${pageId}/changes/${encodeURIComponent(fp)}/decision`, { status, note })); });
+    return out;
+  };
   const approveLine = async (number, ref, status, note) => {
     let out = null;
     await run(async () => { out = await readJson(await api.put(`/api/html-content-check/jobs/${job.id}/rounds/${number}/approvals/${encodeURIComponent(ref)}`, { status, note })); });
@@ -263,7 +277,7 @@ export default function HtmlContentCheckPage() {
                 <div style={{ color: 'var(--color-muted)' }}>Open job</div>
                 <div className="flex items-center gap-1">
                   <Tooltip text={`Show this job: ${job.name}`}>
-                    <button type="button" onClick={() => setTool(job.kind === 'request' ? 'lines' : 'rounds')} className="font-medium truncate flex-1 text-left transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-text)' }}>{job.name}</button>
+                    <button type="button" onClick={() => setTool(job.kind === 'request' ? 'changes' : 'rounds')} className="font-medium truncate flex-1 text-left transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-text)' }}>{job.name}</button>
                   </Tooltip>
                   <Tooltip text="Close this job and go back to Your jobs.">
                     <button type="button" aria-label="Close this job" onClick={() => { setJob(null); setTool('jobs'); }} className="transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 12 })}</button>
@@ -276,7 +290,7 @@ export default function HtmlContentCheckPage() {
           <div className="flex-1 min-w-0 p-4 sm:p-6" style={{ background: 'var(--color-bg)' }} data-tour="html-content-check-main">
             <div className="max-w-[1700px] space-y-4">
               {tool === 'start' && (
-                <JobStart goals={HCC_GOALS} labelFor={labelFor} onPick={startGoal} appName="HTML Content Check" tourId="html-content-check-jobs"
+                <JobStart goals={HCC_GOALS.filter((g) => !g.hidden)} labelFor={labelFor} onPick={startGoal} appName="HTML Content Check" tourId="html-content-check-jobs"
                   intro="Check that the edits a client asked for were made to a web page. Pick a job and it walks you through, or choose a tool on the left." />
               )}
 
@@ -355,7 +369,8 @@ export default function HtmlContentCheckPage() {
 
                   {tool === 'rounds' && job && <RoundsView job={job} busy={busy} checkAgain={checkAgain} uploadCopy={uploadCopy} onShowChanges={showChanges} />}
 
-                  {tool === 'changes' && job && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} pageId={changesPage} setPageId={setChangesPage} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} approveLine={approveLine} downloadReport={downloadReport} busy={busy} />}
+                  {tool === 'changes' && job && job.kind === 'request' && <ReviewView job={job} busy={busy} loadRound={loadRound} checkAgain={checkAgain} uploadCopy={uploadCopy} decideLine={decideLine} decideChange={decideChange} linkChanges={linkChanges} downloadReport={downloadReport} matchRound={matchRound} />}
+                  {tool === 'changes' && job && job.kind !== 'request' && <ChangesView job={job} getIcon={getIcon} fetchRound={loadRound} roundNumber={changesRound} setRoundNumber={setChangesRound} pageId={changesPage} setPageId={setChangesPage} onAllRounds={() => setTool('rounds')} matchRound={matchRound} linkChanges={linkChanges} approveLine={approveLine} downloadReport={downloadReport} busy={busy} />}
 
                   {tool === 'details' && job && editForm && (
                     <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start gap-4">
