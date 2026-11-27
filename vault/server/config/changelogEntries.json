@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "8039fd4f",
+   "fullHash": "8039fd4fd15cfe635f2434768a6193905133acdb",
+   "committedAt": "2026-11-28T08:58:23+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Watchlist report redesign M4: tour step, guide chat, help text",
+   "filesChanged": 5,
+   "insertions": 20,
+   "deletions": 11,
+   "goal": "Milestone 4 of 4 of the Watchlist report redesign: bring the tour, the guide chat and the (i) text in line with the visual report.",
+   "whatChanged": "client/src/utils/tours/sharesTour.js: a Watchlist step 9 after Track record, attached to the Watchlist menu item (TOTAL_STEPS 10 to 11, 12 for admins; Compliance, Metals and help renumbered). The \"Step n of N\" counter now writes into Shepherd's current step element; it used to write into the first step's box only, so steps 2 onwards showed no count. client/src/pages/SharesPage.jsx: the (i) \"How Shares works\" Watchlist paragraph and the menu tip describe the visual report, the consensus as the sources' view, the written-report fallback for reports before 28 Nov 2026, Download and Copy; the old line saying reports never give buy/hold/sell is gone. server/services/sharesTutor.js: the guide's watchlist entry describes every part of the visual report, the ⋯ menu, and two AI calls per report. Docs: docs/shares-watchlist.md (Help section, the old \"no tour step\" note removed), docs/shares-thesis.md (tour now 11/12 steps, the counter fix, browser check).",
+   "filesImpacted": [
+    "vault/client/src/utils/tours/sharesTour.js",
+    "vault/client/src/pages/SharesPage.jsx",
+    "vault/server/services/sharesTutor.js",
+    "vault/docs/shares-watchlist.md",
+    "vault/docs/shares-thesis.md"
+   ],
+   "benefit": "The tour, the (i) box and the guide chat now match what the Watchlist shows, and the Shares tour shows its step count on every step.",
+   "concerns": "Clicked through in a browser locally as an admin: all 12 steps attach to their targets, the count reads Step 1 to 12 of 12, finishing sets the tour key, no console errors except /api/metals/spot returning 500 on the Metals step (no metals price key locally, unrelated). The non-admin 11-step path was not clicked through. The same counter bug is in 43 other tours under client/src/utils/tours/ (same querySelector code); they were not changed. sharesTutor and guides tests pass."
+  },
+  {
    "commit": "78c3b033",
    "fullHash": "78c3b033eab662455138a1174022a7bdcad67bf6",
    "committedAt": "2026-11-28T08:53:00+10:00",
