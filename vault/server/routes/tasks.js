@@ -131,6 +131,19 @@ async function spawnNextRecurrence(updatedTask, userId) {
   }
 }
 
+// a task made from a ticket: the ticket's history notes it, and the ticket moves to Waiting or back (docs/tickets.md "Tasks move the ticket")
+async function syncTicketFromTask(userId, taskId) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await require('../services/tickets').syncFromTask(db, userId, taskId);
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('[tasks] ticket sync failed:', err.message);
+  } finally { db.release(); }
+}
+
 // Change a task's status on behalf of something that is not the task screen (a to-do ticked in a note, docs/notes.md "Live to-dos"): the
 // same follow-ups as ticking it in Tasks (activity log, the next repeat, contract obligations, fitness sessions). Returns the task, or null
 // if it is not this person's or is already in that status.
@@ -148,6 +161,7 @@ async function changeTaskStatus(userId, taskId, newStatus) {
   if (isNowDone !== wasAlreadyDone) {
     try { await require('../services/contractReview/contractService').syncObligationStateFromTask(Number(taskId), isNowDone); } catch (err) { console.error('[tasks] obligation state sync failed:', err.message); }
     try { await require('../services/fitness/fitnessTasks').syncSessionFromTask(Number(taskId), isNowDone); } catch (err) { console.error('[tasks] fitness sync failed:', err.message); }
+    await syncTicketFromTask(userId, taskId);
   }
   // a task sent from a Plan: its plan step takes the same status (docs/plans.md "Send to Tasks")
   try { await require('../services/planTasks').syncStepFromTask(Number(taskId), newStatus); } catch (err) { console.error('[tasks] plan step sync failed:', err.message); }
@@ -243,6 +257,7 @@ router.put('/bulk', async (req, res) => {
     const setValues = sets.map(k => updates[k]);
     const idPlaceholder = `$${sets.length + 1}`;
     const mine = await ownedTaskIds(req.user.id, ids);
+    const { rows: before } = mine.length ? await pool.query('SELECT id, status FROM tasks WHERE id = ANY($1::int[])', [mine.map(Number)]) : { rows: [] };
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -266,6 +281,7 @@ router.put('/bulk', async (req, res) => {
       // tasks sent from a Plan: their plan steps take the same status
       const { syncStepFromTask } = require('../services/planTasks');
       for (const id of mine) await syncStepFromTask(Number(id), updates.status).catch((err) => { console.error('[tasks] plan step sync failed:', err.message); });
+      for (const b of before) if ((b.status === 'done') !== (updates.status === 'done')) await syncTicketFromTask(req.user.id, b.id);
     }
     res.json({ ok: true, updated: mine.length });
   } catch (err) {
@@ -894,6 +910,7 @@ router.put('/:id', async (req, res) => {
       const { rows: again } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
       if (again[0]) Object.assign(built, { status: again[0].status });
     }
+    if (isNowDone !== wasAlreadyDone) await syncTicketFromTask(req.user.id, id);
 
     res.json(built);
   } catch (err) {

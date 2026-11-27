@@ -42,7 +42,7 @@ export const TICKET_VIEWS = [
   { id: 'mine', label: 'Mine', group: 'Lists', icon: 'user', tip: 'Tickets assigned to you that are not done.', filters: { status: 'active', assigneeId: 'me' } },
   { id: 'overdue', label: 'Overdue', group: 'Lists', icon: 'alert-triangle', tip: 'Past their due date and not done, whoever has them.', filters: { status: 'active', overdue: true } },
   { id: 'in_progress', label: 'In progress', group: 'Lists', icon: 'loader', tip: 'Tickets someone is working on now.', filters: { status: 'in_progress' } },
-  { id: 'waiting', label: 'Waiting', group: 'Lists', icon: 'clock', tip: 'Held up on someone else: a client, a supplier, a reply.', filters: { status: 'waiting' } },
+  { id: 'waiting', label: 'Waiting', group: 'Lists', icon: 'clock', tip: 'Held up on someone else (a client, a supplier, a reply), or every task made from it is done and it needs a last look.', filters: { status: 'waiting' } },
   { id: 'done', label: 'Done', group: 'Lists', icon: 'check-circle', tip: 'Finished tickets, most recently changed first.', filters: { status: 'done' } },
   { id: 'all', label: 'All tickets', group: 'Lists', icon: 'list', tip: 'Everything, done or not.', filters: { status: '' } },
   ...TYPES.map((t) => ({

@@ -23,9 +23,9 @@ async function digestFor(db, user, { today, since }) {
   const cols = `t.id, t.title, t.type, t.status, t.priority, t."dueDate"::text AS "dueDate", c.name AS "clientName"`;
   const from = `tickets t LEFT JOIN clients c ON c.id = t."clientId"`;
   const { rows: overdue } = await db.query(
-    `SELECT ${cols} FROM ${from} WHERE t."assigneeId" = $1 AND t.status <> 'done' AND t."dueDate" < $2::date ORDER BY t."dueDate", t.id`, [user.id, today]);
+    `SELECT ${cols} FROM ${from} WHERE t."assigneeId" = $1 AND t.status NOT IN ('done', 'waiting') AND t."dueDate" < $2::date ORDER BY t."dueDate", t.id`, [user.id, today]);
   const { rows: dueToday } = await db.query(
-    `SELECT ${cols} FROM ${from} WHERE t."assigneeId" = $1 AND t.status <> 'done' AND t."dueDate" = $2::date ORDER BY t.priority, t.id`, [user.id, today]);
+    `SELECT ${cols} FROM ${from} WHERE t."assigneeId" = $1 AND t.status NOT IN ('done', 'waiting') AND t."dueDate" = $2::date ORDER BY t.priority, t.id`, [user.id, today]);
   const { rows: assigned } = await db.query(
     `SELECT ${cols} FROM ${from}
       WHERE t."assigneeId" = $1 AND t.status <> 'done'

@@ -50,6 +50,19 @@ Creates a task in the **caller's own** Tasks (`tasks."ticketId"` points back) wi
 priority. The ticket's client and client project are copied only when they are in the caller's own CRM. The ticket's history records it.
 Deleting the ticket leaves its tasks (the link is emptied).
 
+## Tasks move the ticket
+
+`tickets.syncFromTask()`, called from every place a task's status changes in Tasks (the task screen, bulk changes, a to-do ticked in a note)
+whenever the task becomes done or stops being done, and after Make a task. In one transaction:
+
+- the history notes it: "Task done: …" or "Task reopened: …";
+- when **every** task made from the ticket is done, the ticket moves to **Waiting** for a last look (reply to the client, check the fix,
+  add a note). It never moves to Done on its own: closing is a person's decision;
+- an open task (one reopened, or a new one made) moves a **Waiting** ticket back to **In progress**, with the reason in the history;
+- a **Done** ticket, and a ticket with no tasks, never move on their own.
+
+The 7am email leaves Waiting tickets out of "overdue" and "due today". Deleting a task does not move the ticket.
+
 ## Delete and restore
 
 Delete snapshots the ticket and its history into the deleter's recycle bin (`recycleBin/adapters/tickets.js`); restore puts it back under
@@ -78,7 +91,7 @@ with a Show all chip). Each ticket made this way links back to its source.
 
 `cron/ticketDigestCron.js` runs `runDigest()` (`services/ticketDigest.js`) at 07:00 in the workspace time zone (the first admin's
 `user_timezone`, default Australia/Sydney), with the other email crons (off under DISABLE_EXTERNAL_CRON). Each person who can use Tickets gets
-one email listing their open tickets that are **overdue**, **due today**, and **newly assigned** to them by someone else since their last digest
+one email listing their open tickets that are **overdue**, **due today** (both leave out Waiting tickets), and **newly assigned** to them by someone else since their last digest
 (raised already assigned to them, or an "Assigned: ... → them" history line); each ticket once. Nothing is sent when all three are empty.
 `ticket_digest_log` holds each person's last day: claimed before sending, so a restart or a second server cannot send twice; a failed send
 gives the day back. There is no per-person opt-out yet.

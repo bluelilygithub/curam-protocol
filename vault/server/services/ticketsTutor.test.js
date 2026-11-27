@@ -33,7 +33,7 @@ checkGuide({
     ['client', 'does', /Choosing a project also chooses its client/, 'a project chooses its client'],
     ['activity', 'notes', /Change lines cannot be removed/, 'history cannot be removed'],
     ['task', 'does', /your own Tasks/, 'the task is the person\'s own'],
-    ['task', 'notes', /does not change the ticket/, 'a task does not close the ticket'],
+    ['task', 'notes', /moves to Waiting.*never moves to Done on its own/, 'finished tasks move the ticket to Waiting, never to Done'],
     ['emails', 'notes', /Only you see your emails/, 'related emails are private'],
     ['emails', 'notes', /never suggested again on that ticket/, 'dismissing is per ticket'],
     ['emails', 'does', /Regrab emails/, 'the regrab button is named'],

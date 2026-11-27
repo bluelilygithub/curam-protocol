@@ -244,7 +244,33 @@ async function makeTask(db, userId, id, { title } = {}) {
      VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,NOW()) RETURNING id`,
     [taskTitle, `From ticket T-${t.id}: ${t.title}`, t.priority, t.dueDate, userId, clientId, projectId, t.id]);
   await logEvent(db, t.id, userId, 'change', `Task made: ${taskTitle}`);
+  await syncFromTask(db, userId, rows[0].id, { made: true });
   return { taskId: rows[0].id, ticket: await get(db, t.id) };
+}
+
+/**
+ * A task made from a ticket was finished, reopened or just made (docs/tickets.md "Tasks move the ticket"). The history says so; when every
+ * task made from the ticket is done it moves to Waiting for a last look, and an open task moves a Waiting ticket back to In progress.
+ * A Done ticket, and a ticket with no tasks, never move on their own. Call it in a transaction. Returns the new status, or null.
+ */
+async function syncFromTask(db, userId, taskId, { made = false } = {}) {
+  const { rows: [task] } = await db.query('SELECT title, status, "ticketId" FROM tasks WHERE id = $1', [idOf(taskId)]);
+  if (!task?.ticketId) return null;
+  const { rows: [t] } = await db.query('SELECT id, status FROM tickets WHERE id = $1 FOR UPDATE', [task.ticketId]);
+  if (!t) return null;
+  const { rows: [{ open }] } = await db.query(`SELECT COUNT(*) FILTER (WHERE status <> 'done') AS open FROM tasks WHERE "ticketId" = $1`, [t.id]);
+  let next = null;
+  if (t.status !== 'done') {
+    if (Number(open) === 0 && t.status !== 'waiting') next = 'waiting';
+    else if (Number(open) > 0 && t.status === 'waiting') next = 'in_progress';
+  }
+  const lines = made ? [] : [`${task.status === 'done' ? 'Task done' : 'Task reopened'}: ${task.title}`];
+  if (next) {
+    lines.push(`Status: ${STATUS_LABEL[t.status]} → ${STATUS_LABEL[next]} (${next === 'waiting' ? 'every task is done' : 'a task is open again'})`);
+    await db.query('UPDATE tickets SET status = $2, "updatedAt" = NOW() WHERE id = $1', [t.id, next]);
+  }
+  if (lines.length) await logEvent(db, t.id, userId, 'change', lines.join('; '));
+  return next;
 }
 
 /** Everything needed to put a ticket back from the recycle bin: the row and its history. */
@@ -263,5 +289,5 @@ function publicError(err) {
 
 module.exports = {
   TicketError, TYPES, STATUSES, PRIORITIES, TYPE_LABEL, STATUS_LABEL, PRIORITY_LABEL, SOURCE_KINDS, MAX_TITLE,
-  people, list, counts, get, create, update, addComment, deleteComment, makeTask, snapshot, publicError, cleanDate,
+  people, list, counts, get, create, update, addComment, deleteComment, makeTask, syncFromTask, snapshot, publicError, cleanDate,
 };
