@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "56191bbb",
+   "fullHash": "56191bbb7861163b40dcf6cd592e504810632999",
+   "committedAt": "2026-11-27T11:43:50+10:00",
+   "author": "mrb",
+   "area": "Tasks",
+   "subject": "Tasks: a \"From ticket T-12\" link on tasks made from a ticket",
+   "filesChanged": 2,
+   "insertions": 25,
+   "deletions": 2,
+   "goal": "A task made from a ticket gave no sign of it except a plain-text line in its notes, so the ticket's context (client, comments, emails, status) was hard to reach from Tasks.",
+   "whatChanged": "routes/tasks.js: buildTask adds sourceTicketTitle (the linked ticket's title; tickets are shared, so no owner filter), so the task list and task detail carry it. TasksPage.jsx: the open task panel shows 'From ticket T-<id>: <title>' under the From chat / From note links, styled the same, opening /tickets/<id>. Shown only when useTicketsAllowed() says the person has Tickets.",
+   "filesImpacted": [
+    "vault/server/routes/tasks.js",
+    "vault/client/src/pages/TasksPage.jsx"
+   ],
+   "benefit": "One click from a task to the ticket it came from.",
+   "concerns": "Not seen on screen: the local check ran against an older server already on port 3001, and the owner chose to test it themselves. One extra small query per task when tasks are listed (by primary key). Shown in the List view's open panel only, not on Board, Calendar or other views. The ticket title is sent to the task owner even if Tickets was later switched off for them; the link is hidden then, but the title is in the API response."
+  },
+  {
    "commit": "29391281",
    "fullHash": "293912810c4dd475387a1e8799c87b39eff0fa3d",
    "committedAt": "2026-11-27T11:35:21+10:00",
