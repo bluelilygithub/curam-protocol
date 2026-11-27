@@ -92,6 +92,8 @@ async function collect(req, extra = false) {
     raw.inboxNeeds = list(inbox, 'title');
     raw.followUpDrafts = drafts ? { count: Number(drafts[0]?.n || 0) } : null;
   }
+  // Admins only: two-step login cannot work on this server (docs/two-step-login.md). Checked in memory, no query.
+  if (req.user.isAdmin && require('../services/loginChallenge').authKeyProblem()) raw.authKeyBroken = { count: 1 };
   Object.keys(raw).forEach((k) => { if (!raw[k]) delete raw[k]; });
   return raw;
 }

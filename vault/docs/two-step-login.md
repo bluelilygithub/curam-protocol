@@ -47,6 +47,16 @@ This is the brief, with the Milestone 0 findings and the agreed changes (2026-11
 
 So `loginChallenge.js` wraps each send in a 15-second timeout and treats a throw, a timeout or `ok: false` as a failure. The person sees "We couldn't send your code. Try again, or ask an admin." with a **Send code** button that works straight away (a failed send starts no one-minute wait and is not counted as a send), and the primary admin gets a Suggestions alert (one per day).
 
+## When the key is broken
+
+On 2026-11-27 the first deploy went live with an `AUTH_ENCRYPTION_KEY` the server could not use, and members could not sign in until it was replaced in Railway. Since then:
+
+- **Two formats:** the key may be 64 hex characters or base64 (44 characters); both are 32 bytes (`authKey()` in `server/services/loginChallenge.js`). Anything else is refused.
+- **At boot** (`checkAuthKeyAtBoot()`, called from `server/index.js`): a plain error in the log saying what is wrong (not set, or set but N characters long), never the value, and a Suggestions alert to the primary admin (one a day): "Two-step login is broken: members can't sign in", with the fix.
+- **Admins see it** at the top of Needs attention (its own "Sign-in" box in the Home sidebar, first line on the mobile dashboard and project list) for as long as the key is broken: `server/routes/attention.js` adds `authKeyBroken` for admins only, `server/services/attention.js` words it. Members never see it.
+- **`GET /api/admin/auth-health`** (admin only) answers `{ ok, problem }`; `problem` is the plain reason, never the key.
+- **From outside, without signing in:** `POST /api/auth/challenge/resend` with `{"challengeId":"none"}` answers 400 "This sign-in has expired" when the key works and 503 "Sign-in is unavailable" when it does not. It changes nothing.
+
 ## Data model (`server/db.js`, idempotent)
 
 Each table is added in the milestone that uses it.
@@ -132,7 +142,13 @@ Behind `requireAuth` (Milestone 4): `GET /api/auth/security`, `DELETE /api/auth/
 3. TOTP: crypto helper with encryption, forced admin enrolment, backup codes, `reset-2fa.js`. Tests: RFC 6238 Appendix B SHA-1 vectors (secret `12345678901234567890`; T=59 → 287082; T=1111111109 → 081804), ±1 window, reuse rejected, encrypt/decrypt round trip, tampered ciphertext fails, admins can't fall back to email codes.
 4. Settings → Security, the Dashboard reset action, guide, tour, docs. Check everything in a browser locally, including a full admin enrolment and a member login from a new browser.
 
-**Before deploying Milestone 3:** keep a second browser signed in as admin until enrolment has been seen working on the live site. (`AUTH_ENCRYPTION_KEY` was set in Railway on 2026-11-27.)
+**Before pushing Milestone 3** (or anything else that depends on the key):
+
+1. Confirm the key works **on the live server**: an admin opens `GET /api/admin/auth-health` (expects `ok: true`), or the admin Home page shows no "Two-step login is broken" warning, or the outside check above answers 400, not 503. If it is not ok, fix the key in Railway first and push nothing that depends on it.
+2. After the deploy, run the same check again before saying it is live.
+3. Keep a second browser signed in as admin until admin enrolment has been seen working on the live site.
+
+Do not change the key once any admin has enrolled: their authenticator secrets could no longer be read.
 
 ## Out of scope
 

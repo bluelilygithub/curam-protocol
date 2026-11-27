@@ -222,6 +222,37 @@ test('a disabled account and a wrong password get no code', async () => {
   assert.strictEqual(sent.length, before);
 });
 
+test('a broken key: boot raises an inbox alert without the value, login says unavailable, admin auth-health says not ok', async () => {
+  const lc = require('./loginChallenge');
+  const good = process.env.AUTH_ENCRYPTION_KEY;
+  const admin = express();
+  admin.use('/api/admin', (req, _res, next) => { req.user = { id: 1, isAdmin: true }; next(); }, require('../routes/admin'));
+  const srv = http.createServer(admin).listen(0);
+  const health = async () => (await fetch(`http://127.0.0.1:${srv.address().port}/api/admin/auth-health`)).json();
+  try {
+    assert.deepStrictEqual(await health(), { ok: true, problem: null });
+    process.env.AUTH_ENCRYPTION_KEY = 'not-a-key-at-all';
+    lc._internal.resetKeyCache();
+    const before = captured.length;
+    assert.strictEqual(lc.checkAuthKeyAtBoot(), false);
+    await new Promise((res) => setTimeout(res, 100));
+    const alert = captured.slice(before).find((c) => /members can't sign in/.test(c.title));
+    assert.ok(alert && alert.category === 'alert' && alert.userId === 999999);
+    assert.ok(!alert.body.includes('not-a-key-at-all'), 'never the value');
+    const h = await health();
+    assert.strictEqual(h.ok, false);
+    assert.ok(/16 characters/.test(h.problem) && !h.problem.includes('not-a-key'));
+    const u = await makeUser('brokenkey');
+    const r = await login(u);
+    assert.strictEqual(r.status, 503);
+  } finally {
+    process.env.AUTH_ENCRYPTION_KEY = good;
+    lc._internal.resetKeyCache();
+    srv.close();
+  }
+  assert.strictEqual(lc.checkAuthKeyAtBoot(), true);
+});
+
 test('rubbish ids and codes are refused without errors', async () => {
   for (const body of [{}, { challengeId: 'x', code: '123456' }, { challengeId: ['a'], code: { a: 1 } }]) {
     const v = await call('POST', '/api/auth/challenge/verify', body);

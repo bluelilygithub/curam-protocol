@@ -20,9 +20,13 @@ const names = (list, count, max = 3) => {
  * }  (any key may be missing: that source is off for this person or had nothing)
  * Returns [{ id, severity: 'high'|'normal'|'low', title, detail, to, count }], most urgent first, empty ones left out.
  */
+const AUTH_KEY_DETAIL = 'AUTH_ENCRYPTION_KEY in Railway is missing or the wrong shape. The suggestion has the fix.';
+
 function buildAttentionItems(raw = {}) {
   const out = [];
   const add = (id, severity, count, title, detail, to) => { if (count > 0) out.push({ id, severity, title, detail: detail || '', to, count }); };
+
+  add('auth-key-broken', 'high', raw.authKeyBroken?.count, "Two-step login is broken: members can't sign in", AUTH_KEY_DETAIL, '/suggestions');
 
   const inv = raw.invoicesOverdue || {};
   add('invoices-overdue', 'high', inv.count, `${plural(inv.count, 'invoice', 'invoices')} overdue`,
@@ -67,6 +71,9 @@ function buildAttentionSummary(raw = {}) {
   const line = (id, severity, count, text, detail, to) => (count > 0 ? { id, severity, text, detail: detail || '', to, count } : null);
   const inv = raw.invoicesOverdue || {};
   const areas = [
+    { id: 'signin', label: 'Sign-in', icon: 'lock', to: '/suggestions', keys: ['authKeyBroken'], lines: [
+      line('auth-key-broken', 'high', raw.authKeyBroken?.count, "Two-step login is broken: members can't sign in", AUTH_KEY_DETAIL, '/suggestions'),
+    ] },
     { id: 'tasks', label: 'Tasks', icon: 'check-square', to: '/tasks', keys: ['tasksOverdue', 'tasksToday'], lines: [
       line('tasks-overdue', 'high', raw.tasksOverdue?.count, `${plural(raw.tasksOverdue?.count, 'task', 'tasks')} overdue`, names(raw.tasksOverdue?.sample, raw.tasksOverdue?.count), '/tasks'),
       line('tasks-today', 'normal', raw.tasksToday?.count, `${plural(raw.tasksToday?.count, 'task', 'tasks')} due today`, names(raw.tasksToday?.sample, raw.tasksToday?.count), '/tasks'),

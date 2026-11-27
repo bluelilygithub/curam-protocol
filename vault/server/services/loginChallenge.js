@@ -19,19 +19,41 @@ const GENERIC_ERROR = "That code didn't work. Check it and try again.";
 const SEND_FAILED = "We couldn't send your code. Try again, or ask an admin.";
 
 let cachedKey;
-/** AUTH_ENCRYPTION_KEY as 32 bytes, or null when missing or the wrong length. */
+/** AUTH_ENCRYPTION_KEY as 32 bytes: 64 hex characters, or base64 (44 characters). null when missing or the wrong shape. */
 function authKey() {
   if (cachedKey !== undefined) return cachedKey;
   const raw = String(process.env.AUTH_ENCRYPTION_KEY || '').trim();
-  const buf = raw ? Buffer.from(raw, 'base64') : null;
+  let buf = null;
+  if (/^[0-9a-fA-F]{64}$/.test(raw)) buf = Buffer.from(raw, 'hex');
+  else if (/^[A-Za-z0-9+/]{43}=?$/.test(raw)) buf = Buffer.from(raw, 'base64');
   cachedKey = buf && buf.length === 32 ? buf : null;
   return cachedKey;
 }
 
-/** Boot check: say clearly (without the key) when two-step login cannot work. */
+/** What is wrong with the key, in plain words, or null when it works. Never includes the value. */
+function authKeyProblem() {
+  if (authKey()) return null;
+  const raw = String(process.env.AUTH_ENCRYPTION_KEY || '').trim();
+  if (!raw) return 'AUTH_ENCRYPTION_KEY is not set.';
+  return `AUTH_ENCRYPTION_KEY is set but is not 32 bytes: it should be 64 hex characters or 44 base64 characters, and it is ${raw.length} characters long.`;
+}
+
+/** Boot check: log and raise an inbox item (never the key) when two-step login cannot work, so it is seen before a member's sign-in fails. */
 function checkAuthKeyAtBoot() {
-  if (authKey()) return true;
-  getLogger().error('AUTH_ENCRYPTION_KEY is missing or is not 32 bytes of base64: members and accountants cannot finish signing in. See docs/env-vars.md.');
+  const problem = authKeyProblem();
+  if (!problem) return true;
+  getLogger().error(`${problem} Members and accountants cannot finish signing in. See docs/env-vars.md.`);
+  (async () => {
+    const { capture, makeFingerprint, getPrimaryAdminUserId } = require('./SuggestionService');
+    const adminId = await getPrimaryAdminUserId();
+    if (!adminId) return;
+    await capture({
+      userId: adminId, source: 'twoStepLogin', category: 'alert',
+      fingerprint: makeFingerprint('twoStepLogin', `auth-key-broken:${new Date().toISOString().slice(0, 10)}`),
+      title: "Two-step login is broken: members can't sign in",
+      body: `${problem} Members and accountants get "Sign-in is unavailable" after their password. Set it in Railway (Vault service, Variables) to the output of: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))". Railway redeploys on its own; once the key works, the warning on the admin Home page goes away.`,
+    });
+  })().catch((err) => getLogger().warn({ err: err.message }, 'auth key alert not raised'));
   return false;
 }
 
@@ -236,7 +258,7 @@ async function verifyCode(challengeId, code, onSuccess) {
 }
 
 module.exports = {
-  needsEmailCode, startEmailChallenge, resendCode, verifyCode, checkAuthKeyAtBoot,
+  needsEmailCode, startEmailChallenge, resendCode, verifyCode, checkAuthKeyAtBoot, authKeyProblem,
   // for tests
   _internal: { hashCode, makeCode, emailHint, MAX_ATTEMPTS, MAX_SENDS_PER_HOUR, resetKeyCache: () => { cachedKey = undefined; } },
 };

@@ -14,6 +14,12 @@ async function getAdminCount(client = pool) {
   return Number(rows[0]?.n || 0);
 }
 
+// GET /api/admin/auth-health: does two-step login work on this server? ok/not-ok and a plain reason, never the key (docs/two-step-login.md)
+router.get('/auth-health', (_req, res) => {
+  const problem = require('../services/loginChallenge').authKeyProblem();
+  res.json({ ok: !problem, problem });
+});
+
 // GET /api/admin/stats?from=ISO&to=ISO
 router.get('/stats', async (req, res) => {
   const { from, to } = req.query;

@@ -64,3 +64,13 @@ assert.deepEqual(area.notes.lines, [], 'on but nothing waiting: kept, with no li
 assert.deepEqual(area.tickets.lines.map((l) => [l.text, l.to]), [['1 ticket of yours overdue', '/tickets?view=overdue'], ['3 tickets assigned to you', '/tickets?view=mine']]);
 assert.equal(area.emails.lines[0].text, '2 follow-up drafts to approve');
 console.log('attention summary: ok');
+
+// Two-step login key broken (admins only; the route adds authKeyBroken only for an admin): top of the list and its own first box
+const keyItems = buildAttentionItems({ authKeyBroken: { count: 1 }, tasksOverdue: { count: 1, sample: ['A'] } });
+assert.equal(keyItems[0].id, 'auth-key-broken', 'first, ahead of other high items');
+assert.equal(keyItems[0].title, "Two-step login is broken: members can't sign in");
+const keyAreas = buildAttentionSummary({ authKeyBroken: { count: 1 }, tasksOverdue: { count: 0 } });
+assert.equal(keyAreas[0].id, 'signin');
+assert.equal(keyAreas[0].lines[0].severity, 'high');
+assert.ok(!buildAttentionSummary({ tasksOverdue: { count: 0 } }).some((a) => a.id === 'signin'), 'no box when the key works');
+console.log('attention auth key: ok');
