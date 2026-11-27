@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0189c586",
+   "fullHash": "0189c586ac674f9ea9a3123d92b75950b833b2e6",
+   "committedAt": "2026-11-27T15:28:58+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Two-step login Milestone 4: Settings -> Security and Dashboard reset",
+   "filesChanged": 14,
+   "insertions": 665,
+   "deletions": 17,
+   "goal": "Let people manage their own sign-in (remembered devices, other sessions, admin backup codes) and let an admin reset someone's two-step login from Dashboard, without ever signing out the browser they are using.",
+   "whatChanged": "server/routes/auth.js: five signed-in routes, each with requireAuth on the route (the global one skips /api/auth/*): GET /api/auth/security (authenticator date, backup codes left, own live remembered devices with \"this browser\" marked, count of other sessions), DELETE /api/auth/devices/:id (own only), POST /api/auth/devices/forget-all, POST /api/auth/backup-codes/regenerate { code } (current authenticator code checked and 10 new codes made in one transaction; IP-limited), POST /api/auth/sessions/sign-out-others (every session but the request's own token). trustedDevices.js: currentTokenHash(). New client/src/components/settings/SecurityPanel.jsx as Settings -> Security (You group), reusing BackupCodes and CodeInput now exported from AdminSecondStep.jsx; (i) box, Tooltips, Skeleton, EmptyState, inline Forget Yes/No. UsersAdminPanel.jsx: \"Reset 2-step login\" on every other user's row, confirmed in the shared Dialog, calling the existing POST /api/admin/users/:id/reset-2fa. Settings guide entry (settingsTutor.js), Settings tour step 8 (integrationsTour.js). Docs: two-step-login.md (what each person sees, recovery incl. the Railway shell route, never change AUTH_ENCRYPTION_KEY after enrolment, Milestone 4), key-files.md. Tests: new server/routes/authSecurity.db.test.js (8), settingsGroups.test.mjs updated, five routes added to routeManifest.json.",
+   "filesImpacted": [
+    "vault/server/routes/auth.js",
+    "vault/server/services/trustedDevices.js",
+    "vault/client/src/components/settings/SecurityPanel.jsx",
+    "vault/client/src/pages/login/AdminSecondStep.jsx",
+    "vault/client/src/pages/SettingsPage.jsx",
+    "vault/client/src/utils/settingsGroups.mjs",
+    "vault/client/src/utils/settingsGroups.test.mjs",
+    "vault/client/src/components/UsersAdminPanel.jsx",
+    "vault/server/services/settingsTutor.js",
+    "vault/client/src/utils/tours/integrationsTour.js",
+    "vault/server/routes/authSecurity.db.test.js",
+    "vault/server/testing/routeManifest.json",
+    "vault/docs/two-step-login.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "A lost or shared browser can be forgotten, a stray session ended, and backup codes replaced from Settings, and an admin can get a locked-out person back in from Dashboard instead of the Railway shell.",
+   "concerns": "Checked locally only (tests, plus Playwright against a second local copy with a throwaway key), not yet on the live site. Accountant logins get 403 on Security (read-only scope), so they cannot forget their own devices. There is no \"set up my authenticator again\" for yourself, on purpose; a lost phone still needs another admin or reset-2fa.js. Regenerate is IP-limited only (30 tries per 15 minutes), with no per-account wrong-code count. crossUser.test.js still lists 15 older routes (DNS lookup and others) missing from routeManifest.json; not touched here."
+  },
+  {
    "commit": "0f60626d",
    "fullHash": "0f60626de8d10cf1158b4f46445f046a1075a44e",
    "committedAt": "2026-11-27T15:10:47+10:00",
