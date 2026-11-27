@@ -191,7 +191,7 @@ export default function SharesChartsTab({
         info={today
           ? "Holdings day move (cash excluded) compared to Nasdaq, SOX, and ASX 200 ETF proxies — same basis as the Portfolio Note header. The dollar figure is your holdings' move in AUD. Nasdaq and SOX are USD-priced ETFs; your holdings are in AUD."
           : bp?.available
-            ? `Return over ${bp.from} to ${bp.to} (${bp.observationCount} daily Portfolio Notes), holdings only, cash excluded. The dollar figure is the price change on the units you hold today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''} — buys and sells inside the range aren't adjusted for. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
+            ? `Return over ${bp.from} to ${bp.to}, holdings only, cash excluded. Your holdings' % and dollar figure are one calculation: the price change on the units you hold today, from their stored price on ${bp.from} to today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''}; buys and sells inside the range aren't adjusted for. The index figures compound the daily moves in ${bp.observationCount} daily Portfolio Notes, skipping weekend notes that repeat Friday's move. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
             : 'Not enough daily Portfolio Notes recorded for this range yet.'}
       >
         {benchItems.length ? (

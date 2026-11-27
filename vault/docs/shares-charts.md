@@ -75,14 +75,16 @@ The range buttons used to change only a handful of charts (portfolio value, pric
 
 | Chart | Today | 7d / 30d / 90d |
 |---|---|---|
-| Portfolio vs benchmarks | day move | return over the range from the daily Portfolio Note observations (`benchmarksPeriod`) — holdings only, cash excluded; an index with no recorded moves is omitted, never shown as 0% |
+| Portfolio vs benchmarks | day move | return over the dates the Portfolio Notes cover (`benchmarksPeriod`). Your holdings: the units held today, from their first stored price on the first note date to today's price (`buildHoldingsValueSeries`, from `share_symbol_snapshots`), so the % and the A$ are one calculation. Indexes: the notes' daily moves compounded, a weekend note that exactly repeats the previous note skipped. Holdings only, cash excluded; an index with no recorded moves is omitted, never shown as 0% |
 | Movers & beat/lag | day % | each holding's move over the range (first stored snapshot in the window → current price) vs its sector index over the same range (`periodMovers`) |
 | Trailing return | fixed 5 days | exactly the selected range (`trailingWindowDays`) |
 | Portfolio value, price by holding, relative performance, gold spot history | follow the range (as before) | |
 | Move heatmap | follows the range, capped at 14 days (a 90-column grid is unreadable), so 30d and 90d look the same | |
 | Drawdown, allocation, total return vs cost, P&L by stock, gold book move, earnings, dividends | current snapshot / fixed | |
 
-Dollar amounts (2026-10-02): the Movement charts show the AUD figure beside the %. Today = the holdings' day move in AUD (`portfolioMove.changeAud`) and each holding's `dayChangeAud`. For 7d/30d/90d = price change × the units held **today** (`changeAud` on `periodMovers`/`trailingReturns`); the portfolio line is the sum of the holdings that have a stored price in the window (`benchmarksPeriod.changeAudCoverage` says how many), and buys/sells inside the window are not adjusted for. Index bars have no dollar figure.
+Dollar amounts (2026-10-02): the Movement charts show the AUD figure beside the %. Today = the holdings' day move in AUD (`portfolioMove.changeAud`) and each holding's `dayChangeAud`. For 7d/30d/90d = price change × the units held **today** (`changeAud` on `periodMovers`/`trailingReturns`); the portfolio figure is the same price-based calculation as its % (`buildHoldingsValueSeries`; `benchmarksPeriod.changeAudCoverage` says how many holdings had a stored price when not all did), and buys/sells inside the window are not adjusted for.
+
+**Fix (2026-11-28): holdings % from stored prices, weekend repeats skipped.** The holdings % used to be the notes' daily `portfolioMove.changePct` compounded, while the A$ came from stored prices, and the two disagreed badly (production: −34.6% beside −A$19,474 on about A$210k). Notes are written every day, so a Saturday or Sunday note carried Friday's move again and it was compounded two or three times (nine repeated weekend days between 13 Oct and 27 Nov). The holdings % and the Relative performance holdings line now come from stored prices (`buildHoldingsValueSeries`), so the tile's % and A$ agree and the chart ends where the tile does; the index lines skip a weekend note that exactly equals the previous note (`repeatsPrevious`). A weekend note with a different figure still counts (a new US session). Tests in `sharesChartData.test.js`. The A$ now covers the same dates as the % (the note dates); before, on long ranges it reached back to the first stored price in the whole range. Index bars have no dollar figure.
 
 Currency: the Nasdaq and SOX proxies (QQQ, SOXX) are **USD-priced** ETFs and STW is AUD; holdings are AUD. The benchmark charts say so rather than converting.
 

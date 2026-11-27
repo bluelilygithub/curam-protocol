@@ -9,7 +9,7 @@
 const assert = require('assert');
 const {
   buildBenchmarksPeriod, buildPeriodMovers, buildNormalizedPerformance,
-  rangeKeyFrom, fyStartFor, buildRange, downsampleDaily,
+  rangeKeyFrom, fyStartFor, buildRange, downsampleDaily, buildHoldingsValueSeries,
 } = require('./sharesChartData');
 
 let n = 0;
@@ -50,6 +50,67 @@ test('no observations -> not available, empty items', () => {
   const b = buildBenchmarksPeriod([], []);
   assert.strictEqual(b.available, false);
   assert.deepStrictEqual(b.items, []);
+});
+
+// ---- weekend repeats and the price-based holdings figures (fix 2026-11-28) ----
+
+test('a weekend note that repeats the previous note is not compounded again; a weekday repeat is', () => {
+  // Fri 2026-10-16, Sat 17, Sun 18 all carried -1.42 in production; Mon 19 and Tue 20 both +1 are real.
+  const history = [obs('2026-10-16', null, -1.42, null, null), obs('2026-10-17', null, -1.42, null, null),
+    obs('2026-10-18', null, -1.42, null, null), obs('2026-10-19', null, 1, null, null), obs('2026-10-20', null, 1, null, null)];
+  const last = buildNormalizedPerformance(history).at(-1);
+  assert.strictEqual(last.nasdaq, Math.round(100 * 0.9858 * 1.01 * 1.01 * 100) / 100);
+});
+
+test('a weekend note with a different figure still counts (a new session)', () => {
+  const history = [obs('2026-11-06', null, 2.9, null, null), obs('2026-11-07', null, 2.94, null, null)];
+  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, Math.round(100 * 1.029 * 1.0294 * 100) / 100);
+});
+
+const snap = (symbol, priceAud, iso) => ({ symbol, priceAud, recordedAt: new Date(iso) });
+const pos = [{ symbol: 'NVDA', quantity: 10, priceAud: 90 }, { symbol: 'CBA', quantity: 5, priceAud: 160 }];
+const rows = [
+  snap('NVDA', 999, '2026-10-12T01:00:00Z'), // before the window: ignored
+  snap('NVDA', 100, '2026-10-13T00:00:00Z'), snap('NVDA', 104, '2026-10-13T05:00:00Z'),
+  snap('CBA', 150, '2026-10-13T00:00:00Z'),
+  snap('NVDA', 95, '2026-10-14T03:00:00Z'), // CBA has no price this day: carried forward
+  snap('GONE', 50, '2026-10-14T03:00:00Z'), // sold: not held today, ignored
+  snap('CBA', 0, '2026-10-15T03:00:00Z'), // a bad zero price is ignored
+];
+
+test("holdings series: today's units, first price in the window as the start, last price of each day, live price at the end", () => {
+  const s = buildHoldingsValueSeries(rows, pos, '2026-10-13', 'UTC', '2026-10-16');
+  assert.strictEqual(s.baseValue, 10 * 100 + 5 * 150);
+  assert.deepStrictEqual(s.points.map((p) => [p.date, p.value]), [['2026-10-13', 1040 + 750], ['2026-10-14', 950 + 750], ['2026-10-16', 900 + 800]]);
+  assert.strictEqual(s.liveValue, 1700);
+  assert.strictEqual(s.changeAud, -50);
+  assert.strictEqual(s.pct, Math.round((-50 / 1750) * 10000) / 100);
+  assert.strictEqual(s.included, 2);
+});
+
+test('holdings series: dates follow the workspace time zone', () => {
+  // 2026-10-13T14:00Z is the 14th in Sydney
+  const s = buildHoldingsValueSeries([snap('NVDA', 100, '2026-10-13T14:00:00Z')], [{ symbol: 'NVDA', quantity: 1, priceAud: 100 }], '2026-10-14', 'Australia/Sydney', '2026-10-14');
+  assert.strictEqual(s.from, '2026-10-14');
+});
+
+test('holdings series: no stored prices -> null; a holding with no price is left out and counted', () => {
+  assert.strictEqual(buildHoldingsValueSeries([], pos, '2026-10-13', 'UTC', '2026-10-16'), null);
+  const s = buildHoldingsValueSeries([snap('NVDA', 100, '2026-10-13T00:00:00Z')], pos, '2026-10-13', 'UTC', '2026-10-13');
+  assert.deepStrictEqual([s.included, s.total], [1, 2]);
+});
+
+test("the tile's % and A$ are one calculation, and the chart line ends on the same %", () => {
+  const history = [obs('2026-10-13', -0.19, 0.1, null, null), obs('2026-10-14', -2.45, 0.2, null, null), obs('2026-10-16', -1.42, 0.3, null, null)];
+  const s = buildHoldingsValueSeries(rows, pos, history[0].date, 'UTC', '2026-10-16');
+  const norm = buildNormalizedPerformance(history, s);
+  const b = buildBenchmarksPeriod(norm, history, s);
+  const own = b.items.find((i) => i.kind === 'portfolio');
+  assert.strictEqual(own.pct, s.pct);
+  assert.strictEqual(own.changeAud, s.changeAud);
+  assert.ok(Math.abs(own.changeAud / s.baseValue * 100 - own.pct) < 0.01, 'A$ over the start value is the %');
+  assert.ok(Math.abs(norm.at(-1).portfolio - 100 - own.pct) < 0.01, 'chart ends where the tile does');
+  assert.ok(!('changeAudCoverage' in b), 'all holdings priced: no coverage note');
 });
 
 const holdings = [

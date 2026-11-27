@@ -343,18 +343,86 @@ async function loadObservationHistory(userId, days, cutoffDate = null) {
   });
 }
 
-function buildNormalizedPerformance(observationHistory) {
+// Daily Portfolio Notes are written every day, but markets do not trade at weekends: a Saturday or Sunday note can carry the
+// previous note's move again (seen in production 2026-11: every weekend repeated Friday's move, which compounded a −9% fall into
+// −34.6%). A weekend note whose figure exactly equals the previous note's is that repeat and is skipped.
+const isWeekendYmd = (ymd) => [0, 6].includes(new Date(`${ymd}T12:00:00Z`).getUTCDay());
+const repeatsPrevious = (row, prev, field) => !!prev && isWeekendYmd(row.date) && row[field] != null && row[field] === prev[field];
+
+/**
+ * Daily value of the units held TODAY, from stored prices (share_symbol_snapshots rows, oldest first), from `fromDate` (YYYY-MM-DD in
+ * `tz`) to today's live price. Each holding starts at its first stored price on or after fromDate (as the per-holding movers do) and
+ * is valued at its last price of each day after that, carried forward over gaps. Pure.
+ * Returns { from, points: [{ date, value }], baseValue, liveValue, changeAud, pct, included, total } or null with no prices.
+ */
+function buildHoldingsValueSeries(rows, positions, fromDate, tz, todayYmd) {
+  const qty = {};
+  const live = {};
+  for (const p of positions || []) {
+    const q = num(p.quantity);
+    if (!p.symbol || !(q > 0)) continue;
+    qty[p.symbol] = (qty[p.symbol] || 0) + q;
+    if (num(p.priceAud) > 0) live[p.symbol] = num(p.priceAud);
+  }
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'UTC' });
+  const base = {};
+  const lastByDay = new Map(); // date -> { symbol: last price that day }
+  for (const r of rows || []) {
+    const price = num(r.priceAud);
+    if (!(r.symbol in qty) || !(price > 0)) continue;
+    const d = fmt.format(new Date(r.recordedAt));
+    if (fromDate && d < fromDate) continue;
+    if (base[r.symbol] == null) base[r.symbol] = price;
+    if (!lastByDay.has(d)) lastByDay.set(d, {});
+    lastByDay.get(d)[r.symbol] = price;
+  }
+  const syms = Object.keys(base);
+  if (!syms.length) return null;
+  const valueAt = (prices) => syms.reduce((sum, sym) => sum + qty[sym] * prices[sym], 0);
+  const current = { ...base };
+  const points = [];
+  for (const d of [...lastByDay.keys()].sort()) {
+    Object.assign(current, lastByDay.get(d));
+    points.push({ date: d, value: round2(valueAt(current)) });
+  }
+  const end = Object.fromEntries(syms.map((sym) => [sym, live[sym] ?? current[sym]]));
+  const baseValue = valueAt(base);
+  const liveValue = valueAt(end);
+  if (todayYmd) {
+    const last = points[points.length - 1];
+    if (last?.date === todayYmd) last.value = round2(liveValue); else points.push({ date: todayYmd, value: round2(liveValue) });
+  }
+  return {
+    from: points[0].date, points,
+    baseValue: round2(baseValue), liveValue: round2(liveValue),
+    changeAud: round2(liveValue - baseValue),
+    pct: baseValue > 0 ? round2(((liveValue - baseValue) / baseValue) * 100) : null,
+    included: syms.length, total: Object.keys(qty).length,
+  };
+}
+
+/** The relative-performance series (each line starts at 100). With `holdings` (buildHoldingsValueSeries) the holdings line comes
+ *  from stored prices; without it, from the notes' daily moves as before. Index lines always come from the notes. */
+function buildNormalizedPerformance(observationHistory, holdings = null) {
   if (!observationHistory.length) return [];
   let port = 100;
   let nasdaq = 100;
   let sox = 100;
   let asx = 100;
+  let i = 0;
+  const holdingsAt = (date) => {
+    while (i + 1 < holdings.points.length && holdings.points[i + 1].date <= date) i += 1;
+    return holdings.points[i].date <= date ? holdings.points[i].value : holdings.baseValue;
+  };
   const out = [];
+  let prev = null;
   for (const row of observationHistory) {
-    if (row.portfolioChangePct != null) port *= 1 + row.portfolioChangePct / 100;
-    if (row.nasdaqPct != null) nasdaq *= 1 + row.nasdaqPct / 100;
-    if (row.soxPct != null) sox *= 1 + row.soxPct / 100;
-    if (row.asxPct != null) asx *= 1 + row.asxPct / 100;
+    if (holdings && holdings.baseValue > 0) port = (holdingsAt(row.date) / holdings.baseValue) * 100;
+    else if (row.portfolioChangePct != null && !repeatsPrevious(row, prev, 'portfolioChangePct')) port *= 1 + row.portfolioChangePct / 100;
+    if (row.nasdaqPct != null && !repeatsPrevious(row, prev, 'nasdaqPct')) nasdaq *= 1 + row.nasdaqPct / 100;
+    if (row.soxPct != null && !repeatsPrevious(row, prev, 'soxPct')) sox *= 1 + row.soxPct / 100;
+    if (row.asxPct != null && !repeatsPrevious(row, prev, 'asxPct')) asx *= 1 + row.asxPct / 100;
+    prev = row;
     out.push({
       date: row.date,
       portfolio: round2(port),
@@ -370,20 +438,26 @@ function buildNormalizedPerformance(observationHistory) {
 // Portfolio Note observations the relative-performance chart uses (compounded daily moves).
 // Holdings are AUD; the index proxies (QQQ, SOXX) are USD-priced ETFs and STW is AUD — the
 // chart labels that. An index with no recorded moves in the window is left out, never shown as 0%.
-function buildBenchmarksPeriod(normalized, observationHistory) {
+function buildBenchmarksPeriod(normalized, observationHistory, holdings = null) {
   if (!normalized.length || !observationHistory.length) {
     return { available: false, items: [], observationCount: 0, from: null, to: null };
   }
   const last = normalized[normalized.length - 1];
   const has = (field) => observationHistory.some((r) => r[field] != null);
   const pct = (key) => round2(last[key] - 100);
-  const items = [{ label: 'Your holdings', pct: pct('portfolio'), kind: 'portfolio' }];
+  // With stored prices, the holdings' % and A$ are the same calculation (today's units, start of the window to today's price),
+  // so the two figures on the tile always agree.
+  const own = holdings?.pct != null
+    ? { label: 'Your holdings', pct: holdings.pct, kind: 'portfolio', changeAud: holdings.changeAud }
+    : { label: 'Your holdings', pct: pct('portfolio'), kind: 'portfolio' };
+  const items = [own];
   if (has('nasdaqPct')) items.push({ label: 'Nasdaq', pct: pct('nasdaq'), kind: 'nasdaq' });
   if (has('soxPct')) items.push({ label: 'SOX', pct: pct('sox'), kind: 'sox' });
   if (has('asxPct')) items.push({ label: 'ASX 200', pct: pct('asx'), kind: 'asx' });
   return {
     available: true,
     items,
+    ...(holdings?.pct != null && holdings.included < holdings.total ? { changeAudCoverage: { included: holdings.included, total: holdings.total } } : {}),
     observationCount: observationHistory.length,
     from: observationHistory[0].date,
     to: observationHistory[observationHistory.length - 1].date,
@@ -601,18 +675,13 @@ async function getChartData(userId, rawRange = '30d') {
     loadUpcomingEarnings(enriched, today, tz, 90),
   ]);
 
-  const normalizedPerformance = buildNormalizedPerformance(observationHistory);
-  const benchmarksPeriod = buildBenchmarksPeriod(normalizedPerformance, observationHistory);
+  // The holdings line and the "Your holdings" figures come from stored prices over the same dates as the notes the index lines use.
+  const holdingsSeries = !isToday && observationHistory.length
+    ? buildHoldingsValueSeries(symbolRows.rows, dash.positions, observationHistory[0].date, tz, today)
+    : null;
+  const normalizedPerformance = buildNormalizedPerformance(observationHistory, holdingsSeries);
+  const benchmarksPeriod = buildBenchmarksPeriod(normalizedPerformance, observationHistory, holdingsSeries);
   const periodMovers = isToday ? [] : buildPeriodMovers(enriched, trailingReturns, benchmarksPeriod);
-  if (benchmarksPeriod.available && periodMovers.length) {
-    const own = benchmarksPeriod.items.find((i) => i.kind === 'portfolio');
-    const dollars = periodMovers.filter((m) => m.changeAud != null);
-    if (own && dollars.length) {
-      own.changeAud = round2(dollars.reduce((sum, m) => sum + m.changeAud, 0));
-      // $ is only the holdings that have a stored price in the window — tell the UI if that's not all of them
-      benchmarksPeriod.changeAudCoverage = { included: dollars.length, total: enriched.length };
-    }
-  }
   const firstSnapshotAt = firstSnapRes.rows[0]?.first || null;
   const history = {
     firstSnapshotAt,
@@ -749,4 +818,5 @@ module.exports = {
   buildBenchmarksPeriod,
   buildPeriodMovers,
   buildNormalizedPerformance,
+  buildHoldingsValueSeries,
 };
