@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "a1a98c41",
+   "fullHash": "a1a98c41d87ac7f913641d0de3b2670544e755bf",
+   "committedAt": "2026-11-27T14:13:20+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Two-step login: open code routes no longer reveal a broken key",
+   "filesChanged": 3,
+   "insertions": 19,
+   "deletions": 11,
+   "goal": "Anyone on the internet could tell whether two-step login was broken by sending a made-up id to the resend route: it answered 503 'unavailable' with a broken key and 400 'expired' otherwise.",
+   "whatChanged": "loginChallenge.js: resendCode and verifyCode check the key only after looking up the challenge, and a broken key gives the same 400 'This sign-in has expired. Start again.' as an unknown id. The password step still says 'Sign-in is unavailable', but only after a right password. loginChallenge.db.test.js asserts the outside answers are identical with a good and a broken key. two-step-login.md: GET /api/admin/auth-health is the check (with how to call it from the browser console); the outside check is removed.",
+   "filesImpacted": [
+    "vault/server/services/loginChallenge.js",
+    "vault/server/services/loginChallenge.db.test.js",
+    "vault/docs/two-step-login.md"
+   ],
+   "benefit": "Key health can no longer be probed from outside without a password; admins still see it on Home and through auth-health.",
+   "concerns": "Someone who knows a correct password still learns the key is broken from the password step (deliberate: the member needs to be told to ask an admin). Timing is matched by doing the lookup first, but not measured. Tested locally: loginChallenge.db.test.js 14/14 (including identical outside answers), trustedDevices 10/10, auth 7/7, key-shape test."
+  },
+  {
    "commit": "f6fb3216",
    "fullHash": "f6fb32167e150b2c7884547e95f7bc0e6e92d827",
    "committedAt": "2026-11-27T14:09:35+10:00",
