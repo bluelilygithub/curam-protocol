@@ -2,6 +2,32 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "cfe0eb70",
+   "fullHash": "cfe0eb7041dd04b567866457ab776a5fddaf717b",
+   "committedAt": "2026-11-28T08:30:37+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Watchlist report redesign M1: structured output and validation",
+   "filesChanged": 9,
+   "insertions": 492,
+   "deletions": 7,
+   "goal": "Milestone 1 of 4 of the Watchlist report redesign: give each research report a validated structured version (verdicts, moat factors, competitors, targets, figures, risks, data warnings) so the coming visual report page can draw charts from data instead of prose.",
+   "whatChanged": "New server/services/sharesWatchlistStructure.js: figuresFromEvidence maps the Finnhub figures in code (key-figure tiles with a gain/loss/warn signal, revenue growth, operating and net margin by quarter oldest first with real period-end labels, gross margin, multiples, company P/S, price and distance from the 1-year high); extractStructured makes one light-model call (max 4000 tokens, usage shares_watchlist_structure) over the finished prose and numbered sources; buildStructured validates and merges (unknown citation ids dropped and logged, bad items dropped, advice words refused in Vault's own labels, other-currency targets moved to data warnings, empty sections left out, null on failure). runResearch (sharesWatchlist.js) saves the prose first with an evidence snapshot, then the structured version. marketData.js reads Finnhub's 52WeekHigh beside the figures (not into them, so the Thesis pack is unchanged). server/db.js adds evidence and structured JSONB columns to share_research_reports. The processing message mentions the extra step. Tests: sharesWatchlistStructure.test.js (new), marketData.test.js. Docs: docs/shares-watchlist.md, docs/key-files.md.",
+   "filesImpacted": [
+    "vault/server/services/sharesWatchlistStructure.js",
+    "vault/server/services/sharesWatchlistStructure.test.js",
+    "vault/server/services/sharesWatchlist.js",
+    "vault/server/services/marketData.js",
+    "vault/server/services/marketData.test.js",
+    "vault/server/db.js",
+    "vault/client/src/components/shares/SharesWatchlistTab.jsx",
+    "vault/docs/shares-watchlist.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "Every Finnhub figure on the coming report page will come from code, not the model, and every chart will draw only validated data; a failed extraction never loses the prose report. Run once against the real CRWD report on production: valid first time, every section filled, no citation ids dropped, and it surfaced two conflicting Morningstar fair values as a data warning.",
+   "concerns": "Each report now costs one more AI call: about US$0.023 and 30 seconds on production, because light resolves to claude-haiku-4-5 (the first Anthropic model in the owner's list), not a cheaper model; the plan had estimated US$0.003. No visible change until M2 builds the page, so reports made before then pay for data nothing shows yet (they will show once M2 ships). Older reports have no structured data and stay prose. The CRWD test used that day's quote and Finnhub figures, not the report's, because old reports kept no evidence. The script used to run that test required server/db.js, which runs the boot schema setup on load, so it ran part of the normal idempotent boot routine against production before being cut off; no data changed beyond what every deploy does, but it was not the read-only run promised. The model can still pick weak or conflicting targets (two Morningstar fair values on one axis); data warnings flag them but code does not choose between them."
+  },
+  {
    "commit": "81b73462",
    "fullHash": "81b734624035a63af20d92f52391b1b08244cb36",
    "committedAt": "2026-11-28T08:00:34+10:00",
