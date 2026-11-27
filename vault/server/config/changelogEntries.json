@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "81b73462",
+   "fullHash": "81b734624035a63af20d92f52391b1b08244cb36",
+   "committedAt": "2026-11-28T08:00:34+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Watchlist: analyst consensus, portfolio-fit summary, copy and download",
+   "filesChanged": 5,
+   "insertions": 68,
+   "deletions": 22,
+   "goal": "Owner request: collate buy/hold/sell ratings from at least five sources like Morningstar into an aggregated recommendation with a summary, add a final summary arguing whether the company fits the owner's portfolio and profile, and let the report be copied and downloaded.",
+   "whatChanged": "The research prompt (SYSTEM_PROMPT in server/services/sharesWatchlist.js) gains an \"Analyst consensus\" section: a table of ratings published by named sources (Source, rating as published, Buy/Hold/Sell, target, date, citation), a bold \"Consensus of the sources\" line with the count (majority; tie = Mixed; under three = Not enough ratings found) and a paragraph on the aggregated opinion. The old \"Fit with your profile and portfolio\" section is replaced by a last section \"Final summary: does it fit your portfolio?\" that argues for and against and ends \"Fit with your profile: Fits / Partly fits / Does not fit\". Rule 1 now forbids buy/sell/hold only in Vault's own voice, with the consensus section as the one exception. Five rating-site web searches added (Morningstar, MarketBeat, Simply Wall St, plus Zacks and TipRanks for US or Market Index and MarketScreener for ASX), ten in total; max output tokens 6000 to 8000. SharesWatchlistTab.jsx adds Copy and Download (Markdown with heading, report, numbered sources and disclaimer; file <SYMBOL>-<EXCHANGE>-research-<local date>.md) and updated intro and disclaimer text. Guide chat entry (sharesTutor.js), docs/shares-watchlist.md and the prompt test updated.",
+   "filesImpacted": [
+    "vault/server/services/sharesWatchlist.js",
+    "vault/server/services/sharesWatchlist.test.js",
+    "vault/client/src/components/shares/SharesWatchlistTab.jsx",
+    "vault/server/services/sharesTutor.js",
+    "vault/docs/shares-watchlist.md"
+   ],
+   "benefit": "A watchlist report now shows what the research houses think in one table with a clear majority, then argues whether the company suits the owner's own profile and holdings. The report can be pasted or saved as a file with its sources intact.",
+   "concerns": "This relaxes the 2026-11-27 never-advice decision in one place, at the owner's request: the consensus is the sources' ratings, attributed, never Vault's own. Ratings come only from search snippets, and many rating sites are paywalled, so fewer than five sources may be found; the consensus count is done by the model and not checked in code. Each report costs five more web searches and up to 2000 more output tokens. Not run with a live model: the local keys are invalid, so the first real report on production is the first test of how well ratings are found and mapped. The layout, Copy and Download were checked in a browser locally against a sample report put into the local database (removed afterwards), with no console errors."
+  },
+  {
    "commit": "8fed5f69",
    "fullHash": "8fed5f69b88956732ce921b6ca9baf35d0fac25d",
    "committedAt": "2026-11-28T07:41:40+10:00",
