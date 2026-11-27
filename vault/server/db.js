@@ -4114,6 +4114,9 @@ async function initSchema() {
       "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // evidence: the quote and Finnhub figures at report time; structured: the validated data the visual report draws (null = prose only).
+  await pool.query(`ALTER TABLE share_research_reports ADD COLUMN IF NOT EXISTS evidence JSONB`);
+  await pool.query(`ALTER TABLE share_research_reports ADD COLUMN IF NOT EXISTS structured JSONB`);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_share_research_reports_watch
       ON share_research_reports ("watchId", "createdAt" DESC)

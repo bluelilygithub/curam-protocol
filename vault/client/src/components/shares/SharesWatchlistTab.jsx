@@ -116,7 +116,7 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
 
   const research = async () => {
     if (!current) return;
-    startProcessing(`Researching ${current.symbol}…`, 'Searching the web, reading the quote and reported figures, your holdings and your investor profile, then writing the report. This can take a minute or two.');
+    startProcessing(`Researching ${current.symbol}…`, 'Searching the web, reading the quote and reported figures, your holdings and your investor profile, then writing the report and pulling out its key figures. This can take two or three minutes.');
     try {
       const res = await api.post(`/api/shares/watchlist/${current.id}/research`);
       const data = await res.json().catch(() => ({}));

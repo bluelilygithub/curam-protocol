@@ -130,7 +130,11 @@ function parseFinnhubMetrics(body) {
       .map((p) => ({ period: String(p.period).slice(0, 10), pct: Math.abs(Number(p.v)) <= 1.5 ? Number(p.v) * 100 : Number(p.v) }));
     if (points.length) trends.push({ label, points });
   }
-  return { figures, trends };
+  // The 1-year high, for the watchlist report's "distance from the peak" bar. Kept out of `figures` so the Thesis pack is unchanged.
+  const hi = Number(m['52WeekHigh']);
+  return m['52WeekHigh'] != null && Number.isFinite(hi) && hi > 0
+    ? { figures, trends, yearHigh: { value: hi, date: m['52WeekHighDate'] ? String(m['52WeekHighDate']).slice(0, 10) : null } }
+    : { figures, trends };
 }
 
 /** Reported figures for a US share, or null (no key, ASX, or the call failed). Never throws. */

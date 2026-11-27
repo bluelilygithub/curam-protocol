@@ -15,6 +15,7 @@ const { logUsage } = require('../utils/logUsage');
 const sharesPortfolio = require('./sharesPortfolio');
 const { webSearch } = require('./sharesNewsService');
 const { getQuote, getFundamentals, canFetchExchange } = require('./marketData');
+const { extractStructured } = require('./sharesWatchlistStructure');
 
 const EXCHANGES = ['NASDAQ', 'NYSE', 'ASX'];
 const PROFILE_KEY = 'shares_investor_profile';
@@ -145,6 +146,7 @@ function mapReport(r) {
   return {
     id: r.id, watchId: r.watchId, markdown: r.markdown, priceAtReport: r.priceAtReport, model: r.model, createdAt: r.createdAt,
     sources: typeof r.sources === 'string' ? JSON.parse(r.sources) : r.sources || [],
+    structured: typeof r.structured === 'string' ? JSON.parse(r.structured) : r.structured || null,
   };
 }
 
@@ -235,11 +237,21 @@ async function runResearch(userId, watchId) {
   const markdown = String(result.text || '').trim();
   if (!markdown) throw new Error('The model returned an empty report. Try again.');
 
+  // Save the prose first, so a failed extraction never loses the report. The evidence snapshot lets code fill in every Finnhub figure.
+  const evidence = { quote, fundamentals };
   const { rows } = await pool.query(
-    `INSERT INTO share_research_reports ("watchId","userId",markdown,sources,"priceAtReport",model) VALUES ($1,$2,$3,$4::jsonb,$5,$6) RETURNING *`,
-    [watchId, userId, markdown, JSON.stringify(sources), quote ? `${quote.currency} ${fmtNum(quote.price)}` : '', modelId]
+    `INSERT INTO share_research_reports ("watchId","userId",markdown,sources,"priceAtReport",model,evidence) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7::jsonb) RETURNING *`,
+    [watchId, userId, markdown, JSON.stringify(sources), quote ? `${quote.currency} ${fmtNum(quote.price)}` : '', modelId, JSON.stringify(evidence)]
   );
-  return mapReport(rows[0]);
+  const structured = await extractStructured({
+    userId, watch, markdown, sources, evidence, modelId: pickTextModel(tiers, 'light'), callModel, logUsage,
+  });
+  if (!structured) return mapReport(rows[0]);
+  const upd = await pool.query(
+    'UPDATE share_research_reports SET structured=$3::jsonb WHERE id=$1 AND "userId"=$2 RETURNING *',
+    [rows[0].id, userId, JSON.stringify(structured)]
+  );
+  return mapReport(upd.rows[0]);
 }
 
 module.exports = {

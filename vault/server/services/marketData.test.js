@@ -13,6 +13,8 @@ const parsed = parseFinnhubMetrics({
     roeTTM: null,                      // missing: skipped
     'totalDebt/totalEquityQuarterly': 0.29,
     marketCapitalization: 3100000,
+    '52WeekHigh': 557.5,
+    '52WeekHighDate': '2026-07-15',
   },
   series: {
     quarterly: {
@@ -32,6 +34,8 @@ assert.strictEqual(by['Debt/equity'].unit, 'x');
 assert.strictEqual(parsed.trends.length, 1, 'a series with no readable points is dropped');
 assert.strictEqual(parsed.trends[0].points.length, 4, 'last four quarters only');
 assert.ok(Math.abs(parsed.trends[0].points[0].pct - 69.5) < 1e-9, 'series fractions shown as percentages');
+assert.deepStrictEqual(parsed.yearHigh, { value: 557.5, date: '2026-07-15' }, '1-year high kept beside the figures');
+assert.ok(!parsed.figures.some((f) => /52|high/i.test(f.label)), 'not added to the Thesis figures');
 assert.deepStrictEqual(parseFinnhubMetrics(null), { figures: [], trends: [] });
 assert.deepStrictEqual(parseFinnhubMetrics({ error: 'limit' }), { figures: [], trends: [] });
 
