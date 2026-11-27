@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "db45ef0a",
+   "fullHash": "db45ef0a76428531d5b1e464867ceba218badeea",
+   "committedAt": "2026-11-27T17:08:25+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Welcome and reset emails link to vault.curam-ai.com.au",
+   "filesChanged": 2,
+   "insertions": 5,
+   "deletions": 2,
+   "goal": "The owner wants the welcome and reset emails to show and link to vault.curam-ai.com.au, not the Railway address.",
+   "whatChanged": "server/routes/admin.js: new EMAIL_APP_URL (https://vault.curam-ai.com.au) used for the Vault address, the sign-in link and the set-password button in the welcome and reset emails, and for the link handed back when an email fails. A local run (localhost or 127.0.0.1) keeps local links. docs/key-files.md notes it.",
+   "filesImpacted": [
+    "vault/server/routes/admin.js",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "People see and use the Vault's own domain from their first email.",
+   "concerns": "The domain is written in code, so moving Vault to another domain needs a code change. APP_URL was left alone on purpose (it also drives Google sign-in return links), so Forgot password and Wellbeing invite emails still use the address the request came in on. Checked by rendering the email and the 13 account tests; vault.curam-ai.com.au answered the health check before the change."
+  },
+  {
    "commit": "ef52a55a",
    "fullHash": "ef52a55a887c1d3dd5a852f0b17d90bc9ca2b5c3",
    "committedAt": "2026-11-27T16:40:34+10:00",
