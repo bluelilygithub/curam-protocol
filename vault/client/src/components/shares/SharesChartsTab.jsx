@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import MultiLineChart from './MultiLineChart';
-import BenchmarkBarChart from './BenchmarkBarChart';
-import DayMoversChart from './DayMoversChart';
-import DrawdownBars from './DrawdownBars';
 import MoveHeatmap from './MoveHeatmap';
 import EarningsTimeline from './EarningsTimeline';
 import AllocationPie from './AllocationPie';
 import HorizontalBars from './HorizontalBars';
 import ChartCard from '../charts/ChartCard';
+import StatTile from '../charts/StatTile';
+import DivergingBars from '../charts/DivergingBars';
+import ThresholdBars from '../charts/ThresholdBars';
+import Sparkline from '../charts/Sparkline';
+import PortfolioValueChart from './PortfolioValueChart';
+import RelativePerformanceChart from './RelativePerformanceChart';
+import { fmtPct, fmtAud, fmtPts } from '../charts/chartFormat.mjs';
+import { changeOverRange, cardsForRange } from '../charts/chartMath.mjs';
 import RangeToggle from '../charts/RangeToggle';
 import SegmentedToggle from '../charts/SegmentedToggle';
 import Skeleton from '../Skeleton';
@@ -53,7 +58,7 @@ export default function SharesChartsTab({
   PortfolioPnlBarChart,
   dividendSummary,
 }) {
-  const [showCash, setShowCash] = useState(false);
+  const [cashView, setCashView] = useState('total'); // Portfolio value: 'total' or 'split' (holdings + dashed cash)
   const [group, setGroup] = useState('movement');
 
   if (loading && !charts) {
@@ -102,6 +107,55 @@ export default function SharesChartsTab({
   });
   const activeGroup = visibleGroups.some((g) => g.id === group) ? group : 'movement';
 
+  // ---- Movement ----
+  const benchItems = (today ? charts.benchmarksToday : (bp?.items || [])).filter((it) => it.pct != null && Number.isFinite(Number(it.pct)));
+  const mine = benchItems.find((it) => it.kind === 'portfolio');
+  const indexes = benchItems.filter((it) => it.kind !== 'portfolio');
+  const movers = (today ? charts.dayMovers : charts.periodMovers) || [];
+  const moverKey = today ? 'dayChangePct' : 'periodChangePct';
+  const moverAmount = today ? 'dayChangeAud' : 'changeAud';
+  const moverItems = movers.filter((m) => m[moverKey] != null).slice(0, 12).map((m) => {
+    const pct = Number(m[moverKey]);
+    const tick = m.sectorBenchmarkPct ?? (m.vsSectorPct != null ? pct - Number(m.vsSectorPct) : null);
+    const rel = m.relativeToSector;
+    return {
+      key: m.key || `${m.symbol}:${m.exchange}`,
+      label: m.symbol,
+      sublabel: m.sectorBenchmark,
+      value: pct,
+      tick,
+      tickLabel: tick != null ? `${m.sectorBenchmark} ${fmtPct(tick)}` : undefined,
+      valueText: fmtPct(pct),
+      amountText: m[moverAmount] != null ? fmtAud(m[moverAmount]) : null,
+      note: m.vsSectorPct == null || rel === 'unknown' ? null : `${fmtPts(m.vsSectorPct)} vs ${m.sectorBenchmark}`,
+      noteTone: rel === 'beat' ? 'gain' : rel === 'lagged' ? 'loss' : undefined,
+    };
+  });
+  const peakTrigger = thresholds.peakOffPct ?? 10;
+  const costTrigger = thresholds.avgCostOffPct ?? 4;
+  // Status comes from the server's flag (portfolioAlerts.js), so it matches the alert emails; it counts the cost trigger too.
+  const drawdownItems = (rows) => [...(rows || [])]
+    .sort((a, b) => (a.pctOffPeak ?? 0) - (b.pctOffPeak ?? 0))
+    .map((r) => {
+      const peak = Number(r.pctOffPeak);
+      const cost = Number(r.pctOffAvgCost);
+      return {
+        key: r.key || `${r.label}:${r.exchange || ''}`,
+        label: r.label,
+        size: Number.isFinite(peak) ? Math.max(0, -peak) : 0,
+        status: r.flag === '🔴' ? 'past' : r.flag === '⚠️' ? 'near' : 'within',
+        valueText: Number.isFinite(peak) ? `${fmtPct(peak)} off peak` : '—',
+        subText: Number.isFinite(cost) ? `${fmtPct(cost)} vs cost` : null,
+      };
+    });
+  const drawdownLabels = { within: 'Within limits', near: 'Near a trigger', past: 'Trigger hit' };
+  const trailingItems = (charts.trailingReturns || []).filter((t) => t.dataAvailable).map((t) => ({
+    key: `${t.symbol}:${t.exchange || ''}`, label: t.symbol, value: Number(t.trailingPct), valueText: fmtPct(t.trailingPct),
+    amountText: t.changeAud != null ? fmtAud(t.changeAud) : null,
+  }));
+  const trailingDays = charts.trailingWindowDays ?? 5;
+  const showTrailing = cardsForRange(range).trailingReturn;
+
   const movement = (
     <Grid>
       <ChartCard
@@ -111,42 +165,77 @@ export default function SharesChartsTab({
         info={today
           ? "Holdings day move (cash excluded) compared to Nasdaq, SOX, and ASX 200 ETF proxies — same basis as the Portfolio Note header. The dollar figure is your holdings' move in AUD. Nasdaq and SOX are USD-priced ETFs; your holdings are in AUD."
           : bp?.available
-            ? `Return over ${bp.from} to ${bp.to} (${bp.observationCount} daily Portfolio Notes), holdings only, cash excluded. The dollar figure is the price change on the units you hold today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''} — buys and sells inside the range aren't adjusted for. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD.`
+            ? `Return over ${bp.from} to ${bp.to} (${bp.observationCount} daily Portfolio Notes), holdings only, cash excluded. The dollar figure is the price change on the units you hold today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''} — buys and sells inside the range aren't adjusted for. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
             : 'Not enough daily Portfolio Notes recorded for this range yet.'}
       >
-        <BenchmarkBarChart items={today ? charts.benchmarksToday : (bp?.items || [])} />
+        {benchItems.length ? (
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            {mine && <StatTile primary label="Your holdings" value={fmtPct(mine.pct, 2)} sub={mine.changeAud != null ? fmtAud(mine.changeAud) : 'Holdings only, cash excluded'} />}
+            {indexes.map((it) => {
+              const diff = mine ? Number(mine.pct) - Number(it.pct) : null;
+              return (
+                <StatTile
+                  key={it.label}
+                  label={it.label}
+                  value={fmtPct(it.pct, 2)}
+                  sub={diff == null ? null : Math.abs(diff) < 0.05 ? 'Level with it' : diff > 0 ? `You beat it by ${Math.abs(diff).toFixed(1)} pts` : `You lagged by ${Math.abs(diff).toFixed(1)} pts`}
+                  tone={diff == null || Math.abs(diff) < 0.05 ? undefined : diff > 0 ? 'gain' : 'loss'}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <Note>Benchmark data unavailable — check quote API keys, or pick a range with daily Portfolio Notes.</Note>
+        )}
       </ChartCard>
 
       <ChartCard
         title={today ? 'Day movers & beat/lag' : `Movers & beat/lag, ${rangeLabel}`}
-        subtitle={today ? 'Each holding today against its sector index.' : `Each holding over ${phrase} against its sector index.`}
-        info={today
+        subtitle={today ? 'Each holding today; the dark tick is its sector index.' : `Each holding over ${phrase}; the dark tick is its sector index.`}
+        info={`${today
           ? 'Per-holding day % and day $ (AUD) with divergence vs assigned sector benchmark (SOX for semis, ASX 200 for ASX, Nasdaq otherwise).'
-          : `Each holding's move over ${phrase} (from its first stored price in that window) against its sector index over the same range. The dollar figure is the price change on the units you hold today.`}
+          : `Each holding's move over ${phrase} (from its first stored price in that window) against its sector index over the same range. The dollar figure is the price change on the units you hold today.`} The dark tick on each bar marks its sector index's move. The trailing return card shows on Today only: over 7 days and longer it would measure the same window as this card.`}
       >
-        {today
-          ? <DayMoversChart movers={charts.dayMovers} />
-          : <DayMoversChart movers={charts.periodMovers} valueKey="periodChangePct" amountKey="changeAud" periodLabel={rangeLabel} />}
+        {moverItems.length
+          ? <DivergingBars items={moverItems} ariaLabel={`Bars centred on zero: each holding's move ${today ? 'today' : `over ${phrase}`}, with a tick at its sector index move`} />
+          : <Note>{today ? 'No priced holdings for today’s move chart.' : 'No holdings have stored prices in this range yet.'}</Note>}
       </ChartCard>
 
       <ChartCard
         title="Drawdown & alert status"
         badge={SNAPSHOT}
-        subtitle={`Triggers: ${thresholds.peakOffPct ?? 10}% off peak, ${thresholds.avgCostOffPct ?? 4}% off average cost.`}
-        info={`% off high-water mark since purchase. Triggers: ${thresholds.peakOffPct ?? 10}% off peak · ${thresholds.avgCostOffPct ?? 4}% off avg cost.`}
+        subtitle={`Triggers: ${peakTrigger}% off peak, ${costTrigger}% off average cost.`}
+        info={`% off high-water mark since purchase. Triggers: ${peakTrigger}% off peak · ${costTrigger}% off avg cost. The badge counts both triggers, the same as the alert emails: "Near a trigger" within ${thresholds.proximityPp ?? 1} point of either, "Trigger hit" at or past either.`}
       >
-        <DrawdownBars
-          rows={charts.alertRows}
-          peakTrigger={-(thresholds.peakOffPct ?? 10)}
-          costTrigger={-(thresholds.avgCostOffPct ?? 4)}
-        />
+        {charts.alertRows?.length
+          ? <ThresholdBars items={drawdownItems(charts.alertRows)} trigger={peakTrigger} triggerLabel={`${peakTrigger}% off peak trigger`} labels={drawdownLabels} ariaLabel={`Bars of how far each holding is below its peak, with a line at the ${peakTrigger}% trigger`} />
+          : <Note>No alert data — add holdings with live quotes.</Note>}
       </ChartCard>
+
+      {showTrailing && (
+        <ChartCard
+          title={`${trailingDays}-day trailing return`}
+          badge={`Last ${trailingDays} days`}
+          subtitle="Price change over the last few days."
+          info="Price change from the earliest snapshot in the last ~5 days — same metric cited in Portfolio Note movers. On longer ranges this card is hidden, because Movers already shows that window."
+        >
+          {trailingItems.length
+            ? <DivergingBars items={trailingItems} ariaLabel={`Bars centred on zero: each holding's price change over ${trailingDays} days`} />
+            : <Note>No snapshots in the last few days yet — data fills in as polls accumulate.</Note>}
+          {(charts.trailingReturns || []).some((t) => !t.dataAvailable) && trailingItems.length > 0 && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Some holdings have no snapshot in this window — data fills in as polls accumulate.</p>
+          )}
+        </ChartCard>
+      )}
     </Grid>
   );
 
-  const trailingItems = charts.trailingReturns?.filter((t) => t.dataAvailable) || [];
-  const trailingDays = charts.trailingWindowDays ?? 5;
-  const lastSnap = charts.portfolioSnapshots?.[charts.portfolioSnapshots.length - 1];
+  // ---- Performance ----
+  const snaps = charts.portfolioSnapshots || [];
+  const lastSnap = snaps[snaps.length - 1];
+  const valueKey = cashView === 'split' ? 'holdingsValueAud' : 'totalValueAud';
+  const valueChange = changeOverRange(snaps, valueKey);
+  const lastOf = (pts, key) => { for (let i = pts.length - 1; i >= 0; i--) if (pts[i]?.[key] != null) return Number(pts[i][key]); return null; };
 
   const performance = (
     <Grid>
@@ -156,34 +245,34 @@ export default function SharesChartsTab({
         info={today ? 'Intraday snapshots from quote polls and manual refresh.' : `Daily snapshots over ${phrase}.`}
         actions={(
           <SegmentedToggle
-            label="Cash line"
+            label="What the value line shows"
             size="xs"
-            value={showCash ? 'cash' : 'plain'}
-            onChange={(v) => setShowCash(v === 'cash')}
+            value={cashView}
+            onChange={setCashView}
             options={[
-              { value: 'plain', label: 'Holdings + cash', tip: 'Total value and holdings value.' },
-              { value: 'cash', label: 'Show cash line', tip: 'Add a line for cash.' },
+              { value: 'total', label: 'Total', tip: 'One line: holdings and cash together.' },
+              { value: 'split', label: 'Holdings + cash', tip: 'Holdings as the filled line, cash as a dashed line.' },
             ]}
           />
         )}
       >
-        <MultiLineChart
-          points={charts.portfolioSnapshots}
-          series={showCash
-            ? [
-              { key: 'totalValueAud', label: 'Total' },
-              { key: 'holdingsValueAud', label: 'Holdings' },
-              { key: 'cashAud', label: 'Cash' },
-            ]
-            : [
-              { key: 'totalValueAud', label: 'Total' },
-              { key: 'holdingsValueAud', label: 'Holdings' },
-            ]}
-        />
-        {lastSnap?.pnlPct != null && (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Book unrealised P&L: {lastSnap.pnlPct >= 0 ? '+' : '−'}{Math.abs(lastSnap.pnlPct).toFixed(2)}% vs cost basis
-          </p>
+        {snaps.length ? (
+          <>
+            <div>
+              <p className="text-3xl font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{fmtAud(lastOf(snaps, valueKey), { signed: false })}</p>
+              {valueChange && (
+                <p className="text-sm tabular-nums" style={{ color: valueChange.change >= 0 ? 'var(--chart-gain)' : 'var(--chart-loss)' }}>
+                  {fmtAud(valueChange.change)} ({fmtPct(valueChange.pct)}) <span style={{ color: 'var(--color-muted)' }}>{today ? 'today' : `over ${phrase}`}</span>
+                </p>
+              )}
+              {lastSnap?.pnlPct != null && (
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Unrealised P&L {fmtPct(lastSnap.pnlPct, 2)} vs cost basis</p>
+              )}
+            </div>
+            <PortfolioValueChart points={snaps} split={cashView === 'split'} intraday={today} />
+          </>
+        ) : (
+          <Note>No snapshot data for this period — use Refresh or wait for the next poll.</Note>
         )}
       </ChartCard>
 
@@ -192,37 +281,9 @@ export default function SharesChartsTab({
         subtitle="Your holdings against the index proxies."
         info="Cumulative daily returns from stored Portfolio Note observations — portfolio vs index proxies (Nasdaq and SOX are USD-priced)."
       >
-        {charts.normalizedPerformance?.length > 1 ? (
-          <MultiLineChart
-            points={charts.normalizedPerformance}
-            dateKey="date"
-            series={[
-              { key: 'portfolio', label: 'Your holdings', color: 'var(--chart-1)' },
-              { key: 'nasdaq', label: 'Nasdaq', color: 'var(--chart-2)' },
-              { key: 'sox', label: 'SOX', color: 'var(--chart-3)' },
-              { key: 'asx', label: 'ASX 200', color: 'var(--chart-4)' },
-            ]}
-            emptyMessage="Run Portfolio Note for a few days to build relative performance history."
-          />
-        ) : (
-          <Note>Needs at least two daily Portfolio Notes in this range — run the Portfolio Note for a few days.</Note>
-        )}
-      </ChartCard>
-
-      <ChartCard
-        title={today ? `${trailingDays}-day trailing return` : `Trailing return, ${rangeLabel}`}
-        badge={today ? `Last ${trailingDays} days` : undefined}
-        subtitle={today ? 'Price change over the last few days.' : `Price change over ${phrase}.`}
-        info={today
-          ? 'Price change from the earliest snapshot in the last ~5 days — same metric cited in Portfolio Note movers. Pick a longer range to widen it.'
-          : `Price change over ${phrase}, from each holding's first stored price in that window.`}
-      >
-        <HorizontalBars items={trailingItems} valueKey="trailingPct" labelKey="symbol" />
-        {(charts.trailingReturns || []).some((t) => !t.dataAvailable) && (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Some holdings have no snapshot in this window — data fills in as polls accumulate.
-          </p>
-        )}
+        {charts.normalizedPerformance?.length > 1
+          ? <RelativePerformanceChart points={charts.normalizedPerformance} />
+          : <Note>Needs at least two daily Portfolio Notes in this range — run the Portfolio Note for a few days.</Note>}
       </ChartCard>
 
       {symbolKeys.length > 0 && (
@@ -232,15 +293,21 @@ export default function SharesChartsTab({
           subtitle={today ? 'Intraday price in AUD.' : `Price in AUD over ${phrase}${charts.range?.days > 90 ? ' (one point a day)' : ''}.`}
           info={today ? 'Intraday price AUD (quantity changes do not affect this line).' : `Price history over ${phrase}${charts.range?.days > 90 ? ' (one point a day)' : ''}.`}
         >
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {symbolKeys.map((key) => {
               const pts = charts.bySymbol[key];
-              if (!pts?.length) return null;
-              if (today && pts.length < 2) return null;
+              if (!pts?.length || (today && pts.length < 2)) return null;
+              const ch = changeOverRange(pts, 'priceAud');
+              const up = !ch || ch.change >= 0;
+              const [sym, ex] = key.split(':');
               return (
-                <div key={key} className="min-w-0">
-                  <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text)' }}>{key}</p>
-                  <MultiLineChart points={pts} series={[{ key: 'priceAud', label: 'Price AUD' }]} height={140} />
+                <div key={key} className="rounded-xl border p-4 min-w-0" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{sym}<span className="text-xs font-normal ml-1" style={{ color: 'var(--color-muted)' }}>{ex}</span></p>
+                    <p className="text-sm font-medium tabular-nums" style={{ color: up ? 'var(--chart-gain)' : 'var(--chart-loss)' }}>{ch ? fmtPct(ch.pct) : '—'}</p>
+                  </div>
+                  <p className="text-xs tabular-nums" style={{ color: 'var(--color-muted)' }}>{fmtAud(lastOf(pts, 'priceAud'), { signed: false, digits: 2 })}</p>
+                  <Sparkline points={pts} dataKey="priceAud" up={up} ariaLabel={`${sym} price ${today ? 'today' : `over ${phrase}`}: ${ch ? fmtPct(ch.pct) : 'no change measured'}`} />
                 </div>
               );
             })}
@@ -367,11 +434,7 @@ export default function SharesChartsTab({
 
       {charts.metals.alertRows?.length > 0 && (
         <ChartCard title="Metals drawdown" badge={SNAPSHOT} subtitle="Same peak and cost alerts as shares.">
-          <DrawdownBars
-            rows={charts.metals.alertRows}
-            peakTrigger={-(thresholds.peakOffPct ?? 10)}
-            costTrigger={-(thresholds.avgCostOffPct ?? 4)}
-          />
+          <ThresholdBars items={drawdownItems(charts.metals.alertRows)} trigger={peakTrigger} triggerLabel={`${peakTrigger}% off peak trigger`} labels={drawdownLabels} ariaLabel="Bars of how far each metal holding is below its peak" />
         </ChartCard>
       )}
     </Grid>
