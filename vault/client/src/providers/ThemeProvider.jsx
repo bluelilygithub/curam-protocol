@@ -28,6 +28,7 @@ function ThemeProvider({ children }) {
 
   useEffect(() => {
     const t = themes[theme] || themes['warm-sand'];
+    const c = t.chart || themes['warm-sand'].chart;
     let styleEl = document.getElementById('vault-theme-vars');
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -44,6 +45,16 @@ function ThemeProvider({ children }) {
         --color-on-primary: ${t.onPrimary || '#FFFFFF'};
         --color-text: ${t.text};
         --color-muted: ${t.muted};
+        --chart-1: ${c.c1};
+        --chart-2: ${c.c2};
+        --chart-3: ${c.c3};
+        --chart-4: ${c.c4};
+        --chart-gain: ${c.gain};
+        --chart-loss: ${c.loss};
+        --chart-warn: ${c.warn};
+        --chart-neutral: ${c.neutral};
+        --chart-grid: ${c.grid};
+        --chart-ink: ${c.ink};
       }
     `;
   }, [theme]);

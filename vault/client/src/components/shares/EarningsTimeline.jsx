@@ -24,7 +24,7 @@ export default function EarningsTimeline({ events = [] }) {
           >
             <div
               className="w-14 text-center py-1 rounded-lg shrink-0"
-              style={{ background: daysUntil <= 7 ? 'var(--color-primary)' : 'var(--color-bg)', color: daysUntil <= 7 ? '#fff' : 'var(--color-text)' }}
+              style={{ background: daysUntil <= 7 ? 'var(--color-primary)' : 'var(--color-bg)', color: daysUntil <= 7 ? 'var(--color-on-primary)' : 'var(--color-text)' }}
             >
               <div className="font-semibold">{String(e.date).slice(5)}</div>
               <div className="text-[9px] opacity-80">{daysUntil}d</div>

@@ -26,12 +26,12 @@ export default function HorizontalBars({ items = [], valueKey = 'pnlPct', labelK
         const valueLabel = format === 'aud'
           ? AUD_FORMATTER.format(v)
           : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-        const barColor = format === 'aud' ? 'var(--color-primary)' : (positive ? '#22c55e' : '#ef4444');
+        const barColor = format === 'aud' ? 'var(--color-primary)' : (positive ? 'var(--chart-gain)' : 'var(--chart-loss)');
         return (
           <li key={it.symbol ? `${it.symbol}-${it.exchange || ''}` : it[labelKey]}>
             <div className="flex justify-between text-xs mb-1">
               <span style={{ color: 'var(--color-text)' }}>{it[labelKey]}</span>
-              <span style={{ color: format === 'aud' ? 'var(--color-text)' : (positive ? '#22c55e' : '#ef4444') }}>
+              <span style={{ color: format === 'aud' ? 'var(--color-text)' : (positive ? 'var(--chart-gain)' : 'var(--chart-loss)') }}>
                 {valueLabel}
               </span>
             </div>

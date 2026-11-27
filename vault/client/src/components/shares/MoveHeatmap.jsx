@@ -2,10 +2,10 @@ import React from 'react';
 
 function cellColor(pct) {
   const v = Number(pct) || 0;
-  if (v >= 2) return '#16a34a';
-  if (v >= 0.5) return '#86efac';
-  if (v <= -2) return '#dc2626';
-  if (v <= -0.5) return '#fca5a5';
+  if (v >= 2) return 'var(--chart-gain)';
+  if (v >= 0.5) return 'color-mix(in srgb, var(--chart-gain) 45%, var(--color-surface))';
+  if (v <= -2) return 'var(--chart-loss)';
+  if (v <= -0.5) return 'color-mix(in srgb, var(--chart-loss) 45%, var(--color-surface))';
   return 'var(--color-border)';
 }
 
@@ -55,8 +55,8 @@ export default function MoveHeatmap({ heatmap }) {
                       className="w-8 h-6 rounded flex items-center justify-center text-[8px] font-medium"
                       style={{
                         background: cellColor(cell.dayChangePct),
-                        color: Math.abs(cell.dayChangePct) >= 1 ? '#fff' : 'var(--color-muted)',
-                        outline: cell.unexplained ? '2px solid #f59e0b' : 'none',
+                        color: Math.abs(cell.dayChangePct) >= 2 ? 'var(--color-bg)' : 'var(--color-text)',
+                        outline: cell.unexplained ? '2px solid var(--chart-warn)' : 'none',
                       }}
                     >
                       {Math.abs(cell.dayChangePct) >= 0.5 ? `${cell.dayChangePct > 0 ? '+' : ''}${cell.dayChangePct}` : ''}

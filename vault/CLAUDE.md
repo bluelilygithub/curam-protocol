@@ -146,7 +146,7 @@ Full text: `docs/core-conventions.md`.
 
 Full reference: **`client/DESIGN.md`**. Cursor rule `.cursor/rules/vault-ui.mdc` applies to `client/**`.
 
-- **Theming:** six vars `--color-bg/surface/border/primary/text/muted` (+ `--color-on-primary`). Use `var(--color-xxx)` inline, not Tailwind `dark:`. Warning `#f59e0b`, error `#ef4444` are hardcoded. Each theme's `muted` stays 4.5:1 or better. Default palette: warm-sand (primary `#9B5B46`).
+- **Theming:** six vars `--color-bg/surface/border/primary/text/muted` (+ `--color-on-primary`). Use `var(--color-xxx)` inline, not Tailwind `dark:`. Warning `#f59e0b`, error `#ef4444` are hardcoded. Each theme's `muted` stays 4.5:1 or better. Default palette: warm-sand (primary `#9B5B46`). Charts also get `--chart-1..4`, `--chart-gain/loss/warn/neutral/grid/ink` (per theme in `themes.js`, test `client/src/components/charts/chartTokens.test.mjs`) and use the kit in `client/src/components/charts/` (`client/DESIGN.md` "Charts"); no hex in chart components.
 - **Layout:** full-viewport flex row, `100dvh` with `100vh` fallback, one breakpoint `sm` (640px). Sidebar: expanded (180–520px), collapsed (48px rail, desktop default), hidden (mobile overlay). Persisted in `localStorage` `vault:sidebarOpen`. Use the full desktop width (cap ~1700px, two columns from `xl`).
 - **Hover:** `hover:opacity-60` or `-70` only. No colour shifts. **Transitions: 200ms, no exceptions.**
 - **Accessibility:** keep the global `:focus-visible` ring; no `outline-none` without a visible replacement; row actions use `opacity-0 group-hover:opacity-*` so touch/keyboard still see them; honour `prefers-reduced-motion`; `Toast` is a permanent `aria-live` region.

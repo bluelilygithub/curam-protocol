@@ -23,7 +23,7 @@ export default function DrawdownBars({ rows = [], peakTrigger = -10, costTrigger
           const cost = Number(r.pctOffAvgCost);
           const peakVal = Number.isFinite(peak) ? peak : 0;
           const widthPct = Math.min(100, Math.max(4, (Math.abs(peakVal) / 15) * 100));
-          const barColor = r.flag === '🔴' ? '#ef4444' : r.flag === '⚠️' ? '#f59e0b' : '#94a3b8';
+          const barColor = r.flag === '🔴' ? 'var(--chart-loss)' : r.flag === '⚠️' ? 'var(--chart-warn)' : 'var(--chart-neutral)';
           return (
             <li key={r.key || r.label}>
               <div className="flex justify-between text-xs mb-1">
@@ -34,7 +34,7 @@ export default function DrawdownBars({ rows = [], peakTrigger = -10, costTrigger
                     <span style={{ color: 'var(--color-muted)' }}>{r.exchange}</span>
                   )}
                 </span>
-                <span style={{ color: peakVal >= -4 ? 'var(--color-muted)' : '#dc2626' }}>
+                <span style={{ color: peakVal >= -4 ? 'var(--color-muted)' : 'var(--chart-loss)' }}>
                   {Number.isFinite(peak) ? `${peak.toFixed(1)}%` : '—'} off peak
                   {Number.isFinite(cost) && (
                     <span className="ml-2" style={{ color: 'var(--color-muted)' }}>
@@ -50,7 +50,7 @@ export default function DrawdownBars({ rows = [], peakTrigger = -10, costTrigger
                 />
                 <div
                   className="absolute top-0 h-2.5 w-px"
-                  style={{ left: `${(Math.abs(peakTrigger) / 15) * 100}%`, background: '#ef4444', opacity: 0.5 }}
+                  style={{ left: `${(Math.abs(peakTrigger) / 15) * 100}%`, background: 'var(--chart-ink)', opacity: 0.6 }}
                   title={`${peakTrigger}% trigger`}
                 />
               </div>

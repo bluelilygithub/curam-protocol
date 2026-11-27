@@ -25,7 +25,7 @@ export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct',
         const day = Number(m[valueKey]) || 0;
         const vs = Number(m.vsSectorPct) || 0;
         const rel = m.relativeToSector || 'unknown';
-        const relColor = rel === 'beat' ? '#16a34a' : rel === 'lagged' ? '#dc2626' : 'var(--color-muted)';
+        const relColor = rel === 'beat' ? 'var(--chart-gain)' : rel === 'lagged' ? 'var(--chart-loss)' : 'var(--color-muted)';
         return (
           <li key={m.key || `${m.symbol}-${m.exchange}`}>
             <div className="flex justify-between items-baseline text-xs mb-1.5">
@@ -41,7 +41,7 @@ export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct',
               <div>
                 <div className="flex justify-between text-[10px] mb-0.5" style={{ color: 'var(--color-muted)' }}>
                   <span>{periodLabel}</span>
-                  <span style={{ color: day >= 0 ? '#16a34a' : '#dc2626' }}>
+                  <span style={{ color: day >= 0 ? 'var(--chart-gain)' : 'var(--chart-loss)' }}>
                     {day >= 0 ? '+' : ''}{day.toFixed(2)}%
                     {m[amountKey] != null && <span> · {fmtSignedAud(Number(m[amountKey]))}</span>}
                   </span>
@@ -51,7 +51,7 @@ export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct',
                     className="h-2 rounded-full"
                     style={{
                       width: `${Math.max(4, (Math.abs(day) / maxAbs) * 100)}%`,
-                      background: day >= 0 ? '#22c55e' : '#ef4444',
+                      background: day >= 0 ? 'var(--chart-gain)' : 'var(--chart-loss)',
                     }}
                   />
                 </div>
@@ -59,14 +59,14 @@ export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct',
               <div>
                 <div className="flex justify-between text-[10px] mb-0.5" style={{ color: 'var(--color-muted)' }}>
                   <span>vs sector</span>
-                  <span style={{ color: vs >= 0 ? '#16a34a' : '#dc2626' }}>{vs >= 0 ? '+' : ''}{vs.toFixed(2)}pp</span>
+                  <span style={{ color: vs >= 0 ? 'var(--chart-gain)' : 'var(--chart-loss)' }}>{vs >= 0 ? '+' : ''}{vs.toFixed(2)}pp</span>
                 </div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
                   <div
                     className="h-2 rounded-full"
                     style={{
                       width: `${Math.max(4, (Math.abs(vs) / maxAbs) * 100)}%`,
-                      background: vs >= 0 ? '#6B9E70' : '#A85C5C',
+                      background: vs >= 0 ? 'var(--chart-gain)' : 'var(--chart-loss)',
                     }}
                   />
                 </div>

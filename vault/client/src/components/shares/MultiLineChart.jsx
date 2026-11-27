@@ -1,16 +1,16 @@
 import React from 'react';
 
 const SERIES_COLORS = {
-  portfolio: 'var(--color-primary)',
-  totalValueAud: 'var(--color-primary)',
-  holdingsValueAud: '#6B9E70',
-  cashAud: '#5B6FAD',
-  pnlPct: '#C9A84C',
-  nasdaq: '#5B6FAD',
-  sox: '#8A5C8A',
-  asx: '#6B97B5',
-  audPerOz: '#C9A84C',
-  priceAud: 'var(--color-primary)',
+  portfolio: 'var(--chart-1)',
+  totalValueAud: 'var(--chart-1)',
+  holdingsValueAud: 'var(--chart-2)',
+  cashAud: 'var(--chart-3)',
+  pnlPct: 'var(--chart-4)',
+  nasdaq: 'var(--chart-2)',
+  sox: 'var(--chart-3)',
+  asx: 'var(--chart-4)',
+  audPerOz: 'var(--chart-1)',
+  priceAud: 'var(--chart-1)',
 };
 
 function fmtTime(iso, short = false) {
@@ -101,7 +101,7 @@ export default function MultiLineChart({
           </span>
         ))}
       </div>
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="max-w-full" style={{ display: 'block' }}>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="max-w-full" style={{ display: 'block' }} role="img" aria-label={`Line chart of ${series.map((s) => s.label).join(', ')} over ${n} points, from ${fmt(minY)} to ${fmt(maxY)}`}>
         <line x1={pad.l} y1={pad.t + h} x2={width - pad.r} y2={pad.t + h} stroke="var(--color-border)" />
         <text x={pad.l - 4} y={pad.t + 10} textAnchor="end" fontSize="9" fill="var(--color-muted)">{fmt(maxY)}</text>
         <text x={pad.l - 4} y={pad.t + h} textAnchor="end" fontSize="9" fill="var(--color-muted)">{fmt(minY)}</text>

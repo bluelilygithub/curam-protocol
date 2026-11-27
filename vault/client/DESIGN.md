@@ -14,7 +14,7 @@ Tailwind handles **layout and typography scale**. **Colour always comes from CSS
 
 ## Theming
 
-`ThemeProvider` writes six tokens to `:root` on every theme change, plus `--color-on-primary`. Use inline `style={{ … }}` with these vars:
+`ThemeProvider` writes six tokens to `:root` on every theme change, plus `--color-on-primary` and the chart tokens (below). Use inline `style={{ … }}` with these vars:
 
 | Token | Use |
 |-------|-----|
@@ -26,13 +26,31 @@ Tailwind handles **layout and typography scale**. **Colour always comes from CSS
 | `--color-text` | Headings, body |
 | `--color-muted` | Secondary text, placeholders, icons |
 
-Four themes live in `src/themes.js`: warm-sand (default), dark-slate, midnight-blue, paper-white. Warm-sand's primary is `#9B5B46` (darkened from `#CC785C` so text on it, and it as text, reach 4.5:1). Each theme's `muted` stays 4.5:1 or better against its bg and surface. Font is user-selectable via `--font-sans` (default DM Sans).
+Five themes live in `src/themes.js`: warm-sand (default), dark-slate, forest, midnight-blue, paper-white. Warm-sand's primary is `#9B5B46` (darkened from `#CC785C` so text on it, and it as text, reach 4.5:1). Each theme's `muted` stays 4.5:1 or better against its bg and surface. Font is user-selectable via `--font-sans` (default DM Sans).
 
 **Status colours** (outside theme — use as-is):
 
 - Warning / caution: `#b45309`, `#f59e0b`, `#fef3c7`
 - Error / danger: `#ef4444`, `#991b1b`, `#fff1f2`, `#fca5a5`
 - Success: `#166534`, `#16a34a`, `#dcfce7`
+
+These stay for badges and alerts. Charts use the chart tokens instead.
+
+### Chart tokens (2026-11-28)
+
+Each theme in `themes.js` has a `chart` block that `ThemeProvider` writes as:
+
+| Token | Use |
+|-------|-----|
+| `--chart-1` | Main series: your holdings, portfolio value, area fill (at low opacity). Close to the theme's primary |
+| `--chart-2`, `--chart-3`, `--chart-4` | Other series (indexes, allocation slices) |
+| `--chart-gain`, `--chart-loss` | Up/down bars and signed figures |
+| `--chart-warn` | Near-threshold bars, the heatmap's "unexplained move" outline |
+| `--chart-neutral` | Bars that are neither good nor bad |
+| `--chart-grid` | Gridlines and the zero line |
+| `--chart-ink` | Index ticks and reference markers |
+
+Rules, checked by `node client/src/components/charts/chartTokens.test.mjs`: gain, loss and warn reach 4.5:1 on both `--color-surface` and `--color-bg` (they are also text); the four series reach 3:1 on surface and are at least 1.35:1 apart from each other in lightness, not just hue; dark themes have their own lighter values. A new theme needs a `chart` block or the test fails. Gain and loss are never shown by colour alone: always a sign (+, or the Unicode minus) and, on status badges, an icon.
 
 ---
 
@@ -159,3 +177,19 @@ Copy patterns from these before improvising:
 - Importing Lucide or other icon sets directly — use `getIcon`
 
 When this file and `CLAUDE.md` or `docs/core-conventions.md` disagree, those two win; fix this file.
+
+---
+
+## Charts
+
+Shared kit in `client/src/components/charts/`, kept generic so Finance, Usage & Cost and others can use it (first used by Shares → Charts, 2026-11-28). Charts are drawn with **Recharts** (already installed); add no chart package.
+
+- `ChartCard`: the card every chart sits in (`rounded-2xl border p-6 space-y-4`). `title`, a one-line `subtitle`, `info` (long text behind an (i) with the shared `Tooltip`), `badge` (only for a card the page's range does not drive: "Current snapshot", "Next 90 days", "All time"…), `actions` (toggles on the right), `span` (both columns from `xl`). A page of cards is `flex flex-col gap-6 xl:grid xl:grid-cols-2 xl:items-start`, capped at `max-w-[1700px]`.
+- `StatTile`: label, big value, signed sub-line; `primary` fills it with `--color-primary` and `--color-on-primary` text.
+- `SegmentedToggle` and `RangeToggle`: active segment `--color-primary` with `--color-on-primary` text; a `Tooltip` on each segment.
+- `ChartTooltip`: content for a Recharts `<Tooltip>`, on the surface, border and text vars.
+- `chartTheme.mjs`: axis and grid props, `seriesColor(i)`, `animationProps()` (no animation under `prefers-reduced-motion`).
+- `chartFormat.mjs`: `fmtPct` (+1.6%, −0.8%), `fmtAud` (+A$578), `fmtPts` ("beat by 0.5 pts" / "lagged by 0.8 pts" / "level"); "—" for no value. Test `node client/src/components/charts/chartFormat.test.mjs`.
+
+Every chart has `role="img"` and an `aria-label` saying what it shows. Loading uses `Skeleton` shaped like the cards; nothing to show uses `EmptyState` with one next step.
+

@@ -26,7 +26,7 @@ export default function BenchmarkBarChart({ items = [] }) {
               <span className="font-medium" style={{ color: isPortfolio ? 'var(--color-text)' : 'var(--color-muted)' }}>
                 {it.label}
               </span>
-              <span style={{ color: positive ? '#16a34a' : '#dc2626', fontWeight: isPortfolio ? 600 : 400 }}>
+              <span style={{ color: positive ? 'var(--chart-gain)' : 'var(--chart-loss)', fontWeight: isPortfolio ? 600 : 400 }}>
                 {v >= 0 ? '+' : ''}{v.toFixed(2)}%
                 {it.changeAud != null && <span> · {fmtSignedAud(it.changeAud)}</span>}
               </span>
@@ -37,7 +37,7 @@ export default function BenchmarkBarChart({ items = [] }) {
                 style={{
                   width: `${widthPct}%`,
                   left: positive ? '50%' : `${50 - widthPct}%`,
-                  background: isPortfolio ? 'var(--color-primary)' : positive ? '#22c55e' : '#ef4444',
+                  background: isPortfolio ? 'var(--color-primary)' : positive ? 'var(--chart-gain)' : 'var(--chart-loss)',
                   opacity: isPortfolio ? 1 : 0.75,
                 }}
               />
