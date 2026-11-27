@@ -92,4 +92,23 @@ const d2 = diffSnapshots(r1, r2, { goneTexts: goneTexts(d1) });
 assert.equal(d2.changes[0].volatile, 'rotating', 'it came back');
 assert.equal(diffSnapshots(r1, page(P('Featured: Garden Path') + P(FILLER[1])), { goneTexts: goneTexts(d1) }).changes[0].volatile, undefined, 'new wording is not rotating');
 
+// ---- fingerprints (rework R2): the same edit keeps its fingerprint across checks; unique per page and per repeat ----
+{
+  const base = page(P('Phone 03 1111') + P(FILLER[0]) + P(FILLER[1]) + P(FILLER[2]));
+  const check1 = page(P('Phone 03 2222') + P(FILLER[0]) + P(FILLER[1]) + P(FILLER[2]));
+  const check2 = page(P('Phone 03 2222') + P(FILLER[0]) + P('She studied at the Gallery School.') + P(FILLER[2]));
+  const fpOf = (d, text) => d.changes.find((c) => (c.after?.text || '').includes(text)).fp;
+  const a = diffSnapshots(base, check1, { scope: 7 });
+  const b = diffSnapshots(base, check2, { scope: 7 });
+  assert.equal(fpOf(a, '2222'), fpOf(b, '2222'), 'an unrelated edit elsewhere does not change the fingerprint');
+  const c3 = diffSnapshots(base, page(P('Phone 03 3333') + P(FILLER[0]) + P(FILLER[1]) + P(FILLER[2])), { scope: 7 });
+  assert.notEqual(fpOf(c3, '3333'), fpOf(a, '2222'), 'the same line edited again is a new fingerprint');
+  assert.notEqual(diffSnapshots(base, check1, { scope: 8 }).changes[0].fp, a.changes[0].fp, 'another page, another fingerprint');
+  assert.match(a.changes[0].fp, /^p7./);
+  const twice = diffSnapshots(page(P(FILLER[0]) + P(FILLER[1])), page(P(FILLER[0]) + P('Book now') + P(FILLER[1]) + P('Book now')), { scope: 7 });
+  assert.equal(twice.changes.length, 2);
+  assert.notEqual(twice.changes[0].fp, twice.changes[1].fp, 'two identical changes on one page');
+  assert.match(twice.changes[1].fp, /-2$/);
+}
+
 console.log('diff.test.js: passed');

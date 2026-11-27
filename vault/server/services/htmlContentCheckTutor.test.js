@@ -30,10 +30,11 @@ checkGuide({
 }).then((tools) => {
   // the start screen's jobs: every step is a real tool with a note
   const toolIds = tools.HCC_TOOLS.map((t) => t.id);
-  for (const g of tools.HCC_GOALS) {
+  for (const g of tools.HCC_GOALS.filter((x) => !x.hidden)) { // hidden flows (the rework) are not offered
     assert.ok(g.id && g.title && g.blurb && g.icon && g.steps.length >= 1, `${g.id} is described`);
     for (const s of g.steps) assert.ok(toolIds.includes(s.tool) && s.note, `${g.id}: ${s.tool} is a real tool with a note`);
   }
-  for (const id of tools.JOB_TOOL_IDS) assert.ok(toolIds.includes(id), `${id} is a tool`);
+  const allIds = [...toolIds, ...(tools.HIDDEN_TOOLS || []).map((t) => t.id)]; // hidden tools still open a job (code kept)
+  for (const id of tools.JOB_TOOL_IDS) assert.ok(allIds.includes(id), `${id} is a tool`);
   console.log('htmlContentCheck jobs tests passed');
 }).catch((e) => { console.error(e); process.exit(1); });

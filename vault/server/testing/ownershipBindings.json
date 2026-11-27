@@ -16,6 +16,8 @@
     "api/html-content-check/jobs/:id/rounds/:number/pages/:pageId/matches/:ref": null,
     "api/html-content-check/jobs/:id/rounds/:number/approvals/:ref": null,
     "api/html-content-check/jobs/:id/rounds/:number/report": null,
+    "api/html-content-check/jobs/:id/rounds/:number/lines/:ref/decision": null,
+    "api/html-content-check/jobs/:id/rounds/:number/pages/:pageId/changes/:fp/decision": null,
     "api/password-vault/entries/:id": "password_vault_entries",
     "api/graphics/batch-jobs/:id": null,
     "api/document-redaction/jobs/:id": null,

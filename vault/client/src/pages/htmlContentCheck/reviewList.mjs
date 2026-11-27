@@ -1,33 +1,59 @@
-// Review by line (ReviewView.jsx): how request lines are grouped for review, and the list of lines that need work for the developer.
-// Plain functions, tested by reviewList.test.mjs.
+// The review screen's plain helpers (ReviewView.jsx), tested by reviewList.test.mjs.
 
-/** The text the developer gets for the lines that need work, page by page. */
-export function developerList({ jobName, number, groups, approvals }) {
-  const out = [`Changes still needed: ${jobName}, round ${number}`, ''];
-  for (const g of groups) {
-    const lines = g.lines.filter((it) => approvals[it.ref]?.status === 'needs_work');
-    if (!lines.length) continue;
-    out.push(g.url ? `${g.label} (${g.url})` : g.label);
-    for (const it of lines) {
-      out.push(`- ${it.ref}: ${it.lineText}`);
-      if (approvals[it.ref]?.note) out.push(`  Note: ${approvals[it.ref].note}`);
-    }
-    out.push('');
-  }
-  return out.join('\n').trim();
+/** One change as plain text: what the block said before and says now. */
+export function changeText(c) {
+  if (!c) return '';
+  const pic = (s) => `picture ${s.src || ''}${s.text ? ` ("${s.text}")` : ''}`.trim();
+  const t = (s) => (s?.type === 'image' ? pic(s) : `"${s?.text || ''}"`);
+  if (c.type === 'changed') return `${t(c.before)} became ${t(c.after)}`;
+  if (c.type === 'added') return `Added ${t(c.after)}`;
+  if (c.type === 'removed') return `Removed ${t(c.before)}`;
+  if (c.type === 'moved') return `Moved ${t(c.after)}`;
+  return '';
 }
 
-/** Request lines grouped for review: a line on a page under that page; a line with no page under the page of its first linked change,
- * else under "Across the site" (first). Held over and Keep lines are kept apart. */
-export function reviewGroups(job, lines) {
-  const pages = job.pages || [];
-  const statusOf = Object.fromEntries(lines.map((l) => [l.ref, l]));
-  const groups = [{ pageId: null, label: 'Across the site', url: null, lines: [] }, ...pages.map((p, i) => ({ pageId: p.id, label: p.label || `Page ${i + 1}`, url: p.url, lines: [] }))];
-  const others = [];
-  for (const it of job.items) {
-    if ((it.kind || 'request_line') !== 'request_line') { others.push(it); continue; }
-    const home = it.pageId ?? statusOf[it.ref]?.links?.[0]?.pageId ?? null;
-    (groups.find((g) => g.pageId === home) || groups[0]).lines.push(it);
+const WHY = {
+  noChange: 'No change was found on the page for this request.',
+  notMatched: 'Not checked yet.',
+  changedSinceApproval: 'This was approved, but the change has gone or changed since.',
+  keepChanged: 'This text was meant to stay as it is, but it changed or was removed.',
+};
+
+/**
+ * "Copy the open questions": a prompt to paste straight into an LLM (or a message), asking for the open items to be fixed on the live
+ * site. Open items: request lines questioned, with no change found, or changed since approval; Keep lines that changed; unrequested
+ * changes marked Question. Page by page, with notes.
+ * view: the round view ({ pages: [{ pageId, label, url, results: { diff } }], review }); items: the job's lines.
+ */
+export function openQuestionsPrompt({ jobName, items, view }) {
+  const review = view?.review;
+  if (!review) return '';
+  const rows = view.pages || [];
+  const pageLabel = (id, i = rows.findIndex((r) => r.pageId === id)) => (i < 0 ? 'Across the site' : rows[i].label || `Page ${i + 1}`);
+  const changeOf = (pageId, id) => rows.find((r) => r.pageId === pageId)?.results?.diff?.vsBaseline?.changes?.find((c) => c.id === id);
+  const textOf = Object.fromEntries(items.map((it) => [it.ref, it]));
+  const byPage = new Map();
+  const add = (pageId, line) => { if (!byPage.has(pageId)) byPage.set(pageId, []); byPage.get(pageId).push(line); };
+  for (const x of review.attention) {
+    if (x.type === 'line') {
+      if (x.reason === 'notMatched') continue;
+      const it = textOf[x.ref];
+      const out = [`- Request ${x.ref}: "${it?.lineText || ''}"`];
+      out.push(`  Problem: ${x.decision?.note || WHY[x.reason] || 'Questioned.'}`);
+      for (const l of x.links || []) out.push(`  What the page shows now: ${changeText(changeOf(l.pageId, l.changeId))}`);
+      add(it?.pageId ?? x.links?.[0]?.pageId ?? null, out.join('\n'));
+    } else if (x.reason === 'questioned') {
+      const out = [`- A change nobody asked for: ${changeText(changeOf(x.pageId, x.changeId))}`];
+      out.push(`  Problem: ${x.decision?.note || 'Not requested: put it back as it was unless there is a reason for it.'}`);
+      add(x.pageId, out.join('\n'));
+    }
   }
-  return { groups: groups.filter((g) => g.lines.length), others };
+  if (!byPage.size) return '';
+  const head = [`I'm checking edits on a website (${jobName}) against what the client asked for. These items are still open. Please fix each one on the live pages and change nothing else.`, ''];
+  const ordered = [...byPage.keys()].sort((a, b) => (a === null ? -1 : b === null ? 1 : rows.findIndex((r) => r.pageId === a) - rows.findIndex((r) => r.pageId === b)));
+  const body = ordered.flatMap((id) => {
+    const row = rows.find((r) => r.pageId === id);
+    return [`Page: ${pageLabel(id)}${row?.url ? ` (${row.url})` : ''}`, ...byPage.get(id), ''];
+  });
+  return [...head, ...body].join('\n').trim();
 }

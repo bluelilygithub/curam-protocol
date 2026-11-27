@@ -32,8 +32,8 @@ async function ensureDiffs(db, userId, jobId, upTo = null) {
       const base = full[0];
       let diff = cur.results?.diff;
       if (!diff || diff.v !== DIFF_VERSION) {
-        const vsPrevious = diffSnapshots(prev.snapshot, cur.snapshot, { goneTexts: gone });
-        const vsBaseline = prev === base ? null : diffSnapshots(base.snapshot, cur.snapshot, { goneTexts: gone });
+        const vsPrevious = diffSnapshots(prev.snapshot, cur.snapshot, { goneTexts: gone, scope: pageId });
+        const vsBaseline = prev === base ? null : diffSnapshots(base.snapshot, cur.snapshot, { goneTexts: gone, scope: pageId });
         diff = { v: DIFF_VERSION, baselineNumber: base.number, previousNumber: prev.number, vsBaseline, vsPrevious };
         await db.query(`UPDATE content_check_rounds SET results = COALESCE(results, '{}'::jsonb) || jsonb_build_object('diff', $4::jsonb)
                          WHERE "jobId" = $1 AND "pageId" = $2 AND number = $3`, [jobId, pageId, cur.number, JSON.stringify(diff)]);

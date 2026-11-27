@@ -18,7 +18,8 @@ const { splitRequest, findDuplicates } = require('../services/htmlContentCheck/s
 const { loadPage, readUpload, lessTextOf, DEFAULT_DEPS } = require('../services/htmlContentCheck/fetchPage');
 const { MAX_UPLOAD_BYTES } = require('../services/htmlContentCheck/config');
 const { ensureDiffs } = require('../services/htmlContentCheck/roundDiff');
-const { matchRound, setByPerson, summarize } = require('../services/htmlContentCheck/match');
+const { matchRound, setByPerson, summarize, carryMatches, linesKeyOf } = require('../services/htmlContentCheck/match');
+const { reviewState, changeKey, LINE_STATUS, CHANGE_STATUS } = require('../services/htmlContentCheck/review');
 const { keepStatus } = require('../services/htmlContentCheck/keeps');
 const { lineStatuses, scopedItems } = require('../services/htmlContentCheck/summary');
 const { aiLimiter } = require('../middleware/aiRateLimit');
@@ -128,7 +129,7 @@ async function jobDetail(db, userId, id) {
     db.query(`SELECT id, "pageId", number, "fetchedAt", "fetchedVia", "finalUrl", status, error,
                      snapshot->'meta'->>'title' AS title, (snapshot->'meta'->>'words')::int AS words, (snapshot->'meta'->>'chars')::int AS chars,
                      jsonb_array_length(COALESCE(snapshot->'blocks', '[]'::jsonb)) AS blocks,
-                     results->'diff'->'vsPrevious'->'stats' AS "sincePrevious", COALESCE(results->'diff'->'vsBaseline', results->'diff'->'vsPrevious')->'stats' AS "sinceBaseline",
+                     results->'diff'->'vsPrevious'->'stats' AS "sincePrevious", COALESCE(NULLIF(results->'diff'->'vsBaseline', 'null'::jsonb), results->'diff'->'vsPrevious')->'stats' AS "sinceBaseline",
                      (results->'diff'->>'previousNumber')::int AS "previousNumber", results->'fetch' AS "fetchNote"
                 FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 ORDER BY number, "pageId"`, [job.id, userId]),
     job.clientId ? db.query('SELECT name FROM clients WHERE id = $1 AND "userId" = $2', [job.clientId, userId]) : { rows: [] },
@@ -359,17 +360,71 @@ async function roundView(userId, loaded) {
     const inputs = pages.map((p) => ({ pageId: p.id, baseline: snaps.find((s) => s.pageId === p.id)?.snapshot || null, current: now.find((s) => s.pageId === p.id)?.snapshot || null }));
     keepOf = (it) => keepStatus(it.lineText, it.pageId, inputs);
   }
-  const ready = rows.filter((r) => r.status === 'ready').map((r) => ({ pageId: r.pageId, matches: r.results?.matches || null }));
-  const { rows: ap } = await pool.query(`SELECT i.ref, a.status, a.note FROM content_check_approvals a JOIN content_check_items i ON i.id = a."itemId"
-                                           WHERE a."jobId" = $1 AND a."userId" = $2 AND a."roundNumber" = $3`, [job.id, userId, number]);
+  // a checked page with no changes at all answers "no change" for its lines without asking the AI
+  const ready = rows.filter((r) => r.status === 'ready').map((r) => {
+    const changes = r.results?.diff?.vsBaseline?.changes;
+    const none = changes && !changes.length && !r.results?.matches;
+    return { pageId: r.pageId, matches: none ? { items: Object.fromEntries(scopedItems(items, r.pageId).map((it) => [it.ref, { changeIds: [] }])) } : r.results?.matches || null };
+  });
+  const lines = job.kind === 'request' ? lineStatuses(items, ready, keepOf) : [];
+  const decisions = await decisionsOf(pool, userId, job.id);
+  // each page's fingerprints at its previous check, for "New this check" (none on a page's first check)
+  const { rows: prevRows } = await pool.query(`
+    SELECT DISTINCT ON ("pageId") "pageId", COALESCE(NULLIF(results->'diff'->'vsBaseline', 'null'::jsonb), results->'diff'->'vsPrevious')->'changes' AS changes
+      FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 AND number < $3 AND status = 'ready' AND results ? 'diff'
+     ORDER BY "pageId", number DESC`, [job.id, userId, number]);
+  const prevFps = new Map(prevRows.map((r) => [r.pageId, new Set((r.changes || []).map((c) => c.fp))]));
+  const review = job.kind === 'request' ? reviewState({
+    items, lines, decisions,
+    pages: rows.filter((r) => r.status === 'ready' && r.results?.diff).map((r) => ({
+      pageId: r.pageId, changes: r.results.diff.vsBaseline.changes, matches: r.results.matches || null, prevFps: prevFps.get(r.pageId) || null,
+    })),
+  }) : null;
+  // the old per-round shape, for screens not yet moved over (needs_work was renamed question)
+  const approvals = Object.fromEntries(Object.entries(decisions.lines).map(([ref, d]) => [ref, { status: d.status === 'question' ? 'needs_work' : d.status, note: d.note }]));
   return {
-    number, fetchedAt: rows[0].fetchedAt, approvals: Object.fromEntries(ap.map((a) => [a.ref, { status: a.status, note: a.note }])),
+    number, fetchedAt: rows[0].fetchedAt, approvals, decisions, review,
     pages: rows.map((r) => {
       const page = pages.find((p) => p.id === r.pageId);
       return { ...r, label: page?.label || null, url: page?.url || null };
     }),
-    lines: job.kind === 'request' ? lineStatuses(items, ready, keepOf) : [],
+    lines,
   };
+}
+
+/** The job's decisions: { lines: { ref: { status, note, fps } }, changes: { 'pageId|fp': { status, note } } }. */
+async function decisionsOf(db, userId, jobId) {
+  const { rows } = await db.query(`SELECT d."pageId", d.fp, d.status, d.note, d.fps, i.ref FROM content_check_decisions d LEFT JOIN content_check_items i ON i.id = d."itemId"
+                                     WHERE d."jobId" = $1 AND d."userId" = $2`, [jobId, userId]);
+  const out = { lines: {}, changes: {} };
+  for (const r of rows) {
+    if (r.ref) out.lines[r.ref] = { status: r.status, note: r.note, fps: r.fps };
+    else if (r.fp) out.changes[changeKey(r.pageId, r.fp)] = { status: r.status, note: r.note };
+  }
+  return out;
+}
+
+/** Sets (or, with status null, clears) a request line's decision in this check, with the fingerprints of its linked changes now. */
+async function decideLine(userId, loaded, ref, status, rawNote) {
+  if (loaded.job.kind !== 'request') throw bad(400, 'A page comparison has no request lines to approve.');
+  if (loaded.number === 0) throw bad(400, 'Round 0 is the starting point: decide in a later check.');
+  const it = loaded.items.find((x) => x.ref === String(ref));
+  if (!it) throw bad(404, 'No such request line.');
+  if ((it.kind || 'request_line') !== 'request_line') throw bad(400, 'Held over and Keep lines are not approved: they are listed as they are.');
+  if (status !== null && !LINE_STATUS.has(status)) throw bad(400, 'The decision must be approved, question or empty.');
+  const note = typeof rawNote === 'string' ? rawNote.trim().slice(0, LIMITS.lineText) || null : null;
+  if (status === null) {
+    await pool.query('DELETE FROM content_check_decisions WHERE "jobId" = $1 AND "userId" = $2 AND "itemId" = $3', [loaded.job.id, userId, it.id]);
+    return;
+  }
+  const view = await roundView(userId, loaded);
+  const st = view.lines.find((l) => l.ref === it.ref);
+  const fpOf = (l) => loaded.rows.find((r) => r.pageId === l.pageId)?.results?.diff?.vsBaseline?.changes?.find((c) => c.id === l.changeId)?.fp;
+  const fps = (st?.links || []).map(fpOf).filter(Boolean);
+  await pool.query(`INSERT INTO content_check_decisions ("jobId", "userId", "itemId", status, note, fps, "roundNumber") VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+                    ON CONFLICT ("jobId", "itemId") WHERE "itemId" IS NOT NULL
+                    DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note, fps = EXCLUDED.fps, "roundNumber" = EXCLUDED."roundNumber", "decidedAt" = NOW()`,
+    [loaded.job.id, userId, it.id, status, note, JSON.stringify(fps), loaded.number]);
 }
 
 const saveMatches = (db, userId, jobId, number, pageId, matches) => db.query(
@@ -522,14 +577,35 @@ router.post('/jobs/:id/rounds/:number/match', aiLimiter, async (req, res) => {
     if (loaded.job.kind !== 'request') throw bad(400, 'A page comparison has no request to match.');
     const pagesToMatch = loaded.rows.filter((r) => r.status === 'ready' && r.results?.diff);
     if (!pagesToMatch.length) throw bad(400, 'Round 0 is the starting point: check the pages again after the edits, then match that round.');
-    const usage = { pages: 0, calls: 0, inputTokens: 0, outputTokens: 0 };
+    const reuse = req.body?.reuse === true; // from Verify: a page whose changes and lines are as last matched is not sent again
+    const usage = { pages: 0, calls: 0, inputTokens: 0, outputTokens: 0, reused: 0 };
     for (const r of pagesToMatch) {
       const scope = scopedItems(loaded.items, r.pageId);
       const changes = r.results.diff.vsBaseline.changes;
       if (!scope.length || !changes.length) continue;
+      let previous = r.results.matches || null;
+      if (previous && reuse && previous.linesKey === linesKeyOf(scope)) { usage.reused++; continue; }
+      if (!previous) {
+        // this page's last matched check: its links move onto this check's changes by fingerprint (the person's links are kept)
+        const { rows: [last] } = await pool.query(`
+          SELECT number, results->'matches' AS matches, COALESCE(NULLIF(results->'diff'->'vsBaseline', 'null'::jsonb), results->'diff'->'vsPrevious')->'changes' AS changes
+            FROM content_check_rounds WHERE "jobId" = $1 AND "userId" = $2 AND "pageId" = $3 AND number < $4 AND results ? 'matches'
+           ORDER BY number DESC LIMIT 1`, [loaded.job.id, req.user.id, r.pageId, loaded.number]);
+        if (last) {
+          const carried = carryMatches(last.matches, last.changes, changes, scope);
+          if (reuse && carried.same) {
+            const kept = { ...carried.matches, carriedFrom: last.number };
+            await saveMatches(pool, req.user.id, loaded.job.id, loaded.number, r.pageId, kept);
+            r.results.matches = kept;
+            usage.reused++;
+            continue;
+          }
+          previous = carried.matches;
+        }
+      }
       let matches;
       try {
-        matches = await matchRound(req.user.id, { items: scope, changes, previous: r.results.matches }, matchDeps);
+        matches = await matchRound(req.user.id, { items: scope, changes, previous }, matchDeps);
       } catch (err) {
         if (err.cause) getLogger().error({ err: err.cause, jobId: loaded.job.id, pageId: r.pageId }, '[html-content-check] match model call');
         throw err;
@@ -566,18 +642,41 @@ router.put('/jobs/:id/rounds/:number/approvals/:ref', async (req, res) => {
     const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
     if (loaded.job.kind !== 'request') throw bad(400, 'A page comparison has no request lines to approve.');
     if (loaded.number === 0) throw bad(400, 'Round 0 is the starting point: approve lines in a later round.');
-    const it = loaded.items.find((x) => x.ref === String(req.params.ref));
-    if (!it) throw bad(404, 'No such request line.');
-    if ((it.kind || 'request_line') !== 'request_line') throw bad(400, 'Held over and Keep lines are not approved: the report lists them as they are.');
-    const status = req.body?.status ?? null;
-    if (status !== null && status !== 'approved' && status !== 'needs_work') throw bad(400, 'The status must be approved, needs_work or empty.');
-    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, LIMITS.lineText) || null : null;
-    if (status === null) await pool.query('DELETE FROM content_check_approvals WHERE "jobId" = $1 AND "userId" = $2 AND "roundNumber" = $3 AND "itemId" = $4', [loaded.job.id, req.user.id, loaded.number, it.id]);
-    else await pool.query(`INSERT INTO content_check_approvals ("jobId", "userId", "roundNumber", "itemId", status, note) VALUES ($1, $2, $3, $4, $5, $6)
-                           ON CONFLICT ("jobId", "roundNumber", "itemId") DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note, "updatedAt" = NOW()`,
-      [loaded.job.id, req.user.id, loaded.number, it.id, status, note]);
+    const raw = req.body?.status ?? null;
+    if (raw !== null && raw !== 'approved' && raw !== 'needs_work') throw bad(400, 'The status must be approved, needs_work or empty.');
+    await decideLine(req.user.id, loaded, req.params.ref, raw === 'needs_work' ? 'question' : raw, req.body?.note);
     res.json(await roundView(req.user.id, loaded));
   } catch (err) { fail(res, err, 'approve'); }
+});
+
+// Rework R2: a request line's decision (approved / question / null), kept for the job and carried to later checks.
+router.put('/jobs/:id/rounds/:number/lines/:ref/decision', async (req, res) => {
+  try {
+    const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
+    await decideLine(req.user.id, loaded, req.params.ref, req.body?.status ?? null, req.body?.note);
+    res.json(await roundView(req.user.id, loaded));
+  } catch (err) { fail(res, err, 'decide line'); }
+});
+
+// An unrequested change's mark, by its fingerprint on that page: mine (intentional) / question / expected / null (back to unmarked).
+router.put('/jobs/:id/rounds/:number/pages/:pageId/changes/:fp/decision', async (req, res) => {
+  try {
+    const loaded = await loadRound(req.user.id, req.params.id, req.params.number);
+    if (loaded.job.kind !== 'request') throw bad(400, 'A page comparison has no review.');
+    const r = loaded.rows.find((x) => x.pageId === idOf(req.params.pageId));
+    if (!r) throw bad(404, 'That page was not read in this check.');
+    const fp = String(req.params.fp);
+    if (!r.results?.diff?.vsBaseline?.changes?.some((c) => c.fp === fp)) throw bad(404, 'That change is not on this page in this check.');
+    const status = req.body?.status ?? null;
+    if (status !== null && !CHANGE_STATUS.has(status)) throw bad(400, 'The mark must be mine, question, expected or empty.');
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, LIMITS.lineText) || null : null;
+    if (status === null) await pool.query('DELETE FROM content_check_decisions WHERE "jobId" = $1 AND "userId" = $2 AND "pageId" = $3 AND fp = $4', [loaded.job.id, req.user.id, r.pageId, fp]);
+    else await pool.query(`INSERT INTO content_check_decisions ("jobId", "userId", "pageId", fp, status, note, "roundNumber") VALUES ($1, $2, $3, $4, $5, $6, $7)
+                           ON CONFLICT ("jobId", "pageId", fp) WHERE fp IS NOT NULL
+                           DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note, "roundNumber" = EXCLUDED."roundNumber", "decidedAt" = NOW()`,
+      [loaded.job.id, req.user.id, r.pageId, fp, status, note, loaded.number]);
+    res.json(await roundView(req.user.id, loaded));
+  } catch (err) { fail(res, err, 'decide change'); }
 });
 
 // The client report: a fillable PDF of this round's approved lines, grouped by page (report.js). ?unasked=1 adds the changes nobody
@@ -608,15 +707,15 @@ router.delete('/jobs/:id', async (req, res) => {
       const q = (table, cols = '*') => db.query(`SELECT ${cols} FROM ${table} WHERE "jobId" = $1 AND "userId" = $2 ORDER BY id`, [job.id, req.user.id]).then((r) => r.rows);
       // the gzipped page ("rawHtml") and the worked-out changes stay out of the bin copy: the page is only for re-reading old rounds,
       // and the changes are worked out again on read with the same ids (so AI and hand links still fit); both would crowd the 25 MB limit
-      const [pages, items, rounds, notes, approvals] = [await q('content_check_pages'), await q('content_check_items'),
+      const [pages, items, rounds, notes, approvals, decisions] = [await q('content_check_pages'), await q('content_check_items'),
         await q('content_check_rounds', `id, "jobId", "userId", "pageId", number, "fetchedAt", "finalUrl", "fetchedVia", snapshot, results - 'diff' AS results, status, error`),
-        await q('content_check_client_notes'), await q('content_check_approvals')];
+        await q('content_check_client_notes'), await q('content_check_approvals'), await q('content_check_decisions')];
       let id;
       try {
         id = await bin.moveToBin(db, {
           userId: req.user.id, type: 'html-content-check-job', id: job.id, title: job.name,
           detail: `HTML Content Check: ${pages.length} page${pages.length === 1 ? '' : 's'}, ${job.kind === 'compare' ? 'page comparison' : `${items.length} request line${items.length === 1 ? '' : 's'}`}, ${new Set(rounds.map((r) => r.number)).size} round${new Set(rounds.map((r) => r.number)).size === 1 ? '' : 's'}`,
-          payload: { job, pages, items, rounds, notes, approvals }, maxBytes: BIN_MAX_BYTES,
+          payload: { job, pages, items, rounds, notes, approvals, decisions }, maxBytes: BIN_MAX_BYTES,
         });
       } catch (err) {
         if (err.code === 'TOO_LARGE') throw bad(413, 'This job is too big to keep in the recycle bin.');

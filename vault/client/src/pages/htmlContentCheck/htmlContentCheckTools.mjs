@@ -6,16 +6,21 @@ export const HCC_TOOLS = [
   { id: 'new', label: 'New job', group: 'Jobs', icon: 'plus' },
   { id: 'jobs', label: 'Your jobs', group: 'Jobs', icon: 'list-checks' },
   { id: 'lines', label: 'Request lines', group: 'This job', icon: 'clipboard-list' },
-  { id: 'rounds', label: 'Rounds', group: 'This job', icon: 'history' },
-  { id: 'changes', label: 'Changes', group: 'This job', icon: 'compare' },
+  { id: 'changes', label: 'Review', group: 'This job', icon: 'compare' },
   { id: 'details', label: 'Job details', group: 'This job', icon: 'edit' },
+];
+// Hidden by the rework (brief decision 11), code kept: Rounds (replaced by the strip on Review; still opened from a page comparison's
+// Changes) and the parked Returned report.
+export const HIDDEN_TOOLS = [
+  { id: 'rounds', label: 'Rounds', group: 'This job', icon: 'history' },
   { id: 'returns', label: 'Returned report', group: 'From the client', icon: 'inbox' },
 ];
 
 /** The tools that work on one open job. */
 export const JOB_TOOL_IDS = ['lines', 'rounds', 'changes', 'details'];
 
-export const GROUPS = ['Jobs', 'This job', 'From the client'];
+
+export const GROUPS = ['Jobs', 'This job'];
 
 export const GROUP_TIPS = {
   Jobs: 'Start a new check of a web page, or open one you started before.',
@@ -27,7 +32,7 @@ export const TOOL_TIPS = {
   new: 'Add the page or pages (each with a name and address) and paste the change request you were sent. The page is fetched as its starting point, and the request is split into numbered lines (R1, R2 ...) you can fix. Or just keep a page to compare over time. A saved copy of the page can be used instead of fetching.',
   jobs: 'Every page you are checking, newest first, with its request lines and status. Search by name or address, open one, or delete it (it goes to the recycle bin for 30 days).',
   rounds: 'Every time the page was read: the starting point (round 0), then each Check again. When, how (plain fetch, real browser or saved copy), and why a fetch failed.',
-  changes: 'What changed on the page, word by word, since the round before or since the starting point. Cookie banners, dates, counters and rotating panels that may change by themselves are grouped at the end.',
+  changes: 'Judge the edits: changes nobody asked for first, then each request with its before and after, to approve or question. Verify after each round of edits. Older text: what changed on the page, word by word, since the round before or since the starting point. Cookie banners, dates, counters and rotating panels that may change by themselves are grouped at the end.',
   lines: 'The change request as numbered lines. Edit, split, join, reorder, add or remove lines, give each its kind (Normal, Held over, Keep) and page, then press Save. The numbers become fixed once a client report has been made.',
   details: 'The job\'s name, page address, the request as pasted, the text from before the edits, the CRM client and ticket, its status, and Delete.',
   returns: 'Upload the PDF report your client filled in and sent back; their notes land against the right R numbers. Not built yet.',
@@ -38,7 +43,7 @@ export const TOOL_BLURBS = {
   jobs: 'Open a page you are checking, or tidy up the list.',
   lines: 'The change request as numbered lines you can fix before checking.',
   rounds: 'Each time the page was read, and Check again.',
-  changes: 'What changed on the page, word by word.',
+  changes: 'Judge every change: approve, question or mark it.',
   details: 'Name, address, client, ticket and status of this job.',
   returns: 'Read the report your client sent back.',
 };
@@ -55,13 +60,12 @@ export const HCC_GOALS = [
     blurb: 'You were sent a list of edits for a web page. Paste it with the page address and check each line was done.',
     steps: [
       { tool: 'new', note: 'Enter the page address and paste the change request, then press Create job.' },
-      { tool: 'lines', note: 'Optional: the lines are ready as they are. Only fix, split or join one if it is wrong, then press Save.' },
-      { tool: 'rounds', note: 'Round 0 is the page before the edits. When the developer says they are live, press Check again: the request is matched and Changes opens.' },
-      { tool: 'changes', note: 'Go through the request line by line: Approve each edit that is right or mark it Needs work, then make the client report.' },
+      { tool: 'lines', note: 'Optional: the lines are ready as they are. Only fix, split or join one, or put it on another page, then press Save.' },
+      { tool: 'changes', note: 'Make the edits on the site, then press Verify. Mark every change nobody asked for, approve or question each request, and Verify again after fixes.' },
     ],
   },
   {
-    id: 'compare', kind: 'compare', title: 'Just compare a page', icon: 'columns',
+    id: 'compare', kind: 'compare', title: 'Just compare a page', icon: 'columns', hidden: true, // hidden by the rework; code kept
     blurb: 'Keep a page\'s address and see what changed on it between checks, with no request to tick off.',
     steps: [
       { tool: 'new', note: 'Choose "Just compare the page", enter the address, then press Create job.' },
@@ -70,7 +74,7 @@ export const HCC_GOALS = [
     ],
   },
   {
-    id: 'returns', title: 'Read a client\'s returned report', icon: 'inbox',
+    id: 'returns', title: 'Read a client\'s returned report', icon: 'inbox', hidden: true, // parked
     blurb: 'Upload the PDF report your client filled in; it finds the job and puts their notes against each R number.',
     steps: [
       { tool: 'returns', note: 'Not built yet: reading returned reports comes in a later update.' },
@@ -106,19 +110,16 @@ export const GUIDE_TOOLS = [
   { id: 'jobs', label: 'Your jobs', tool: 'jobs' },
   { id: 'lines', label: 'Request lines', tool: 'lines' },
   { id: 'line-kinds', label: 'Kinds of line', tool: 'lines' },
-  { id: 'rounds', label: 'Rounds', tool: 'rounds' },
-  { id: 'check-again', label: 'Check again', tool: 'rounds' },
-  { id: 'changes', label: 'Changes', tool: 'changes' },
-  { id: 'page-tabs', label: 'Page tabs', tool: 'changes' },
-  { id: 'self-changing', label: 'May have changed by itself', tool: 'changes' },
-  { id: 'match', label: 'Match to request', tool: 'changes' },
-  { id: 'change-links', label: 'Change links', tool: 'changes' },
-  { id: 'review-mode', label: 'Review by line', tool: 'changes' },
-  { id: 'approve', label: 'Approve or Needs work', tool: 'changes' },
-  { id: 'developer', label: 'List for the developer', tool: 'changes' },
-  { id: 'report', label: 'Client report', tool: 'changes' },
+  { id: 'verify', label: 'Verify', tool: 'changes' },
+  { id: 'changes', label: 'Review', tool: 'changes' },
+  { id: 'unrequested', label: 'Changes nobody asked for', tool: 'changes' },
+  { id: 'self-changing', label: 'Looks automatic', tool: 'changes' },
+  { id: 'match', label: 'Why it was linked', tool: 'changes' },
+  { id: 'change-links', label: 'Not this change / pick another', tool: 'changes' },
+  { id: 'approve', label: 'Approve or Question', tool: 'changes' },
+  { id: 'open-questions', label: 'Copy the open questions', tool: 'changes' },
+  { id: 'report', label: 'Client checklist', tool: 'changes' },
   { id: 'details', label: 'Job details', tool: 'details' },
-  { id: 'returns', label: 'Returned report', tool: 'returns' },
   { id: 'info', label: 'How HTML Content Check works', tool: 'new' },
   { id: 'tour', label: 'Guided tour', tool: 'new' },
 ];

@@ -12,10 +12,11 @@
 //    `volatile` with a reason, so the page can group them under the real edits. They are never dropped.
 // Change ids (c1, c2 ...) follow reading order, so the same two snapshots always give the same ids.
 
+const crypto = require('crypto');
 const lib = require('./lib');
 const { normalizeText } = require('./extract');
 
-const DIFF_VERSION = 2; // 2: filler words ("a", "just", "on") no longer count as a date changing by itself
+const DIFF_VERSION = 3; // 2: filler words ("a", "just", "on") no longer count as a date changing by itself; 3: change fingerprints
 const PAIR_MIN = 0.4;
 
 const linksOf = (b) => (b.runs || []).filter((r) => r.link).map((r) => r.link);
@@ -110,10 +111,25 @@ function volatileReason(c, gone) {
 }
 
 /**
- * Changes from `from` to `to` (snapshots). `goneTexts`: normalised texts that left the page in earlier rounds (for 'rotating').
- * Returns { changes, stats }.
+ * A change's lasting identity (rework brief, R2): the same edit gets the same fingerprint in every later comparison with the starting
+ * point, whatever else changed, so a decision on it carries over. Built from the page (scope), the kind of change and what the block was
+ * and is now; the n-th identical change on a page gets "-n". If the edit's text changes again, so does its fingerprint ("was approved,
+ * now changed"). Change ids (c1, c2 ...) stay as positions within one comparison.
  */
-function diffSnapshots(from, to, { goneTexts = null } = {}) {
+function fingerprint(c, scope, seen) {
+  const side = (b) => (b ? keyOf(b) : '');
+  const links = c.links ? `${c.links.before.join(' ')}>${c.links.after.join(' ')}` : '';
+  const base = crypto.createHash('sha1').update([c.type, side(c.before), side(c.after), links].join('\u0002')).digest('hex').slice(0, 16);
+  const n = (seen.get(base) || 0) + 1;
+  seen.set(base, n);
+  return `p${scope}.${base}${n > 1 ? `-${n}` : ''}`;
+}
+
+/**
+ * Changes from `from` to `to` (snapshots). `goneTexts`: normalised texts that left the page in earlier rounds (for 'rotating').
+ * Returns { changes, stats }. `scope` (the page id) goes into each change's fingerprint, so fingerprints are unique across pages.
+ */
+function diffSnapshots(from, to, { goneTexts = null, scope = '' } = {}) {
   const A = from?.blocks || [];
   const B = to?.blocks || [];
   const ka = A.map(keyOf);
@@ -189,8 +205,10 @@ function diffSnapshots(from, to, { goneTexts = null } = {}) {
   }
 
   const stats = { added: 0, removed: 0, changed: 0, moved: 0, volatile: 0, total: changes.length, ...(rough ? { rough: true } : {}) };
+  const seenFp = new Map();
   changes.forEach((c, n) => {
     c.id = `c${n + 1}`;
+    c.fp = fingerprint(c, scope, seenFp);
     const why = volatileReason(c, goneTexts);
     if (why) { c.volatile = why; stats.volatile++; }
     stats[c.type]++;

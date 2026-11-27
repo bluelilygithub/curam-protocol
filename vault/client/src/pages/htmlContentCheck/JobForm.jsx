@@ -97,7 +97,7 @@ export default function JobForm({ form, set, clients, tickets, isNew, readIds = 
         </Tooltip>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {clients && (
+        {clients && !isNew && (
           <div>
             <Label>Client</Label>
             <Tooltip text="Optional: the CRM client these pages belong to.">
@@ -108,7 +108,7 @@ export default function JobForm({ form, set, clients, tickets, isNew, readIds = 
             </Tooltip>
           </div>
         )}
-        {tickets && (
+        {tickets && !isNew && (
           <div>
             <Label>Ticket</Label>
             <Tooltip text="Optional: the ticket this change request came in on.">

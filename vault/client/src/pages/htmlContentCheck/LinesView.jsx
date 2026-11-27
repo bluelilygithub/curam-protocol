@@ -18,6 +18,7 @@ const shape = (list) => JSON.stringify(list.map((d) => [d.id, d.lineText, d.kind
 
 export default function LinesView({ job, getIcon, saveItems, resplit }) {
   const [draft, setDraft] = useState(() => toDraft(job.items));
+  const [kindsOpen, setKindsOpen] = useState(() => new Set()); // lines whose kind picker is shown (Normal lines hide it)
   const [confirmResplit, setConfirmResplit] = useState(false);
   const boxes = useRef({}); // key -> that line's text box; Split reads its cursor (kept after the box loses focus)
   useEffect(() => { setDraft(toDraft(job.items)); }, [job.items]);
@@ -113,11 +114,17 @@ export default function LinesView({ job, getIcon, saveItems, resplit }) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 pl-12" data-guide={i === 0 ? 'line-kinds' : undefined}>
-                <Tooltip text={LINE_KINDS[d.kind]?.tip || ''}>
-                  <select value={d.kind} onChange={(e) => update(i, { kind: e.target.value })} aria-label={`Kind of request line ${d.ref || i + 1}`} className={`${FIELD_INLINE} py-1.5 text-xs`} style={FIELD_STYLE}>
-                    {Object.entries(LINE_KINDS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                </Tooltip>
+                {d.kind !== 'request_line' || kindsOpen.has(d.key) ? (
+                  <Tooltip text={LINE_KINDS[d.kind]?.tip || ''}>
+                    <select value={d.kind} onChange={(e) => update(i, { kind: e.target.value })} aria-label={`Kind of request line ${d.ref || i + 1}`} className={`${FIELD_INLINE} py-1.5 text-xs`} style={FIELD_STYLE}>
+                      {Object.entries(LINE_KINDS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </Tooltip>
+                ) : (
+                  <Tooltip text="Make this line Held over (not checked yet) or Keep (text that must stay as it is).">
+                    <button type="button" className="text-xs underline transition-opacity duration-200 hover:opacity-60" style={{ color: 'var(--color-muted)' }} onClick={() => setKindsOpen(new Set([...kindsOpen, d.key]))}>Kind…</button>
+                  </Tooltip>
+                )}
                 {pages.length > 1 && (
                   <Tooltip text="Which page this edit is on. All pages: it is matched against the changes on every page.">
                     <select value={d.pageId ?? ''} onChange={(e) => update(i, { pageId: e.target.value === '' ? null : Number(e.target.value) })} aria-label={`Page of request line ${d.ref || i + 1}`} className={`${FIELD_INLINE} py-1.5 text-xs`} style={FIELD_STYLE}>
