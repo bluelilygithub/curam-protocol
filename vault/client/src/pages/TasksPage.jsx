@@ -763,6 +763,9 @@ export default function TasksPage() {
     }
     const projectParam = params.get('project');
     if (projectParam) setFilterProject(projectParam);
+    // ?task=<id> (the ticket page's Open task link): open that task in the list, with the completed section shown in case it is done
+    const taskParam = Number(params.get('task'));
+    if (taskParam) { setViewMode('list'); setCompletedOpen(true); setExpandedId(null); handleExpand(taskParam); }
   }, [searchParams]);
 
   useEffect(() => {

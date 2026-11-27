@@ -41,6 +41,8 @@ export default function TicketDetail({ id, people }) {
     } catch (e) { setError(e.message); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+  // a task finished in Tasks moves the ticket on the server: reload when the person comes back to this tab
+  useEffect(() => { window.addEventListener('focus', load); return () => window.removeEventListener('focus', load); }, [load]);
 
   const mailCall = async (method, path, body) => {
     const r = await api[method](`/api/tickets/${id}/emails${path}`, body);
@@ -76,7 +78,7 @@ export default function TicketDetail({ id, people }) {
 
   const makeTask = async () => {
     const d = await send('post', '/task', {});
-    if (d) addToast('Task added to your Tasks.', 'success', undefined, { label: 'Open Tasks', onClick: () => navigate('/tasks') });
+    if (d) addToast('Task added to your Tasks.', 'success', undefined, { label: 'Open task', onClick: () => navigate(`/tasks?task=${d.taskId}`) });
   };
 
   const remove = async () => {
@@ -126,9 +128,20 @@ export default function TicketDetail({ id, people }) {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Tooltip text="Add a task to your own Tasks, linked to this ticket, with its title, due date and priority.">
-              <Btn variant="secondary" onClick={makeTask} disabled={busy}>Make a task</Btn>
-            </Tooltip>
+            {(() => {
+              const k = t.tasks.find((x) => x.userId === me?.id) || t.tasks[0];
+              if (!k) return (
+                <Tooltip text="Add a task to your own Tasks, linked to this ticket, with its title, due date and priority. A ticket has one task.">
+                  <Btn variant="secondary" onClick={makeTask} disabled={busy}>Make a task</Btn>
+                </Tooltip>
+              );
+              if (k.userId !== me?.id) return <span className="text-xs" style={MUTED}>Task in someone else's Tasks</span>;
+              return (
+                <Tooltip text="Open the task made from this ticket. When it is done, the ticket moves to Waiting for a last look.">
+                  <Btn variant="secondary" onClick={() => navigate(`/tasks?task=${k.id}`)}>{k.status === 'done' ? 'Task done: open it' : 'Open task'}</Btn>
+                </Tooltip>
+              );
+            })()}
             <Btn variant="danger" onClick={() => setConfirmDelete(true)}>Delete</Btn>
           </div>
         </div>
@@ -223,7 +236,7 @@ export default function TicketDetail({ id, people }) {
                   {t.tasks.map((k) => (
                     <li key={k.id} className="flex items-center justify-between gap-2">
                       <span style={{ color: 'var(--color-text)', textDecoration: k.status === 'done' ? 'line-through' : 'none' }}>{k.title}</span>
-                      {k.userId === me?.id ? <Link to="/tasks" className="text-xs" style={{ color: 'var(--color-primary)' }}>Tasks</Link> : <span className="text-xs" style={MUTED}>someone else's</span>}
+                      {k.userId === me?.id ? <Link to={`/tasks?task=${k.id}`} className="text-xs" style={{ color: 'var(--color-primary)' }}>Open</Link> : <span className="text-xs" style={MUTED}>someone else's</span>}
                     </li>
                   ))}
                 </ul>

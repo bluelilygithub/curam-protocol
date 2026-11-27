@@ -233,7 +233,10 @@ async function deleteComment(db, user, id, eventId) {
  * due date and priority. `title` overrides the ticket title. The ticket's history records it.
  */
 async function makeTask(db, userId, id, { title } = {}) {
-  const t = await getRow(db, id);
+  const t = await getRow(db, id, { lock: true });
+  // one task per ticket (the owner's choice); older tickets may have several, and syncFromTask still handles them
+  const { rows: had } = await db.query('SELECT 1 FROM tasks WHERE "ticketId" = $1 LIMIT 1', [t.id]);
+  if (had.length) throw new TicketError('This ticket already has a task. Open it from the ticket.', 409);
   const taskTitle = title ? cleanTitle(title) : t.title;
   // the task is the caller's, so only link a client or project that is in their own CRM
   const own = async (table, rowId) => (rowId ? (await db.query(`SELECT 1 FROM ${table} WHERE id = $1 AND "userId" = $2`, [rowId, userId])).rows.length > 0 : false);

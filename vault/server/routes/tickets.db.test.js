@@ -8,7 +8,8 @@
 //   - a client can only be linked by someone whose CRM holds it, but everyone sees its name, and others can still change other fields;
 //   - comments: add, and only the writer (or an admin) can remove one;
 //   - "Make a task" makes a task in the caller's own Tasks, linked back, with the client only when it is the caller's;
-//   - its tasks move it: all done → Waiting, one reopened or a new one → back to In progress, a Done ticket never moves;
+//   - one task per ticket (a second is refused); its tasks move it: all done → Waiting, one reopened → back to In progress,
+//     a Done ticket never moves;
 //   - the counts for the menu badge; T-number search; overdue;
 //   - delete goes to the deleter's recycle bin and restore brings back the ticket, its number and its history.
 const assert = require('node:assert/strict');
@@ -132,35 +133,37 @@ function serve(users) {
     assert.equal(task.ticketId, t1.id);
     assert.equal(task.clientId, null, 'A\'s client is not put on B\'s task');
     r = await call(A, 'POST', `/${t1.id}/task`, { title: 'Email the accountant' });
+    assert.equal(r.status, 409, 'one task per ticket');
+    await pool.query('DELETE FROM tasks WHERE id = $1', [task.id]);
+    r = await call(A, 'POST', `/${t1.id}/task`, { title: 'Email the accountant' });
+    assert.equal(r.status, 201, 'once its task is gone, a ticket can have a new one');
     task = (await pool.query('SELECT * FROM tasks WHERE id = $1', [r.body.taskId])).rows[0];
     assert.equal(task.clientId, clientA);
     assert.equal(task.title, 'Email the accountant');
-    assert.equal(r.body.ticket.tasks.length, 2);
+    assert.equal(r.body.ticket.tasks.length, 1);
 
     // ---- tasks move the ticket (docs/tickets.md "Tasks move the ticket") ----
     const svc = require('../services/tickets');
     const status = async () => (await pool.query('SELECT status FROM tickets WHERE id = $1', [t1.id])).rows[0].status;
     const setTask = (id, st) => pool.query('UPDATE tasks SET status = $2 WHERE id = $1', [id, st]);
     await call(A, 'PUT', `/${t1.id}`, { status: 'in_progress' });
-    const [taskB, taskA] = (await pool.query('SELECT id FROM tasks WHERE "ticketId" = $1 ORDER BY id', [t1.id])).rows.map((x) => x.id);
-    await setTask(taskB, 'done');
-    assert.equal(await svc.syncFromTask(pool, B, taskB), null, 'one task still open: the ticket stays');
+    // a ticket from before one-task-per-ticket can have two: it waits for both
+    const older = (await pool.query(`INSERT INTO tasks (title, status, "userId", "ticketId", "updatedAt") VALUES ('Older second task', 'todo', $1, $2, NOW()) RETURNING id`, [B, t1.id])).rows[0].id;
+    await setTask(task.id, 'done');
+    assert.equal(await svc.syncFromTask(pool, A, task.id), null, 'one task still open: the ticket stays');
     assert.equal(await status(), 'in_progress');
-    await setTask(taskA, 'done');
-    assert.equal(await svc.syncFromTask(pool, A, taskA), 'waiting', 'every task done: Waiting');
-    let lines = (await call(A, 'GET', `/${t1.id}`)).body.events.map((e) => e.body);
-    assert.ok(lines.includes('Task done: Email the accountant; Status: In progress → Waiting (every task is done)'), lines.join(' | '));
-    await setTask(taskA, 'todo');
-    assert.equal(await svc.syncFromTask(pool, A, taskA), 'in_progress', 'a task reopened: back to In progress');
-    await setTask(taskA, 'done');
-    await svc.syncFromTask(pool, A, taskA);
-    r = await call(B, 'POST', `/${t1.id}/task`, { title: 'One more thing' });
-    assert.equal(r.body.ticket.status, 'in_progress', 'a new task on a Waiting ticket: back to In progress');
-    await setTask(r.body.taskId, 'done');
-    await svc.syncFromTask(pool, B, r.body.taskId);
+    await setTask(older, 'done');
+    assert.equal(await svc.syncFromTask(pool, B, older), 'waiting', 'every task done: Waiting');
+    const lines = (await call(A, 'GET', `/${t1.id}`)).body.events.map((e) => e.body);
+    assert.ok(lines.includes('Task done: Older second task; Status: In progress → Waiting (every task is done)'), lines.join(' | '));
+    await pool.query('DELETE FROM tasks WHERE id = $1', [older]);
+    await setTask(task.id, 'todo');
+    assert.equal(await svc.syncFromTask(pool, A, task.id), 'in_progress', 'a task reopened: back to In progress');
+    await setTask(task.id, 'done');
+    assert.equal(await svc.syncFromTask(pool, A, task.id), 'waiting');
     await call(A, 'PUT', `/${t1.id}`, { status: 'done' });
-    await setTask(taskA, 'todo');
-    assert.equal(await svc.syncFromTask(pool, A, taskA), null, 'a Done ticket never moves on its own');
+    await setTask(task.id, 'todo');
+    assert.equal(await svc.syncFromTask(pool, A, task.id), null, 'a Done ticket never moves on its own');
     assert.equal(await status(), 'done');
     await call(A, 'PUT', `/${t1.id}`, { status: 'in_progress' });
 

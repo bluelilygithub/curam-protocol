@@ -50,6 +50,12 @@ Creates a task in the **caller's own** Tasks (`tasks."ticketId"` points back) wi
 priority. The ticket's client and client project are copied only when they are in the caller's own CRM. The ticket's history records it.
 Deleting the ticket leaves its tasks (the link is emptied).
 
+**One task per ticket.** A second Make a task is refused (409). Tickets made before this rule may have several, and everything below
+handles them. Once a ticket has a task, the button becomes **Open task** (`/tasks?task=<id>`, which opens that task in the List view)
+for the person whose task it is, and "Task in someone else's Tasks" for everyone else, as tasks are private. If the task is deleted, the
+link is emptied and Make a task comes back. The task's open panel shows **From ticket T-12: title**, which opens the ticket (only for
+people with Tickets). The ticket page reloads when its browser tab gets focus again, so a task finished in another tab shows at once.
+
 ## Tasks move the ticket
 
 `tickets.syncFromTask()`, called from every place a task's status changes in Tasks (the task screen, bulk changes, a to-do ticked in a note)
