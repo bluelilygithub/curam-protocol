@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4b9d2ce9",
+   "fullHash": "4b9d2ce939ec8eee28ea30784a092f994045a7c4",
+   "committedAt": "2026-11-27T16:30:41+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "New accounts get a welcome email with a set-password link",
+   "filesChanged": 6,
+   "insertions": 151,
+   "deletions": 40,
+   "goal": "Creating a user sent nothing, so the admin had to choose a password and pass it on by hand. The owner asked for new users to be emailed instead.",
+   "whatChanged": "server/routes/admin.js: POST /api/admin/users now takes { email, isAdmin } (any password sent is ignored), checks the email, makes the account with an unusable random password and mustChangePassword, stores a 7-day single-use link in password_resets and emails it (\"Welcome to Project Vault: set your password\", 15-second send timeout). On a failed send it still answers 201 with emailSent false, the link and a plain message. PUT /api/admin/users/:id/password now also clears mustChangePassword, so an admin-chosen password ends a pending invite. client/src/components/UsersAdminPanel.jsx: no password box; \"Create and send invite\" with a Tooltip; a success line, or the error with the link and Copy link. Settings guide wording (settingsTutor.js), docs/two-step-login.md, docs/key-files.md. Tests: server/routes/auth.test.js now 10 (email with link and 7-day expiry, password set from the link then two-step sign-in, link works once, failed email returns the link, admin password ends the invite, bad and duplicate emails).",
+   "filesImpacted": [
+    "vault/server/routes/admin.js",
+    "vault/client/src/components/UsersAdminPanel.jsx",
+    "vault/server/routes/auth.test.js",
+    "vault/server/services/settingsTutor.js",
+    "vault/docs/two-step-login.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "New people choose their own password from an email, so the admin never knows it or has to send it, and their first sign-in goes straight on to two-step login.",
+   "concerns": "A real email was not sent: tests use a recorder, and the browser check ran with email switched off (the failure path with Copy link and the set-password page were seen). There is no \"resend invite\" button; after 7 days use Reset Password, or ask the person to use Forgot password. The Dashboard list does not show who has not set their password yet. Accounts created before this (such as user 37) are unchanged."
+  },
+  {
    "commit": "4b9a9e07",
    "fullHash": "4b9a9e07887fea28f64a98ca6cb4a17fd3940dda",
    "committedAt": "2026-11-27T16:15:01+10:00",
