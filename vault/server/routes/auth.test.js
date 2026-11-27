@@ -31,6 +31,8 @@ const run = Date.now();
 const mail = (tag) => `auth-test-${tag}-${run}@example.test`;
 let adminId;
 const app = express();
+app.set('trust proxy', 1); // each request comes from its own address (below), so the per-address sign-in limit never trips mid-run
+let ipSeq = 0;
 app.use(express.json());
 app.use('/api/auth', require('./auth'));
 // Admin routes are called as an administrator (or, with x-role: member, as an ordinary member), mounted the way index.js mounts them.
@@ -40,7 +42,7 @@ app.use('/api/wellbeing', asCaller, require('./wellbeing'));
 
 let base;
 async function call(method, url, body, headers = {}) {
-  const res = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.9.${Math.floor(++ipSeq / 250)}.${ipSeq % 250}`, ...headers }, body: body ? JSON.stringify(body) : undefined });
   let json = null; try { json = await res.json(); } catch { /* empty */ }
   return { status: res.status, json };
 }
@@ -117,6 +119,58 @@ test('an administrator creates an account: a welcome email with a set-password l
   const me = await call('GET', '/api/auth/me', undefined, { Authorization: `Bearer ${login.json.token}` });
   assert.strictEqual(me.json.user.email, email);
   assert.strictEqual((await call('POST', '/api/auth/reset-password-confirm', { token: token.token, password: 'again-pass-1' })).status, 400, 'the link works once');
+});
+
+test('the welcome email carries the sign-in details: Vault address, their email, the link, and the right second step', async () => {
+  const memberEmail = mail('details-member');
+  await call('POST', '/api/admin/users', { email: memberEmail });
+  const m = sent[sent.length - 1];
+  assert.strictEqual(m.subject, 'Welcome to Project Vault: your sign-in details');
+  for (const bit of [memberEmail, '/login', '/reset-password?token=', 'emails you a 6-digit code', 'works once, for 7 days']) assert.ok(m.html.includes(bit), `member email has ${bit}`);
+  assert.ok(!m.html.includes('authenticator'), 'no authenticator steps for a member');
+  const adminEmail = mail('details-admin');
+  await call('POST', '/api/admin/users', { email: adminEmail, isAdmin: true });
+  const a = sent[sent.length - 1];
+  assert.ok(a.html.includes('with admin access') && a.html.includes('authenticator app') && a.html.includes('backup codes'));
+});
+
+test('Reset password & email: old password and sessions stop working, an email goes with a link, the link sets a new password', async () => {
+  const email = mail('reset-email');
+  const made = await call('POST', '/api/admin/users', { email });
+  const first = (await pool.query('SELECT token FROM password_resets WHERE email=$1', [email])).rows[0].token;
+  await call('POST', '/api/auth/reset-password-confirm', { token: first, password: 'first-pass-1' });
+  const s = await signIn(email, 'first-pass-1');
+  assert.strictEqual(s.status, 200);
+  const before = sent.length;
+  const r = await call('POST', `/api/admin/users/${made.json.user.id}/reset-password-email`, {});
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  assert.strictEqual(r.json.emailSent, true);
+  assert.ok(!r.json.link);
+  assert.strictEqual(sent.length, before + 1);
+  const e = sent[sent.length - 1];
+  assert.strictEqual(e.to, email);
+  assert.strictEqual(e.subject, 'Your Project Vault password was reset');
+  assert.strictEqual((await call('GET', '/api/auth/me', undefined, { Authorization: `Bearer ${s.json.token}` })).status, 401, 'signed out');
+  assert.strictEqual((await call('POST', '/api/auth/login', { email, password: 'first-pass-1' })).status, 401, 'old password dead');
+  const token = (await pool.query('SELECT token FROM password_resets WHERE email=$1', [email])).rows[0].token;
+  assert.ok(e.html.includes(`/reset-password?token=${token}`));
+  assert.strictEqual((await call('POST', '/api/auth/reset-password-confirm', { token, password: 'second-pass-1' })).status, 200);
+  assert.strictEqual((await signIn(email, 'second-pass-1')).status, 200);
+});
+
+test('Reset password & email: not for your own account, 404 for a missing one, link returned when the email fails', async () => {
+  assert.strictEqual((await call('POST', `/api/admin/users/${adminId}/reset-password-email`, {})).status, 400);
+  assert.strictEqual((await call('POST', '/api/admin/users/999999999/reset-password-email', {})).status, 404);
+  assert.strictEqual((await call('POST', `/api/admin/users/${adminId}/reset-password-email`, {}, { 'x-role': 'member' })).status, 403);
+  const email = mail('reset-email-fail');
+  const made = await call('POST', '/api/admin/users', { email });
+  mailFails = true;
+  let r;
+  try { r = await call('POST', `/api/admin/users/${made.json.user.id}/reset-password-email`, {}); } finally { mailFails = false; }
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.emailSent, false);
+  const token = (await pool.query('SELECT token FROM password_resets WHERE email=$1', [email])).rows[0].token;
+  assert.ok(r.json.link.endsWith(token) && /could not be sent/.test(r.json.emailError));
 });
 
 test('if the welcome email fails, the account is still made and the admin gets the link back', async () => {

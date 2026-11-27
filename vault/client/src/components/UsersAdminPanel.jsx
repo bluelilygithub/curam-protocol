@@ -25,6 +25,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
   const [workspaceLanding, setWorkspaceLanding] = useState('');
   const [reset2faFor, setReset2faFor] = useState(null); // the user row whose two-step login is being reset (confirmed in a Dialog)
   const [notice, setNotice] = useState('');
+  const [resetPwFor, setResetPwFor] = useState(null); // the user row whose password is being reset by email (confirmed in a Dialog)
   const myId = useAuthStore((s) => s.user?.id);
 
   const loadWorkspaceLanding = useCallback(async () => {
@@ -133,6 +134,27 @@ export default function UsersAdminPanel({ title = 'Members' }) {
       await loadUsers();
     } catch (err) {
       setError(err.message || 'Failed to reset two-step login');
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  // POST /api/admin/users/:id/reset-password-email: old password stops working, signed out, emailed a link to choose a new one
+  const handleResetPwEmail = async (user) => {
+    setError('');
+    setNotice('');
+    setInviteLink(null);
+    setBusyUserId(user.id);
+    try {
+      const res = await api.post(`/api/admin/users/${user.id}/reset-password-email`, {});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset the password');
+      setResetPwFor(null);
+      await loadUsers(); // clears the error line, so the outcome is shown after it
+      if (data.emailSent) setNotice(`Password reset for ${user.email}. They are signed out and have been emailed a link to choose a new one (works for 7 days).`);
+      else { setError(data.emailError); setInviteLink(data.link); }
+    } catch (err) {
+      setError(err.message || 'Failed to reset the password');
     } finally {
       setBusyUserId(null);
     }
@@ -373,8 +395,20 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                         className="px-2.5 py-1 rounded-md text-xs border hover:opacity-70 transition-opacity disabled:opacity-50"
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
                       >
-                        Reset Password
+                        Set password
                       </button>
+                      {user.id !== myId && (
+                        <Tooltip text="Their password stops working, they are signed out, and they get an email with their sign-in details and a link to choose a new one. Also resends a welcome that ran out.">
+                          <button
+                            onClick={() => setResetPwFor(user)}
+                            disabled={busyUserId === user.id}
+                            className="px-2.5 py-1 rounded-md text-xs border hover:opacity-70 transition-opacity disabled:opacity-50"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                          >
+                            Reset password &amp; email
+                          </button>
+                        </Tooltip>
+                      )}
                       {user.id !== myId && (
                         <Tooltip text="Removes their authenticator, backup codes and remembered devices, and signs them out everywhere. For a lost phone or a suspected break-in.">
                           <button
@@ -515,6 +549,40 @@ export default function UsersAdminPanel({ title = 'Members' }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {resetPwFor && (
+        <Dialog
+          title="Reset password and email them?"
+          role="alertdialog"
+          size="sm"
+          onClose={() => { if (busyUserId !== resetPwFor.id) setResetPwFor(null); }}
+          footer={(
+            <div className="flex gap-2">
+              <button
+                onClick={() => setResetPwFor(null)}
+                disabled={busyUserId === resetPwFor.id}
+                className="px-3 py-1.5 rounded-md text-xs border hover:opacity-70 transition-opacity disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleResetPwEmail(resetPwFor)}
+                disabled={busyUserId === resetPwFor.id}
+                className="px-3 py-1.5 rounded-md text-xs text-white hover:opacity-70 transition-opacity disabled:opacity-50"
+                style={{ background: '#ef4444' }}
+              >
+                {busyUserId === resetPwFor.id ? 'Sending…' : 'Reset and email'}
+              </button>
+            </div>
+          )}
+        >
+          <div className="space-y-2 text-sm" style={{ color: 'var(--color-text)' }}>
+            <p><strong>{resetPwFor.email}</strong>'s password stops working now, and they are signed out everywhere.</p>
+            <p style={{ color: 'var(--color-muted)' }}>They get an email with their sign-in details and a link to choose a new password (works once, for 7 days). Their two-step login is not changed.</p>
+          </div>
+        </Dialog>
       )}
 
       {reset2faFor && (

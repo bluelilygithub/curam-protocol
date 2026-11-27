@@ -67,6 +67,9 @@
   "POST /api/admin/users/:id/reset-2fa": {
    "class": "admin"
   },
+  "POST /api/admin/users/:id/reset-password-email": {
+   "class": "admin"
+  },
   "PUT /api/admin/users/:id/admin": {
    "class": "admin"
   },

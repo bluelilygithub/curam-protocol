@@ -207,54 +207,93 @@ router.get('/users', async (_req, res) => {
   }
 });
 
-// POST /api/admin/users { email, isAdmin } -> 201 { user, emailSent, link? }
-// The new person gets a welcome email with a link to set their own password (7 days); nobody else ever knows it. Until they use
-// it, sign-in answers "Password setup required" (mustChangePassword). If the email can't be sent, the account still exists and
-// the admin gets the link back to pass on (or sets a password with Reset Password). Same pattern as the Wellbeing invite.
-const INVITE_DAYS = 7;
+// New accounts and password resets are done by email: the person is sent a single-use link (7 days) to choose their own password,
+// so no admin ever knows it. Until they use it, sign-in answers "Password setup required" (mustChangePassword). If the email can't
+// be sent, the admin gets the link back to pass on (or uses Set password). Same pattern as the Wellbeing invite.
+const LINK_DAYS = 7;
 const SEND_TIMEOUT_MS = 15000; // MailChannels' request has no timeout of its own
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-async function sendWelcomeEmail(to, link, isAdmin) {
+/** Inside the caller's transaction: the password stops working until the person sets one, and a fresh link is stored. */
+async function issueSetPasswordLink(client, user) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const unusable = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS); // unknown to anyone
+  await client.query('UPDATE users SET "passwordHash"=$1, "mustChangePassword"=TRUE WHERE id=$2', [unusable, user.id]);
+  await client.query('DELETE FROM password_resets WHERE email=$1', [user.email]);
+  await client.query(`INSERT INTO password_resets (token, email, "expiresAt") VALUES ($1, $2, NOW() + make_interval(days => $3))`, [token, user.email, LINK_DAYS]);
+  return token;
+}
+
+/** The welcome or reset email, with everything the person needs to sign in. Throws when it was not sent. */
+async function sendSetPasswordEmail({ kind, to, isAdmin, link, appUrl, from }) {
   const sendEmail = require('../utils/sendEmail');
+  const welcome = kind === 'welcome';
+  const row = (k, v) => `<tr><td style="padding:4px 12px 4px 0;color:#888;">${k}</td><td style="padding:4px 0;"><strong>${v}</strong></td></tr>`;
+  const steps = isAdmin
+    ? '<li>The first time, Vault asks you to set up an authenticator app on your phone (such as Google or Microsoft Authenticator): scan the QR code, type the 6-digit code, then save the 10 backup codes somewhere safe.</li><li>After that, each sign-in on a new device asks for the 6-digit code from the app.</li>'
+    : '<li>On a device Vault doesn\'t know yet, it emails you a 6-digit code: type it in. Tick "Remember this device" to skip the code on that device for 30 days.</li>';
   const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
-<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
-<h2 style="margin-top:0;">Welcome to Project Vault</h2>
-<p>An account has been made for you (${to}). Choose your password to start. The link works for ${INVITE_DAYS} days and only once.</p>
-<a href="${link}" style="display:inline-block;background:#CC785C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Set your password</a>
-<p style="margin-top:20px;">When you sign in on a new device, Vault ${isAdmin ? 'asks you to set up an authenticator app on your phone' : 'emails you a 6-digit code'} as a second step.</p>
-<p style="margin-top:24px;font-size:12px;color:#888;">If you weren't expecting this, you can ignore this email.</p>
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+<h2 style="margin-top:0;">${welcome ? 'Welcome to Project Vault' : 'Your Project Vault password was reset'}</h2>
+<p>${welcome
+    ? `${esc(from)} has made you a Project Vault account${isAdmin ? ' with admin access' : ''}. Here are your details:`
+    : `${esc(from)} has reset your Project Vault password and signed you out everywhere. Your old password no longer works. Your details:`}</p>
+<table style="border-collapse:collapse;margin:8px 0 20px;">
+${row('Vault', `<a href="${esc(appUrl)}">${esc(appUrl)}</a>`)}
+${row('Sign in with', esc(to))}
+${row('Password', 'you choose it with the button below')}
+</table>
+<a href="${esc(link)}" style="display:inline-block;background:#CC785C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">${welcome ? 'Set your password' : 'Choose a new password'}</a>
+<p style="font-size:13px;color:#555;">The button works once, for ${LINK_DAYS} days. If it has run out, use "Forgot password" on the sign-in page, or ask ${esc(from)}.</p>
+<h3 style="margin:24px 0 8px;font-size:15px;">Signing in</h3>
+<ol style="padding-left:20px;margin:0;line-height:1.6;">
+<li>Go to <a href="${esc(appUrl)}/login">${esc(appUrl)}/login</a> and type your email and password.</li>
+${steps}
+</ol>
+<p style="margin-top:20px;">Questions? Ask ${esc(from)}.</p>
+<p style="margin-top:24px;font-size:12px;color:#888;">${welcome ? "If you weren't expecting this, you can ignore this email." : `If you didn't expect this, tell ${esc(from)}.`}</p>
 </div></body></html>`;
+  const subject = welcome ? 'Welcome to Project Vault: your sign-in details' : 'Your Project Vault password was reset';
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('send timed out')), SEND_TIMEOUT_MS); });
   try {
-    const result = await Promise.race([sendEmail({ to, subject: 'Welcome to Project Vault: set your password', html }), timeout]);
+    const result = await Promise.race([sendEmail({ to, subject, html }), timeout]);
     if (!result || result.ok === false) throw new Error(result?.reason || 'email not sent'); // DISABLE_EMAIL returns { ok: false, skipped: true }
   } finally {
     clearTimeout(timer);
   }
 }
 
+/** Send the email; hand the link back to the admin only when it could not be sent. */
+async function emailLinkAndAnswer(req, res, { kind, user, token, status, failText }) {
+  const appUrl = require('../utils/appUrl').getAppUrl(req);
+  const link = `${appUrl}/reset-password?token=${token}`;
+  try {
+    await sendSetPasswordEmail({ kind, to: user.email, isAdmin: user.isAdmin, link, appUrl, from: req.user.email || 'your administrator' });
+    res.status(status).json({ user, emailSent: true });
+  } catch (err) {
+    getLogger().warn({ userId: user.id, kind, err: err.message }, 'set-password email not sent');
+    res.status(status).json({ user, emailSent: false, link, emailError: `${failText} (${err.message}). Send them this link yourself, or use Set password.` });
+  }
+}
+
+// POST /api/admin/users { email, isAdmin } -> 201 { user, emailSent, link? }: the account, and a welcome email with their details
 router.post('/users', async (req, res) => {
   const { email, isAdmin } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'A valid email address is required' });
 
-  const setupToken = crypto.randomBytes(32).toString('hex');
   let user;
+  let token;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS); // unknown to anyone
     const { rows } = await client.query(
-      'INSERT INTO users (email, "passwordHash", "isAdmin", "mustChangePassword") VALUES ($1, $2, $3, TRUE) RETURNING id, email, "isAdmin", "createdAt"',
-      [normalizedEmail, passwordHash, !!isAdmin]
+      `INSERT INTO users (email, "passwordHash", "isAdmin", "mustChangePassword") VALUES ($1, 'x', $2, TRUE) RETURNING id, email, "isAdmin", "createdAt"`,
+      [normalizedEmail, !!isAdmin]
     );
     user = rows[0];
-    await client.query('DELETE FROM password_resets WHERE email=$1', [normalizedEmail]);
-    await client.query(
-      `INSERT INTO password_resets (token, email, "expiresAt") VALUES ($1, $2, NOW() + make_interval(days => $3))`,
-      [setupToken, normalizedEmail, INVITE_DAYS]
-    );
+    token = await issueSetPasswordLink(client, user); // replaces the placeholder hash at once
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -263,15 +302,34 @@ router.post('/users', async (req, res) => {
   } finally {
     client.release();
   }
+  await emailLinkAndAnswer(req, res, { kind: 'welcome', user, token, status: 201, failText: 'The account was made, but the welcome email could not be sent' });
+});
 
-  const link = `${require('../utils/appUrl').getAppUrl(req)}/reset-password?token=${setupToken}`;
+// POST /api/admin/users/:id/reset-password-email -> { user, emailSent, link? }: their password stops working, every session and
+// remembered device goes, and they are emailed a link to choose a new one. Also resends an expired welcome. Not for your own account.
+router.post('/users/:id/reset-password-email', async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+  if (userId === req.user.id) return res.status(400).json({ error: 'Use Forgot password on the sign-in page for your own account' });
+  let user;
+  let token;
+  const client = await pool.connect();
   try {
-    await sendWelcomeEmail(normalizedEmail, link, user.isAdmin);
-    res.status(201).json({ user, emailSent: true });
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT id, email, "isAdmin" FROM users WHERE id=$1 FOR UPDATE', [userId]);
+    user = rows[0];
+    if (!user) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'User not found' }); }
+    token = await issueSetPasswordLink(client, user);
+    await client.query('DELETE FROM auth_sessions WHERE "userId"=$1', [userId]);
+    await require('../services/trustedDevices').forgetAllDevices(client, userId);
+    await client.query('COMMIT');
   } catch (err) {
-    getLogger().warn({ userId: user.id, err: err.message }, 'welcome email not sent');
-    res.status(201).json({ user, emailSent: false, link, emailError: `The account was made, but the welcome email could not be sent (${err.message}). Send them this link yourself, or set a password with Reset Password.` });
+    await client.query('ROLLBACK').catch(() => {});
+    return res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
+  await emailLinkAndAnswer(req, res, { kind: 'reset', user, token, status: 200, failText: 'Their password was reset and they are signed out, but the email could not be sent' });
 });
 
 // PUT /api/admin/users/:id/password
