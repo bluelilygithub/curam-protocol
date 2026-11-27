@@ -63,7 +63,7 @@ Moved out of CLAUDE.md. Detailed per-file/per-tool notes. CLAUDE.md keeps only a
 - `server/services/rainforestClient.js` — Amazon search via Rainforest API
 - `client/src/utils/productScoutCompareTable.js` — side-by-side feature table (price/delivery first)
 - `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
-- `client/src/components/charts/` — **shared chart kit** (`ChartCard`, `StatTile`, `SegmentedToggle`, `RangeToggle`, `ChartTooltip`, `chartTheme.mjs`, `chartFormat.mjs`) on the `--chart-*` theme tokens; first used by Shares → Charts. See `client/DESIGN.md` "Charts"; tests `node client/src/components/charts/chartTokens.test.mjs` and `chartFormat.test.mjs`.
+- `client/src/components/charts/` — **shared chart kit** (`ChartCard`, `StatTile`, `SegmentedToggle`, `RangeToggle`, `ChartTooltip`, `chartTheme.mjs`, `chartFormat.mjs`) on the `--chart-*` theme tokens; first used by Shares → Charts (also `DivergingBars`, `ThresholdBars`, `Sparkline`, `DonutChart`, `AreaTrend`, `ColumnChart`, `chartMath.mjs`). See `client/DESIGN.md` "Charts"; tests `node client/src/components/charts/chartTokens.test.mjs` and `chartFormat.test.mjs`.
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
 - `server/services/sharesAskService.js` — Shares **Questions** tab: Q&A grounded only in the stored portfolio data pack (holdings, cash, trades, recent briefings, latest note); archived in `share_qa`. Routes `GET/POST/DELETE /api/shares/ask`. Explains stored/hypothetical maths but never recommends buy/sell.

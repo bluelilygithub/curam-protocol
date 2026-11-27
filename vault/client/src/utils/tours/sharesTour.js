@@ -86,7 +86,7 @@ export function startSharesTour(setTab, { isAdmin = false } = {}) {
     '[data-tour="shares-tab-cgt"]', 'right', 'cgt');
 
   step(5, 'shares-insight', 'Charts and News',
-    'Charts compare your portfolio with benchmarks and show who beat or lagged the market, drawdowns, sector mix and an earnings timeline. News writes a short AI briefing per holding each morning (bullish, bearish, watch or neutral) and a 30-day summary. Each bullish or bearish signal is also kept and scored later (see Track record on the Thesis tab). They are information, not advice.',
+    'Charts has six panels. Movement: your holdings against the indexes, each holding against its sector index, and drawdown against the alert triggers. Performance: portfolio value, relative performance and price by holding. Holdings: allocation and Return by holding (% vs cost, or A$ open + closed). Then Calendar & patterns, Metals and Dividends. Cards with no tag follow the range you pick. News writes a short AI briefing per holding each morning (bullish, bearish, watch or neutral) and a 30-day summary. Each bullish or bearish signal is also kept and scored later (see Track record on the Thesis tab). They are information, not advice.',
     '[data-tour="shares-tab-news"]', 'right', 'news');
 
   step(6, 'shares-questions', 'Questions',

@@ -12,19 +12,19 @@ export default function DivergingBars({ items, ariaLabel }) {
         const bar = divergingBar(it.value, maxAbs);
         const up = Number(it.value) >= 0;
         return (
-          <li key={it.key} className="grid grid-cols-[4.5rem_1fr_7.5rem] sm:grid-cols-[6.5rem_1fr_11rem] items-center gap-3">
-            <span className="min-w-0">
+          <li key={it.key} className="grid grid-cols-[1fr_auto] sm:grid-cols-[6.5rem_1fr_11rem] items-center gap-x-3 gap-y-1.5">
+            <span className="min-w-0 order-1">
               <span className="block text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{it.label}</span>
               {it.sublabel && <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{it.sublabel}</span>}
             </span>
-            <span className="relative h-3 rounded-full" style={{ background: 'var(--color-bg)' }}>
+            <span className="relative h-3 rounded-full order-3 col-span-2 sm:order-2 sm:col-span-1" style={{ background: 'var(--color-bg)' }}>
               <span className="absolute top-0 bottom-0 w-px" style={{ left: '50%', background: 'var(--chart-grid)' }} />
               <span className="absolute top-0 h-3 rounded-full" style={{ left: `${bar.left}%`, width: `${bar.width}%`, background: up ? 'var(--chart-gain)' : 'var(--chart-loss)' }} />
               {it.tick != null && (
                 <span className="absolute -top-1 h-5 w-0.5 rounded" title={it.tickLabel} style={{ left: `calc(${positionPct(it.tick, maxAbs)}% - 1px)`, background: 'var(--chart-ink)' }} />
               )}
             </span>
-            <span className="text-right tabular-nums">
+            <span className="text-right tabular-nums order-2 sm:order-3">
               <span className="block text-sm font-medium" style={{ color: up ? 'var(--chart-gain)' : 'var(--chart-loss)' }}>
                 {it.valueText}{it.amountText && <span className="font-normal" style={{ color: 'var(--color-muted)' }}> · {it.amountText}</span>}
               </span>

@@ -22,18 +22,18 @@ export default function ThresholdBars({ items, trigger, triggerLabel, labels = {
           const look = LOOK[it.status] || LOOK.within;
           const { width } = thresholdBar(it.size, trigger, scaleMax);
           return (
-            <li key={it.key} className="grid grid-cols-[4.5rem_1fr_7.5rem] sm:grid-cols-[6.5rem_1fr_11rem] items-center gap-3">
-              <span className="min-w-0">
+            <li key={it.key} className="grid grid-cols-[1fr_auto] sm:grid-cols-[6.5rem_1fr_11rem] items-center gap-x-3 gap-y-1.5">
+              <span className="min-w-0 order-1">
                 <span className="block text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{it.label}</span>
                 <span className="inline-flex items-center gap-1 text-xs" style={{ color: look.color }}>
                   {getIcon(look.icon, { size: 12 })}{labels[it.status] || labels.within}
                 </span>
               </span>
-              <span className="relative h-3 rounded-full" style={{ background: 'var(--color-bg)' }}>
+              <span className="relative h-3 rounded-full order-3 col-span-2 sm:order-2 sm:col-span-1" style={{ background: 'var(--color-bg)' }}>
                 <span className="absolute top-0 left-0 h-3 rounded-full" style={{ width: `${width}%`, background: look.bar }} />
                 <span className="absolute -top-1 h-5 border-l-2 border-dashed" style={{ left: `${line}%`, borderColor: 'var(--chart-ink)' }} />
               </span>
-              <span className="text-right tabular-nums">
+              <span className="text-right tabular-nums order-2 sm:order-3">
                 <span className="block text-sm font-medium" style={{ color: it.status === 'within' ? 'var(--color-text)' : look.color }}>{it.valueText}</span>
                 {it.subText && <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{it.subText}</span>}
               </span>
