@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b093b304",
+   "fullHash": "b093b3048ec84d1072ced77a15caca54503f1278",
+   "committedAt": "2026-11-28T09:37:35+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts: skip Sunday and Monday notes for index moves",
+   "filesChanged": 4,
+   "insertions": 28,
+   "deletions": 29,
+   "goal": "Fix the Nasdaq (−31.83%) and SOX (−55.17%) figures in Portfolio vs benchmarks, and the \"beat/lagged by\" comparisons built on them.",
+   "whatChanged": "server/services/sharesChartData.js: the daily Portfolio Note runs at 7 am in the workspace time zone after the US close (sharesCron.js), so a note dated D carries the previous day's session. Read-only production data (14 Oct to 28 Nov 2026) showed Saturday notes carry the US Friday session and Sunday and Monday notes repeat it, Sunday sometimes slightly re-measured (1.46 then 1.40), so the exact-repeat rule from 92728c33 missed most repeats and every Friday counted three times. buildNormalizedPerformance now skips index moves (and the fallback holdings moves) on notes dated Sunday or Monday (noNewSession). Tests rewritten for the weekday rule. The Charts card's (i) text and docs/shares-charts.md say so.",
+   "filesImpacted": [
+    "vault/server/services/sharesChartData.js",
+    "vault/server/services/sharesChartData.test.js",
+    "vault/client/src/components/shares/SharesChartsTab.jsx",
+    "vault/docs/shares-charts.md"
+   ],
+   "benefit": "On the owner's production notes, Nasdaq goes from −31.83% to −13.81% and SOX from −55.17% to −27.94% (run through the new code), and the beat/lag points follow.",
+   "concerns": "The rule assumes a workspace time zone ahead of New York (Australia) and the 7 am note time; a different time zone or schedule would need another rule (storing the quote's trading day in each note would be sturdier and is not done). Public holidays are not handled (US Thanksgiving 26 Nov 2026 still counts the 27 Nov note's move). One note is missing (19 Nov), so one session is lost. Each note's index move is measured around 3 pm New York, before the close, so the figures approximate the true index return; they were not checked against published index levels. Not yet seen on production."
+  },
+  {
    "commit": "f4738aed",
    "fullHash": "f4738aede49718b9f4ddfe66af2cd541990ee17a",
    "committedAt": "2026-11-28T09:34:15+10:00",
