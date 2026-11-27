@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "92728c33",
+   "fullHash": "92728c339bc0a8df4f29462c2956557d6efa6985",
+   "committedAt": "2026-11-28T09:14:36+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts: holdings % from stored prices, weekend note repeats skipped",
+   "filesChanged": 4,
+   "insertions": 155,
+   "deletions": 22,
+   "goal": "Fix the \"Your holdings\" tile in Portfolio vs benchmarks, which showed −34.6% beside −A$19,474 on a portfolio of about A$210k: the % and the A$ came from two different calculations, and the % was wrong.",
+   "whatChanged": "server/services/sharesChartData.js: the holdings % compounded each daily Portfolio Note's portfolioMove.changePct, and notes are written every day, so Saturday and Sunday notes carried Friday's move again (nine repeated weekend days between 13 Oct and 27 Nov in production). New pure buildHoldingsValueSeries values the units held today from share_symbol_snapshots (first stored price on the first note date, last price of each day after, carried over gaps, today's live price at the end, workspace time zone). buildBenchmarksPeriod takes the holdings % and A$ from it, so they are one calculation over the same dates as the index figures; buildNormalizedPerformance draws the Relative performance holdings line from it, so the chart ends where the tile does. Index lines (and the holdings fallback when there are no stored prices) skip a weekend note whose figure exactly equals the previous note's. The old sum of periodMovers for the A$ is gone, so the A$ no longer reaches back further than the %. SharesChartsTab.jsx: the card's (i) text explains the new basis. Six new tests in sharesChartData.test.js. Docs: docs/shares-charts.md.",
+   "filesImpacted": [
+    "vault/server/services/sharesChartData.js",
+    "vault/server/services/sharesChartData.test.js",
+    "vault/client/src/components/shares/SharesChartsTab.jsx",
+    "vault/docs/shares-charts.md"
+   ],
+   "benefit": "The holdings % and A$ on the tile agree, the Relative performance chart ends on the same figure, and the index comparisons no longer count weekend repeats.",
+   "concerns": "Not run against production data: the owner declined a read-only check of the before and after figures, so the corrected figure for the real portfolio has not been seen; the tests use small made-up data. The A$ figure changes too: on long ranges it now covers only the dates the notes cover (45 days by default), not the whole range. Index moves still come from the notes: a weekend note with a slightly different figure (a re-measured Friday) still counts, and a genuine identical move on a weekend note would be skipped. The Today range is unchanged. Portfolio snapshots with a holdings value of A$0 (87 of 1,677 in production) were noticed but not touched; they do not feed this tile."
+  },
+  {
    "commit": "8039fd4f",
    "fullHash": "8039fd4fd15cfe635f2434768a6193905133acdb",
    "committedAt": "2026-11-28T08:58:23+10:00",
