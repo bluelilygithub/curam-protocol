@@ -2,6 +2,36 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "494887f4",
+   "fullHash": "494887f47bf80b2599aff274b0f6112f05a6d35e",
+   "committedAt": "2026-11-28T07:16:33+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts redesign M2: Movement and Performance",
+   "filesChanged": 13,
+   "insertions": 437,
+   "deletions": 281,
+   "goal": "Milestone 2 of 4 of the Shares Charts redesign brief: rebuild the Movement and Performance panels as dashboard charts, with no change to the API.",
+   "whatChanged": "Movement (SharesChartsTab.jsx): Portfolio vs benchmarks as StatTiles (holdings filled, each index with \"You beat it by / lagged by X pts\", an index with no move left out); Movers as DivergingBars with a --chart-ink tick at the sector index move and a beat/lag line; Drawdown and Metals drawdown as ThresholdBars with a dashed trigger line and icon badges (Within limits / Near a trigger / Trigger hit) taken from the server flag; trailing return on Today only (cardsForRange), explained in the Movers (i). Performance: PortfolioValueChart.jsx (Recharts area, latest value, change over the range, unrealised P&L line, Total / Holdings + cash with a dashed cash line), RelativePerformanceChart.jsx (Recharts lines, dashed 100 baseline, thicker portfolio line, end values in the legend), Price by holding as tiles with change, last AUD price and a Sparkline. Kit: chartMath.mjs (+ chartMath.test.mjs), DivergingBars, ThresholdBars, Sparkline. Deleted BenchmarkBarChart, DayMoversChart, DrawdownBars. Docs: client/DESIGN.md, docs/shares-charts.md.",
+   "filesImpacted": [
+    "vault/client/src/components/shares/SharesChartsTab.jsx",
+    "vault/client/src/components/shares/PortfolioValueChart.jsx",
+    "vault/client/src/components/shares/RelativePerformanceChart.jsx",
+    "vault/client/src/components/charts/chartMath.mjs",
+    "vault/client/src/components/charts/chartMath.test.mjs",
+    "vault/client/src/components/charts/DivergingBars.jsx",
+    "vault/client/src/components/charts/ThresholdBars.jsx",
+    "vault/client/src/components/charts/Sparkline.jsx",
+    "vault/client/src/components/shares/BenchmarkBarChart.jsx",
+    "vault/client/src/components/shares/DayMoversChart.jsx",
+    "vault/client/src/components/shares/DrawdownBars.jsx",
+    "vault/client/DESIGN.md",
+    "vault/docs/shares-charts.md"
+   ],
+   "benefit": "The two most-used panels read at a glance: headline numbers first, bars that show direction and the index in one row, drawdown status in words and icons rather than emoji, and value and price history as real charts with hover figures.",
+   "concerns": "Departs from the brief on one point on purpose: the drawdown badge uses the server flag, which counts the 4% average-cost trigger and a 1-point near margin (the brief assumed 2 points, peak only), so it matches the alert emails; a holding can show \"Trigger hit\" with a short peak bar when cost triggered it, which the (i) explains. Hiding the trailing return outside Today removes a card someone may look for. Checked only with a sample payload in a headless browser (Movement and Performance in all five themes at 1440 px, warm-sand and dark-slate at 390 px, Today in warm-sand), no console errors; not against real Shares data. The tooltip hover on the Recharts charts was not exercised."
+  },
+  {
    "commit": "66afe845",
    "fullHash": "66afe845f6ead227a9fae892f141d05f0e577226",
    "committedAt": "2026-11-28T07:06:19+10:00",
