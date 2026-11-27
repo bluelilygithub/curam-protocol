@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "4b9a9e07",
+   "fullHash": "4b9a9e07887fea28f64a98ca6cb4a17fd3940dda",
+   "committedAt": "2026-11-27T16:15:01+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Two-step login: per-account limit on regenerating backup codes",
+   "filesChanged": 4,
+   "insertions": 54,
+   "deletions": 4,
+   "goal": "Regenerate backup codes was limited only per internet address. A per-account limit stops one session guessing authenticator codes from many addresses.",
+   "whatChanged": "server/routes/auth.js: POST /api/auth/backup-codes/regenerate allows 5 wrong codes an hour per account, then answers 429 (\"Too many wrong codes. Try again in an hour.\") even to a right code until the hour is up; a wrong code answer now includes attemptsLeft. Each wrong code is stored as an already-used row with method regen and attempts 0 in auth_login_challenges, so it never counts towards the sign-in limit (10 wrong an hour) and a stolen session cannot use it to lock the owner out of signing in; the hourly auth clean-up removes these rows after a day. Test added to server/routes/authSecurity.db.test.js (now 9). Docs: docs/two-step-login.md (the limit); docs/local-dev-windows.md (local dev uses its own AUTH_ENCRYPTION_KEY in .env, never the production key; what to do if it changes). The local .env got a new random key, which is not in git.",
+   "filesImpacted": [
+    "vault/server/routes/auth.js",
+    "vault/server/routes/authSecurity.db.test.js",
+    "vault/docs/two-step-login.md",
+    "vault/docs/local-dev-windows.md"
+   ],
+   "benefit": "Guessing a 6-digit authenticator code through Settings is capped at 5 tries an hour per account, and that cap can never block the owner signing in.",
+   "concerns": "The limit was tested with the database test only; the 429 message in Settings was not looked at in a browser (the panel shows the server error text, the same path as a wrong code, which was seen). The local dev server must be restarted to pick up the new .env key."
+  },
+  {
    "commit": "0189c586",
    "fullHash": "0189c586ac674f9ea9a3123d92b75950b833b2e6",
    "committedAt": "2026-11-27T15:28:58+10:00",
@@ -30,7 +51,7 @@
     "vault/docs/key-files.md"
    ],
    "benefit": "A lost or shared browser can be forgotten, a stray session ended, and backup codes replaced from Settings, and an admin can get a locked-out person back in from Dashboard instead of the Railway shell.",
-   "concerns": "Checked locally only (tests, plus Playwright against a second local copy with a throwaway key), not yet on the live site. Accountant logins get 403 on Security (read-only scope), so they cannot forget their own devices. There is no \"set up my authenticator again\" for yourself, on purpose; a lost phone still needs another admin or reset-2fa.js. Regenerate is IP-limited only (30 tries per 15 minutes), with no per-account wrong-code count. crossUser.test.js still lists 15 older routes (DNS lookup and others) missing from routeManifest.json; not touched here."
+   "concerns": "Checked locally only (tests, plus Playwright against a second local copy with a throwaway key), not yet on the live site. Accountant logins get 403 on Security (read-only scope), so they cannot forget their own devices. There is no \"set up my authenticator again\" for yourself, on purpose; a lost phone still needs another admin or reset-2fa.js. A per-account limit on Regenerate was added in the next commit (4b9a9e07). crossUser.test.js still lists 15 older routes (DNS lookup and others) missing from routeManifest.json; not touched here."
   },
   {
    "commit": "0f60626d",
