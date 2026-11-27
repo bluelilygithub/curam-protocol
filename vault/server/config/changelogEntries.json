@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "78c3b033",
+   "fullHash": "78c3b033eab662455138a1174022a7bdcad67bf6",
+   "committedAt": "2026-11-28T08:53:00+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Watchlist report redesign M3: financials, valuation, risks",
+   "filesChanged": 11,
+   "insertions": 430,
+   "deletions": 12,
+   "goal": "Milestone 3 of 4 of the Watchlist report redesign: draw the bottom half of the visual report (financials, valuation, risks) from the structured data, and move the written report to a collapsed box.",
+   "whatChanged": "New client/src/components/shares/SharesWatchlistSections.jsx. Financials: key-figure tiles coloured by signal with an icon, revenue growth as DivergingBars, operating and net margin by quarter above and below a zero line (new kit GroupedColumns, series in --chart-2 and --chart-4 so a margin never reads as a loss), a small gross-margin AreaTrend, and an amber \"Check before relying on the figures\" callout from dataWarnings. Valuation: every fair value and price target as a numbered dot on one price axis against a Now line (the live quote in the same currency, else the price at the report), green above and red below with signed % and an icon, close dots stacked in lanes, a numbered list below; P/S against peers as two bars; multiples as StatTiles; the assumptions as numbered cards. Risks: cards with an icon from the title's words. SharesWatchlistReport.jsx renders the three sections and their pills; a mouse click on a pill drops its tooltip. SharesWatchlistTab.jsx passes the live quote and name, and the full written report is collapsed at the bottom (owner's choice). chartMath.mjs gains priceAxisDomain, axisPct and stackLanes (tested); watchlistReport.mjs gains fmtFigure, nowPrice, targetRows, psMultiple and riskIcon (tested). Docs: docs/shares-watchlist.md, docs/key-files.md, client/DESIGN.md.",
+   "filesImpacted": [
+    "vault/client/src/components/shares/SharesWatchlistSections.jsx",
+    "vault/client/src/components/shares/SharesWatchlistReport.jsx",
+    "vault/client/src/components/shares/SharesWatchlistTab.jsx",
+    "vault/client/src/components/shares/watchlistReport.mjs",
+    "vault/client/src/components/shares/watchlistReport.test.mjs",
+    "vault/client/src/components/charts/GroupedColumns.jsx",
+    "vault/client/src/components/charts/chartMath.mjs",
+    "vault/client/src/components/charts/chartMath.test.mjs",
+    "vault/client/DESIGN.md",
+    "vault/docs/shares-watchlist.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "The whole report now reads as a visual page: the figures, how far every published target sits from today's price, what the price assumes, and the risks, each claim one click from its source. The written report is still one click away.",
+   "concerns": "Checked in a browser locally with the real production CRWD report and its structured data: all five themes at 1600 px and warm-sand at 390 px, no console errors, nothing makes the page scroll sideways (Markdown tables inside the collapsed written report sit 9 px past a phone's edge, as they did before). The Now line with a live quote was not seen locally (no quote key), only the At report fallback. The key-figure and multiples values are Finnhub's as stored; CRWD's P/E shows 3689.77x because earnings are tiny, which is correct but striking. The price axis plots whatever targets the extraction kept, including two very different Morningstar fair values; the data-warnings callout flags them but code does not choose. Risk icons are picked from title words, so an unusual title gets the plain warning icon. The tour, guide chat and (i) text are not updated until M4."
+  },
+  {
    "commit": "6da0fbea",
    "fullHash": "6da0fbea65d01255cf3c2e2d79fa3e4861176cb0",
    "committedAt": "2026-11-28T08:41:29+10:00",
