@@ -229,8 +229,14 @@ test('a broken key: boot raises an inbox alert without the value, login says una
   admin.use('/api/admin', (req, _res, next) => { req.user = { id: 1, isAdmin: true }; next(); }, require('../routes/admin'));
   const srv = http.createServer(admin).listen(0);
   const health = async () => (await fetch(`http://127.0.0.1:${srv.address().port}/api/admin/auth-health`)).json();
+  const outside = async () => {
+    const rs = await resend('no-such-id');
+    const vs = await verify('no-such-id', '123456');
+    return JSON.stringify([rs.status, rs.json, vs.status, vs.json]);
+  };
   try {
     assert.deepStrictEqual(await health(), { ok: true, problem: null });
+    const goodKeyAnswer = await outside();
     process.env.AUTH_ENCRYPTION_KEY = 'not-a-key-at-all';
     lc._internal.resetKeyCache();
     const before = captured.length;
@@ -244,7 +250,8 @@ test('a broken key: boot raises an inbox alert without the value, login says una
     assert.ok(/16 characters/.test(h.problem) && !h.problem.includes('not-a-key'));
     const u = await makeUser('brokenkey');
     const r = await login(u);
-    assert.strictEqual(r.status, 503);
+    assert.strictEqual(r.status, 503, 'only after the right password does a member hear sign-in is unavailable');
+    assert.strictEqual(await outside(), goodKeyAnswer, 'resend and verify cannot tell a broken key from an unknown id');
   } finally {
     process.env.AUTH_ENCRYPTION_KEY = good;
     lc._internal.resetKeyCache();

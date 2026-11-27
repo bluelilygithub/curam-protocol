@@ -54,8 +54,8 @@ On 2026-11-27 the first deploy went live with an `AUTH_ENCRYPTION_KEY` the serve
 - **Two formats:** the key may be 64 hex characters or base64 (44 characters); both are 32 bytes (`authKey()` in `server/services/loginChallenge.js`). Anything else is refused.
 - **At boot** (`checkAuthKeyAtBoot()`, called from `server/index.js`): a plain error in the log saying what is wrong (not set, or set but N characters long), never the value, and a Suggestions alert to the primary admin (one a day): "Two-step login is broken: members can't sign in", with the fix.
 - **Admins see it** at the top of Needs attention (its own "Sign-in" box in the Home sidebar, first line on the mobile dashboard and project list) for as long as the key is broken: `server/routes/attention.js` adds `authKeyBroken` for admins only, `server/services/attention.js` words it. Members never see it.
-- **`GET /api/admin/auth-health`** (admin only) answers `{ ok, problem }`; `problem` is the plain reason, never the key.
-- **From outside, without signing in:** `POST /api/auth/challenge/resend` with `{"challengeId":"none"}` answers 400 "This sign-in has expired" when the key works and 503 "Sign-in is unavailable" when it does not. It changes nothing.
+- **`GET /api/admin/auth-health`** (admin only) answers `{ ok, problem }`; `problem` is the plain reason, never the key. **This is the check.**
+- **It cannot be probed from outside.** The open routes `challenge/resend` and `challenge/verify` answer a broken key exactly as they answer an unknown id (400 "This sign-in has expired. Start again."), and the key is checked only after the database lookup, so the timing matches too (2026-11-27; until then resend answered 503 and gave it away). Only the password step says "Sign-in is unavailable right now. Ask an admin.", and only to someone who typed a right password.
 
 ## Data model (`server/db.js`, idempotent)
 
@@ -118,7 +118,7 @@ Before `requireAuth` (under `/api/auth`), IP rate-limited:
   - admin with TOTP → `{ challengeId, method: 'totp' }` (Milestone 3)
   - admin without TOTP → `{ challengeId, method: 'totp_enrol' }` (Milestone 3)
 - `POST /api/auth/challenge/verify` `{ challengeId, code, rememberDevice }` → session (+ device cookie from Milestone 2). A dead challenge answers `400 { code: 'challenge_dead' }`; a wrong code `400 { error, attemptsLeft }`.
-- `POST /api/auth/challenge/resend` `{ challengeId }`. A failed send answers `502 { code: 'code_send_failed' }`.
+- `POST /api/auth/challenge/resend` `{ challengeId }`. A failed send answers `502 { code: 'code_send_failed' }`. An unknown, dead or unusable challenge (including a broken key) answers `400 { code: 'challenge_dead' }`.
 - `POST /api/auth/challenge/backup` `{ challengeId, backupCode }` (admins, Milestone 3)
 - `POST /api/auth/challenge/enrol/start` `{ challengeId }` → `{ otpauthUri, manualKey }`. **No image**: the browser draws the QR code with `qrEncode.mjs`.
 - `POST /api/auth/challenge/enrol/confirm` `{ challengeId, code }` → `{ backupCodes }` + session
@@ -144,7 +144,7 @@ Behind `requireAuth` (Milestone 4): `GET /api/auth/security`, `DELETE /api/auth/
 
 **Before pushing Milestone 3** (or anything else that depends on the key):
 
-1. Confirm the key works **on the live server**: an admin opens `GET /api/admin/auth-health` (expects `ok: true`), or the admin Home page shows no "Two-step login is broken" warning, or the outside check above answers 400, not 503. If it is not ok, fix the key in Railway first and push nothing that depends on it.
+1. Confirm the key works **on the live server** with `GET /api/admin/auth-health` while signed in as an admin (expects `ok: true`). The API takes a `Bearer` token, so call it from the browser console on the live site: `fetch('/api/admin/auth-health',{headers:{Authorization:'Bearer '+JSON.parse(localStorage['vault-auth']).state.token}}).then(r=>r.json()).then(console.log)`. The admin Home page showing no "Two-step login is broken" warning means the same. If it is not ok, fix the key in Railway first and push nothing that depends on it.
 2. After the deploy, run the same check again before saying it is live.
 3. Keep a second browser signed in as admin until admin enrolment has been seen working on the live site.
 

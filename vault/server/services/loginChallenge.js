@@ -17,6 +17,9 @@ const SEND_TIMEOUT_MS = 15000;        // MailChannels' request has no timeout of
 
 const GENERIC_ERROR = "That code didn't work. Check it and try again.";
 const SEND_FAILED = "We couldn't send your code. Try again, or ask an admin.";
+// Resend and verify are open to anyone: a broken key answers exactly like an unknown id, so key health can't be probed from outside
+// (admins check it with GET /api/admin/auth-health).
+const dead = () => ({ status: 400, body: { error: 'This sign-in has expired. Start again.', code: 'challenge_dead' } });
 
 let cachedKey;
 /** AUTH_ENCRYPTION_KEY as 32 bytes: 64 hex characters, or base64 (44 characters). null when missing or the wrong shape. */
@@ -178,14 +181,13 @@ async function startEmailChallenge(user, req) {
 
 /** A fresh code for a live email challenge, at most once a minute and 6 sends an hour per account. */
 async function resendCode(challengeId) {
-  if (!authKey()) return { status: 503, body: { error: 'Sign-in is unavailable right now. Ask an admin.' } };
   const { rows } = await pool.query(
     `SELECT c.*, u.email FROM auth_login_challenges c JOIN users u ON u.id=c."userId"
      WHERE c.id=$1 AND c.method='email' AND c."usedAt" IS NULL AND c."expiresAt" > NOW() AND c.attempts < $2`,
     [String(challengeId || ''), MAX_ATTEMPTS]
   );
   const ch = rows[0];
-  if (!ch) return { status: 400, body: { error: 'This sign-in has expired. Start again.', code: 'challenge_dead' } };
+  if (!ch || !authKey()) return dead();
   if (ch.lastSentAt && Date.now() - new Date(ch.lastSentAt).getTime() < RESEND_GAP_SEC * 1000) {
     return { status: 429, body: { error: 'Wait a minute before asking for another code.' } };
   }
@@ -214,7 +216,6 @@ async function resendCode(challengeId) {
  * inside the same transaction, so a challenge can never give two sessions.
  */
 async function verifyCode(challengeId, code, onSuccess) {
-  if (!authKey()) return { status: 503, body: { error: 'Sign-in is unavailable right now. Ask an admin.' } };
   const id = String(challengeId || '');
   const typed = String(code || '').replace(/\D/g, '');
   const client = await pool.connect();
@@ -223,13 +224,13 @@ async function verifyCode(challengeId, code, onSuccess) {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT * FROM auth_login_challenges WHERE id=$1 FOR UPDATE', [id]);
     const ch = rows[0];
-    if (!ch || ch.method !== 'email' || ch.usedAt || new Date(ch.expiresAt) < new Date() || ch.attempts >= MAX_ATTEMPTS || !ch.codeHash) {
+    if (!ch || ch.method !== 'email' || ch.usedAt || new Date(ch.expiresAt) < new Date() || ch.attempts >= MAX_ATTEMPTS || !ch.codeHash || !authKey()) {
       await client.query('ROLLBACK');
-      return { status: 400, body: { error: 'This sign-in has expired. Start again.', code: 'challenge_dead' } };
+      return dead();
     }
     const { rows: users } = await client.query('SELECT * FROM users WHERE id=$1', [ch.userId]);
     const user = users[0];
-    if (!user) { await client.query('ROLLBACK'); return { status: 400, body: { error: 'This sign-in has expired. Start again.', code: 'challenge_dead' } }; }
+    if (!user) { await client.query('ROLLBACK'); return dead(); }
 
     const tooMany = (await failsLastHour(user.id)) >= MAX_FAILS_PER_HOUR;
     if (tooMany || typed.length !== 6 || !sameHash(ch.codeHash, hashCode(id, typed))) {
