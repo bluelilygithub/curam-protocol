@@ -17,6 +17,9 @@ const CATALOG = [
     does: 'Settings, Profile: your name and details, and changing your password.', notes: '' },
   { id: 'Tasks', label: 'Tasks', group: 'You',
     does: 'Settings, Tasks: how your task list behaves.', notes: '' },
+  { id: 'Security', label: 'Security', group: 'You',
+    does: 'Settings, Security: your two-step login. Admins see their authenticator app status, how many of their 10 backup codes are left, and Regenerate backup codes (needs the current 6-digit code from the authenticator app; the new codes are shown once with Copy and Download, and the old ones stop working). Everyone sees their remembered devices (name such as "Chrome on Windows", last used, expiry) with Forget for one or Forget all devices, and Sign out other sessions.',
+    notes: 'Forgetting a device only makes that browser ask for a code at its next sign-in; it does not sign anyone out. Forget all devices and Sign out other sessions never sign out the browser you are using. Members get emailed codes and have no authenticator or backup codes. Locked out of the authenticator: another admin uses Reset 2-step login on the user row in Admin, Dashboard; a sole admin needs the server reset script (ask whoever runs the server). Read-only accountant logins cannot change these.' },
   { id: 'Recycle bin', label: 'Recycle bin', group: 'You',
     does: 'Settings, Recycle bin: everything you deleted in the last 30 days from tools that use the shared bin (notes, tasks, goals, chats and more), each with a restore button.',
     notes: 'After 30 days an item is gone for good.' },
@@ -83,7 +86,7 @@ const CATALOG = [
   { id: 'admin-errors', label: 'Errors (Sentry)', group: 'Admin page',
     does: 'The Admin page: recent errors and counts from Sentry error tracking, when Sentry is connected. Otherwise it links out to Sentry.', notes: 'Admin only.' },
   { id: 'admin-users', label: 'Users', group: 'Admin page',
-    does: 'The Admin page: the same user list as Settings, Members (add, admin on or off, new password, delete, per-person Features) plus the landing page choice for each.', notes: 'Admin only.' },
+    does: 'The Admin page: the same user list as Settings, Members (add, admin on or off, new password, Reset 2-step login, delete, per-person Features) plus the landing page choice for each.', notes: 'Admin only. Reset 2-step login (confirmed in a box first) removes their authenticator, backup codes and remembered devices and signs them out everywhere; an admin sets up the authenticator again at their next sign-in. It is not offered on your own row.' },
   { id: 'admin-update-report', label: 'Tool update report', group: 'Admin page',
     does: 'The Admin page: Open update report goes to Settings, Tool Maintenance to review available updates without running commands.', notes: 'Admin only.' },
   { id: 'admin-backups', label: 'Backups', group: 'Admin page',
@@ -91,7 +94,7 @@ const CATALOG = [
 ];
 
 const RULES = [
-  'Settings is a menu of sections down the left (a dropdown on a phone), with a search box. Members see only You: Appearance, Profile, Tasks and Recycle bin (and Vault Shelf, when an admin has switched that feature on for them). Everything else is for admins.',
+  'Settings is a menu of sections down the left (a dropdown on a phone), with a search box. Members see only You: Appearance, Profile, Security, Tasks and Recycle bin (and Vault Shelf, when an admin has switched that feature on for them). Everything else is for admins.',
   'The first user was made the admin. Only an admin sees the Admin page and the admin sections of Settings.',
   'Feature Access works in two layers: the workspace switches (Settings, Feature Access) apply to every member, then an admin can narrow one person further in Members. A person\'s own switch can only turn a feature off, never on.',
   'Admins always keep access to every feature, whatever the switches say.',

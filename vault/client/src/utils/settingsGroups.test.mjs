@@ -6,21 +6,21 @@ let passed = 0;
 const t = (name, fn) => { try { fn(); passed++; } catch (e) { console.error(`FAIL  ${name}\n   ${e.message}`); process.exitCode = 1; } };
 
 // the sections the page had before the menu was grouped: none may go missing, none may be added by accident
-const ORIGINAL_ADMIN = ['Appearance', 'Profile', 'AI & Chat', 'Models', 'Translation', 'Tasks', 'Goals', 'Integrations', 'Shares', 'Amazon Search', 'Topic Research', 'Email Follow-Up', 'PDF Tools', 'Mobile', 'Navigation', 'Members', 'Feature Access', 'Wellbeing Invites', 'Content Restrictions', 'Tool Maintenance', 'Environment', 'Tours', 'Recycle bin', 'Vault Shelf'];
+const ORIGINAL_ADMIN = ['Appearance', 'Profile', 'AI & Chat', 'Models', 'Translation', 'Tasks', 'Goals', 'Integrations', 'Shares', 'Amazon Search', 'Topic Research', 'Email Follow-Up', 'PDF Tools', 'Mobile', 'Navigation', 'Members', 'Feature Access', 'Wellbeing Invites', 'Content Restrictions', 'Tool Maintenance', 'Environment', 'Tours', 'Recycle bin', 'Vault Shelf', 'Security'];
 
 t('an admin sees exactly the original sections plus the Recycle bin and Vault Shelf, once each', () => {
   const ids = allowedTabIds(true);
   assert.deepEqual([...ids].sort(), [...ORIGINAL_ADMIN].sort());
   assert.equal(new Set(ids).size, ids.length);
 });
-t('a member sees only Appearance, Profile, Tasks and the Recycle bin, under one group', () => {
-  assert.deepEqual(allowedTabIds(false), ['Appearance', 'Profile', 'Tasks', 'Recycle bin']);
+t('a member sees only Appearance, Profile, Security, Tasks and the Recycle bin, under one group', () => {
+  assert.deepEqual(allowedTabIds(false), ['Appearance', 'Profile', 'Security', 'Tasks', 'Recycle bin']);
   assert.equal(visibleGroups(false).length, 1);
 });
 t('Vault Shelf shows to a member only while the Shelf feature is on for them; admins always see it', () => {
   assert.ok(!allowedTabIds(false).includes('Vault Shelf'));
   assert.ok(!allowedTabIds(false, SETTINGS_GROUPS, { shelf: false }).includes('Vault Shelf'));
-  assert.deepEqual(allowedTabIds(false, SETTINGS_GROUPS, { shelf: true }), ['Appearance', 'Profile', 'Tasks', 'Recycle bin', 'Vault Shelf']);
+  assert.deepEqual(allowedTabIds(false, SETTINGS_GROUPS, { shelf: true }), ['Appearance', 'Profile', 'Security', 'Tasks', 'Recycle bin', 'Vault Shelf']);
   assert.ok(allowedTabIds(true, SETTINGS_GROUPS, { shelf: false }).includes('Vault Shelf'));
   assert.ok(isFeatureGatedTab('Vault Shelf'));
   assert.ok(!isFeatureGatedTab('Profile'));

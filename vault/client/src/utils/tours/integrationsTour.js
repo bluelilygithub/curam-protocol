@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_integrations_completed';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -138,6 +138,25 @@ export function startIntegrationsTour(navigate) {
     title: 'Privacy & Access',
     text: "Vault stores only the OAuth tokens needed to query on your behalf — no email content is stored permanently. You can disconnect at any time from Settings and Vault immediately loses access. All queries are made in real time when you use <code>@gmail</code> or <code>@calendar</code>.",
     when: { show() { injectStepCounter(7); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  // ── Step 8: Security (two-step login, docs/two-step-login.md) ────────────
+  tour.addStep({
+    id: 'settings-security',
+    title: 'Security',
+    text: "Settings → <strong>Security</strong> shows the browsers Vault remembers for you (Forget one, or Forget all), lets you sign out everywhere else, and for admins shows the authenticator app and backup codes. None of these buttons signs out the page you are on.",
+    attachTo: { element: '[data-tour="security-section"]', on: 'top' },
+    beforeShowPromise() {
+      return new Promise((resolve) => {
+        navigate('/settings?tab=Security');
+        setTimeout(() => {
+          if (!document.querySelector('[data-tour="security-section"]')) tour.getById('settings-security')?.updateStepOptions({ attachTo: {} });
+          resolve();
+        }, 700);
+      });
+    },
+    when: { show() { injectStepCounter(8); } },
     buttons: [
       btnBack(),
       {

@@ -60,6 +60,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import SettingsNav from '../components/SettingsNav';
 import { visibleGroups, allowedTabIds, isFeatureGatedTab } from '../utils/settingsGroups.mjs';
 import ShelfTokensPanel from '../components/settings/ShelfTokensPanel';
+import SecurityPanel from '../components/settings/SecurityPanel';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import AccountantAccessPanel from '../components/AccountantAccessPanel';
 import RecycleBinPanel from '../components/RecycleBinPanel';
@@ -1615,6 +1616,14 @@ function SettingsPage() {
         >
           {inquirySaved ? 'Saved ✓' : 'Save'}
         </button>
+      </section>
+      )}
+
+      {/* Security tab: two-step login, remembered devices, other sessions (docs/two-step-login.md) */}
+      {tab === 'Security' && (
+      <section>
+        <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Security</h2>
+        <SecurityPanel />
       </section>
       )}
 

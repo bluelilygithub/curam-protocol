@@ -277,6 +277,85 @@ router.post('/reset-password-confirm', resetLimiter, async (req, res) => {
   }
 });
 
+// ── Settings → Security (Milestone 4). Signed-in routes: requireAuth here, because the global one skips /api/auth/*.
+// None of these ever ends the session making the request. Accountant logins are refused by requireAuth's read-only scope (403).
+const { requireAuth } = require('../middleware/auth');
+const currentToken = (req) => String(req.headers.authorization || '').replace(/^Bearer /, '');
+
+// GET /api/auth/security -> authenticator status, backup codes left, remembered devices (this browser marked), other sessions
+router.get('/security', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const thisDevice = devices.currentTokenHash(req);
+    const [totpRow, list, others] = await Promise.all([
+      pool.query('SELECT "enabledAt" FROM auth_totp WHERE "userId"=$1 AND "enabledAt" IS NOT NULL', [uid]),
+      pool.query(`SELECT id, label, "lastUsedAt", "expiresAt", "createdAt", "tokenHash"=$2 AS current FROM auth_trusted_devices
+                  WHERE "userId"=$1 AND "expiresAt" > NOW() ORDER BY "lastUsedAt" DESC NULLS LAST`, [uid, thisDevice || '']),
+      pool.query('SELECT COUNT(*)::int n FROM auth_sessions WHERE "userId"=$1 AND token<>$2 AND "expiresAt" > NOW()', [uid, currentToken(req)]),
+    ]);
+    res.json({
+      isAdmin: !!req.user.isAdmin,
+      authenticatorSince: totpRow.rows[0]?.enabledAt || null,
+      backupCodesLeft: totpRow.rows[0] ? await authenticator.backupCodesLeft(uid) : 0,
+      devices: list.rows,
+      otherSessions: others.rows[0].n,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not load your security settings.' });
+  }
+});
+
+// POST /api/auth/devices/forget-all: every remembered device; sessions (this one included) are untouched
+router.post('/devices/forget-all', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM auth_trusted_devices WHERE "userId"=$1', [req.user.id]);
+    res.json({ ok: true, removed: rowCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not forget your devices.' });
+  }
+});
+
+// DELETE /api/auth/devices/:id: one of your own remembered devices
+router.delete('/devices/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM auth_trusted_devices WHERE id=$1 AND "userId"=$2', [Number(req.params.id) || 0, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Device not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not forget that device.' });
+  }
+});
+
+// POST /api/auth/backup-codes/regenerate { code } -> { backupCodes }: needs a current authenticator code; the old codes stop working
+router.post('/backup-codes/regenerate', requireAuth, codeLimiter, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (!(await authenticator.checkTotp(client, req.user.id, String((req.body || {}).code || '')))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "That code didn't work. Use the current code from your authenticator app." });
+    }
+    const backupCodes = await authenticator.newBackupCodes(client, req.user.id);
+    await client.query('COMMIT');
+    res.json({ backupCodes });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: 'Could not make new backup codes.' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/auth/sessions/sign-out-others: ends every session but the one making this request
+router.post('/sessions/sign-out-others', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1 AND token<>$2', [req.user.id, currentToken(req)]);
+    res.json({ ok: true, removed: rowCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not sign out your other sessions.' });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', async (req, res) => {
   const header = req.headers.authorization || '';

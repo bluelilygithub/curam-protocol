@@ -37,6 +37,12 @@ function deviceLabel(ua) {
   return os ? `${browser} on ${os}` : browser;
 }
 
+/** Hash of this browser's device cookie (sent only to /api/auth/*), to mark "This browser" in Settings. */
+function currentTokenHash(req) {
+  const token = readCookie(req);
+  return token ? hashToken(token) : null;
+}
+
 /** Is this browser a remembered device for this user? Stamps last use when it is. */
 async function isTrusted(req, userId) {
   const token = readCookie(req);
@@ -73,4 +79,4 @@ async function purgeOldAuthRecords() {
   return { challenges: a.rowCount, devices: b.rowCount };
 }
 
-module.exports = { isTrusted, trustDevice, forgetAllDevices, purgeOldAuthRecords, deviceDays, deviceLabel, COOKIE };
+module.exports = { isTrusted, trustDevice, currentTokenHash, forgetAllDevices, purgeOldAuthRecords, deviceDays, deviceLabel, COOKIE };

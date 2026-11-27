@@ -2,7 +2,25 @@
 
 After the right password, Vault asks for a second step before it makes a session. Members and accountant logins get a 6-digit code by email, only on a device Vault doesn't recognise. Admins use an authenticator app (TOTP), with backup codes as their fallback.
 
-This is the brief, with the Milestone 0 findings and the agreed changes (2026-11-27) folded in. It is built in four milestones; the status of each is at the end.
+This is the brief, with the Milestone 0 findings and the agreed changes (2026-11-27) folded in. It is built in four milestones; the status of each is at the end. **What each person sees** and **Recovery** are the two sections to read first.
+
+## What each person sees
+
+- **Member:** password, then (only on a browser Vault doesn't remember) a 6-digit code by email, with "Remember this device for 30 days" ticked. Settings → Security lists their remembered devices (Forget one, Forget all devices) and Sign out other sessions. No authenticator, no backup codes.
+- **Accountant login:** the same emailed code at sign-in. Settings → Security answers 403 for them (the read-only accountant scope refuses it) and says it is not available for a read-only login; an admin manages their sign-in.
+- **Admin:** password, then an authenticator code (or "Use a backup code"), unless the browser is remembered (7 days). The first time, they set up the authenticator during sign-in (QR, manual key, confirm a code, 10 backup codes once). Settings → Security also shows when the authenticator was set up, how many backup codes are left (amber at 3 or fewer) and **Regenerate backup codes** (needs the current authenticator code; the 10 new codes show once with Copy, Download and "I've saved these"; the old ones stop working at once).
+- **Admin, on Dashboard:** **Reset 2-step login** on every other user's row (not their own), confirmed in a `Dialog`.
+
+Nothing on Settings → Security ever signs out the browser you are using: Forget and Forget all devices only make those browsers ask for a code at their next sign-in, and Sign out other sessions ends every session except the one making the request.
+
+## Recovery
+
+- **A member lost access to their email, or suspects someone else signed in:** an admin uses **Reset 2-step login** on their Dashboard row (signs them out everywhere and forgets their devices), and Reset Password if needed. Their next sign-in asks for an emailed code.
+- **An admin lost their phone but has backup codes:** sign in with a backup code, then ask another admin to reset their two-step login so they set up the authenticator on the new phone at the next sign-in. There is no "set up again" button for yourself, on purpose: it would let a stolen session replace the authenticator.
+- **An admin lost their phone and their backup codes, and another admin exists:** the other admin uses **Reset 2-step login** on their row.
+- **The only admin is locked out** (or every admin is): in the Railway dashboard open the Vault service's shell (or run `railway ssh` with the Railway CLI) and run `node server/scripts/reset-2fa.js <their email>`. It prints what it removed. Then sign in with the password and set up the authenticator again. It works for user 1 (forced admin on every boot). It does not change the password; for that, use "Forgot password" on the sign-in page.
+- **Never change `AUTH_ENCRYPTION_KEY` once any admin has enrolled.** Their authenticator secrets are encrypted with it and could no longer be read, so every admin would be locked out and need `reset-2fa.js`; outstanding backup codes and emailed codes would stop working too. If the key really must change (a leak), change it, then run `reset-2fa.js` for every admin and have them enrol again.
+- **The key is broken or missing:** nobody can finish a sign-in. See "When the key is broken" below; fix it in Railway, do not work round it.
 
 ## What was there before (Milestone 0, 2026-11-27)
 
@@ -126,7 +144,7 @@ Before `requireAuth` (under `/api/auth`), IP rate-limited:
 
 Errors are generic ("That code didn't work") and never reveal whether an account exists. Wrong codes answer 400, not 401, so nothing treats them as "signed out".
 
-Behind `requireAuth` (Milestone 4): `GET /api/auth/security`, `DELETE /api/auth/devices/:id` (owner check), `POST /api/auth/devices/forget-all`, `POST /api/auth/backup-codes/regenerate` `{ code }`, `POST /api/auth/sessions/sign-out-others`. Behind `requireAdmin` (built in Milestone 3): `POST /api/admin/users/:id/reset-2fa` (clears the authenticator, backup codes, remembered devices, open challenges and every session; answers `{ ok, removed }`). No model calls, so no `aiLimiter`.
+Behind `requireAuth` (Milestone 4, details under Milestones): `GET /api/auth/security`, `DELETE /api/auth/devices/:id` (owner check), `POST /api/auth/devices/forget-all`, `POST /api/auth/backup-codes/regenerate` `{ code }`, `POST /api/auth/sessions/sign-out-others`. Behind `requireAdmin` (built in Milestone 3): `POST /api/admin/users/:id/reset-2fa` (clears the authenticator, backup codes, remembered devices, open challenges and every session; answers `{ ok, removed }`). No model calls, so no `aiLimiter`.
 
 ## UI
 
@@ -150,7 +168,11 @@ Behind `requireAuth` (Milestone 4): `GET /api/auth/security`, `DELETE /api/auth/
    - **Broken key:** admins cannot sign in either (503 with a plain message). Fix the key in Railway; nobody gets in on a password alone. Do not change the key once admins have enrolled.
    - **Reset:** `POST /api/admin/users/:id/reset-2fa` (admin only) and `node server/scripts/reset-2fa.js <email>` remove the authenticator, backup codes, remembered devices, sessions and open challenges. The admin flag is untouched, so an admin (user 1 included) is asked to set up again at the next sign-in. The Dashboard button is Milestone 4.
    - **Tests:** `node server/services/totp.test.js` (RFC 6238 Appendix B SHA-1 vectors, ±1 window, reuse, AES-GCM round trip and tampering), `DATABASE_URL=... node server/services/authenticator.db.test.js` (11: enrolment, TOTP, backup codes once only, another admin's codes refused, no email for admins, no replacing an authenticator, 5 wrong codes, 7-day device, admin reset, the script, broken key). Seen in a browser locally: password → enrol screen → QR (checked to encode exactly the server's otpauth link; a phone was not used) → code → backup codes (Copy, Download, Continue locked until ticked) → signed in; then an authenticator-code sign-in, a backup-code sign-in, and the same backup code refused. `reset-2fa.js` run on local user 1.
-4. Settings → Security, the Dashboard reset action, guide, tour, docs. Check everything in a browser locally, including a full admin enrolment and a member login from a new browser.
+4. **Built (2026-11-27), not yet pushed.** Settings → Security and the Dashboard reset action.
+   - **Routes** (`server/routes/auth.js`, each with `requireAuth` on the route, because the global one skips `/api/auth/*`): `GET /api/auth/security` → `{ isAdmin, authenticatorSince, backupCodesLeft, devices: [{ id, label, lastUsedAt, expiresAt, createdAt, current }], otherSessions }` (`current` marks this browser: the device cookie is sent to `/api/auth/*` and read by `trustedDevices.currentTokenHash()`); `DELETE /api/auth/devices/:id` (your own only, else 404); `POST /api/auth/devices/forget-all`; `POST /api/auth/backup-codes/regenerate { code }` (IP-limited like the other code routes; checks the authenticator code and makes the new codes in one transaction, so the code is spent and a wrong one changes nothing); `POST /api/auth/sessions/sign-out-others` (deletes every session but the request's own token). None touches the requesting session.
+   - **Client:** `client/src/components/settings/SecurityPanel.jsx` (Settings section `Security` in the You group, `settingsGroups.mjs`), reusing `BackupCodes` and `CodeInput` from `client/src/pages/login/AdminSecondStep.jsx`; the (i) box opens by itself once (`vault_security_info_seen`). Dashboard and Settings → Members: `client/src/components/UsersAdminPanel.jsx`, "Reset 2-step login" hidden on your own row. Settings guide: a `Security` entry in `server/services/settingsTutor.js`. Tour: step 8 of the Settings tour (`client/src/utils/tours/integrationsTour.js`).
+   - **Tests:** `DATABASE_URL=... node server/routes/authSecurity.db.test.js` (8: every route needs a session; own devices only, "this browser" marked, no hashes sent; forget one / all keeps this session and other people's devices; sign out others keeps this session; regenerate needs a fresh authenticator code, kills the old codes, the same code can't be used twice; members can't make codes; accountants refused). `node client/src/utils/settingsGroups.test.mjs` updated for the new section.
+   - **Seen in a browser locally** (Playwright, against a second local copy with a throwaway key; screenshots looked at): (i) box, "9 of 10" backup codes, "This browser"; regenerate (wrong code refused, 10 new codes, Copy and Download checked, Done locked until ticked, an old code dead); forget one (No keeps it, Yes removes it); forget all (empty state, this and other sessions still signed in); sign out others (other session ended, this one still signed in after a reload); Dashboard reset of a test member in the Dialog (Cancel changes nothing, Reset signs them out and forgets their devices, no button on your own row); member view (no authenticator box); tour step 8. A full admin enrolment and a member emailed-code sign-in were not repeated for this milestone (seen in Milestones 1 to 3, code unchanged).
 
 **Before pushing Milestone 3** (or anything else that depends on the key):
 

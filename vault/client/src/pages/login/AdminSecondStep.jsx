@@ -15,7 +15,7 @@ const label = 'block text-xs font-semibold uppercase tracking-wider mb-1.5';
 const primary = 'w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity duration-200 hover:opacity-70 disabled:opacity-50';
 const link = 'text-xs transition-opacity duration-200 hover:opacity-70';
 
-function CodeInput({ value, onChange, id, hint }) {
+export function CodeInput({ value, onChange, id, hint, autoFocus = true }) {
   return (
     <Tooltip text={hint}>
       <input
@@ -26,7 +26,7 @@ function CodeInput({ value, onChange, id, hint }) {
         inputMode="numeric"
         pattern="[0-9]{6}"
         required
-        autoFocus
+        autoFocus={autoFocus}
         placeholder="123456"
         className="w-full px-3 py-2.5 rounded-xl border text-lg tracking-[0.4em] text-center"
         style={field}
@@ -49,7 +49,7 @@ function Remember({ checked, onChange, days }) {
 const ErrorLine = ({ text }) => (text ? <p className="text-xs" role="alert" style={{ color: '#ef4444' }}>{text}</p> : null);
 
 /** The 10 backup codes, once, with Copy and Download; Continue only after "I've saved these". */
-function BackupCodes({ codes, onContinue }) {
+export function BackupCodes({ codes, onContinue, continueLabel = 'Continue', continueTip = 'Finish signing in' }) {
   const getIcon = useIcon();
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -88,9 +88,9 @@ function BackupCodes({ codes, onContinue }) {
           I've saved these
         </label>
       </Tooltip>
-      <Tooltip text="Finish signing in">
+      <Tooltip text={continueTip}>
         <button type="button" disabled={!saved} onClick={onContinue} className={primary} style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>
-          Continue
+          {continueLabel}
         </button>
       </Tooltip>
     </div>

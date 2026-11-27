@@ -121,6 +121,21 @@
   "GET /api/auth/me": {
    "class": "authed"
   },
+  "GET /api/auth/security": {
+   "class": "authed"
+  },
+  "DELETE /api/auth/devices/:id": {
+   "class": "authed"
+  },
+  "POST /api/auth/devices/forget-all": {
+   "class": "authed"
+  },
+  "POST /api/auth/backup-codes/regenerate": {
+   "class": "authed"
+  },
+  "POST /api/auth/sessions/sign-out-others": {
+   "class": "authed"
+  },
   "POST /api/auth/register": {
    "class": "public"
   },

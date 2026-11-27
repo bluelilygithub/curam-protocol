@@ -7,6 +7,7 @@ export const SETTINGS_GROUPS = [
   { id: 'you', label: 'You', tabs: [
     { id: 'Appearance', tip: 'Theme, font, icons and how Vault looks for you.' },
     { id: 'Profile', tip: 'Your name, details and password.' },
+    { id: 'Security', tip: 'Two-step login, backup codes, remembered devices and signing out other sessions.' },
     { id: 'Tasks', tip: 'How your tasks behave.' },
     { id: 'Recycle bin', tip: 'Things you deleted in the last 30 days, ready to put back.' },
     { id: 'Vault Shelf', tip: 'Keys that connect the Vault Shelf Windows app to your Vault.', feature: 'shelf' },

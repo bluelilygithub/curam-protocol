@@ -4,6 +4,8 @@ import { relativeTime } from '../utils/relativeTime';
 import { FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
 import LandingPicker from './LandingPicker';
 import Tooltip from './Tooltip';
+import Dialog from './Dialog';
+import useAuthStore from '../store/authStore';
 
 export default function UsersAdminPanel({ title = 'Members' }) {
   const [users, setUsers] = useState([]);
@@ -20,6 +22,9 @@ export default function UsersAdminPanel({ title = 'Members' }) {
   const [featuresLoading, setFeaturesLoading] = useState(false);
   const [featuresSaving, setFeaturesSaving] = useState(false);
   const [workspaceLanding, setWorkspaceLanding] = useState('');
+  const [reset2faFor, setReset2faFor] = useState(null); // the user row whose two-step login is being reset (confirmed in a Dialog)
+  const [notice, setNotice] = useState('');
+  const myId = useAuthStore((s) => s.user?.id);
 
   const loadWorkspaceLanding = useCallback(async () => {
     try {
@@ -105,6 +110,25 @@ export default function UsersAdminPanel({ title = 'Members' }) {
       setNewPassword('');
     } catch (err) {
       setError(err.message || 'Failed to reset password');
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  // POST /api/admin/users/:id/reset-2fa: authenticator, backup codes, remembered devices and every session go (docs/two-step-login.md)
+  const handleReset2fa = async (user) => {
+    setError('');
+    setNotice('');
+    setBusyUserId(user.id);
+    try {
+      const res = await api.post(`/api/admin/users/${user.id}/reset-2fa`, {});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset two-step login');
+      setReset2faFor(null);
+      setNotice(`Two-step login reset for ${user.email}. They are signed out everywhere${user.isAdmin ? ' and will set up an authenticator at their next sign-in' : ''}.`);
+      await loadUsers();
+    } catch (err) {
+      setError(err.message || 'Failed to reset two-step login');
     } finally {
       setBusyUserId(null);
     }
@@ -246,6 +270,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
       </form>
 
       {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
+      {notice && <p className="text-sm" role="status" style={{ color: 'var(--color-primary)' }}>{notice}</p>}
 
       {loading ? (
         <div className="rounded-2xl border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
@@ -336,6 +361,18 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                       >
                         Reset Password
                       </button>
+                      {user.id !== myId && (
+                        <Tooltip text="Removes their authenticator, backup codes and remembered devices, and signs them out everywhere. For a lost phone or a suspected break-in.">
+                          <button
+                            onClick={() => setReset2faFor(user)}
+                            disabled={busyUserId === user.id}
+                            className="px-2.5 py-1 rounded-md text-xs border hover:opacity-70 transition-opacity disabled:opacity-50"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                          >
+                            Reset 2-step login
+                          </button>
+                        </Tooltip>
+                      )}
                       {deleteConfirmId === user.id ? (
                         <>
                           <button
@@ -464,6 +501,42 @@ export default function UsersAdminPanel({ title = 'Members' }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {reset2faFor && (
+        <Dialog
+          title="Reset 2-step login?"
+          role="alertdialog"
+          size="sm"
+          onClose={() => { if (busyUserId !== reset2faFor.id) setReset2faFor(null); }}
+          footer={(
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReset2faFor(null)}
+                disabled={busyUserId === reset2faFor.id}
+                className="px-3 py-1.5 rounded-md text-xs border hover:opacity-70 transition-opacity disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleReset2fa(reset2faFor)}
+                disabled={busyUserId === reset2faFor.id}
+                className="px-3 py-1.5 rounded-md text-xs text-white hover:opacity-70 transition-opacity disabled:opacity-50"
+                style={{ background: '#ef4444' }}
+              >
+                {busyUserId === reset2faFor.id ? 'Resetting…' : 'Reset'}
+              </button>
+            </div>
+          )}
+        >
+          <div className="space-y-2 text-sm" style={{ color: 'var(--color-text)' }}>
+            <p><strong>{reset2faFor.email}</strong> will be signed out everywhere, and every browser they told Vault to remember is forgotten.</p>
+            {reset2faFor.isAdmin
+              ? <p style={{ color: 'var(--color-muted)' }}>Their authenticator app and backup codes stop working. At their next sign-in they set up an authenticator again.</p>
+              : <p style={{ color: 'var(--color-muted)' }}>Their next sign-in asks for an emailed code. Their password does not change.</p>}
+          </div>
+        </Dialog>
       )}
     </div>
   );
