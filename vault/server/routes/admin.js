@@ -3,6 +3,8 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { getLogger } = require('../middleware/requestContext');
 const { pool } = require('../db');
 const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
 const sentryStats = require('../services/sentryStats');
@@ -205,23 +207,70 @@ router.get('/users', async (_req, res) => {
   }
 });
 
-// POST /api/admin/users
-router.post('/users', async (req, res) => {
-  const { email, password, isAdmin } = req.body || {};
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  if (!normalizedEmail || !password) return res.status(400).json({ error: 'email and password required' });
-  if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+// POST /api/admin/users { email, isAdmin } -> 201 { user, emailSent, link? }
+// The new person gets a welcome email with a link to set their own password (7 days); nobody else ever knows it. Until they use
+// it, sign-in answers "Password setup required" (mustChangePassword). If the email can't be sent, the account still exists and
+// the admin gets the link back to pass on (or sets a password with Reset Password). Same pattern as the Wellbeing invite.
+const INVITE_DAYS = 7;
+const SEND_TIMEOUT_MS = 15000; // MailChannels' request has no timeout of its own
 
+async function sendWelcomeEmail(to, link, isAdmin) {
+  const sendEmail = require('../utils/sendEmail');
+  const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
+<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+<h2 style="margin-top:0;">Welcome to Project Vault</h2>
+<p>An account has been made for you (${to}). Choose your password to start. The link works for ${INVITE_DAYS} days and only once.</p>
+<a href="${link}" style="display:inline-block;background:#CC785C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Set your password</a>
+<p style="margin-top:20px;">When you sign in on a new device, Vault ${isAdmin ? 'asks you to set up an authenticator app on your phone' : 'emails you a 6-digit code'} as a second step.</p>
+<p style="margin-top:24px;font-size:12px;color:#888;">If you weren't expecting this, you can ignore this email.</p>
+</div></body></html>`;
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('send timed out')), SEND_TIMEOUT_MS); });
   try {
-    const passwordHash = await bcrypt.hash(String(password), SALT_ROUNDS);
-    const { rows } = await pool.query(
-      'INSERT INTO users (email, "passwordHash", "isAdmin") VALUES ($1, $2, $3) RETURNING id, email, "isAdmin", "createdAt"',
+    const result = await Promise.race([sendEmail({ to, subject: 'Welcome to Project Vault: set your password', html }), timeout]);
+    if (!result || result.ok === false) throw new Error(result?.reason || 'email not sent'); // DISABLE_EMAIL returns { ok: false, skipped: true }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+router.post('/users', async (req, res) => {
+  const { email, isAdmin } = req.body || {};
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'A valid email address is required' });
+
+  const setupToken = crypto.randomBytes(32).toString('hex');
+  let user;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS); // unknown to anyone
+    const { rows } = await client.query(
+      'INSERT INTO users (email, "passwordHash", "isAdmin", "mustChangePassword") VALUES ($1, $2, $3, TRUE) RETURNING id, email, "isAdmin", "createdAt"',
       [normalizedEmail, passwordHash, !!isAdmin]
     );
-    res.status(201).json({ user: rows[0] });
+    user = rows[0];
+    await client.query('DELETE FROM password_resets WHERE email=$1', [normalizedEmail]);
+    await client.query(
+      `INSERT INTO password_resets (token, email, "expiresAt") VALUES ($1, $2, NOW() + make_interval(days => $3))`,
+      [setupToken, normalizedEmail, INVITE_DAYS]
+    );
+    await client.query('COMMIT');
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+
+  const link = `${require('../utils/appUrl').getAppUrl(req)}/reset-password?token=${setupToken}`;
+  try {
+    await sendWelcomeEmail(normalizedEmail, link, user.isAdmin);
+    res.status(201).json({ user, emailSent: true });
+  } catch (err) {
+    getLogger().warn({ userId: user.id, err: err.message }, 'welcome email not sent');
+    res.status(201).json({ user, emailSent: false, link, emailError: `The account was made, but the welcome email could not be sent (${err.message}). Send them this link yourself, or set a password with Reset Password.` });
   }
 });
 
@@ -234,7 +283,8 @@ router.put('/users/:id/password', async (req, res) => {
 
   try {
     const hash = await bcrypt.hash(String(password), SALT_ROUNDS);
-    const update = await pool.query('UPDATE users SET "passwordHash"=$1 WHERE id=$2 RETURNING id', [hash, userId]);
+    // an admin-chosen password is usable at once, so it also ends a pending "set your password" invite
+    const update = await pool.query('UPDATE users SET "passwordHash"=$1, "mustChangePassword"=FALSE WHERE id=$2 RETURNING id', [hash, userId]);
     if (!update.rows[0]) return res.status(404).json({ error: 'User not found' });
     await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [userId]);
     await require('../services/trustedDevices').forgetAllDevices(pool, userId);

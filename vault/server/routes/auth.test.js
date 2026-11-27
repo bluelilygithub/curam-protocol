@@ -22,7 +22,8 @@ const http = require('http');
 const express = require('express');
 const sent = [];
 const sendEmailPath = require.resolve('../utils/sendEmail');
-require.cache[sendEmailPath] = { id: sendEmailPath, filename: sendEmailPath, loaded: true, exports: async (opts) => { sent.push(opts); return { ok: true }; } };
+require.cache[sendEmailPath] = { id: sendEmailPath, filename: sendEmailPath, loaded: true, exports: async (opts) => { if (mailFails) throw new Error('mail is down'); sent.push(opts); return { ok: true }; } };
+let mailFails = false;
 const { pool } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 
@@ -92,15 +93,60 @@ test('signing in still works for an existing account; a wrong password is refuse
   assert.strictEqual((await call('POST', '/api/auth/login', { email, password: 'nope-nope-nope' })).status, 401);
 });
 
-test('an administrator can create an account, and its owner can then sign in', async () => {
+test('an administrator creates an account: a welcome email with a set-password link, then the owner signs in', async () => {
   const email = mail('admin-made');
-  const made = await call('POST', '/api/admin/users', { email, password: 'admin-made-pass-1' });
+  const before = sent.length;
+  const made = await call('POST', '/api/admin/users', { email, password: 'ignored-pass-1' });
   assert.strictEqual(made.status, 201, JSON.stringify(made.json));
   assert.strictEqual(made.json.user.isAdmin, false);
-  const login = await signIn(email, 'admin-made-pass-1');
-  assert.strictEqual(login.status, 200);
+  assert.strictEqual(made.json.emailSent, true);
+  assert.ok(!made.json.link, 'the link is not handed back when the email went');
+  assert.strictEqual(sent.length, before + 1, 'one welcome email');
+  const welcome = sent[sent.length - 1];
+  assert.strictEqual(welcome.to, email);
+  const token = (await pool.query('SELECT token, "expiresAt" FROM password_resets WHERE email=$1', [email])).rows[0];
+  assert.ok(welcome.html.includes(`/reset-password?token=${token.token}`), 'the email carries the set-password link');
+  const days = (new Date(token.expiresAt) - Date.now()) / 86400000;
+  assert.ok(days > 6.9 && days <= 7, `link lasts 7 days, got ${days}`);
+  // a password sent with the request is ignored; nobody knows the placeholder
+  assert.strictEqual((await call('POST', '/api/auth/login', { email, password: 'ignored-pass-1' })).status, 401);
+  const set = await call('POST', '/api/auth/reset-password-confirm', { token: token.token, password: 'my-own-pass-1' });
+  assert.strictEqual(set.status, 200, JSON.stringify(set.json));
+  const login = await signIn(email, 'my-own-pass-1');
+  assert.strictEqual(login.status, 200, JSON.stringify(login.json));
   const me = await call('GET', '/api/auth/me', undefined, { Authorization: `Bearer ${login.json.token}` });
   assert.strictEqual(me.json.user.email, email);
+  assert.strictEqual((await call('POST', '/api/auth/reset-password-confirm', { token: token.token, password: 'again-pass-1' })).status, 400, 'the link works once');
+});
+
+test('if the welcome email fails, the account is still made and the admin gets the link back', async () => {
+  const email = mail('admin-made-nomail');
+  mailFails = true;
+  let made;
+  try { made = await call('POST', '/api/admin/users', { email, isAdmin: true }); } finally { mailFails = false; }
+  assert.strictEqual(made.status, 201, JSON.stringify(made.json));
+  assert.strictEqual(made.json.emailSent, false);
+  assert.ok(/could not be sent/.test(made.json.emailError));
+  const token = (await pool.query('SELECT token FROM password_resets WHERE email=$1', [email])).rows[0].token;
+  assert.ok(made.json.link.endsWith(`/reset-password?token=${token}`));
+  assert.strictEqual(made.json.user.isAdmin, true);
+});
+
+test('an admin setting a password for an invited person lets them sign in (the invite is no longer pending)', async () => {
+  const email = mail('admin-made-set');
+  const made = await call('POST', '/api/admin/users', { email });
+  const early = await call('POST', '/api/auth/login', { email, password: 'admin-chosen-1' });
+  assert.strictEqual(early.status, 401);
+  assert.strictEqual((await call('PUT', `/api/admin/users/${made.json.user.id}/password`, { password: 'admin-chosen-1' })).status, 200);
+  assert.strictEqual((await signIn(email, 'admin-chosen-1')).status, 200);
+});
+
+test('creating an account needs a valid email, and a duplicate is refused', async () => {
+  assert.strictEqual((await call('POST', '/api/admin/users', { email: 'not-an-email' })).status, 400);
+  assert.strictEqual((await call('POST', '/api/admin/users', { email: '<b>x</b>@a.b' })).status, 400);
+  const email = mail('admin-made-dup');
+  assert.strictEqual((await call('POST', '/api/admin/users', { email })).status, 201);
+  assert.strictEqual((await call('POST', '/api/admin/users', { email })).status, 409);
 });
 
 test('an ordinary member cannot create an account through the admin route', async () => {

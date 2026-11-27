@@ -12,7 +12,8 @@ export default function UsersAdminPanel({ title = 'Members' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
-  const [createForm, setCreateForm] = useState({ email: '', password: '', isAdmin: false });
+  const [createForm, setCreateForm] = useState({ email: '', isAdmin: false });
+  const [inviteLink, setInviteLink] = useState(null); // shown only when the welcome email could not be sent
   const [resetPasswordFor, setResetPasswordFor] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -68,15 +69,18 @@ export default function UsersAdminPanel({ title = 'Members' }) {
     setError('');
     setCreating(true);
     try {
+      setNotice('');
+      setInviteLink(null);
       const res = await api.post('/api/admin/users', {
         email: createForm.email.trim(),
-        password: createForm.password,
         isAdmin: createForm.isAdmin,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create user');
-      setCreateForm({ email: '', password: '', isAdmin: false });
-      await loadUsers();
+      setCreateForm({ email: '', isAdmin: false });
+      await loadUsers(); // clears the error line, so the outcome is shown after it
+      if (data.emailSent) setNotice(`Welcome email sent to ${data.user.email}. They choose their own password from the link (it works for 7 days).`);
+      else { setError(data.emailError); setInviteLink(data.link); }
     } catch (err) {
       setError(err.message || 'Failed to create user');
     } finally {
@@ -238,16 +242,9 @@ export default function UsersAdminPanel({ title = 'Members' }) {
             className="px-3 py-2 rounded-lg border text-sm outline-none"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
           />
-          <input
-            type="password"
-            value={createForm.password}
-            onChange={(e) => setCreateForm(v => ({ ...v, password: e.target.value }))}
-            required
-            minLength={8}
-            placeholder="Temporary password (min 8 chars)"
-            className="px-3 py-2 rounded-lg border text-sm outline-none"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-          />
+          <p className="text-xs self-center" style={{ color: 'var(--color-muted)' }}>
+            They get a welcome email with a link to choose their own password (works for 7 days).
+          </p>
         </div>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label className="text-xs flex items-center gap-2" style={{ color: 'var(--color-muted)' }}>
@@ -258,19 +255,36 @@ export default function UsersAdminPanel({ title = 'Members' }) {
             />
             Grant admin access
           </label>
-          <button
-            type="submit"
-            disabled={creating}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 hover:opacity-80 transition-opacity"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            {creating ? 'Creating…' : 'Create User'}
-          </button>
+          <Tooltip text="Makes the account and emails them a link to set their own password. You never choose or see it.">
+            <button
+              type="submit"
+              disabled={creating}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 hover:opacity-80 transition-opacity"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {creating ? 'Creating…' : 'Create and send invite'}
+            </button>
+          </Tooltip>
         </div>
       </form>
 
       {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
       {notice && <p className="text-sm" role="status" style={{ color: 'var(--color-primary)' }}>{notice}</p>}
+      {inviteLink && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <code className="text-xs px-2 py-1 rounded border break-all" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}>{inviteLink}</code>
+          <Tooltip text="Copy the set-password link to send them yourself. It works once, for 7 days.">
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(inviteLink).then(() => setNotice('Link copied.')).catch(() => {})}
+              className="px-2.5 py-1 rounded-md text-xs border hover:opacity-70 transition-opacity"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Copy link
+            </button>
+          </Tooltip>
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-2xl border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
