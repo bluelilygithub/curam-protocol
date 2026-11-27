@@ -4,6 +4,7 @@ import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import Dialog from '../components/Dialog';
 import Tooltip from '../components/Tooltip';
+import AdminSecondStep from './login/AdminSecondStep';
 
 function safeNextPath(search) {
   const next = new URLSearchParams(search || '').get('next');
@@ -197,7 +198,14 @@ function LoginPage() {
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Sign in to your workspace. Accounts are created by an administrator.</p>
         </div>
 
-        {challenge ? (
+        {challenge && challenge.method !== 'email' ? (
+          <AdminSecondStep
+            challenge={challenge}
+            postJson={postJson}
+            onSignedIn={(data) => { setAuth(data.token, data.user); navigate(nextPath, { replace: true }); }}
+            onStartOver={startOver}
+          />
+        ) : challenge ? (
           <form
             onSubmit={handleVerify}
             className="rounded-2xl border p-6 space-y-4"

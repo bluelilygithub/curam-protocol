@@ -244,6 +244,20 @@ router.put('/users/:id/password', async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:id/reset-2fa: authenticator, backup codes, remembered devices and every session go (docs/two-step-login.md)
+router.post('/users/:id/reset-2fa', async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+  try {
+    const { rows } = await pool.query('SELECT id FROM users WHERE id=$1', [userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    const removed = await require('../services/twoStepReset').resetTwoStep(pool, userId);
+    res.json({ ok: true, removed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PUT /api/admin/users/:id/admin
 router.put('/users/:id/admin', async (req, res) => {
   const userId = Number(req.params.id);

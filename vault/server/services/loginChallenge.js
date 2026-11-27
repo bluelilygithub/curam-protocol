@@ -80,7 +80,7 @@ function emailHint(email) {
   return `${name.slice(0, 1)}***@${domain || ''}`;
 }
 
-/** Does this login need an emailed code? Admins wait for TOTP (Milestone 3). */
+/** Does this login need an emailed code? Never for an admin: admins use an authenticator app (services/authenticator.js). */
 function needsEmailCode(user) {
   return !user.isAdmin;
 }
@@ -212,19 +212,19 @@ async function resendCode(challengeId) {
 }
 
 /**
- * Check a code. On success the challenge is marked used and onSuccess(client, user) makes the session
- * inside the same transaction, so a challenge can never give two sessions.
+ * Finish a challenge with whatever the person typed. check(client, ch, user) says whether it was right; on success the challenge is
+ * marked used and onSuccess(client, user) makes the session inside the same transaction, so a challenge can never give two sessions.
+ * Wrong answers count towards 5 per challenge and 10 an hour per account, whatever the method.
  */
-async function verifyCode(challengeId, code, onSuccess) {
+async function finishChallenge(challengeId, methods, check, onSuccess) {
   const id = String(challengeId || '');
-  const typed = String(code || '').replace(/\D/g, '');
   const client = await pool.connect();
   let reportUser = null;
   try {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT * FROM auth_login_challenges WHERE id=$1 FOR UPDATE', [id]);
     const ch = rows[0];
-    if (!ch || ch.method !== 'email' || ch.usedAt || new Date(ch.expiresAt) < new Date() || ch.attempts >= MAX_ATTEMPTS || !ch.codeHash || !authKey()) {
+    if (!ch || !methods.includes(ch.method) || ch.usedAt || new Date(ch.expiresAt) < new Date() || ch.attempts >= MAX_ATTEMPTS || !authKey()) {
       await client.query('ROLLBACK');
       return dead();
     }
@@ -233,22 +233,22 @@ async function verifyCode(challengeId, code, onSuccess) {
     if (!user) { await client.query('ROLLBACK'); return dead(); }
 
     const tooMany = (await failsLastHour(user.id)) >= MAX_FAILS_PER_HOUR;
-    if (tooMany || typed.length !== 6 || !sameHash(ch.codeHash, hashCode(id, typed))) {
-      const { rows: up } = await client.query(
+    if (tooMany || !(await check(client, ch, user))) {
+      await client.query('ROLLBACK'); // undoes anything check() changed
+      const { rows: up } = await pool.query(
         'UPDATE auth_login_challenges SET attempts=attempts+1 WHERE id=$1 RETURNING attempts', [id]
       );
-      await client.query('COMMIT');
-      if (up[0].attempts >= MAX_ATTEMPTS || tooMany) reportUser = user;
-      const dead = up[0].attempts >= MAX_ATTEMPTS || tooMany;
-      return dead
+      const over = up[0].attempts >= MAX_ATTEMPTS || tooMany;
+      if (over) reportUser = user;
+      return over
         ? { status: 400, body: { error: 'Too many wrong codes. Start again.', code: 'challenge_dead' } }
         : { status: 400, body: { error: GENERIC_ERROR, attemptsLeft: MAX_ATTEMPTS - up[0].attempts } };
     }
 
     await client.query('UPDATE auth_login_challenges SET "usedAt"=NOW() WHERE id=$1', [id]);
-    const result = await onSuccess(client, user);
+    const result = await onSuccess(client, user, ch);
     await client.query('COMMIT');
-    return { status: 200, body: result, user };
+    return { status: 200, body: result, user, method: ch.method };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     throw err;
@@ -258,8 +258,29 @@ async function verifyCode(challengeId, code, onSuccess) {
   }
 }
 
+/** The emailed code (members, accountants) or the authenticator code (admins). Admins never have an email challenge. */
+function verifyCode(challengeId, code, onSuccess) {
+  const typed = String(code || '').replace(/\D/g, '');
+  return finishChallenge(challengeId, ['email', 'totp'], async (client, ch, user) => {
+    if (ch.method === 'totp') return require('./authenticator').checkTotp(client, user.id, typed);
+    return typed.length === 6 && !!ch.codeHash && sameHash(ch.codeHash, hashCode(ch.id, typed));
+  }, onSuccess);
+}
+
+/** An admin's backup code, in place of the authenticator code. */
+function verifyBackup(challengeId, backupCode, onSuccess) {
+  return finishChallenge(challengeId, ['totp'],
+    (client, ch, user) => require('./authenticator').useBackupCode(client, user.id, backupCode), onSuccess);
+}
+
+/** Enrolment step 2: the first code from the newly scanned authenticator switches it on. */
+function confirmEnrol(challengeId, code, onSuccess) {
+  return finishChallenge(challengeId, ['totp_enrol'],
+    (client, ch, user) => require('./authenticator').checkTotp(client, user.id, code, { enrolling: true }), onSuccess);
+}
+
 module.exports = {
-  needsEmailCode, startEmailChallenge, resendCode, verifyCode, checkAuthKeyAtBoot, authKeyProblem,
+  needsEmailCode, startEmailChallenge, resendCode, verifyCode, verifyBackup, confirmEnrol, checkAuthKeyAtBoot, authKeyProblem,
   // for tests
-  _internal: { hashCode, makeCode, emailHint, MAX_ATTEMPTS, MAX_SENDS_PER_HOUR, resetKeyCache: () => { cachedKey = undefined; } },
+  _internal: { authKey, hashCode, makeCode, emailHint, MAX_ATTEMPTS, MAX_SENDS_PER_HOUR, resetKeyCache: () => { cachedKey = undefined; } },
 };

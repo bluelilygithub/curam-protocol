@@ -196,6 +196,25 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_auth_devices_user ON auth_trusted_devices("userId")`);
+    // Admins' authenticator app: secret encrypted with AUTH_ENCRYPTION_KEY (AES-256-GCM); enabledAt NULL until the first code is confirmed
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS auth_totp (
+        "userId"      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        "secretEnc"   TEXT NOT NULL,
+        "enabledAt"   TIMESTAMPTZ,
+        "lastStep"    BIGINT
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS auth_backup_codes (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "codeHash"    TEXT NOT NULL,
+        "usedAt"      TIMESTAMPTZ,
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_auth_backup_codes_user ON auth_backup_codes("userId")`);
 
     // ── Organisation ──────────────────────────────────────────────────────────
     await client.query(`

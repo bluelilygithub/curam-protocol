@@ -64,6 +64,9 @@
   "GET /api/admin/auth-health": {
    "class": "admin"
   },
+  "POST /api/admin/users/:id/reset-2fa": {
+   "class": "admin"
+  },
   "PUT /api/admin/users/:id/admin": {
    "class": "admin"
   },
@@ -101,6 +104,15 @@
    "class": "public"
   },
   "POST /api/auth/challenge/resend": {
+   "class": "public"
+  },
+  "POST /api/auth/challenge/backup": {
+   "class": "public"
+  },
+  "POST /api/auth/challenge/enrol/start": {
+   "class": "public"
+  },
+  "POST /api/auth/challenge/enrol/confirm": {
    "class": "public"
   },
   "POST /api/auth/logout": {

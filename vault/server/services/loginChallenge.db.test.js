@@ -204,12 +204,15 @@ test('email switched off (DISABLE_EMAIL) counts as a failed send; a failed resen
   assert.strictEqual(s.json.code, 'code_send_failed');
 });
 
-test('admins still sign in with a password until Milestone 3; they are never sent an email code', async () => {
+test('admins get an authenticator step, never an email code (full admin flow: authenticator.db.test.js)', async () => {
   const u = await makeUser('admin', { isAdmin: true });
   const before = sent.length;
   const r = await login(u);
   assert.strictEqual(r.status, 200);
-  assert.ok(r.json.token && !r.json.challengeId);
+  assert.ok(!r.json.token && r.json.challengeId);
+  assert.strictEqual(r.json.method, 'totp_enrol');
+  assert.strictEqual(sent.length, before);
+  assert.strictEqual((await resend(r.json.challengeId)).json.code, 'challenge_dead', 'no email code can be asked for');
   assert.strictEqual(sent.length, before);
 });
 

@@ -11,6 +11,7 @@ const { logLogin, accessEnded, ownerEmailOf } = require('../services/accountantA
 const { landingFor } = require('../utils/landing');
 const challenge = require('../services/loginChallenge');
 const devices = require('../services/trustedDevices');
+const authenticator = require('../services/authenticator');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -102,8 +103,11 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Account disabled' });
     }
 
-    if (challenge.needsEmailCode(user) && !(await devices.isTrusted(req, user.id))) {
-      const r = await challenge.startEmailChallenge(user, req);
+    // Second step (docs/two-step-login.md): skipped only on a remembered device, and for an admin only once an authenticator is set up.
+    const trusted = await devices.isTrusted(req, user.id);
+    const needsStep = user.isAdmin ? !(trusted && (await authenticator.isEnrolled(user.id))) : !trusted;
+    if (needsStep) {
+      const r = user.isAdmin ? await authenticator.startAdminChallenge(user, req) : await challenge.startEmailChallenge(user, req);
       if (r.body.challengeId) r.body.rememberDays = devices.deviceDays(user);
       return res.status(r.status).json(r.body);
     }
@@ -115,17 +119,66 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
-// POST /api/auth/challenge/verify { challengeId, code, rememberDevice } -> session (+ device cookie)
+// The session (and, when asked, the remembered-device cookie) made inside the challenge's transaction.
+const sessionFor = (req, rememberDevice, extra) => async (client, user) => ({
+  token: await createSession(client, user),
+  cookie: rememberDevice === true ? await devices.trustDevice(client, req, user) : null,
+  ...(extra ? await extra(client, user) : {}),
+});
+
+async function finish(req, res, r, how) {
+  if (r.status !== 200) return res.status(r.status).json(r.body);
+  const { token, cookie, ...rest } = r.body;
+  if (cookie) res.setHeader('Set-Cookie', cookie);
+  if (r.user.isAdmin) authenticator.reportAdminNewDevice(req, r.user, how);
+  res.json({ ...(await signedIn(req, r.user, token)), ...rest });
+}
+
+// POST /api/auth/challenge/verify { challengeId, code, rememberDevice } -> session (+ device cookie). Emailed code or authenticator code.
 router.post('/challenge/verify', codeLimiter, async (req, res) => {
   try {
     const { challengeId, code, rememberDevice } = req.body || {};
-    const r = await challenge.verifyCode(challengeId, code, async (client, user) => ({
-      token: await createSession(client, user),
-      cookie: rememberDevice === true ? await devices.trustDevice(client, req, user) : null,
-    }));
-    if (r.status !== 200) return res.status(r.status).json(r.body);
-    if (r.body.cookie) res.setHeader('Set-Cookie', r.body.cookie);
-    res.json(await signedIn(req, r.user, r.body.token));
+    const r = await challenge.verifyCode(challengeId, code, sessionFor(req, rememberDevice));
+    await finish(req, res, r, 'an authenticator code');
+  } catch (err) {
+    res.status(500).json({ error: 'Sign-in failed. Try again.' });
+  }
+});
+
+// POST /api/auth/challenge/backup { challengeId, backupCode, rememberDevice } -> session. Admins only (a 'totp' challenge).
+router.post('/challenge/backup', codeLimiter, async (req, res) => {
+  try {
+    const { challengeId, backupCode, rememberDevice } = req.body || {};
+    const r = await challenge.verifyBackup(challengeId, backupCode, sessionFor(req, rememberDevice));
+    if (r.status === 200) {
+      const left = await authenticator.backupCodesLeft(r.user.id);
+      authenticator.reportBackupCodeUsed(req, r.user, left);
+      r.body.backupCodesLeft = left;
+    }
+    await finish(req, res, r, 'a backup code');
+  } catch (err) {
+    res.status(500).json({ error: 'Sign-in failed. Try again.' });
+  }
+});
+
+// POST /api/auth/challenge/enrol/start { challengeId } -> { otpauthUri, manualKey }. The browser draws the QR code.
+router.post('/challenge/enrol/start', codeLimiter, async (req, res) => {
+  try {
+    const r = await authenticator.enrolStart((req.body || {}).challengeId);
+    if (!r) return res.status(400).json({ error: 'This sign-in has expired. Start again.', code: 'challenge_dead' });
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ error: 'Sign-in failed. Try again.' });
+  }
+});
+
+// POST /api/auth/challenge/enrol/confirm { challengeId, code, rememberDevice } -> { backupCodes } + session. Shown once.
+router.post('/challenge/enrol/confirm', codeLimiter, async (req, res) => {
+  try {
+    const { challengeId, code, rememberDevice } = req.body || {};
+    const r = await challenge.confirmEnrol(challengeId, code,
+      sessionFor(req, rememberDevice, async (client, user) => ({ backupCodes: await authenticator.newBackupCodes(client, user.id) })));
+    await finish(req, res, r, 'a newly set-up authenticator');
   } catch (err) {
     res.status(500).json({ error: 'Sign-in failed. Try again.' });
   }
