@@ -6398,6 +6398,30 @@ async function initSchema() {
       UNIQUE ("jobId", "roundNumber", "itemId")
     )
   `);
+  // Rework R2: decisions belong to the job and carry over between checks. A request line: approved / question (with the fingerprints of
+  // its linked changes when decided, so a later change to them shows as "was approved, now changed"). An unrequested change, by its
+  // fingerprint on its page: mine (intentional) / question / expected. Replaces content_check_approvals (kept, no longer written).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_check_decisions (
+      id              SERIAL PRIMARY KEY,
+      "jobId"         INTEGER NOT NULL REFERENCES content_check_jobs(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "itemId"        INTEGER REFERENCES content_check_items(id) ON DELETE CASCADE,
+      "pageId"        INTEGER REFERENCES content_check_pages(id) ON DELETE CASCADE,
+      fp              TEXT,
+      status          TEXT NOT NULL,
+      note            TEXT,
+      fps             JSONB,
+      "roundNumber"   INTEGER,
+      "decidedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (("itemId" IS NOT NULL AND fp IS NULL) OR ("itemId" IS NULL AND fp IS NOT NULL AND "pageId" IS NOT NULL))
+    )
+  `);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS content_check_decisions_line_idx ON content_check_decisions ("jobId", "itemId") WHERE "itemId" IS NOT NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS content_check_decisions_change_idx ON content_check_decisions ("jobId", "pageId", fp) WHERE fp IS NOT NULL`);
+  // one-time move of the old per-round approvals (the latest per line; needs_work becomes question); marked so a cleared decision is not
+  // brought back on the next boot
+  await moveOldApprovals(pool);
 
   console.log('[db] Schema ready');
 }
@@ -6414,4 +6438,17 @@ pool.query('SELECT NOW()')
     process.exit(1);
   });
 
-module.exports = { pool, initSchema, CONTRACT_TYPE_KEYS, PARTY_ROLE_KEYS };
+// Rework R2: the old per-round approvals move once into content_check_decisions (the latest per line; needs_work becomes question).
+// Marked as moved, so a decision cleared later is not brought back on the next boot. Exported for its test.
+async function moveOldApprovals(db) {
+  await db.query(`ALTER TABLE content_check_approvals ADD COLUMN IF NOT EXISTS "movedAt" TIMESTAMPTZ`);
+  await db.query(`
+    INSERT INTO content_check_decisions ("jobId", "userId", "itemId", status, note, "roundNumber", "decidedAt")
+    SELECT DISTINCT ON ("jobId", "itemId") "jobId", "userId", "itemId", CASE status WHEN 'needs_work' THEN 'question' ELSE status END, note, "roundNumber", "updatedAt"
+      FROM content_check_approvals WHERE "movedAt" IS NULL ORDER BY "jobId", "itemId", "roundNumber" DESC
+    ON CONFLICT ("jobId", "itemId") WHERE "itemId" IS NOT NULL DO NOTHING
+  `);
+  await db.query(`UPDATE content_check_approvals SET "movedAt" = NOW() WHERE "movedAt" IS NULL`);
+}
+
+module.exports = { pool, initSchema, moveOldApprovals, CONTRACT_TYPE_KEYS, PARTY_ROLE_KEYS };

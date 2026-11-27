@@ -95,6 +95,27 @@ function summarize(matches, items, changes) {
   };
 }
 
+/** What the lines were when matched: a page is matched again when its lines changed (added, edited, moved to another page). */
+const linesKeyOf = (items) => require('crypto').createHash('sha1').update(JSON.stringify(items.map((it) => [it.ref, it.lineText]))).digest('hex').slice(0, 16);
+
+/**
+ * An earlier check's links, moved onto this check's changes by fingerprint (rework R2): a change that is still there keeps its links
+ * (the AI's and the person's), whatever its position id is now. `same` is true when this check has exactly the changes that were matched
+ * then and the lines are the same: the links can be reused without asking the AI again.
+ */
+function carryMatches(prev, prevChanges, changes, items) {
+  const fpOfPrev = new Map((prevChanges || []).map((c) => [c.id, c.fp]));
+  const idNow = new Map(changes.map((c) => [c.fp, c.id]));
+  const itemsOut = {};
+  for (const [ref, m] of Object.entries(prev?.items || {})) {
+    itemsOut[ref] = { ...m, changeIds: (m.changeIds || []).map((id) => idNow.get(fpOfPrev.get(id))).filter(Boolean) };
+  }
+  const before = (prevChanges || []).map((c) => c.fp).sort().join(' ');
+  const now = changes.map((c) => c.fp).sort().join(' ');
+  const same = before === now && prev?.linesKey === linesKeyOf(items);
+  return { matches: summarize({ ...prev, items: itemsOut }, items, changes), same };
+}
+
 const pub = (message, status = 502) => Object.assign(new Error(message), { isPublic: true, status });
 
 /**
@@ -145,7 +166,7 @@ async function matchRound(userId, { items, changes, previous = null }, deps = {}
       ? { changeIds: m.changeIds, reason: m.reason, by: 'ai', model: modelId, at }
       : { changeIds: [], reason: '', by: 'ai', model: modelId, at, unreadable: true };
   }
-  return summarize({ v: MATCH_VERSION, basis: 'vsBaseline', model: modelId, at, usage, items: itemsOut }, items, changes);
+  return summarize({ v: MATCH_VERSION, basis: 'vsBaseline', model: modelId, at, usage, linesKey: linesKeyOf(items), items: itemsOut }, items, changes);
 }
 
 /** The person links or unlinks by hand: `changeIds` replaces that line's list. */
@@ -158,4 +179,4 @@ function setByPerson(matches, items, changes, ref, changeIds) {
   return summarize({ ...base, items: items2 }, items, changes);
 }
 
-module.exports = { matchRound, setByPerson, summarize, buildPrompt, parseReply, planBatches, SYSTEM, FEATURE, BATCH_SIZE, MAX_CHANGES, TEXT_CAP, MATCH_VERSION };
+module.exports = { matchRound, setByPerson, summarize, carryMatches, linesKeyOf, buildPrompt, parseReply, planBatches, SYSTEM, FEATURE, BATCH_SIZE, MAX_CHANGES, TEXT_CAP, MATCH_VERSION };

@@ -35,6 +35,13 @@ register('html-content-check-job', {
     for (const ap of list(payload.approvals)) {
       if (itemIds.has(ap.itemId)) await insertRow(db, 'content_check_approvals', ap, { userId, override: { jobId, itemId: itemIds.get(ap.itemId) } });
     }
+    for (const d of list(payload.decisions)) {
+      const itemId = d.itemId == null ? null : itemIds.get(d.itemId);
+      const pageId = d.pageId == null ? null : pageIds.get(d.pageId);
+      if (d.itemId != null && !itemId) continue;
+      if (d.fp && !pageId) continue;
+      await insertRow(db, 'content_check_decisions', d, { userId, override: { jobId, itemId: itemId ?? null, pageId: pageId ?? null, fps: json(d.fps) } });
+    }
     return { entityId: jobId };
   },
 });

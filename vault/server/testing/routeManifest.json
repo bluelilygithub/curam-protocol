@@ -3643,6 +3643,12 @@
   "GET /api/html-content-check/jobs/:id/rounds/:number/report": {
    "class": "authed"
   },
+  "PUT /api/html-content-check/jobs/:id/rounds/:number/lines/:ref/decision": {
+   "class": "authed"
+  },
+  "PUT /api/html-content-check/jobs/:id/rounds/:number/pages/:pageId/changes/:fp/decision": {
+   "class": "authed"
+  },
   "DELETE /api/html-content-check/jobs/:id": {
    "class": "authed"
   },

@@ -152,7 +152,7 @@ function serve() {
     await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R4`, { status: 'approved' });
     r = await call(A, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R1`, { status: 'needs_work', note: 'Wrong number' });
     assert.deepEqual(r.body.approvals, { R1: { status: 'needs_work', note: 'Wrong number' }, R2: { status: 'approved', note: null }, R4: { status: 'approved', note: null } });
-    assert.deepEqual((await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body.approvals, {}, 'a later round starts with no verdicts');
+    assert.deepEqual((await call(A, 'GET', `/jobs/${job.id}/rounds/2`)).body.approvals, { R1: { status: 'needs_work', note: 'Wrong number' }, R2: { status: 'approved', note: null }, R4: { status: 'approved', note: null } }, 'decisions belong to the job and carry over to later checks (rework R2)');
     assert.equal((await call(B, 'PUT', `/jobs/${job.id}/rounds/1/approvals/R2`, { status: null })).status, 404, 'another member');
     assert.equal((await getPdf(B)).status, 404, 'another member gets no report');
     pdfRes = await getPdf(A);
