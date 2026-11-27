@@ -326,14 +326,27 @@ router.delete('/devices/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/auth/backup-codes/regenerate { code } -> { backupCodes }: needs a current authenticator code; the old codes stop working
+// POST /api/auth/backup-codes/regenerate { code } -> { backupCodes }: needs a current authenticator code; the old codes stop working.
+// 5 wrong codes an hour per account, then refused for the rest of the hour. Each wrong code is an already-used 'regen' row in
+// auth_login_challenges (attempts 0, so it never counts against signing in; the hourly cron clears it after a day).
+const MAX_REGEN_FAILS_PER_HOUR = 5;
 router.post('/backup-codes/regenerate', requireAuth, codeLimiter, async (req, res) => {
+  const tooMany = { error: 'Too many wrong codes. Try again in an hour.' };
+  const { rows: [{ n: fails }] } = await pool.query(
+    `SELECT COUNT(*)::int n FROM auth_login_challenges WHERE "userId"=$1 AND method='regen' AND "createdAt" > NOW() - INTERVAL '1 hour'`, [req.user.id]
+  ).catch(() => ({ rows: [{ n: MAX_REGEN_FAILS_PER_HOUR }] }));
+  if (fails >= MAX_REGEN_FAILS_PER_HOUR) return res.status(429).json(tooMany);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     if (!(await authenticator.checkTotp(client, req.user.id, String((req.body || {}).code || '')))) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: "That code didn't work. Use the current code from your authenticator app." });
+      await pool.query(
+        `INSERT INTO auth_login_challenges (id, "userId", method, "expiresAt", "usedAt", ip) VALUES ($1, $2, 'regen', NOW(), NOW(), $3)`,
+        [makeToken(), req.user.id, req.ip || null]
+      );
+      if (fails + 1 >= MAX_REGEN_FAILS_PER_HOUR) return res.status(429).json(tooMany);
+      return res.status(400).json({ error: "That code didn't work. Use the current code from your authenticator app.", attemptsLeft: MAX_REGEN_FAILS_PER_HOUR - fails - 1 });
     }
     const backupCodes = await authenticator.newBackupCodes(client, req.user.id);
     await client.query('COMMIT');

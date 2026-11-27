@@ -26,6 +26,14 @@ mkdir -p /c/Users/micha/vault-local-pg && cd /c/Users/micha/vault-local-pg
 3. Log in as the admin created from `SEED_EMAIL` / `SEED_PASSWORD` in `.env` (first boot only).
 4. To stop the database: same `pg_ctl` command with `stop` instead of `start`.
 
+## Two-step login locally
+
+Local has its **own** `AUTH_ENCRYPTION_KEY` in `.env` (a random key made 2026-11-27). It is **never** the production key: do not copy the key from Railway into `.env`, and do not copy the local one to Railway. Without a key nobody can finish signing in locally (`docs/two-step-login.md`).
+
+- A local admin's authenticator is encrypted with the local key, so a phone set up against local Vault works only locally.
+- If the local key is ever changed, local admins who already enrolled can no longer sign in: run `DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_local node server/scripts/reset-2fa.js <email>` and set it up again.
+- nodemon does not watch `.env`: restart `npm run dev` after changing it.
+
 ## The fitness demo user
 
 Create it from the app (Fitness, three-dot menu, "Create or reset demo user") while signed in as the admin, or run it directly:

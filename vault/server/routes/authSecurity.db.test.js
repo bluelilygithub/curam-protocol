@@ -150,6 +150,35 @@ test('regenerating backup codes needs a current authenticator code; old codes st
   assert.ok(await alive(token));
 });
 
+test('regenerate: 5 wrong codes an hour per account, then even a right code is refused; sign-in is not affected', async () => {
+  const a = await makeUser('regen-limit', { isAdmin: true });
+  const secret = totp.newSecret();
+  await pool.query(`INSERT INTO auth_totp ("userId","secretEnc","enabledAt") VALUES ($1,$2,NOW())`, [a.id, encrypt(authKey(), secret)]);
+  const before = await authenticator.newBackupCodes(pool, a.id);
+  const token = await session(a);
+  const other = await makeUser('regen-limit-other', { isAdmin: true });
+  const otherToken = await session(other);
+  for (let i = 1; i <= 4; i++) {
+    const r = await call('POST', '/api/auth/backup-codes/regenerate', token, { code: '000000' });
+    assert.strictEqual(r.status, 400, `wrong code ${i}`);
+    assert.strictEqual(r.json.attemptsLeft, 5 - i);
+  }
+  assert.strictEqual((await call('POST', '/api/auth/backup-codes/regenerate', token, { code: '000000' })).status, 429, 'the 5th wrong code closes it');
+  const right = totp.codeAt(secret, totp.stepAt(Date.now()));
+  const r = await call('POST', '/api/auth/backup-codes/regenerate', token, { code: right });
+  assert.strictEqual(r.status, 429, 'a right code is refused too, for the rest of the hour');
+  assert.ok(await authenticator.useBackupCode(pool, a.id, before[0]), 'the old codes were not replaced');
+  // the limit is per account: another admin is unaffected (a wrong code is a plain 400)
+  assert.strictEqual((await call('POST', '/api/auth/backup-codes/regenerate', otherToken, { code: '000000' })).status, 400);
+  // the wrong regenerate codes do not count towards the sign-in limit (10 wrong an hour)
+  const signInFails = (await pool.query(`SELECT COALESCE(SUM(attempts),0)::int n FROM auth_login_challenges WHERE "userId"=$1`, [a.id])).rows[0].n;
+  assert.strictEqual(signInFails, 0);
+  // an hour later it opens again
+  await pool.query(`UPDATE auth_login_challenges SET "createdAt"=NOW() - INTERVAL '61 minutes' WHERE "userId"=$1 AND method='regen'`, [a.id]);
+  assert.strictEqual((await call('POST', '/api/auth/backup-codes/regenerate', token, { code: right })).status, 200);
+  assert.ok(await alive(token));
+});
+
 test('a member (no authenticator) cannot make backup codes', async () => {
   const u = await makeUser('regen-member');
   const token = await session(u);
