@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import MultiLineChart from './MultiLineChart';
 import MoveHeatmap from './MoveHeatmap';
 import EarningsTimeline from './EarningsTimeline';
-import AllocationPie from './AllocationPie';
 import HorizontalBars from './HorizontalBars';
 import ChartCard from '../charts/ChartCard';
 import StatTile from '../charts/StatTile';
 import DivergingBars from '../charts/DivergingBars';
 import ThresholdBars from '../charts/ThresholdBars';
 import Sparkline from '../charts/Sparkline';
+import DonutChart from '../charts/DonutChart';
+import AreaTrend from '../charts/AreaTrend';
+import ColumnChart from '../charts/ColumnChart';
+import { useIcon } from '../../providers/IconProvider';
 import PortfolioValueChart from './PortfolioValueChart';
 import RelativePerformanceChart from './RelativePerformanceChart';
 import { fmtPct, fmtAud, fmtPts } from '../charts/chartFormat.mjs';
@@ -44,6 +46,29 @@ const GROUPS = [
 
 // Cards the range drives carry no badge; the rest say what window they show instead (Current snapshot, Next 90 days, ...).
 const SNAPSHOT = 'Current snapshot';
+// Return by holding in A$: open positions unrealised, then sold holdings' realised P&L summed per symbol (was PortfolioPnlBarChart).
+function pnlRows(positions, realized) {
+  const closed = new Map();
+  for (const t of realized || []) {
+    const key = `${t.symbol}:${t.exchange || ''}`;
+    const row = closed.get(key) || { symbol: t.symbol, pnl: 0, sells: 0 };
+    row.pnl += Number(t.pnlAud || 0);
+    row.sells += 1;
+    closed.set(key, row);
+  }
+  const open = (positions || []).filter((p) => p.pnlAud != null).map((p) => ({
+    key: `open:${p.symbol}:${p.exchange || ''}`, label: p.symbol, sublabel: 'Open', value: Number(p.pnlAud),
+    valueText: fmtAud(p.pnlAud), note: p.pnlPct != null ? `${fmtPct(p.pnlPct)} vs cost` : null,
+  }));
+  const shut = [...closed.entries()].map(([key, r]) => ({
+    key: `closed:${key}`, label: r.symbol, sublabel: 'Closed', value: r.pnl, valueText: fmtAud(r.pnl),
+    note: `realised, ${r.sells} sell${r.sells === 1 ? '' : 's'}`,
+  }));
+  return [...open, ...shut].sort((a, b) => b.value - a.value);
+}
+const shortDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }); } catch { return String(iso).slice(0, 10); } };
+const monthLabel = (ym) => { try { return new Date(`${ym}-15T12:00:00`).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }); } catch { return ym; } };
+
 // One panel of cards: one column, two from xl (DESIGN.md "Wide screens").
 const Grid = ({ children }) => <div className="flex flex-col gap-6 xl:grid xl:grid-cols-2 xl:items-start">{children}</div>;
 const Note = ({ children }) => <p className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>{children}</p>;
@@ -55,9 +80,10 @@ export default function SharesChartsTab({
   loading,
   positions = [],
   realized = [],
-  PortfolioPnlBarChart,
   dividendSummary,
 }) {
+  const getIcon = useIcon();
+  const [returnView, setReturnView] = useState('pct'); // Return by holding: 'pct' (vs cost) or 'aud' (open + closed)
   const [cashView, setCashView] = useState('total'); // Portfolio value: 'total' or 'split' (holdings + dashed cash)
   const [group, setGroup] = useState('movement');
 
@@ -317,6 +343,17 @@ export default function SharesChartsTab({
     </Grid>
   );
 
+  // ---- Holdings ----
+  const buckets = charts.allocationByBenchmark?.length
+    ? charts.allocationByBenchmark.map((b) => ({ key: b.label, label: b.label, pct: Number(b.pct) || 0, detail: b.symbols?.join(', ') }))
+    : (charts.allocation || []).map((a) => ({ key: `${a.symbol}:${a.exchange || ''}`, label: a.symbol, pct: Number(a.pct) || 0 }));
+  const holdingCount = (charts.allocation || []).length || positions.length;
+  const pctRows = (charts.holdingPnl || []).filter((h) => h.pnlPct != null).map((h) => ({
+    key: `${h.symbol}:${h.exchange || ''}`, label: h.symbol, value: Number(h.pnlPct), valueText: fmtPct(h.pnlPct),
+  }));
+  const audRows = pnlRows(positions, realized);
+  const audTotal = audRows.reduce((sum, r) => sum + r.value, 0);
+
   const holdings = (
     <Grid>
       <ChartCard
@@ -325,54 +362,57 @@ export default function SharesChartsTab({
         subtitle="Grouped by the sector index each holding is compared with."
         info="Grouped by the sector proxy used in the Portfolio Note (not just ticker weight)."
       >
-        {charts.allocationByBenchmark?.length > 0 ? (
-          <AllocationPie
-            slices={charts.allocationByBenchmark.map((b) => ({
-              symbol: b.label,
-              pct: b.pct,
-              detail: b.symbols?.join(', '),
-            }))}
-          />
-        ) : (
-          <AllocationPie slices={charts.allocation} />
-        )}
+        {buckets.length
+          ? <DonutChart slices={buckets} centreValue={holdingCount} centreLabel={holdingCount === 1 ? 'holding' : 'holdings'} ariaLabel={`Donut chart of allocation: ${buckets.map((b) => `${b.label} ${b.pct.toFixed(1)}%`).join(', ')}`} />
+          : <Note>Add holdings with live quotes to see allocation.</Note>}
       </ChartCard>
 
       <ChartCard
-        title="Total return vs cost"
+        title="Return by holding"
         badge={SNAPSHOT}
-        subtitle="Unrealised gain or loss since purchase."
-        info="Unrealised gain/loss since purchase (not today's move)."
+        subtitle={returnView === 'pct' ? 'Unrealised gain or loss since purchase.' : `Open unrealised and closed realised, total ${fmtAud(audTotal)}.`}
+        info="% vs cost: unrealised gain/loss since purchase (not today's move). A$ open + closed: open positions unrealised, closed positions realised from sell trades, one row each."
+        actions={(
+          <SegmentedToggle
+            label="Return measure"
+            size="xs"
+            value={returnView}
+            onChange={setReturnView}
+            options={[
+              { value: 'pct', label: '% vs cost', tip: 'Each open holding’s unrealised return as a percentage of what it cost.' },
+              { value: 'aud', label: 'A$ open + closed', tip: 'Dollar profit or loss: unrealised on open holdings, realised on sold ones.' },
+            ]}
+          />
+        )}
       >
-        <HorizontalBars items={charts.holdingPnl} valueKey="pnlPct" />
+        {returnView === 'pct'
+          ? (pctRows.length ? <DivergingBars items={pctRows} ariaLabel="Bars centred on zero: each holding's unrealised return vs cost" /> : <Note>No holdings to chart.</Note>)
+          : (audRows.length ? (
+            <>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                {audRows.filter((r) => r.value >= 0).length} in profit · {audRows.filter((r) => r.value < 0).length} at a loss · {audRows.length} charted
+              </p>
+              <DivergingBars items={audRows} ariaLabel="Bars centred on zero: dollar profit or loss, open holdings unrealised and closed holdings realised" />
+            </>
+          ) : <Note>No open or closed stock P&L to chart yet.</Note>)}
       </ChartCard>
-
-      {PortfolioPnlBarChart && (
-        <ChartCard
-          span
-          title="P&L by stock"
-          badge={SNAPSHOT}
-          subtitle="Open positions unrealised, closed positions realised."
-          info="Open positions: unrealised. Closed: realised from sell trades."
-        >
-          <PortfolioPnlBarChart positions={positions} realized={realized} />
-        </ChartCard>
-      )}
     </Grid>
   );
 
+  // ---- Calendar & patterns ----
   const calendar = (
     <Grid>
       <ChartCard
         title="Upcoming earnings"
         badge="Next 90 days"
-        subtitle="US holdings only."
+        subtitle="US holdings only; filled dates are within a week."
         info="US symbols only — Finnhub calendar for the next 90 days."
       >
         <EarningsTimeline events={charts.earningsTimeline} />
       </ChartCard>
 
       <ChartCard
+        span
         title="Move heatmap"
         badge="Max 14 days"
         subtitle="Daily price moves from snapshots."
@@ -380,41 +420,42 @@ export default function SharesChartsTab({
       >
         <MoveHeatmap heatmap={charts.moveHeatmap} />
         {(pattern.recurringUnexplained?.length > 0 || pattern.laggingSymbols?.length > 0) && (
-          <div className="text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>
+          <ul className="space-y-1.5 text-sm">
             {pattern.laggingSymbols?.length > 0 && (
-              <p>Lagging cluster today: {pattern.laggingSymbols.join(', ')}</p>
+              <li className="flex items-start gap-2" style={{ color: 'var(--color-text)' }}>
+                <span className="mt-0.5" style={{ color: 'var(--chart-loss)' }}>{getIcon('trending-down', { size: 15 })}</span>
+                Lagging cluster today: {pattern.laggingSymbols.join(', ')}
+              </li>
             )}
             {pattern.recurringUnexplained?.map((r) => (
-              <p key={r.symbol}>
+              <li key={r.symbol} className="flex items-start gap-2" style={{ color: 'var(--color-text)' }}>
+                <span className="mt-0.5" style={{ color: 'var(--chart-warn)' }}>{getIcon('alert-triangle', { size: 15 })}</span>
                 {r.symbol}: {r.count} unexplained material moves in recent observations
-              </p>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </ChartCard>
     </Grid>
   );
 
-  const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n)}%`;
-  const metals = charts.metals?.hasHoldings ? (
+  // ---- Metals ----
+  const m = charts.metals || {};
+  const tone = (v) => (v == null ? undefined : v >= 0 ? 'gain' : 'loss');
+  const metals = m.hasHoldings ? (
     <Grid>
       <ChartCard
+        span
         title="Gold book day move"
         badge={SNAPSHOT}
         subtitle="Physical holdings against XAU/AUD spot."
         info="Physical holdings vs XAU/AUD spot — parallel to the METALS block in the Portfolio Note."
       >
-        {charts.metals.portfolioMove ? (
-          <div className="flex flex-wrap gap-4 text-sm">
-            <span style={{ color: charts.metals.portfolioMove.changePct >= 0 ? 'var(--chart-gain)' : 'var(--chart-loss)' }}>
-              Book {signed(charts.metals.portfolioMove.changePct)}
-            </span>
-            {charts.metals.spotDayChangePct != null && (
-              <span style={{ color: 'var(--color-muted)' }}>Spot {signed(charts.metals.spotDayChangePct)}</span>
-            )}
-            {charts.metals.unrealizedPnlPct != null && (
-              <span style={{ color: 'var(--color-muted)' }}>Unrealised {signed(charts.metals.unrealizedPnlPct)} vs cost</span>
-            )}
+        {m.portfolioMove ? (
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+            <StatTile primary label="Book move today" value={fmtPct(m.portfolioMove.changePct, 2)} sub={m.portfolioMove.changeAud != null ? fmtAud(m.portfolioMove.changeAud) : null} />
+            <StatTile label="Spot move today" value={fmtPct(m.spotDayChangePct, 2)} sub="XAU/AUD" />
+            <StatTile label="Unrealised vs cost" value={fmtPct(m.unrealizedPnlPct, 1)} sub={m.holdingsValueAud != null ? `Worth ${fmtAud(m.holdingsValueAud, { signed: false })}` : null} tone={tone(m.unrealizedPnlPct)} />
           </div>
         ) : (
           <Note>Spot quote unavailable.</Note>
@@ -425,21 +466,30 @@ export default function SharesChartsTab({
         title="XAU/AUD spot history"
         subtitle={today ? 'Pick 7d or longer to see the history.' : `Gold spot over ${phrase}.`}
       >
-        {charts.metals.spotHistory?.length > 1 ? (
-          <MultiLineChart points={charts.metals.spotHistory} series={[{ key: 'audPerOz', label: 'XAU/AUD per oz' }]} height={140} />
+        {m.spotHistory?.length > 1 ? (
+          <AreaTrend
+            points={m.spotHistory}
+            xKey="recordedAt"
+            yKey="audPerOz"
+            name="XAU/AUD per oz"
+            format={(v) => fmtAud(v, { signed: false })}
+            xFormat={shortDate}
+            ariaLabel={`Area chart of the gold spot price in AUD per ounce over ${phrase}`}
+          />
         ) : (
           <Note>{today ? 'Choose a longer range.' : 'Not enough spot history recorded for this range.'}</Note>
         )}
       </ChartCard>
 
-      {charts.metals.alertRows?.length > 0 && (
+      {m.alertRows?.length > 0 && (
         <ChartCard title="Metals drawdown" badge={SNAPSHOT} subtitle="Same peak and cost alerts as shares.">
-          <ThresholdBars items={drawdownItems(charts.metals.alertRows)} trigger={peakTrigger} triggerLabel={`${peakTrigger}% off peak trigger`} labels={drawdownLabels} ariaLabel="Bars of how far each metal holding is below its peak" />
+          <ThresholdBars items={drawdownItems(m.alertRows)} trigger={peakTrigger} triggerLabel={`${peakTrigger}% off peak trigger`} labels={drawdownLabels} ariaLabel="Bars of how far each metal holding is below its peak" />
         </ChartCard>
       )}
     </Grid>
   ) : null;
 
+  // ---- Dividends ----
   const dividends = dividendSummary?.totalCount > 0 ? (
     <Grid>
       <ChartCard
@@ -448,11 +498,19 @@ export default function SharesChartsTab({
         subtitle={`Gross, across ${dividendSummary.totalCount} payment${dividendSummary.totalCount === 1 ? '' : 's'}.`}
         info={`Gross (before withholding tax) — all-time total across ${dividendSummary.totalCount} payment(s). FY to date (from ${dividendSummary.fyStart}) shown as the Portfolio tab stat tile.`}
       >
-        <HorizontalBars items={dividendSummary.bySymbol} valueKey="totalAud" labelKey="symbol" format="aud" />
+        <HorizontalBars items={dividendSummary.bySymbol} valueKey="totalAud" labelKey="symbol" ariaLabel="Bars of gross dividends received per holding, all time" />
       </ChartCard>
       {dividendSummary.monthly.length > 1 && (
-        <ChartCard title="By month" badge="All time" subtitle="By the month received.">
-          <HorizontalBars items={dividendSummary.monthly} valueKey="totalAud" labelKey="month" format="aud" />
+        <ChartCard title="By month" badge="All time" subtitle="Gross, by the month received.">
+          <ColumnChart
+            points={dividendSummary.monthly}
+            xKey="month"
+            yKey="totalAud"
+            name="Gross dividends"
+            format={(v) => fmtAud(v, { signed: false })}
+            xFormat={monthLabel}
+            ariaLabel="Column chart of gross dividends received per month"
+          />
         </ChartCard>
       )}
     </Grid>

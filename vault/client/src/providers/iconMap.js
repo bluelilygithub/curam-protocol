@@ -55,6 +55,7 @@ export const semanticMap = {
   'shield-check': { lucide: 'ShieldCheck' },
   radar: { lucide: 'Radar' },
   'trending-up': { lucide: 'TrendingUp' },
+  'trending-down': { lucide: 'TrendingDown' },
   'eye': { lucide: 'Eye' },
   'scan-search': { lucide: 'ScanSearch' },
   megaphone: { lucide: 'Megaphone' },

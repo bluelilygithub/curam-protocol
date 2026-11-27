@@ -1,49 +1,21 @@
 import React from 'react';
+import { fmtAud } from '../charts/chartFormat.mjs';
 
-const AUD_FORMATTER = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
-
-// format: 'pct' (default, existing behaviour — signed %, red/green by sign)
-// or 'aud' (currency, always the positive/accent colour — for amounts that
-// are never "bad", like dividend income, not a P&L figure).
-export default function HorizontalBars({ items = [], valueKey = 'pnlPct', labelKey = 'symbol', format = 'pct' }) {
-  if (!items.length) {
-    return (
-      <p className="text-xs py-6 text-center" style={{ color: 'var(--color-muted)' }}>
-        No holdings to chart.
-      </p>
-    );
-  }
-
-  const vals = items.map((it) => Number(it[valueKey]) || 0);
-  const maxAbs = Math.max(...vals.map(Math.abs), 1);
-
+// Amounts that are never "bad" (dividend income): one bar per item in --chart-1, the amount on the right.
+export default function HorizontalBars({ items = [], valueKey = 'totalAud', labelKey = 'symbol', ariaLabel }) {
+  if (!items.length) return <p className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>Nothing to chart yet.</p>;
+  const max = Math.max(...items.map((it) => Number(it[valueKey]) || 0), 1);
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3" role="img" aria-label={ariaLabel}>
       {items.map((it) => {
         const v = Number(it[valueKey]) || 0;
-        const pct = Math.max(4, (Math.abs(v) / maxAbs) * 100);
-        const positive = v >= 0;
-        const valueLabel = format === 'aud'
-          ? AUD_FORMATTER.format(v)
-          : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-        const barColor = format === 'aud' ? 'var(--color-primary)' : (positive ? 'var(--chart-gain)' : 'var(--chart-loss)');
         return (
-          <li key={it.symbol ? `${it.symbol}-${it.exchange || ''}` : it[labelKey]}>
-            <div className="flex justify-between text-xs mb-1">
-              <span style={{ color: 'var(--color-text)' }}>{it[labelKey]}</span>
-              <span style={{ color: format === 'aud' ? 'var(--color-text)' : (positive ? 'var(--chart-gain)' : 'var(--chart-loss)') }}>
-                {valueLabel}
-              </span>
-            </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
-              <div
-                className="h-2 rounded-full transition-all duration-200"
-                style={{
-                  width: `${pct}%`,
-                  background: barColor,
-                }}
-              />
-            </div>
+          <li key={`${it[labelKey]}-${it.exchange || ''}`} className="grid grid-cols-[4.5rem_1fr_6.5rem] sm:grid-cols-[6.5rem_1fr_8rem] items-center gap-3">
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{it[labelKey]}</span>
+            <span className="h-3 rounded-full" style={{ background: 'var(--color-bg)' }}>
+              <span className="block h-3 rounded-full" style={{ width: `${Math.max(2, (v / max) * 100)}%`, background: 'var(--chart-1)' }} />
+            </span>
+            <span className="text-sm text-right tabular-nums" style={{ color: 'var(--color-text)' }}>{fmtAud(v, { signed: false, digits: 2 })}</span>
           </li>
         );
       })}

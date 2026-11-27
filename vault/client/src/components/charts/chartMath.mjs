@@ -52,3 +52,19 @@ export function changeOverRange(points, key) {
 export function cardsForRange(range) {
   return { trailingReturn: range === 'today' };
 }
+
+/** Heatmap cell: { tone: 'gain'|'loss'|'flat', strength: 0-85 (% of the tone mixed into the surface), strong } for a % move. `cap` is the move that gets full strength. */
+export function heatCell(pct, cap = 3) {
+  const v = num(pct);
+  if (v == null || Math.abs(v) < 0.05) return { tone: 'flat', strength: 0, strong: false };
+  const strength = Math.round(15 + (Math.min(Math.abs(v), cap) / cap) * 70);
+  return { tone: v > 0 ? 'gain' : 'loss', strength, strong: strength >= 55 };
+}
+
+/** Monday (YYYY-MM-DD) of the week a YYYY-MM-DD date falls in, for grouping by week. */
+export function weekStart(ymd) {
+  const d = new Date(`${String(ymd).slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}

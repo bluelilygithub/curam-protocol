@@ -1,6 +1,6 @@
 // node client/src/components/charts/chartMath.test.mjs
 import assert from 'node:assert/strict';
-import { maxAbsOf, positionPct, divergingBar, thresholdStatus, thresholdBar, changeOverRange, cardsForRange } from './chartMath.mjs';
+import { maxAbsOf, positionPct, divergingBar, thresholdStatus, thresholdBar, changeOverRange, cardsForRange, heatCell, weekStart } from './chartMath.mjs';
 
 // ---- zero-centred bars ----
 assert.equal(maxAbsOf([2, -5, null, 'x']), 5);
@@ -41,5 +41,19 @@ assert.equal(changeOverRange([{ v: 0 }, { v: 5 }], 'v').pct, null, 'no % from ze
 // ---- which cards a range shows ----
 assert.equal(cardsForRange('today').trailingReturn, true);
 for (const r of ['7d', '30d', '90d', '12m', 'fy', 'all']) assert.equal(cardsForRange(r).trailingReturn, false, r);
+
+// ---- heatmap scale ----
+assert.deepEqual(heatCell(0), { tone: 'flat', strength: 0, strong: false });
+assert.deepEqual(heatCell(null), { tone: 'flat', strength: 0, strong: false });
+assert.deepEqual(heatCell(3), { tone: 'gain', strength: 85, strong: true });
+assert.deepEqual(heatCell(-9), { tone: 'loss', strength: 85, strong: true }, 'capped');
+assert.equal(heatCell(0.3).strong, false);
+assert.ok(heatCell(-1).strength < heatCell(-2).strength, 'bigger moves are stronger');
+
+// ---- week grouping (Monday start) ----
+assert.equal(weekStart('2026-11-30'), '2026-11-30', 'a Monday is its own week');
+assert.equal(weekStart('2026-12-06'), '2026-11-30', 'Sunday belongs to the week before');
+assert.equal(weekStart('2026-12-03'), '2026-11-30');
+assert.equal(weekStart('nonsense'), null);
 
 console.log('chartMath tests passed');
