@@ -2,6 +2,37 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "5d796c29",
+   "fullHash": "5d796c2934fcf4cd72174c93122f839403eded5f",
+   "committedAt": "2026-11-27T13:33:09+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Two-step login Milestone 1: emailed sign-in codes for members",
+   "filesChanged": 14,
+   "insertions": 864,
+   "deletions": 13,
+   "goal": "A password alone was enough to get into any account. Milestone 1 of four adds a second step for members and accountant logins: a 6-digit code sent by email after the right password.",
+   "whatChanged": "New table auth_login_challenges (db.js). New server/services/loginChallenge.js: makes a challenge instead of a session for members and accountants, emails the code (HMAC-SHA256 with AUTH_ENCRYPTION_KEY, 10 minutes), checks it with a constant-time compare, and makes the session in the same transaction that marks the challenge used. Limits: 5 wrong tries per challenge, 10 wrong codes and 6 code emails an hour per account, resend once a minute, plus IP limits on the new routes. auth.js: createSession() is now the one place a session is made; new POST /api/auth/challenge/verify and /challenge/resend. A failed send (error, 15-second timeout, or email switched off) shows 'We couldn't send your code. Try again, or ask an admin.' with a Send code button and raises a Suggestions alert. index.js logs a clear boot error if AUTH_ENCRYPTION_KEY is missing. LoginPage.jsx has the code step (one-time-code box, paste with spaces cleaned, Resend countdown, Start again, Tooltips, no mic on purpose). Admins still sign in with a password only until Milestone 3. Docs: new docs/two-step-login.md (the full plan, with the agreed changes), env-vars.md, hardening.md (plus future item: session token out of localStorage), recycle-bin.md, key-files.md, CLAUDE.md. Tests: new loginChallenge.db.test.js; auth.test.js completes the code step; two routes added to routeManifest.json.",
+   "filesImpacted": [
+    "vault/server/services/loginChallenge.js",
+    "vault/server/routes/auth.js",
+    "vault/server/db.js",
+    "vault/server/index.js",
+    "vault/client/src/pages/LoginPage.jsx",
+    "vault/server/services/loginChallenge.db.test.js",
+    "vault/server/routes/auth.test.js",
+    "vault/server/testing/routeManifest.json",
+    "vault/docs/two-step-login.md",
+    "vault/docs/env-vars.md",
+    "vault/docs/hardening.md",
+    "vault/docs/recycle-bin.md",
+    "vault/docs/key-files.md",
+    "vault/CLAUDE.md"
+   ],
+   "benefit": "A stolen or guessed password no longer opens a member's or accountant's account without access to their email. Failed code emails are visible to the person and to the admin instead of failing silently.",
+   "concerns": "Held back from deploy until Milestone 2: without trusted devices, every member sign-in (about daily, sessions last 24 hours) needs an emailed code. If email delivery fails, members cannot sign in at all; only an alert is raised. Admins are not covered until Milestone 3. AUTH_ENCRYPTION_KEY must stay set in Railway (set 2026-11-27); without it members cannot finish signing in. Tested locally: loginChallenge.db.test.js 13/13, auth.test.js 7/7, the login page seen working in a browser with email switched off (send-failed screen, wrong code, pasted code, sign-in and refresh). Not seen: a real code email arriving, the Resend countdown on screen. The cross-user inventory check still fails on 15 older DNS-lookup and Geo-check routes missing from the manifest (not from this commit). Express rate limits are kept in memory per instance, so they reset on deploy."
+  },
+  {
    "commit": "36f9924a",
    "fullHash": "36f9924a3c2061f1c3762d519bbf9530abce375b",
    "committedAt": "2026-11-27T13:02:04+10:00",
