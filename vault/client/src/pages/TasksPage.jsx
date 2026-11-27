@@ -18,6 +18,7 @@ import AttachmentChip from '../components/AttachmentChip';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 import PageToolbar from '../components/PageToolbar';
 import Dialog from '../components/Dialog';
+import useTicketsAllowed from './tickets/useTicketsAllowed';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -532,6 +533,7 @@ export default function TasksPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const searchInputRef = useRef(null);
+  const ticketsAllowed = useTicketsAllowed();
 
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -1795,6 +1797,19 @@ export default function TasksPage() {
                 >
                   {getIcon('pen-line', { size: 13 })}
                   From note: {task.sourceNoteTitle}
+                </button>
+              </div>
+            )}
+            {ticketsAllowed && task.ticketId && task.sourceTicketTitle && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/tickets/${task.ticketId}`)}
+                  className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  {getIcon('ticket', { size: 13 })}
+                  From ticket T-{task.ticketId}: {task.sourceTicketTitle}
                 </button>
               </div>
             )}

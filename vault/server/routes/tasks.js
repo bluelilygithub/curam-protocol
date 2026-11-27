@@ -97,8 +97,15 @@ async function getSourceNoteTitle(noteId, userId) {
   return rows[0]?.title || null;
 }
 
+// tickets are shared by everyone with Tickets, so no owner filter; the page shows the link only to people with Tickets
+async function getSourceTicketTitle(ticketId) {
+  if (!ticketId) return null;
+  const { rows } = await pool.query('SELECT title FROM tickets WHERE id=$1', [ticketId]);
+  return rows[0]?.title || null;
+}
+
 async function buildTask(row) {
-  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle, attachments, sourceNoteTitle] = await Promise.all([
+  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle, attachments, sourceNoteTitle, sourceTicketTitle] = await Promise.all([
     getTags(row.id),
     getSubtaskStats(row.id),
     getKrInfo(row.keyResultId),
@@ -106,8 +113,9 @@ async function buildTask(row) {
     getSourceSessionTitle(row.sourceSessionId),
     attachmentsForEntity('task', row.id),
     getSourceNoteTitle(row.sourceNoteId, row.userId),
+    getSourceTicketTitle(row.ticketId),
   ]);
-  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle, attachments, sourceNoteTitle };
+  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle, attachments, sourceNoteTitle, sourceTicketTitle };
 }
 
 // A repeating task that has just been finished makes its next occurrence (same title, notes, tags, next date).
