@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { pool } = require('../db');
 const sendEmail = require('../utils/sendEmail');
-const { getAppUrl } = require('../utils/appUrl');
+const { emailAppUrl } = require('../utils/appUrl');
 const { buildWellbeingPdfBuffer } = require('../services/wellbeingPdf');
 const { buildCombinedProfilePdfBuffer } = require('../services/combinedProfilePdf');
 const { buildWellbeingVisualPdfBuffer } = require('../services/wellbeingVisualPdf');
@@ -2443,7 +2443,7 @@ router.post('/admin/invite', async (req, res) => {
   client.release();
 
   try {
-    const appUrl = getAppUrl(req);
+    const appUrl = emailAppUrl(req);
     const link = `${appUrl}/reset-password?token=${setupToken}&next=${encodeURIComponent('/wellbeing')}`;
     const template = await loadWellbeingInviteTemplate();
     const html = renderWellbeingInviteHtml({
