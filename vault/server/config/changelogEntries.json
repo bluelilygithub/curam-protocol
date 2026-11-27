@@ -2,6 +2,28 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "a5cc3607",
+   "fullHash": "a5cc36074dfc42aac62c1a3f2c25496c4567d9b0",
+   "committedAt": "2026-11-27T17:10:17+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Forgot password and Wellbeing invite emails link to vault.curam-ai.com.au",
+   "filesChanged": 5,
+   "insertions": 16,
+   "deletions": 10,
+   "goal": "The owner asked for the Forgot password and Wellbeing invite emails to use vault.curam-ai.com.au too.",
+   "whatChanged": "server/utils/appUrl.js: new emailAppUrl(req) (and EMAIL_APP_URL): https://vault.curam-ai.com.au whatever address the request came in on; a local run (localhost or 127.0.0.1, exact host) keeps its address. Used by the welcome and reset emails (server/routes/admin.js, replacing its own copy), Forgot password (server/routes/auth.js) and the Wellbeing invite (server/routes/wellbeing.js). getAppUrl() and APP_URL are unchanged. docs/key-files.md updated.",
+   "filesImpacted": [
+    "vault/server/utils/appUrl.js",
+    "vault/server/routes/admin.js",
+    "vault/server/routes/auth.js",
+    "vault/server/routes/wellbeing.js",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "Every email Vault sends with a link points at the Vault's own domain.",
+   "concerns": "The domain is written in code. The Forgot password and Wellbeing emails were not rendered; the change there is only the address, and auth.test.js (13, including Forgot password and the Wellbeing invite) and trustedDevices.db.test.js (10) pass. Not checked with a real email."
+  },
+  {
    "commit": "db45ef0a",
    "fullHash": "db45ef0a76428531d5b1e464867ceba218badeea",
    "committedAt": "2026-11-27T17:08:25+10:00",
@@ -18,7 +40,7 @@
     "vault/docs/key-files.md"
    ],
    "benefit": "People see and use the Vault's own domain from their first email.",
-   "concerns": "The domain is written in code, so moving Vault to another domain needs a code change. APP_URL was left alone on purpose (it also drives Google sign-in return links), so Forgot password and Wellbeing invite emails still use the address the request came in on. Checked by rendering the email and the 13 account tests; vault.curam-ai.com.au answered the health check before the change."
+   "concerns": "The domain is written in code, so moving Vault to another domain needs a code change. APP_URL was left alone on purpose (it also drives Google sign-in return links), so Forgot password and Wellbeing invite emails still used the address the request came in on (moved over in the next commit, a5cc3607). Checked by rendering the email and the 13 account tests; vault.curam-ai.com.au answered the health check before the change."
   },
   {
    "commit": "ef52a55a",
