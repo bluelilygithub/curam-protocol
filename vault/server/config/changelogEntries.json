@@ -2,6 +2,33 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f6fb3216",
+   "fullHash": "f6fb32167e150b2c7884547e95f7bc0e6e92d827",
+   "committedAt": "2026-11-27T14:09:35+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Two-step login: broken-key alerts, hex keys, admin auth-health check",
+   "filesChanged": 10,
+   "insertions": 135,
+   "deletions": 8,
+   "goal": "The first two-step login deploy went live with an AUTH_ENCRYPTION_KEY the server could not use, and members could not sign in until someone noticed. A broken key should be visible at once, and a common way of writing the key (hex) should simply work.",
+   "whatChanged": "loginChallenge.js: the key may be 64 hex characters or base64 (44 characters); authKeyProblem() gives a plain reason without the value; checkAuthKeyAtBoot() logs it and raises a Suggestions alert to the primary admin (once a day). attention.js (route and service): for admins only, 'Two-step login is broken: members can't sign in' at the top of Needs attention (its own Sign-in box in the Home sidebar, first line on the mobile dashboard and project list). admin.js: new GET /api/admin/auth-health answering { ok, problem }. Docs: env-vars.md (both key formats), two-step-login.md (what happens when the key is broken; Milestone 3 must check the key on the live server before and after pushing). Tests: new loginChallenge.key.test.js; broken-key test in loginChallenge.db.test.js; attention.test.js; route added to routeManifest.json.",
+   "filesImpacted": [
+    "vault/server/services/loginChallenge.js",
+    "vault/server/routes/attention.js",
+    "vault/server/services/attention.js",
+    "vault/server/routes/admin.js",
+    "vault/server/services/loginChallenge.key.test.js",
+    "vault/server/services/loginChallenge.db.test.js",
+    "vault/server/services/attention.test.js",
+    "vault/server/testing/routeManifest.json",
+    "vault/docs/env-vars.md",
+    "vault/docs/two-step-login.md"
+   ],
+   "benefit": "A broken or missing key now shows up for admins the moment the server starts, instead of when a member's sign-in fails. A key written as hex no longer locks members out.",
+   "concerns": "The admin warning only shows on pages that show Needs attention (Home, mobile dashboard, project list). The boot alert fingerprint is per day, so a key that stays broken raises one alert a day. Tested locally: key-shape test, loginChallenge.db.test.js 14/14, trustedDevices 10/10, auth 7/7, attention test; warning seen in a browser on desktop Home and the mobile dashboard with a broken key, and the boot log checked to never contain the value. auth-health not yet run on the live site at commit time."
+  },
+  {
    "commit": "15236a8c",
    "fullHash": "15236a8c42088c5763ff01168ac92d0e40a2e44e",
    "committedAt": "2026-11-27T13:38:20+10:00",
