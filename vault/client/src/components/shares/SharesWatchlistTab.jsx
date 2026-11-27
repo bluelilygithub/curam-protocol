@@ -7,13 +7,15 @@ import useProcessingStore from '../../store/processingStore';
 import { useIcon } from '../../providers/IconProvider';
 import { mdComponents } from '../../utils/mdComponents';
 import { offerUndo } from '../../utils/binUndo';
+import { downloadBlob } from '../../utils/exportHelpers';
 import Tooltip from '../Tooltip';
 import EmptyState from '../EmptyState';
 import { VoiceInputProvider, VoiceInput } from '../voiceInput/VoiceInput';
 
 // Shares → Watchlist. Companies you are researching but do not hold. "Research" runs a dated report (web search, live quote, Finnhub
 // figures for US shares, your holdings and your investor profile from Settings → Shares). Reports describe the business and the
-// trade-offs; they never say buy, sell, hold or how much. Server: routes/sharesWatchlist.js, services/sharesWatchlist.js.
+// trade-offs in their own voice; the "Analyst consensus" section reports the Buy / Hold / Sell majority of ratings published by named
+// sources, and the last section argues whether the company fits your profile. Never a size. Copy / Download give Markdown. Server: routes/sharesWatchlist.js, services/sharesWatchlist.js.
 // Docs: docs/shares-watchlist.md.
 
 const BAD = '#ef4444';
@@ -22,6 +24,15 @@ const fmtWhen = (iso) => {
   if (!iso) return '';
   try { return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return String(iso).slice(0, 10); }
 };
+const DISCLAIMER = 'Written by AI from web search snippets, Finnhub figures (US shares only) and your Vault data, not company filings. Check any figure before relying on it. Sentences marked "(background)" come from the model’s general knowledge and may be out of date. The analyst consensus is what the named sources published, not a recommendation from Vault. Information, not advice.';
+// The report as one Markdown document: heading, body, numbered sources (so the [n] citations still resolve), disclaimer.
+const reportMarkdown = (w, r) => [
+  `# ${w.symbol} (${w.exchange})${w.name ? ` · ${w.name}` : ''}`,
+  `Research report · ${fmtWhen(r.createdAt)}${r.priceAtReport ? ` · price then ${r.priceAtReport}` : ''}`,
+  r.markdown,
+  r.sources?.length ? `## Sources\n\n${r.sources.map((s, i) => `${i + 1}. [${s.title || s.url}](${s.url}) ${s.source || ''}`).join('\n')}` : '',
+  `_${DISCLAIMER}_`,
+].filter(Boolean).join('\n\n');
 const fmtQuote = (q) => (q ? `${q.currency} ${Number(q.price).toLocaleString('en-AU', { maximumFractionDigits: 2 })}` : '—');
 
 export default function SharesWatchlistTab({ onWriteThesis }) {
@@ -55,6 +66,7 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
   useEffect(() => { load(); }, [load]);
 
   const current = items.find((w) => w.id === selected) || null;
+  const report = reports[reportIdx] || null;
 
   const loadReports = useCallback(async (id) => {
     try {
@@ -117,6 +129,19 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
     }
   };
 
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(reportMarkdown(current, report));
+      addToast('Report copied as Markdown', 'success');
+    } catch {
+      addToast('Could not copy the report', 'error');
+    }
+  };
+  const downloadReport = () => downloadBlob(
+    new Blob([reportMarkdown(current, report)], { type: 'text/markdown;charset=utf-8' }),
+    `${current.symbol}-${current.exchange}-research-${new Date(report.createdAt).toLocaleDateString('en-CA')}.md`, // en-CA = local YYYY-MM-DD, matching the date shown
+  );
+
   const remove = async () => {
     if (!current) return;
     try {
@@ -141,15 +166,13 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
     return <div className="space-y-2 max-w-3xl" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-14 rounded-lg animate-pulse" style={{ background: 'var(--color-surface)' }} />)}</div>;
   }
 
-  const report = reports[reportIdx] || null;
-
   return (
     <VoiceInputProvider lang="en-AU">
       <div className="max-w-[1700px]" data-tour="shares-watchlist">
         <div className="mb-5">
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Companies you are researching</p>
           <p className="text-xs mt-0.5 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Companies you are looking at but do not hold. Research writes a dated report on the business, its moat, figures, valuation, risks and how it fits your profile and holdings. It never says whether to buy, sell or hold, or how much.
+            Companies you are looking at but do not hold. Research writes a dated report on the business, its moat, figures, valuation and risks, an analyst consensus (the Buy / Hold / Sell majority of ratings from at least five named sources where found), and a final summary arguing whether it fits your profile and holdings. Vault never says how much to buy.
           </p>
         </div>
         {error && <p className="text-xs mb-3 px-3 py-2 rounded-md" style={{ background: '#fff1f2', color: BAD }}>{error}</p>}
@@ -251,13 +274,21 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
                   <div className="rounded-xl border p-4" style={card}>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                       <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Report · {fmtWhen(report.createdAt)}{report.priceAtReport ? ` · price then ${report.priceAtReport}` : ''}</p>
-                      {reports.length > 1 && (
-                        <Tooltip text="Read an earlier report.">
-                          <select value={reportIdx} onChange={(e) => setReportIdx(Number(e.target.value))} aria-label="Pick a report" className="text-xs px-2 py-1 rounded-md border" style={field}>
-                            {reports.map((r, i) => <option key={r.id} value={i}>{fmtWhen(r.createdAt)}{i === 0 ? ' (latest)' : ''}</option>)}
-                          </select>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {reports.length > 1 && (
+                          <Tooltip text="Read an earlier report.">
+                            <select value={reportIdx} onChange={(e) => setReportIdx(Number(e.target.value))} aria-label="Pick a report" className="text-xs px-2 py-1 rounded-md border" style={field}>
+                              {reports.map((r, i) => <option key={r.id} value={i}>{fmtWhen(r.createdAt)}{i === 0 ? ' (latest)' : ''}</option>)}
+                            </select>
+                          </Tooltip>
+                        )}
+                        <Tooltip text="Copy this report, with its sources, as Markdown.">
+                          <button type="button" onClick={copyReport} className="text-xs px-2 py-1 rounded-md border hover:opacity-70 transition-opacity duration-200 inline-flex items-center gap-1" style={btnGhost}>{getIcon('copy', { size: 12 })} Copy</button>
                         </Tooltip>
-                      )}
+                        <Tooltip text="Download this report, with its sources, as a Markdown (.md) file.">
+                          <button type="button" onClick={downloadReport} className="text-xs px-2 py-1 rounded-md border hover:opacity-70 transition-opacity duration-200 inline-flex items-center gap-1" style={btnGhost}>{getIcon('download', { size: 12 })} Download</button>
+                        </Tooltip>
+                      </div>
                     </div>
                     <div className="prose max-w-none text-sm">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{report.markdown}</ReactMarkdown>
@@ -270,7 +301,7 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
                         </ol>
                       </details>
                     )}
-                    <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>Written by AI from web search snippets, Finnhub figures (US shares only) and your Vault data, not company filings. Check any figure before relying on it. Sentences marked "(background)" come from the model's general knowledge and may be out of date. Information, not advice.</p>
+                    <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{DISCLAIMER}</p>
                   </div>
                 ) : (
                   <p className="text-sm px-1" style={{ color: 'var(--color-muted)' }}>No report yet. Press Research to write the first one. For a report that fits you, fill in your investor profile in Settings → Shares.</p>

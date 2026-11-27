@@ -4,7 +4,9 @@
 //
 // A report is one model call over an evidence pack: a live quote, Finnhub reported figures (US only), web search results (numbered,
 // so the report can cite them), the person's holdings and weights, their investor profile (Settings → Shares) and the previous report.
-// Same rule as the rest of Shares: it never says buy, sell, hold or how much to buy, and never predicts a price of its own.
+// In its own voice it never says buy, sell, hold or how much to buy, and never predicts a price. The one exception (owner, 2026-11-28):
+// the "Analyst consensus" section collates the ratings published by named sources (Morningstar, Zacks, MarketBeat ...) and reports
+// their majority as Buy / Hold / Sell, attributed and cited.
 
 const { pool } = require('../db');
 const { callModel } = require('./callModel');
@@ -68,7 +70,7 @@ async function cachedQuote(symbol, exchange) {
 const SYSTEM_PROMPT = `You write a research report on one listed company for a private investor's watchlist, using the evidence pack provided.
 
 Rules:
-1. Never say buy, sell, hold, accumulate, avoid, add or trim, and never suggest a position size, a starter position or a portfolio weight. Never give a rating such as "watch" or "attractive entry". You describe the business, the evidence and the trade-offs; the investor decides.
+1. In your own voice, never say buy, sell, hold, accumulate, avoid, add or trim, and never suggest a position size, a starter position or a portfolio weight. Never give a rating of your own such as "watch" or "attractive entry". You describe the business, the evidence and the trade-offs; the investor decides. The one exception is the "Analyst consensus" section, which reports the ratings that named sources published and the majority of those ratings, always attributed to them.
 2. Never predict a price. You may quote price targets or fair values published by others ONLY if they appear in the SOURCES, attributed by name with the citation ("analysts' average target of US$257 [3]").
 3. Every number (revenue, margins, growth, valuation ratios, targets, deal sizes, dates) must come from the pack: QUOTE, FUNDAMENTALS or a SOURCE. Cite sources as [n]. If a figure is not in the pack, say it was not found; never estimate or recall one.
 4. The business description, products, competitors and moat may also draw on your general knowledge, which can be out of date. Mark any sentence that relies on it with "(background)".
@@ -85,8 +87,13 @@ Write these sections, each as a "## " heading, in this order:
 ## Key risks and swing factors — acquisitions, competition, regulation, reliability, dilution, whatever the pack supports.
 ## Bear, base and bull cases — a table: Scenario | What must happen | What it would mean for the investment case. Describe outcomes in words; no price of your own.
 ## What would change the view — two short lists: evidence that would strengthen the case, evidence that would weaken it.
-## Fit with your profile and portfolio — how the company's risk, volatility, sector and style fit the investor's stated profile, and any overlap or concentration with current holdings. Say plainly where it clashes with the profile. Never a size or an action.
-## Bottom line — 2 to 4 sentences on the trade-off between business quality and price. No verdict, no action.`;
+## Bottom line — 2 to 4 sentences on the trade-off between business quality and price. No verdict, no action.
+## Analyst consensus — collate the ratings published by research houses and rating sites found in the SOURCES (for example Morningstar, Zacks, MarketBeat, TipRanks, Simply Wall St, Market Index, MarketScreener, Motley Fool, named brokers). Aim for at least five different sources.
+  - A table: Source | Rating as published | Buy / Hold / Sell | Price target or fair value | Date | Citation. One row per source, only when the SOURCES show that source's rating; never invent or recall a rating. If fewer than five are found, say how many were found.
+  - Map each rating: strong buy, buy, outperform, overweight, accumulate, 4 or 5 stars, Zacks Rank 1-2, undervalued = Buy; hold, neutral, market perform, equal-weight, 3 stars, Zacks Rank 3, fairly valued = Hold; sell, underperform, underweight, reduce, 1 or 2 stars, Zacks Rank 4-5, overvalued = Sell.
+  - Then one bold line: "**Consensus of the sources: Buy**" (or Hold, or Sell) with the count, e.g. "(4 Buy, 1 Hold, 0 Sell from 5 sources)". Use the majority of the table rows; a tie is "Mixed"; fewer than three rated sources is "Not enough ratings found".
+  - Then one paragraph summarising the aggregated opinion: what the more positive and more negative sources argue, how far apart their targets are, and how recent the ratings are. This is the sources' opinion, not yours.
+## Final summary: does it fit your portfolio? — argue the case: first the reasons it fits the investor's profile (horizon, the fall they can sit through, goals, things to avoid) and current holdings, then the reasons it does not (risk, volatility, sector or style overlap, concentration with what they already hold, clashes with the profile). Weigh the consensus above against that profile. End with one bold line: "**Fit with your profile: Fits**" (or "Partly fits", or "Does not fit") and a one-sentence reason. This judges fit only; never a size or a portfolio weight.`;
 
 const fmtNum = (n, d = 2) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString('en-AU', { maximumFractionDigits: d }) : 'n/a');
 
@@ -198,7 +205,13 @@ async function runResearch(userId, watchId) {
   const queries = [
     `${q} business model products competitors`,
     `${q} quarterly results revenue guidance ${now.getFullYear()}`,
-    `${q} analyst price target fair value`,
+    `${q} analyst consensus rating price target`,
+    // rating sites for the Analyst consensus section; Zacks and TipRanks cover few ASX names
+    `${q} Morningstar rating fair value`,
+    `${q} MarketBeat analyst rating`,
+    `${q} Simply Wall St valuation`,
+    watch.exchange === 'ASX' ? `${q} Market Index broker rating` : `${q} Zacks Rank`,
+    watch.exchange === 'ASX' ? `${q} MarketScreener consensus` : `${q} TipRanks analyst rating`,
     `${q} competitive advantage moat risks`,
     `${q} stock news ${monthYear}`,
   ];
@@ -217,7 +230,7 @@ async function runResearch(userId, watchId) {
   const prompt = buildReportPrompt({
     watch, quote, fundamentals, sources, portfolio, profile, previous: mapReport(prev.rows[0]), today: now.toISOString().slice(0, 10),
   });
-  const result = await callModel(modelId, prompt, { maxTokens: 6000, system: SYSTEM_PROMPT, returnUsage: true });
+  const result = await callModel(modelId, prompt, { maxTokens: 8000, system: SYSTEM_PROMPT, returnUsage: true });
   logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs, feature: 'shares_watchlist_research' });
   const markdown = String(result.text || '').trim();
   if (!markdown) throw new Error('The model returned an empty report. Try again.');
