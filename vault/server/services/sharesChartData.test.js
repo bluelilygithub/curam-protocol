@@ -9,7 +9,7 @@
 const assert = require('assert');
 const {
   buildBenchmarksPeriod, buildPeriodMovers, buildNormalizedPerformance,
-  rangeKeyFrom, fyStartFor, buildRange, downsampleDaily, buildHoldingsValueSeries,
+  rangeKeyFrom, fyStartFor, buildRange, downsampleDaily, buildHoldingsValueSeries, observationFromRow,
 } = require('./sharesChartData');
 
 let n = 0;
@@ -111,6 +111,17 @@ test("the tile's % and A$ are one calculation, and the chart line ends on the sa
   assert.ok(Math.abs(own.changeAud / s.baseValue * 100 - own.pct) < 0.01, 'A$ over the start value is the %');
   assert.ok(Math.abs(norm.at(-1).portfolio - 100 - own.pct) < 0.01, 'chart ends where the tile does');
   assert.ok(!('changeAudCoverage' in b), 'all holdings priced: no coverage note');
+});
+
+test('a note date from pg (a JS Date) becomes YYYY-MM-DD, so the weekend rule and the holdings series work', () => {
+  // production bug: String(date).slice(0, 10) gave "Wed Oct 14"
+  const row = observationFromRow({ date: new Date(2026, 9, 17), headlines: { portfolioMove: { changePct: -1.42 }, nasdaqPct: -1.42 } });
+  assert.strictEqual(row.date, '2026-10-17');
+  assert.strictEqual(observationFromRow({ date: '2026-10-17', headlines: '{}' }).date, '2026-10-17');
+  const history = [observationFromRow({ date: new Date(2026, 9, 16), headlines: { nasdaqPct: -1.42 } }), row];
+  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, 98.58, 'the Saturday repeat is skipped');
+  const s = buildHoldingsValueSeries([snap('NVDA', 100, '2026-10-16T03:00:00Z')], [{ symbol: 'NVDA', quantity: 2, priceAud: 90 }], history[0].date, 'UTC', '2026-10-17');
+  assert.strictEqual(s.pct, -10, 'the series finds its prices from a pg-style date');
 });
 
 const holdings = [

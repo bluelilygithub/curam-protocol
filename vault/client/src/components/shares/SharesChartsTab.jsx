@@ -73,6 +73,9 @@ const monthLabel = (ym) => { try { return new Date(`${ym}-15T12:00:00`).toLocale
 const Grid = ({ children }) => <div className="flex flex-col gap-6 xl:grid xl:grid-cols-2 xl:items-start">{children}</div>;
 const Note = ({ children }) => <p className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>{children}</p>;
 
+// "2026-10-14" -> "14 Oct 2026" (with the year: a range can cross one).
+const fullDay = (ymd) => { const d = new Date(`${ymd}T12:00:00`); return Number.isNaN(d.getTime()) ? String(ymd) : d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }); };
+
 export default function SharesChartsTab({
   charts,
   range,
@@ -186,12 +189,12 @@ export default function SharesChartsTab({
     <Grid>
       <ChartCard
         span
-        title={today ? 'Portfolio vs benchmarks' : `Portfolio vs benchmarks, ${rangeLabel}`}
-        subtitle={today ? 'Your holdings today against the market indexes.' : bp?.available ? `${bp.from} to ${bp.to}, holdings only.` : 'Not enough daily Portfolio Notes for this range yet.'}
+        title="Portfolio vs benchmarks"
+        subtitle={today ? 'Your holdings today against the market indexes.' : bp?.available ? `${fullDay(bp.from)} to ${fullDay(bp.to)}, holdings only: the days with Portfolio Notes, which can be shorter than ${rangeLabel}.` : 'Not enough daily Portfolio Notes for this range yet.'}
         info={today
           ? "Holdings day move (cash excluded) compared to Nasdaq, SOX, and ASX 200 ETF proxies — same basis as the Portfolio Note header. The dollar figure is your holdings' move in AUD. Nasdaq and SOX are USD-priced ETFs; your holdings are in AUD."
           : bp?.available
-            ? `Return over ${bp.from} to ${bp.to}, holdings only, cash excluded. Your holdings' % and dollar figure are one calculation: the price change on the units you hold today, from their stored price on ${bp.from} to today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''}; buys and sells inside the range aren't adjusted for. The index figures compound the daily moves in ${bp.observationCount} daily Portfolio Notes, skipping weekend notes that repeat Friday's move. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
+            ? `Return over ${fullDay(bp.from)} to ${fullDay(bp.to)}, holdings only, cash excluded. This card covers only the days with a daily Portfolio Note (they are kept for the number of days set in Settings → Shares), so it can be shorter than the range chosen above. Your holdings' % and dollar figure are one calculation: the price change on the units you hold today, from their stored price on ${fullDay(bp.from)} to today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''}; buys and sells inside the range aren't adjusted for. The index figures compound the daily moves in ${bp.observationCount} daily Portfolio Notes, skipping weekend notes that repeat Friday's move. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
             : 'Not enough daily Portfolio Notes recorded for this range yet.'}
       >
         {benchItems.length ? (

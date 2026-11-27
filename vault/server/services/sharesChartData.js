@@ -320,27 +320,36 @@ function parseHeadlines(val) {
   return {};
 }
 
+// pg returns a DATE column as a JS Date; String(date).slice(0, 10) gave "Wed Oct 14", which broke every date comparison and label
+// downstream (fixed 2026-11-28). The query now casts to text; a Date is still turned into YYYY-MM-DD with local getters.
+function ymdOf(v) {
+  if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  return String(v).slice(0, 10);
+}
+
+function observationFromRow(r) {
+  const h = parseHeadlines(r.headlines);
+  return {
+    date: ymdOf(r.date),
+    portfolioChangePct: h.portfolioMove?.changePct ?? null,
+    nasdaqPct: h.nasdaqPct ?? null,
+    soxPct: h.soxPct ?? null,
+    asxPct: h.asxPct ?? null,
+    metalsChangePct: h.metalsPortfolioMove?.changePct ?? null,
+    movers: h.movers || [],
+    unexplainedMoveHistory: h.unexplainedMoveHistory || {},
+  };
+}
+
 async function loadObservationHistory(userId, days, cutoffDate = null) {
   const cutoff = cutoffDate || getDateInTz(await getWorkspaceTimezone(), days);
   const { rows } = await pool.query(
-    `SELECT date, headlines FROM share_news_briefings
+    `SELECT date::text AS date, headlines FROM share_news_briefings
      WHERE "userId"=$1 AND type='observation' AND date >= $2
      ORDER BY date ASC`,
     [userId, cutoff]
   );
-  return rows.map((r) => {
-    const h = parseHeadlines(r.headlines);
-    return {
-      date: String(r.date).slice(0, 10),
-      portfolioChangePct: h.portfolioMove?.changePct ?? null,
-      nasdaqPct: h.nasdaqPct ?? null,
-      soxPct: h.soxPct ?? null,
-      asxPct: h.asxPct ?? null,
-      metalsChangePct: h.metalsPortfolioMove?.changePct ?? null,
-      movers: h.movers || [],
-      unexplainedMoveHistory: h.unexplainedMoveHistory || {},
-    };
-  });
+  return rows.map(observationFromRow);
 }
 
 // Daily Portfolio Notes are written every day, but markets do not trade at weekends: a Saturday or Sunday note can carry the
@@ -819,4 +828,5 @@ module.exports = {
   buildPeriodMovers,
   buildNormalizedPerformance,
   buildHoldingsValueSeries,
+  observationFromRow,
 };
