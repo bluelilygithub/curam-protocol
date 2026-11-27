@@ -2,6 +2,35 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "c241e9c8",
+   "fullHash": "c241e9c8e41e171bbc7911bbbef9c092c5dcb7a1",
+   "committedAt": "2026-11-27T12:22:16+10:00",
+   "author": "mrb",
+   "area": "Burner Mail",
+   "subject": "Burner Mail: tool-page layout, saved burns with B-12 numbers",
+   "filesChanged": 12,
+   "insertions": 444,
+   "deletions": 227,
+   "goal": "Burner Mail looked different from the other tools, and every address was thrown away when it expired, so a burn could not be kept or referred to later.",
+   "whatChanged": "BurnerMailPage.jsx rebuilt on ToolSidebar (New burn, Live burns, Saved burns) with a burn page at /burner-mail/:id, numbered B-<id> like tickets; list search matches name, address or number; burns can be renamed. db.js adds burner_addresses.\"savedAt\". burnerMail.js: GET and PATCH /addresses/:id (label, saved); a saved burn counts as live whatever its expiry, still receives mail, is never purged and does not count toward the 50 limit; unsaving sets expiry to at least 7 days out. Tour walks through the views; guide catalogue, tools list, route manifest and docs updated.",
+   "filesImpacted": [
+    "vault/client/src/pages/BurnerMailPage.jsx",
+    "vault/client/src/pages/burnerMail/burnerMailTools.mjs",
+    "vault/client/src/utils/tours/burnerMailTour.js",
+    "vault/client/src/App.jsx",
+    "vault/client/src/config/appNavigation.js",
+    "vault/server/routes/burnerMail.js",
+    "vault/server/db.js",
+    "vault/server/services/burnerMailTutor.js",
+    "vault/server/services/burnerMailTutor.test.js",
+    "vault/server/testing/routeManifest.json",
+    "vault/docs/burner-mail.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "Same look as the other tools; burns worth keeping can be saved, named and found again by number.",
+   "concerns": "A real email arriving at a saved, past-expiry burn was not tested (same inbound code path, condition changed). B-12 is not in the global Ctrl+K search. No job-tile start screen. Tested locally: save/rename/unsave/404 on the API, screenshots of list, New burn and burn views, guide and nav tests, client build."
+  },
+  {
    "commit": "cdea7474",
    "fullHash": "cdea74747bb83ddd39417e1015222614e29d88a5",
    "committedAt": "2026-11-27T12:04:36+10:00",
