@@ -352,11 +352,12 @@ async function loadObservationHistory(userId, days, cutoffDate = null) {
   return rows.map(observationFromRow);
 }
 
-// Daily Portfolio Notes are written every day, but markets do not trade at weekends: a Saturday or Sunday note can carry the
-// previous note's move again (seen in production 2026-11: every weekend repeated Friday's move, which compounded a −9% fall into
-// −34.6%). A weekend note whose figure exactly equals the previous note's is that repeat and is skipped.
-const isWeekendYmd = (ymd) => [0, 6].includes(new Date(`${ymd}T12:00:00Z`).getUTCDay());
-const repeatsPrevious = (row, prev, field) => !!prev && isWeekendYmd(row.date) && row[field] != null && row[field] === prev[field];
+// The daily Portfolio Note runs at 7 am in the workspace time zone, after the overnight US close (sharesCron.js), so a note dated D
+// carries the session of the day before. Notes dated Sunday or Monday follow a Saturday or Sunday: no session, so their moves repeat
+// Saturday's note (seen in production 2026-11: Sat, Sun and Mon all -2.5% Nasdaq, and Sunday sometimes slightly re-measured). Counting
+// them compounded every Friday session three times (Nasdaq -31.8% instead of about -13.8% over six weeks). Their moves are skipped.
+// Assumes a workspace time zone ahead of New York (Australia); see docs/shares-charts.md.
+const noNewSession = (ymd) => [0, 1].includes(new Date(`${ymd}T12:00:00Z`).getUTCDay());
 
 /**
  * Daily value of the units held TODAY, from stored prices (share_symbol_snapshots rows, oldest first), from `fromDate` (YYYY-MM-DD in
@@ -424,14 +425,13 @@ function buildNormalizedPerformance(observationHistory, holdings = null) {
     return holdings.points[i].date <= date ? holdings.points[i].value : holdings.baseValue;
   };
   const out = [];
-  let prev = null;
   for (const row of observationHistory) {
+    const session = !noNewSession(row.date);
     if (holdings && holdings.baseValue > 0) port = (holdingsAt(row.date) / holdings.baseValue) * 100;
-    else if (row.portfolioChangePct != null && !repeatsPrevious(row, prev, 'portfolioChangePct')) port *= 1 + row.portfolioChangePct / 100;
-    if (row.nasdaqPct != null && !repeatsPrevious(row, prev, 'nasdaqPct')) nasdaq *= 1 + row.nasdaqPct / 100;
-    if (row.soxPct != null && !repeatsPrevious(row, prev, 'soxPct')) sox *= 1 + row.soxPct / 100;
-    if (row.asxPct != null && !repeatsPrevious(row, prev, 'asxPct')) asx *= 1 + row.asxPct / 100;
-    prev = row;
+    else if (session && row.portfolioChangePct != null) port *= 1 + row.portfolioChangePct / 100;
+    if (session && row.nasdaqPct != null) nasdaq *= 1 + row.nasdaqPct / 100;
+    if (session && row.soxPct != null) sox *= 1 + row.soxPct / 100;
+    if (session && row.asxPct != null) asx *= 1 + row.asxPct / 100;
     out.push({
       date: row.date,
       portfolio: round2(port),

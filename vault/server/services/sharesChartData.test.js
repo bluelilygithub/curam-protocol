@@ -54,17 +54,16 @@ test('no observations -> not available, empty items', () => {
 
 // ---- weekend repeats and the price-based holdings figures (fix 2026-11-28) ----
 
-test('a weekend note that repeats the previous note is not compounded again; a weekday repeat is', () => {
-  // Fri 2026-10-16, Sat 17, Sun 18 all carried -1.42 in production; Mon 19 and Tue 20 both +1 are real.
-  const history = [obs('2026-10-16', null, -1.42, null, null), obs('2026-10-17', null, -1.42, null, null),
-    obs('2026-10-18', null, -1.42, null, null), obs('2026-10-19', null, 1, null, null), obs('2026-10-20', null, 1, null, null)];
-  const last = buildNormalizedPerformance(history).at(-1);
-  assert.strictEqual(last.nasdaq, Math.round(100 * 0.9858 * 1.01 * 1.01 * 100) / 100);
+test('Sunday and Monday notes carry no new session and are not compounded (production: Sat, Sun, Mon all -2.5)', () => {
+  // Notes run at 7 am Sydney after the US close: Fri 16 Oct = US Thu, Sat 17 = US Fri, Sun 18 and Mon 19 = no session, Tue 20 = US Mon.
+  const history = [obs('2026-10-16', null, -0.13, null, null), obs('2026-10-17', null, -2.5, null, null),
+    obs('2026-10-18', null, -2.5, null, null), obs('2026-10-19', null, -2.5, null, null), obs('2026-10-20', null, 1.21, null, null)];
+  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, Math.round(100 * 0.9987 * 0.975 * 1.0121 * 100) / 100);
 });
 
-test('a weekend note with a different figure still counts (a new session)', () => {
-  const history = [obs('2026-11-06', null, 2.9, null, null), obs('2026-11-07', null, 2.94, null, null)];
-  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, Math.round(100 * 1.029 * 1.0294 * 100) / 100);
+test('a Sunday note re-measured slightly differently is still skipped; Saturday counts', () => {
+  const history = [obs('2026-11-07', null, 1.46, null, null), obs('2026-11-08', null, 1.4, null, null)];
+  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, 101.46);
 });
 
 const snap = (symbol, priceAud, iso) => ({ symbol, priceAud, recordedAt: new Date(iso) });
@@ -115,12 +114,12 @@ test("the tile's % and A$ are one calculation, and the chart line ends on the sa
 
 test('a note date from pg (a JS Date) becomes YYYY-MM-DD, so the weekend rule and the holdings series work', () => {
   // production bug: String(date).slice(0, 10) gave "Wed Oct 14"
-  const row = observationFromRow({ date: new Date(2026, 9, 17), headlines: { portfolioMove: { changePct: -1.42 }, nasdaqPct: -1.42 } });
-  assert.strictEqual(row.date, '2026-10-17');
-  assert.strictEqual(observationFromRow({ date: '2026-10-17', headlines: '{}' }).date, '2026-10-17');
-  const history = [observationFromRow({ date: new Date(2026, 9, 16), headlines: { nasdaqPct: -1.42 } }), row];
-  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, 98.58, 'the Saturday repeat is skipped');
-  const s = buildHoldingsValueSeries([snap('NVDA', 100, '2026-10-16T03:00:00Z')], [{ symbol: 'NVDA', quantity: 2, priceAud: 90 }], history[0].date, 'UTC', '2026-10-17');
+  const row = observationFromRow({ date: new Date(2026, 9, 18), headlines: { portfolioMove: { changePct: -1.42 }, nasdaqPct: -1.42 } });
+  assert.strictEqual(row.date, '2026-10-18');
+  assert.strictEqual(observationFromRow({ date: '2026-10-18', headlines: '{}' }).date, '2026-10-18');
+  const history = [observationFromRow({ date: new Date(2026, 9, 17), headlines: { nasdaqPct: -1.42 } }), row];
+  assert.strictEqual(buildNormalizedPerformance(history).at(-1).nasdaq, 98.58, 'the Sunday note is skipped');
+  const s = buildHoldingsValueSeries([snap('NVDA', 100, '2026-10-17T03:00:00Z')], [{ symbol: 'NVDA', quantity: 2, priceAud: 90 }], history[0].date, 'UTC', '2026-10-18');
   assert.strictEqual(s.pct, -10, 'the series finds its prices from a pg-style date');
 });
 
