@@ -253,6 +253,12 @@
   "DELETE /api/burner-mail/addresses/:id": {
    "class": "authed"
   },
+  "GET /api/burner-mail/addresses/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/burner-mail/addresses/:id": {
+   "class": "authed"
+  },
   "GET /api/burner-mail/addresses": {
    "class": "authed"
   },

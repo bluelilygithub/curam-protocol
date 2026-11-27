@@ -229,6 +229,7 @@ function App() {
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/measurements" element={<MeasurementsPage />} />
               <Route path="/burner-mail" element={<BurnerMailPage />} />
+              <Route path="/burner-mail/:id" element={<BurnerMailPage />} />
               <Route path="/dns-lookup" element={<DnsLookupPage />} />
               <Route path="/bip" element={<BipPage />} />
               <Route path="/bip/:id" element={<BipPage />} />

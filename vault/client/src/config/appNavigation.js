@@ -111,7 +111,7 @@ export const APP_NAV_GROUPS = [
       { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
       { id: 'measurements', label: 'Measurements', path: '/measurements', icon: 'ruler', featureKey: 'measurements' },
       { id: 'fitness', label: 'Fitness', path: '/fitness', icon: 'dumbbell', featureKey: 'fitness' },
-      { id: 'burnerMail', label: 'Burner Mail', path: '/burner-mail', icon: 'mail', featureKey: 'burnerMail' },
+      { id: 'burnerMail', label: 'Burner Mail', path: '/burner-mail', icon: 'mail', featureKey: 'burnerMail', matchPrefix: true, aliases: 'burn burns temp email throwaway sign-up verification code' },
       { id: 'dnsLookup', label: 'DNS Lookup', path: '/dns-lookup', icon: 'globe', featureKey: 'dnsLookup' },
       { id: 'emailFollowUp', label: 'Email Follow-Up', path: '/email-follow-up', icon: 'list-checks', featureKey: 'emailFollowUp' },
       { id: 'passwordVault', label: 'Password Vault', path: '/password-vault', icon: 'key-round', featureKey: 'passwordVault' },

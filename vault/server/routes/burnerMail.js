@@ -28,7 +28,10 @@ function slugFromLabel(label) {
   return String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20);
 }
 
-const ADDRESS_COLS = `a.id, a.address, a.label, a."createdAt", a."expiresAt", a."lastMessageAt",
+// Live: not yet expired, or saved (a saved burn never expires).
+const LIVE = `(a."expiresAt" > NOW() OR a."savedAt" IS NOT NULL)`;
+
+const ADDRESS_COLS = `a.id, a.address, a.label, a."createdAt", a."expiresAt", a."lastMessageAt", a."savedAt",
   (SELECT COUNT(*) FROM burner_messages m WHERE m."addressId" = a.id) AS "messageCount"`;
 
 function addressRow(r) {
@@ -46,7 +49,7 @@ router.get('/status', (req, res) => {
 router.get('/addresses', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a."userId"=$1 AND a."expiresAt" > NOW() ORDER BY a."createdAt" DESC`,
+      `SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a."userId"=$1 AND ${LIVE} ORDER BY a."createdAt" DESC`,
       [req.user.id]
     );
     res.json(rows.map(addressRow));
@@ -60,8 +63,8 @@ router.post('/addresses', async (req, res, next) => {
     const label = String(req.body?.label || '').trim().slice(0, 60);
     const days = LIFETIMES_DAYS.includes(Number(req.body?.days)) ? Number(req.body.days) : DEFAULT_DAYS;
 
-    const { rows: [{ n }] } = await pool.query(`SELECT COUNT(*) AS n FROM burner_addresses WHERE "userId"=$1 AND "expiresAt" > NOW()`, [req.user.id]);
-    if (Number(n) >= MAX_ADDRESSES) return res.status(409).json({ error: `You already have ${MAX_ADDRESSES} live addresses. Delete some first.` });
+    const { rows: [{ n }] } = await pool.query(`SELECT COUNT(*) AS n FROM burner_addresses WHERE "userId"=$1 AND "expiresAt" > NOW() AND "savedAt" IS NULL`, [req.user.id]);
+    if (Number(n) >= MAX_ADDRESSES) return res.status(409).json({ error: `You already have ${MAX_ADDRESSES} unsaved live burns. Delete some first.` });
 
     const slug = slugFromLabel(label) || 'signup';
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -79,6 +82,31 @@ router.post('/addresses', async (req, res, next) => {
       }
     }
     res.status(500).json({ error: 'Could not make a free address. Try again.' });
+  } catch (err) { next(err); }
+});
+
+router.get('/addresses/:id', async (req, res, next) => {
+  try {
+    const { rows: [row] } = await pool.query(`SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a.id=$1 AND a."userId"=$2`, [req.params.id, req.user.id]);
+    if (!row) return res.status(404).json({ error: 'Burn not found.' });
+    res.json(addressRow(row));
+  } catch (err) { next(err); }
+});
+
+// Rename and/or save. Unsaving gives the burn at least the default lifetime again, so it does not vanish the moment it is unsaved.
+router.patch('/addresses/:id', async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const sets = [];
+    const vals = [req.params.id, req.user.id];
+    if (b.label !== undefined) { vals.push(String(b.label || '').trim().slice(0, 60) || null); sets.push(`label=$${vals.length}`); }
+    if (b.saved === true) sets.push(`"savedAt"=COALESCE("savedAt", NOW())`);
+    if (b.saved === false) sets.push(`"savedAt"=NULL, "expiresAt"=GREATEST("expiresAt", NOW() + INTERVAL '${DEFAULT_DAYS} days')`);
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+    const { rowCount } = await pool.query(`UPDATE burner_addresses SET ${sets.join(', ')} WHERE id=$1 AND "userId"=$2`, vals);
+    if (!rowCount) return res.status(404).json({ error: 'Burn not found.' });
+    const { rows: [row] } = await pool.query(`SELECT ${ADDRESS_COLS} FROM burner_addresses a WHERE a.id=$1`, [req.params.id]);
+    res.json(addressRow(row));
   } catch (err) { next(err); }
 });
 
@@ -127,7 +155,7 @@ async function storeInbound(raw, envelopeTo) {
   const to = String(envelopeTo || '').trim().toLowerCase();
   if (!to) return 'no-recipient';
   const { rows: [addr] } = await pool.query(
-    `SELECT id, "userId" FROM burner_addresses WHERE address=$1 AND "expiresAt" > NOW()`, [to]
+    `SELECT a.id, a."userId" FROM burner_addresses a WHERE a.address=$1 AND ${LIVE}`, [to]
   );
   if (!addr) return 'unknown-address'; // dropped quietly: a bounce would tell a stranger which addresses exist
 
@@ -171,9 +199,9 @@ inboundRouter.post('/', express.raw({ type: () => true, limit: MAX_RAW_BYTES }),
   }
 });
 
-/** Hourly: remove addresses past their time (their messages go with them). */
+/** Hourly: remove unsaved addresses past their time (their messages go with them). */
 async function purgeExpired() {
-  const { rowCount } = await pool.query(`DELETE FROM burner_addresses WHERE "expiresAt" < NOW() - INTERVAL '1 day'`);
+  const { rowCount } = await pool.query(`DELETE FROM burner_addresses WHERE "expiresAt" < NOW() - INTERVAL '1 day' AND "savedAt" IS NULL`);
   return rowCount;
 }
 

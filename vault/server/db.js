@@ -1892,6 +1892,8 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_burner_addresses_user ON burner_addresses ("userId", "createdAt" DESC)`);
+    // a saved burn (B-12) never expires and is never purged; it stays until deleted
+    await client.query(`ALTER TABLE burner_addresses ADD COLUMN IF NOT EXISTS "savedAt" TIMESTAMPTZ`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS burner_messages (
         id           SERIAL PRIMARY KEY,

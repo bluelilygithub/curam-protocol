@@ -1,15 +1,18 @@
 # Burner Mail
 
-Throw-away email addresses on your own domain for web sign-ups. Page: `/burner-mail` (flag `burnerMail`, Research & Utilities). Make an address, use it on a sign-up form, and the verification code and confirm link appear on the page within a few seconds.
+Throw-away email addresses on your own domain for web sign-ups. Page: `/burner-mail` (flag `burnerMail`, Research & Utilities). Make a burn, use its address on a sign-up form, and the verification code and confirm link appear within a few seconds.
+
+Laid out like the other tool pages (ToolSidebar on the left): **New burn** (`?view=make`), **Live burns** (`?view=live`, the default) and **Saved burns** (`?view=saved`). One burn opens at `/burner-mail/:id` and is referred to as **B-12** (its `burner_addresses.id`), the same way tickets are T-12. The list search matches name, address or number (`matchesBurn` in `burnerMailTools.mjs`).
 
 ## What it does and does not do
 
 - Makes addresses like `spotify-a1b2c3@yourdomain.xyz`, kept 1, 7 or 30 days (default 7). Expired addresses stop receiving mail; a cron removes them a day later.
+- **Save** on a burn sets `"savedAt"`: a saved burn is live whatever its `expiresAt`, keeps receiving mail and is never purged. Unsave clears it and sets `expiresAt` to at least 7 days from now. The name can be edited on the burn. API: `GET`/`PATCH /api/burner-mail/addresses/:id` (`{ label?, saved? }`).
 - Pulls out verification codes (4-8 digits, or a short letters-and-digits code near words like "code") and links (confirm-looking ones first). Pure code, no model: `server/services/burnerMail/extract.js`.
 - Stores plain text, codes and link addresses only. Email HTML is never stored or shown.
 - **Never opens a link.** Each link shows its site name with Copy and Open buttons; the person decides.
 - Mail to an address that does not exist or has expired is dropped quietly (no bounce, so a stranger cannot learn which addresses exist).
-- Limits: 50 live addresses per person, 100 emails kept per address, 6 MB per email.
+- Limits: 50 unsaved live burns per person (saved ones do not count), 100 emails kept per address, 6 MB per email.
 - Does not send mail, and does not fill sign-up forms (use Browser Agent for that).
 - Deleting an address or email removes it for good (no recycle bin): the point of the tool is that it is disposable.
 
@@ -41,4 +44,4 @@ The page has an (i) box (opens once), a compass tour (`client/src/utils/tours/bu
 
 ## Not built
 
-Microphone on the label field. A Browser Agent hand-off that reads the code for you.
+B-12 in the global Ctrl+K search. A Browser Agent hand-off that reads the code for you.

@@ -16,9 +16,9 @@ checkGuide({
   exampleToolId: 'make',
   exampleStepId: 'codes',
   facts: [
-    ['make', 'does', /Make address/, 'the button is named as on the page'],
+    ['make', 'does', /Make burn/, 'the button is named as on the page'],
     ['keep', 'does', /1 day, 7 days.*30 days/s, 'the three lifetimes are named'],
-    ['addresses', 'notes', /permanent/, 'deleting is permanent'],
+    ['live', 'notes', /permanent/, 'deleting is permanent'],
     ['inbox', 'does', /every few seconds/, 'the inbox refreshes by itself'],
     ['codes', 'does', /Copy/, 'a code can be copied'],
     ['links', 'notes', /never opens a link/, 'links are never opened for the person'],
