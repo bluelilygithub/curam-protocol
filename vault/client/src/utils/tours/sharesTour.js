@@ -4,11 +4,12 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_shares_completed';
 
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 11;
 
 function injectStepCounter(stepIndex, totalSteps = TOTAL_STEPS) {
   requestAnimationFrame(() => {
-    const el = document.querySelector('.shepherd-element.vault-tour');
+    // The current step's own box: Shepherd keeps earlier steps' boxes in the page, so the first match was step 1's (fixed 2026-11-28).
+    const el = Shepherd.activeTour?.getCurrentStep()?.getElement() || document.querySelector('.shepherd-element.vault-tour');
     if (!el) return;
     let counter = el.querySelector('.vault-tour-step-count');
     if (!counter) {
@@ -101,14 +102,18 @@ export function startSharesTour(setTab, { isAdmin = false } = {}) {
     'Every bullish or bearish news signal and every thesis verdict is saved with the price that day, then compared with how the share did against its index 30 and 90 days later. This card shows how often each kind of call was right. Thesis checks read it too, to sound only as sure as the record allows; it never changes a rating. It appears once the first call is recorded, and the first results take 30 days.',
     '[data-tour="shares-track-record"]', 'left', 'thesis');
 
+  step(9, 'shares-watchlist', 'Watchlist',
+    'Companies you are looking at but do not hold. Research writes a dated report and draws it as a visual page: verdict tiles (the analyst consensus that named sources published, moat, valuation, growth), the central question, a moat scorecard, competitors, reported figures for US shares, every published price target against today\'s price, what the price assumes, and the risks. Each claim has a numbered chip that opens its source. The full written report, with what changed and how it fits your portfolio, is at the bottom; Download and the ⋯ menu give it as Markdown. Vault never says how much to buy.',
+    '[data-tour="shares-tab-watchlist"]', 'right', 'watchlist');
+
   if (isAdmin) {
-    step(9, 'shares-compliance', 'Compliance (admins only)',
+    step(10, 'shares-compliance', 'Compliance (admins only)',
       'A monthly check of a fixed ATO page list writes an in-app note on changes that may matter for your share records, with source links and an action to consider. It is general information, not tax or legal advice: check the ATO page and your accountant. Reports are kept until you delete them, and deleted reports can be restored from the recycle bin.',
       '[data-tour="shares-tab-compliance"]', 'right', 'compliance');
   }
 
-  const metalsStep = isAdmin ? 10 : 9;
-  const helpStep = isAdmin ? 11 : 10;
+  const metalsStep = isAdmin ? 11 : 10;
+  const helpStep = isAdmin ? 12 : 11;
   step(metalsStep, 'shares-metals', 'Metals',
     'A separate book for physical gold: ounces, cost, current spot value and unrealised profit, with a price history and a drop alert. It is kept apart from your share holdings.',
     '[data-tour="shares-tab-metals"]', 'right', 'metals');

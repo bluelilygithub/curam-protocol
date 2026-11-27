@@ -42,6 +42,10 @@ Built in M2: four verdict tiles (consensus: Buy green / Sell red / Hold neutral 
 
 Tests: `node client/src/components/shares/watchlistReport.test.mjs`, `node client/src/components/charts/chartMath.test.mjs` (price axis and lanes).
 
+## Help (redesign M4, 2026-11-28)
+
+The Shares tour has a Watchlist step (step 9, after Track record; `TOTAL_STEPS` 11, 12 for admins), attached to the Watchlist menu item. The (i) "How Shares works" paragraph, the menu tip and the guide chat (`watchlist` in `CATALOG`, `server/services/sharesTutor.js`) describe the visual report, the two AI calls and the prose fallback for older reports.
+
 ## Quotes
 
 `listWatchlist` shows a quote per company, cached in memory 15 minutes for US shares and 6 hours for ASX, because ASX quotes come from Alpha Vantage (25 a day, shared with holdings). A failed quote shows "—".
@@ -60,4 +64,4 @@ Run locally on 2026-11-27: add, duplicate and bad-exchange errors, list, edit no
 
 ## Not built
 
-No tour step (the Shares tour still has 10 steps). No scheduled re-research. No company-name lookup from the ticker (the name is typed). No ASX fundamentals (same limit as Thesis). No price alerts on watched companies.
+No scheduled re-research. No company-name lookup from the ticker (the name is typed). No ASX fundamentals (same limit as Thesis). No price alerts on watched companies.
