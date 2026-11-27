@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "36f9924a",
+   "fullHash": "36f9924a3c2061f1c3762d519bbf9530abce375b",
+   "committedAt": "2026-11-27T13:02:04+10:00",
+   "author": "mrb",
+   "area": "Burner Mail",
+   "subject": "Burner Mail: never reissue an address; Keep for good option",
+   "filesChanged": 7,
+   "insertions": 40,
+   "deletions": 25,
+   "goal": "A deleted or purged burn's address could in principle be issued again (same name plus the same 6 random characters, about 1 in 16.7 million), and the new owner would then get password resets for the old sign-ups. Accounts meant to be kept also needed saving by hand after making the burn.",
+   "whatChanged": "db.js adds burner_addresses.\"deletedAt\". burnerMail.js: DELETE removes the burn's emails and sets \"deletedAt\" in one statement instead of deleting the row; purgeExpired deletes the emails of unsaved burns a day past expiry and keeps the row; the live check, list, open, rename/save and message routes ignore deleted burns; POST accepts days 0 (Keep for good) and saves the burn at once. UNIQUE(address) now blocks reissue for everyone. BurnerMailPage.jsx adds the Keep for good choice. Cron log, guide text, (i) help and docs/burner-mail.md updated.",
+   "filesImpacted": [
+    "vault/server/routes/burnerMail.js",
+    "vault/server/db.js",
+    "vault/server/cron/burnerMailCron.js",
+    "vault/client/src/pages/BurnerMailPage.jsx",
+    "vault/client/src/pages/burnerMail/burnerMailTools.mjs",
+    "vault/server/services/burnerMailTutor.js",
+    "vault/docs/burner-mail.md"
+   ],
+   "benefit": "An address can never reach a second owner; only the address, name and dates are kept after emails are deleted. Keep for good saves a burn for a kept account in one step.",
+   "concerns": "Tombstone rows now build up forever (small: one row per burn). Deleting a whole user account still cascades and removes that user's tombstones, so their addresses could in theory be reissued. Burns purged before this deploy are already gone, so their addresses are not protected. Tested locally in-process against the local database (Keep for good, delete tombstone, list/open/save hide deleted, mail dropped, reissue refused, clean-up keeps rows, saved emails untouched); guide tests and client build pass. Keep for good choice not seen in a browser."
+  },
+  {
    "commit": "c241e9c8",
    "fullHash": "c241e9c8e41e171bbc7911bbbef9c092c5dcb7a1",
    "committedAt": "2026-11-27T12:22:16+10:00",
