@@ -2,6 +2,34 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "15236a8c",
+   "fullHash": "15236a8c42088c5763ff01168ac92d0e40a2e44e",
+   "committedAt": "2026-11-27T13:38:20+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Two-step login Milestone 2: remembered devices; new passwords forget them",
+   "filesChanged": 11,
+   "insertions": 353,
+   "deletions": 9,
+   "goal": "Without remembered devices, Milestone 1 would ask members for an emailed code at every sign-in. Also, changing your own password used to leave every other session signed in.",
+   "whatChanged": "New table auth_trusted_devices (db.js) and server/services/trustedDevices.js: a random token in the vault_device cookie (httpOnly, Secure, SameSite=Lax, Path=/api/auth), stored as a SHA-256 hash and tied to one user, 30 days or 7 for an admin, labelled like 'Chrome on Windows'. auth.js: login skips the code on a remembered browser for that same user; verify with rememberDevice sets the cookie; password reset forgets devices. user.js: changing your own password ends your other sessions (keeps this one) and forgets devices. admin.js: setting a user's password forgets their devices. New server/cron/authCleanupCron.js (hourly, withCronLock) deletes challenges over a day old and expired devices. LoginPage.jsx: 'Remember this device for N days' box, ticked by default, with a Tooltip. Docs: two-step-login.md, key-files.md. Test: new trustedDevices.db.test.js.",
+   "filesImpacted": [
+    "vault/server/services/trustedDevices.js",
+    "vault/server/cron/authCleanupCron.js",
+    "vault/server/routes/auth.js",
+    "vault/server/routes/user.js",
+    "vault/server/routes/admin.js",
+    "vault/server/db.js",
+    "vault/server/index.js",
+    "vault/client/src/pages/LoginPage.jsx",
+    "vault/server/services/trustedDevices.db.test.js",
+    "vault/docs/two-step-login.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "Members enter an emailed code once per browser per 30 days, not at every sign-in. A new password now signs out other sessions and forgets every remembered browser, so a leaked password plus a stolen browser cookie stop working together.",
+   "concerns": "After this deploy every member and accountant gets one emailed code the first time they sign in on each browser, so email delivery must be working. Anyone who unticks the box, or uses a browser that blocks cookies, gets a code every time. One cookie per browser: if two people share a browser, the second person's remembered device replaces the first's cookie. The admin new-device alert and the 7-day admin period only take effect in Milestone 3. Tested locally: trustedDevices.db.test.js 10/10, Milestone 1 tests still pass; seen in a browser with email switched off (box ticked, cookie flags, second sign-in skips the code, a fresh browser is asked for one). Not seen: a real code email arriving."
+  },
+  {
    "commit": "5d796c29",
    "fullHash": "5d796c2934fcf4cd72174c93122f839403eded5f",
    "committedAt": "2026-11-27T13:33:09+10:00",
