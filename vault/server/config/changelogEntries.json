@@ -2,6 +2,29 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "cdea7474",
+   "fullHash": "cdea74747bb83ddd39417e1015222614e29d88a5",
+   "committedAt": "2026-11-27T12:04:36+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Tickets: one task per ticket, Make a task becomes Open task, page reloads on focus",
+   "filesChanged": 6,
+   "insertions": 55,
+   "deletions": 27,
+   "goal": "Make a task stayed on the ticket after a task was made, so a ticket could collect several tasks, and the ticket page kept showing the old status after its task was finished elsewhere.",
+   "whatChanged": "services/tickets.js: makeTask locks the ticket and refuses a second task (409 'This ticket already has a task'). TicketDetail.jsx: with no task, Make a task; with one, Open task (or 'Task done: open it') going to /tasks?task=<id> for the person whose task it is, and 'Task in someone else's Tasks' for others; the Tasks made from it list links to the task too; the page reloads on window focus. TasksPage.jsx: ?task=<id> opens that task in the List view, with the completed section shown. Tests rewritten for one task per ticket (the several-task path kept for older tickets); guide text and docs/tickets.md updated.",
+   "filesImpacted": [
+    "vault/server/services/tickets.js",
+    "vault/client/src/pages/tickets/TicketDetail.jsx",
+    "vault/client/src/pages/TasksPage.jsx",
+    "vault/server/routes/tickets.db.test.js",
+    "vault/server/services/ticketsTutor.js",
+    "vault/docs/tickets.md"
+   ],
+   "benefit": "One ticket, one task, linked both ways; the ticket shows the task's effect without a manual refresh.",
+   "concerns": "Not seen in a browser (the owner is testing it). The ?task link opens the task but does not scroll to it. Reloading on every window focus adds one request each time the tab is focused. Someone without the task cannot make their own once another person has made one. Tested: tickets.db.test.js (one-task rule, Waiting and back, older two-task tickets, Done untouched), ticketsTutor test, client build, and the refusal of a second task on the local server."
+  },
+  {
    "commit": "56191bbb",
    "fullHash": "56191bbb7861163b40dcf6cd592e504810632999",
    "committedAt": "2026-11-27T11:43:50+10:00",
