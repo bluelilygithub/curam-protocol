@@ -1,6 +1,6 @@
 // node client/src/components/charts/chartMath.test.mjs
 import assert from 'node:assert/strict';
-import { maxAbsOf, positionPct, divergingBar, thresholdStatus, thresholdBar, changeOverRange, cardsForRange, heatCell, weekStart } from './chartMath.mjs';
+import { maxAbsOf, positionPct, divergingBar, thresholdStatus, thresholdBar, changeOverRange, cardsForRange, heatCell, weekStart, priceAxisDomain, axisPct, stackLanes } from './chartMath.mjs';
 
 // ---- zero-centred bars ----
 assert.equal(maxAbsOf([2, -5, null, 'x']), 5);
@@ -55,5 +55,28 @@ assert.equal(weekStart('2026-11-30'), '2026-11-30', 'a Monday is its own week');
 assert.equal(weekStart('2026-12-06'), '2026-11-30', 'Sunday belongs to the week before');
 assert.equal(weekStart('2026-12-03'), '2026-11-30');
 assert.equal(weekStart('nonsense'), null);
+
+
+// price axis (watchlist valuation): every value and the reference inside, padded, never below zero
+{
+  const d = priceAxisDomain([152, 251.58, 460], 217.2);
+  assert.ok(d.min < 152 && d.max > 460, 'padded around the extremes');
+  assert.ok(Math.abs(d.min - (152 - 308 * 0.08)) < 1e-9 && Math.abs(d.max - (460 + 308 * 0.08)) < 1e-9);
+  assert.ok(axisPct(152, d) > 0 && axisPct(460, d) < 100);
+  assert.ok(axisPct(217.2, d) > axisPct(152, d) && axisPct(217.2, d) < axisPct(251.58, d), 'order kept');
+  assert.strictEqual(axisPct(9999, d), 100, 'clamped');
+  assert.strictEqual(priceAxisDomain([], null), null);
+  assert.strictEqual(priceAxisDomain([0, -5], null), null, 'non-positive prices ignored');
+  const flat = priceAxisDomain([100], 100);
+  assert.ok(flat.min < 100 && flat.max > 100, 'a single price still gets a visible range');
+  assert.strictEqual(priceAxisDomain([1, 2], 1.5, 5).min, 0, 'never below zero');
+  assert.strictEqual(axisPct(5, { min: 1, max: 1 }), 50);
+}
+
+// marker lanes: close markers move to the next lane, input order kept
+assert.deepStrictEqual(stackLanes([10, 50, 51, 52, 90], 4), [0, 0, 1, 2, 0]);
+assert.deepStrictEqual(stackLanes([52, 50, 10], 4), [1, 0, 0], 'order of input kept');
+assert.deepStrictEqual(stackLanes([20, 24, 28], 4), [0, 0, 0], 'exactly minGap apart share a lane');
+assert.deepStrictEqual(stackLanes([], 4), []);
 
 console.log('chartMath tests passed');

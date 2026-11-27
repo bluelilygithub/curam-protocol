@@ -344,9 +344,9 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
                 {reportsLoading && <div className="space-y-3" aria-busy="true">{[0, 1].map((i) => <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: 'var(--color-surface)' }} />)}</div>}
 
                 {!reportsLoading && report && (structured ? (
-                  <SharesWatchlistReport s={structured} sources={report.sources || []} picker={picker}>
-                    <details className="rounded-2xl border p-5" style={card} open>
-                      <summary className="text-sm font-semibold cursor-pointer hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>Full written report</summary>
+                  <SharesWatchlistReport s={structured} sources={report.sources || []} picker={picker} liveQuote={current.quote} companyName={current.name || current.symbol}>
+                    <details className="rounded-2xl border p-5" style={card}>
+                      <summary className="text-sm font-semibold cursor-pointer hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>Full written report <span className="font-normal text-xs" style={{ color: 'var(--color-muted)' }}>· includes what changed since the last report and the fit with your portfolio</span></summary>
                       <div className="prose max-w-none text-sm mt-3">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{report.markdown}</ReactMarkdown>
                       </div>

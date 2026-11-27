@@ -5,15 +5,16 @@ import ChartCard from '../charts/ChartCard';
 import LevelMeter from '../charts/LevelMeter';
 import { fmtPct } from '../charts/chartFormat.mjs';
 import CitationChips from './CitationChips';
+import { FinancialsSection, ValuationSection, RisksSection } from './SharesWatchlistSections';
 import {
   TONE_ICON, TONE_COLOR, LEVELS, consensusTone, moatTone, labelTone, pctFrom, levelIndex, groupCompetitors, sectionPills,
 } from './watchlistReport.mjs';
 
 // The visual watchlist report: verdict tiles, section pills, summary, moat scorecard and competitors. Drawn only from the validated
 // `structured` data (share_research_reports.structured); SharesWatchlistTab shows the prose instead when there is none.
-// Financials, valuation and risks follow in the next milestone (BUILT below). Docs: docs/shares-watchlist.md.
+// Financials, valuation and risks are in SharesWatchlistSections.jsx. Docs: docs/shares-watchlist.md.
 
-const BUILT = ['summary', 'moat'];
+const BUILT = ['summary', 'moat', 'financials', 'valuation', 'risks'];
 const LEVEL_LABELS = ['Weak', 'Moderate', 'Strong'];
 const LEVEL_COLOR = { weak: 'var(--chart-loss)', moderate: 'var(--chart-warn)', strong: 'var(--chart-gain)' };
 export const fmtMoney = (v, currency) => (v == null ? '—' : `${currency ? `${currency} ` : ''}${Number(v).toLocaleString('en-AU', { maximumFractionDigits: 2 })}`);
@@ -154,7 +155,7 @@ function CompetitorsCard({ s, sources }) {
 }
 
 /** The top half of the visual report. `picker` is the report date picker; `children` follow the drawn sections. */
-export default function SharesWatchlistReport({ s, sources, picker, children }) {
+export default function SharesWatchlistReport({ s, sources, picker, liveQuote, companyName, children }) {
   const pills = sectionPills(s, sources?.length || 0, BUILT);
   return (
     <div className="space-y-5">
@@ -164,7 +165,7 @@ export default function SharesWatchlistReport({ s, sources, picker, children }) 
         <nav aria-label="Report sections" className="flex flex-wrap gap-1.5">
           {pills.map((p) => (
             <Tooltip key={p.id} text={`Jump to ${p.label.replace(/ \(\d+\)$/, '')}`}>
-              <button type="button" onClick={() => jumpTo(p.id)} className="text-xs px-3 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
+              <button type="button" onClick={(e) => { jumpTo(p.id); if (e.detail > 0) e.currentTarget.blur(); /* mouse click: drop the tip, keep it for keyboard */ }} className="text-xs px-3 py-1 rounded-full border hover:opacity-70 transition-opacity duration-200" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
                 {p.label}
               </button>
             </Tooltip>
@@ -187,6 +188,10 @@ export default function SharesWatchlistReport({ s, sources, picker, children }) 
           <CompetitorsCard s={s} sources={sources} />
         </div>
       )}
+
+      <FinancialsSection s={s} sources={sources} />
+      <ValuationSection s={s} sources={sources} liveQuote={liveQuote} companyName={companyName} />
+      <RisksSection s={s} sources={sources} />
 
       {children}
     </div>

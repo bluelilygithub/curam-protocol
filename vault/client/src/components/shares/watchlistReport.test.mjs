@@ -50,4 +50,37 @@ const s = { centralQuestion: 'Q', moat: { factors: [{}] }, valuation: { targets:
 assert.deepStrictEqual(r.sectionPills(s, 36, ['summary', 'moat']).map((p) => p.label), ['Summary', 'Moat', 'Sources (36)']);
 assert.deepStrictEqual(r.sectionPills(s, 0).map((p) => p.id), ['summary', 'moat', 'valuation'], 'no risks, no sources');
 
+// figures
+assert.strictEqual(r.fmtFigure(74.5, '%'), '+74.5%');
+assert.strictEqual(r.fmtFigure(-2.21, '%'), '−2.2%');
+assert.strictEqual(r.fmtFigure(0, '%'), '0.0%');
+assert.strictEqual(r.fmtFigure(1.4, 'x'), '1.40x');
+assert.strictEqual(r.fmtFigure(98000, 'm'), 'USD 98bn');
+assert.strictEqual(r.fmtFigure(98400, 'm'), 'USD 98.4bn');
+assert.strictEqual(r.fmtFigure(850, 'm'), 'USD 850m');
+assert.strictEqual(r.fmtFigure(null, '%'), '—');
+
+// now: live quote in the same currency wins, else the report price
+assert.deepStrictEqual(r.nowPrice({ price: 220, currency: 'USD' }, { current: 217.2, currency: 'USD' }), { price: 220, currency: 'USD', label: 'Now' });
+assert.strictEqual(r.nowPrice({ price: 33, currency: 'AUD' }, { current: 217.2, currency: 'USD' }).label, 'At report', 'other currency: report price');
+assert.strictEqual(r.nowPrice(null, { current: 217.2, currency: 'USD' }).price, 217.2);
+assert.strictEqual(r.nowPrice(null, null), null);
+
+// targets: sorted, signed % from now, tone above / below
+const rows = r.targetRows([{ source: 'A', value: 460 }, { source: 'B', value: 152 }, { source: 'C', value: 217.2 }, { source: 'D', value: 0 }], 217.2);
+assert.deepStrictEqual(rows.map((x) => x.source), ['B', 'C', 'A']);
+assert.deepStrictEqual(rows.map((x) => x.tone), ['loss', 'neutral', 'gain']);
+assert.ok(Math.abs(rows[0].pct - -30.02) < 0.01 && Math.abs(rows[2].pct - 111.79) < 0.01);
+assert.strictEqual(r.targetRows([{ value: 10 }], null)[0].pct, null);
+assert.ok(Math.abs(r.psMultiple(39.97, 11.7) - 3.416) < 0.001);
+assert.strictEqual(r.psMultiple(39.97, 0), null);
+
+// risk icons
+assert.strictEqual(r.riskIcon('Microsoft bundle'), 'crosshair');
+assert.strictEqual(r.riskIcon('Outage repeat'), 'zap');
+assert.strictEqual(r.riskIcon('Something else'), 'alert-triangle');
+
+// pills now include the M3 sections
+assert.deepStrictEqual(r.sectionPills({ centralQuestion: 'Q', financials: {}, valuation: {}, risks: [{}] }, 2).map((p) => p.id), ['summary', 'financials', 'valuation', 'risks', 'sources']);
+
 console.log('watchlistReport tests passed');

@@ -68,3 +68,36 @@ export function weekStart(ymd) {
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * A price axis that holds every value plus a reference (e.g. today's price), padded by `pad` of the range on each side (or of the
+ * value itself when everything is equal). Returns { min, max } or null with nothing usable.
+ */
+export function priceAxisDomain(values, reference, pad = 0.08) {
+  const all = [...values, reference].map(num).filter((v) => v != null && v > 0);
+  if (!all.length) return null;
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const span = hi - lo || hi * 0.1;
+  return { min: Math.max(0, lo - span * pad), max: hi + span * pad };
+}
+
+/** Where a value sits on that axis, as % from the left, clamped. */
+export function axisPct(value, domain) {
+  const v = num(value);
+  if (v == null || !domain || !(domain.max > domain.min)) return 50;
+  return clamp(((v - domain.min) / (domain.max - domain.min)) * 100, 0, 100);
+}
+
+/** Lanes for markers on one axis so none sit closer than `minGap` (in %) to another in the same lane. Input order kept. */
+export function stackLanes(positions, minGap = 4) {
+  const order = positions.map((p, i) => [Number(p), i]).sort((a, b) => a[0] - b[0]);
+  const lastInLane = [];
+  const lanes = new Array(positions.length).fill(0);
+  for (const [p, i] of order) {
+    let lane = lastInLane.findIndex((last) => p - last >= minGap);
+    if (lane < 0) { lane = lastInLane.length; lastInLane.push(p); } else lastInLane[lane] = p;
+    lanes[i] = lane;
+  }
+  return lanes;
+}

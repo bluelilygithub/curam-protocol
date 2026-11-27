@@ -85,3 +85,65 @@ export function sectionPills(s, sourceCount, built = ['summary', 'moat', 'financ
   if (sourceCount > 0) pills.push({ id: 'sources', label: `Sources (${sourceCount})` });
   return pills;
 }
+
+// ---- financials and valuation (M3) ----
+
+const MINUS = '−';
+const isNum = (v) => v != null && v !== '' && Number.isFinite(Number(v));
+
+/** A Finnhub figure for a tile: % figures signed (margins, growth, ROE), ratios as 1.40x, market cap (USD m) as USD 98.0bn. */
+export function fmtFigure(value, unit, { signed = true } = {}) {
+  if (!isNum(value)) return '—';
+  const n = Number(value);
+  if (unit === '%') {
+    const r = Math.abs(n).toFixed(1);
+    return `${signed && n > 0 ? '+' : n < 0 ? MINUS : ''}${r}%`;
+  }
+  if (unit === 'm') return n >= 1000 ? `USD ${(n / 1000).toLocaleString('en-AU', { maximumFractionDigits: 1 })}bn` : `USD ${Math.round(n).toLocaleString('en-AU')}m`;
+  return `${n < 0 ? MINUS : ''}${Math.abs(n).toFixed(2)}x`;
+}
+
+/**
+ * "Now" for the price axis: the live quote when it is in the targets' currency, else the price at the report. Null without either.
+ * Returns { price, currency, label }.
+ */
+export function nowPrice(liveQuote, reportPrice) {
+  if (liveQuote && isNum(liveQuote.price) && Number(liveQuote.price) > 0 && (!reportPrice?.currency || liveQuote.currency === reportPrice.currency)) {
+    return { price: Number(liveQuote.price), currency: liveQuote.currency, label: 'Now' };
+  }
+  if (reportPrice && isNum(reportPrice.current) && Number(reportPrice.current) > 0) return { price: Number(reportPrice.current), currency: reportPrice.currency, label: 'At report' };
+  return null;
+}
+
+/** Targets sorted low to high, each with % from now and a tone (gain above, loss below, neutral level). */
+export function targetRows(targets, now) {
+  return (Array.isArray(targets) ? targets : [])
+    .filter((t) => isNum(t.value) && Number(t.value) > 0)
+    .map((t) => {
+      const pct = now ? pctFrom(t.value, now) : null;
+      const tone = pct == null ? 'neutral' : pct > 0.05 ? 'gain' : pct < -0.05 ? 'loss' : 'neutral';
+      return { ...t, pct, tone };
+    })
+    .sort((a, b) => a.value - b.value);
+}
+
+/** How many times the company's P/S is the peers' (one decimal), or null. */
+export function psMultiple(company, peers) {
+  return isNum(company) && isNum(peers) && Number(peers) > 0 ? Number(company) / Number(peers) : null;
+}
+
+// An icon per risk from plain words in its title; anything else gets the warning triangle.
+const RISK_ICONS = [
+  [/compet|rival|bundle|pricing pressure/i, 'crosshair'],
+  [/regulat|legal|lawsuit|antitrust|government|tariff/i, 'landmark'],
+  [/outage|reliab|incident|breach|security event/i, 'zap'],
+  [/valuation|multiple|price|expectation/i, 'percent'],
+  [/acqui|deal|merger|integration/i, 'briefcase'],
+  [/dilution|share|stock[- ]based|buyback/i, 'layers'],
+  [/growth|slow|demand|deceler/i, 'trending-down'],
+  [/margin|cost|profit|cash/i, 'coins'],
+];
+export function riskIcon(title) {
+  const t = String(title || '');
+  return (RISK_ICONS.find(([re]) => re.test(t)) || [null, 'alert-triangle'])[1];
+}
