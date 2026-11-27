@@ -211,6 +211,7 @@ router.get('/users', async (_req, res) => {
 // so no admin ever knows it. Until they use it, sign-in answers "Password setup required" (mustChangePassword). If the email can't
 // be sent, the admin gets the link back to pass on (or uses Set password). Same pattern as the Wellbeing invite.
 const LINK_DAYS = 7;
+const EMAIL_APP_URL = 'https://vault.curam-ai.com.au'; // the address in welcome and reset emails (owner's choice, 2026-11-27)
 const SEND_TIMEOUT_MS = 15000; // MailChannels' request has no timeout of its own
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -266,7 +267,9 @@ ${steps}
 
 /** Send the email; hand the link back to the admin only when it could not be sent. */
 async function emailLinkAndAnswer(req, res, { kind, user, token, status, failText }) {
-  const appUrl = require('../utils/appUrl').getAppUrl(req);
+  // People are sent to the Vault's own domain, not whichever address the admin happened to use; local runs keep local links
+  const requestUrl = require('../utils/appUrl').getAppUrl(req);
+  const appUrl = /\/\/(localhost|127\.0\.0\.1)(:|$)/.test(requestUrl) ? requestUrl : EMAIL_APP_URL;
   const link = `${appUrl}/reset-password?token=${token}`;
   try {
     await sendSetPasswordEmail({ kind, to: user.email, isAdmin: user.isAdmin, link, appUrl, from: req.user.email || 'your administrator' });
