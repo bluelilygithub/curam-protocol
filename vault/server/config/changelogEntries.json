@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "ef52a55a",
+   "fullHash": "ef52a55a887c1d3dd5a852f0b17d90bc9ca2b5c3",
+   "committedAt": "2026-11-27T16:40:34+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Welcome email with sign-in details; Reset password & email from Dashboard",
+   "filesChanged": 7,
+   "insertions": 217,
+   "deletions": 33,
+   "goal": "The owner wants new users to get a welcome email with their details, and to be able to reset someone's password and let them know by email.",
+   "whatChanged": "server/routes/admin.js: shared issueSetPasswordLink() (password made unusable, mustChangePassword, fresh 7-day single-use link) and sendSetPasswordEmail() (welcome or reset wording: the Vault address, the email they sign in with, a set-password button, how their first sign-in works for a member or an admin, who to ask; values HTML-escaped; 15-second send timeout). POST /api/admin/users uses them. New POST /api/admin/users/:id/reset-password-email (not your own account): password unusable, every session and remembered device removed in one transaction, then the reset email; the link comes back to the admin if the email fails. client/src/components/UsersAdminPanel.jsx: \"Reset password & email\" on every other user row with a Tooltip, confirmed in the shared Dialog; outcome line or the link with Copy link; the manual \"Reset Password\" button renamed \"Set password\". Guide wording (settingsTutor.js), docs/two-step-login.md, docs/key-files.md, routeManifest.json (admin). server/routes/auth.test.js now 13 (email details for member and admin, the reset flow end to end, own account refused, missing user, failed email returns the link); its requests now come from varying addresses so the sign-in rate limit does not trip mid-run.",
+   "filesImpacted": [
+    "vault/server/routes/admin.js",
+    "vault/client/src/components/UsersAdminPanel.jsx",
+    "vault/server/routes/auth.test.js",
+    "vault/server/services/settingsTutor.js",
+    "vault/server/testing/routeManifest.json",
+    "vault/docs/two-step-login.md",
+    "vault/docs/key-files.md"
+   ],
+   "benefit": "New people get everything they need to sign in in one email, and an admin can reset a password (or resend an expired welcome) with one button, without ever knowing the password.",
+   "concerns": "No real email was sent: tests use a recording mailer, the three emails were rendered and looked at as pages, and the Dashboard flow was checked in a browser with email switched off. Reset password & email does not change two-step login (use Reset 2-step login for a lost phone). The email names the admin who pressed the button as the person to ask. The list still does not show who has not yet set a password."
+  },
+  {
    "commit": "4b9d2ce9",
    "fullHash": "4b9d2ce939ec8eee28ea30784a092f994045a7c4",
    "committedAt": "2026-11-27T16:30:41+10:00",
