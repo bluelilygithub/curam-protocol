@@ -2,15 +2,15 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
-   "commit": "e0d7d6af",
-   "fullHash": "e0d7d6af5e5e31b18e937ae48d56ab0ae8f4d6ff",
-   "committedAt": "2026-11-28T09:21:31+10:00",
+   "commit": "6da0fbea",
+   "fullHash": "6da0fbea65d01255cf3c2e2d79fa3e4861176cb0",
+   "committedAt": "2026-11-28T08:41:29+10:00",
    "author": "mrb",
    "area": "Shares",
    "subject": "Shares Watchlist report redesign M2: header, verdicts, summary, moat, competitors",
    "filesChanged": 8,
-   "insertions": 551,
-   "deletions": 58,
+   "insertions": 498,
+   "deletions": 52,
    "goal": "Milestone 2 of 4 of the Watchlist report redesign: turn the top half of a research report into a visual, scannable page drawn from the structured data saved since M1.",
    "whatChanged": "SharesWatchlistTab.jsx: new header for every report (company name, ticker and exchange; live price with today's move as a signed badge with an icon, hidden with no quote; price at the report; a bar for the distance from the 1-year high when the report has it; the research question with Edit; Research again, Write a thesis, Download, and an OverflowMenu with Copy and Remove, Remove still confirmed inline). A report with usable structured data (isUsableStructured) renders SharesWatchlistReport.jsx: four verdict tiles (consensus, moat, valuation, growth; tone with an icon, never colour alone), section pills and the date picker, the central question as a pull quote with a short summary, the moat scorecard (LevelMeter per factor, overall badge, \"Readings that disagree\" callout) and competitors grouped by the kind of pressure, two columns from xl. CitationChips.jsx: numbered chips linking to the source with a Tooltip (title, site). New kit piece charts/LevelMeter.jsx. Pure helpers watchlistReport.mjs (fallback guard, tones, % from price, the peak bar, competitor grouping, pills) with watchlistReport.test.mjs. Until M3, the full written report sits in an open box under the drawn sections, then sources and the unchanged disclaimer. Reports without structured data keep the prose view. Docs: docs/shares-watchlist.md, docs/key-files.md.",
    "filesImpacted": [
