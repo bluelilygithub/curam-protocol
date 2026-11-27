@@ -2,6 +2,31 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "29391281",
+   "fullHash": "293912810c4dd475387a1e8799c87b39eff0fa3d",
+   "committedAt": "2026-11-27T11:35:21+10:00",
+   "author": "mrb",
+   "area": "Tickets",
+   "subject": "Tickets: tasks move the ticket to Waiting when all are done, back when one reopens",
+   "filesChanged": 8,
+   "insertions": 91,
+   "deletions": 7,
+   "goal": "Close the return trip from Tasks to Tickets. Finishing the tasks made from a ticket changed nothing on the ticket, so finished work sat in Active and in the 7am overdue email until someone closed it by hand.",
+   "whatChanged": "services/tickets.js: new syncFromTask() (in a transaction, ticket row locked). It writes 'Task done: …' or 'Task reopened: …' to the history; when every task made from the ticket is done it moves the ticket to Waiting (never Done); an open task moves a Waiting ticket back to In progress, with the reason in the history. Done tickets and tickets with no tasks never move. makeTask() calls it, so a new task on a Waiting ticket reopens it. routes/tasks.js: syncTicketFromTask() runs it whenever a task becomes done or stops being done on the task screen (PUT /:id), in bulk (PUT /bulk) and from a note to-do (changeTaskStatus). services/ticketDigest.js: Waiting tickets are left out of overdue and due today. The Waiting list tooltip, the Tickets guide's Make a task note and its test, and docs/tickets.md ('Tasks move the ticket') say the same.",
+   "filesImpacted": [
+    "vault/server/services/tickets.js",
+    "vault/server/routes/tasks.js",
+    "vault/server/services/ticketDigest.js",
+    "vault/server/routes/tickets.db.test.js",
+    "vault/server/services/ticketsTutor.js",
+    "vault/server/services/ticketsTutor.test.js",
+    "vault/client/src/pages/tickets/ticketLogic.mjs",
+    "vault/docs/tickets.md"
+   ],
+   "benefit": "Tickets whose work is finished leave the work-to-do pile and the morning email by themselves, but still wait for a person to close them, so a reply or check to the client is not skipped.",
+   "concerns": "A ticket set to Waiting by hand (held up on a client) moves to In progress if one of its tasks is reopened or a new one is made. Deleting a task does not move the ticket, even when every task left is done. Waiting tickets still count in the Active list and the Apps menu badge. A failed ticket update is logged and does not fail the task change. Tested on the local database: tickets.db.test.js (all done, reopen, new task, Done ticket untouched), ticketDigest, ticketsTutor and ticketLogic tests, and the real Tasks routes (single, bulk, reopen) against a test ticket. Not tried: the browser, Railway."
+  },
+  {
    "commit": "cf1e6eca",
    "fullHash": "cf1e6ecae9d1762d35afd0da46f3ffd915d5ffd3",
    "committedAt": "2026-11-27T10:30:36+10:00",
