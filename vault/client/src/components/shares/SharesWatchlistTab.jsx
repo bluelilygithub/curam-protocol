@@ -10,6 +10,10 @@ import { offerUndo } from '../../utils/binUndo';
 import { downloadBlob } from '../../utils/exportHelpers';
 import Tooltip from '../Tooltip';
 import EmptyState from '../EmptyState';
+import OverflowMenu from '../OverflowMenu';
+import { fmtPct } from '../charts/chartFormat.mjs';
+import SharesWatchlistReport, { ToneBadge, fmtMoney } from './SharesWatchlistReport';
+import { isUsableStructured, peakBar } from './watchlistReport.mjs';
 import { VoiceInputProvider, VoiceInput } from '../voiceInput/VoiceInput';
 
 // Shares → Watchlist. Companies you are researching but do not hold. "Research" runs a dated report (web search, live quote, Finnhub
@@ -47,6 +51,7 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
   const [saving, setSaving] = useState(false);
   const [reports, setReports] = useState([]);
   const [reportIdx, setReportIdx] = useState(0);
+  const [reportsLoading, setReportsLoading] = useState(false);
   const [editNote, setEditNote] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -77,8 +82,10 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
       setReports([]);
     }
     setReportIdx(0);
+    setReportsLoading(false);
   }, []);
   useEffect(() => {
+    setReportsLoading(!!selected);
     setConfirmDelete(false);
     setEditNote(null);
     setReports([]);
@@ -166,6 +173,29 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
     return <div className="space-y-2 max-w-3xl" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-14 rounded-lg animate-pulse" style={{ background: 'var(--color-surface)' }} />)}</div>;
   }
 
+  const structured = report && isUsableStructured(report.structured) ? report.structured : null;
+  const peak = structured?.price ? peakBar(structured.price.current, structured.price.yearHigh) : null;
+  const picker = reports.length > 1 ? (
+    <Tooltip text="Read an earlier report.">
+      <select value={reportIdx} onChange={(e) => setReportIdx(Number(e.target.value))} aria-label="Pick a report" className="text-xs px-2 py-1 rounded-md border" style={field}>
+        {reports.map((r, i) => <option key={r.id} value={i}>{fmtWhen(r.createdAt)}{i === 0 ? ' (latest)' : ''}</option>)}
+      </select>
+    </Tooltip>
+  ) : report ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Report · {fmtWhen(report.createdAt)}</span> : null;
+  const sourcesBlock = report ? (
+    <div className="rounded-2xl border p-5 mt-0" style={card}>
+      {report.sources?.length > 0 && (
+        <details id="wl-sec-sources" className="scroll-mt-4">
+          <summary className="text-sm font-semibold cursor-pointer hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>Sources ({report.sources.length})</summary>
+          <ol className="mt-2 space-y-1 text-xs list-decimal pl-5" style={{ color: 'var(--color-text)' }}>
+            {report.sources.map((s, i) => <li key={i}><a href={s.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-70 transition-opacity duration-200">{s.title || s.url}</a> <span style={{ color: 'var(--color-muted)' }}>{s.source}</span></li>)}
+          </ol>
+        </details>
+      )}
+      <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{DISCLAIMER}</p>
+    </div>
+  ) : null;
+
   return (
     <VoiceInputProvider lang="en-AU">
       <div className="max-w-[1700px]" data-tour="shares-watchlist">
@@ -230,14 +260,15 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
             )}
 
             {!adding && current && (
-              <div className="space-y-4">
-                <div className="rounded-xl border p-4" style={card}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-                      {current.symbol} <span className="text-xs font-normal" style={{ color: 'var(--color-muted)' }}>{current.exchange}{current.name ? ` · ${current.name}` : ''} · {fmtQuote(current.quote)}</span>
-                    </h2>
+              <div className="space-y-5">
+                <section className="rounded-2xl border p-5 space-y-4" style={card}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{current.name || current.symbol}</h2>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{current.symbol} · {current.exchange}</p>
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Tooltip text="Write a new dated report: web search, the live quote, reported figures for US shares, your holdings and your investor profile (Settings → Shares). One AI call. Earlier reports are kept and the new one says what changed.">
+                      <Tooltip text="Write a new dated report: web search, the live quote, reported figures for US shares, your holdings and your investor profile (Settings → Shares). Two AI calls: the report, then its key figures for the charts. Earlier reports are kept and the new one says what changed.">
                         <button type="button" onClick={research} className={btnCls} style={btnPrimary}>{reports.length ? 'Research again' : 'Research'}</button>
                       </Tooltip>
                       {onWriteThesis && (
@@ -245,66 +276,100 @@ export default function SharesWatchlistTab({ onWriteThesis }) {
                           <button type="button" onClick={() => onWriteThesis(current.symbol, current.exchange)} className={`${btnCls} border`} style={btnGhost}>Write a thesis</button>
                         </Tooltip>
                       )}
+                      <Tooltip text={report ? 'Download this report, with its sources, as a Markdown (.md) file.' : 'Run a report first.'}>
+                        <button type="button" onClick={downloadReport} disabled={!report} className={`${btnCls} border inline-flex items-center gap-1`} style={btnGhost}>{getIcon('download', { size: 14 })} Download</button>
+                      </Tooltip>
                       {confirmDelete ? (
                         <span className="text-sm" style={{ color: 'var(--color-text)' }}>Remove? <button type="button" onClick={remove} className="underline hover:opacity-60 transition-opacity duration-200" style={{ color: BAD }}>Yes</button> / <button type="button" onClick={() => setConfirmDelete(false)} className="underline hover:opacity-60 transition-opacity duration-200">No</button></span>
                       ) : (
-                        <Tooltip text="Remove from the watchlist with its reports. Kept 30 days in the recycle bin.">
-                          <button type="button" onClick={() => setConfirmDelete(true)} className={`${btnCls} border`} style={btnGhost}>Remove</button>
+                        <Tooltip text="More: copy the report, or remove this company.">
+                          <span><OverflowMenu title="More actions" actions={[
+                            { label: 'Copy report as Markdown', icon: 'copy', disabled: !report, onClick: copyReport },
+                            { label: 'Remove from watchlist', icon: 'trash', danger: true, onClick: () => setConfirmDelete(true) },
+                          ]} /></span>
                         </Tooltip>
                       )}
                     </div>
                   </div>
-                  {editNote == null ? (
-                    <p className="text-sm" style={{ color: current.note ? 'var(--color-text)' : 'var(--color-muted)' }}>
-                      {current.note || 'No note on why you are looking at it.'}{' '}
-                      <Tooltip text="The report reads this note."><button type="button" onClick={() => setEditNote(current.note || '')} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>Edit note</button></Tooltip>
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      <VoiceInput type="textarea" append rows={2} value={editNote} onChange={setEditNote} label="Why you are looking at it" />
-                      <div className="flex gap-2">
-                        <button type="button" onClick={saveNote} className={btnCls} style={btnPrimary}>Save note</button>
-                        <button type="button" onClick={() => setEditNote(null)} className={`${btnCls} border`} style={btnGhost}>Cancel</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
 
-                {report ? (
-                  <div className="rounded-xl border p-4" style={card}>
+                  <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                    {current.quote && <div>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Price now</p>
+                      <p className="flex flex-wrap items-baseline gap-2">
+                        <span className="text-2xl font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{fmtQuote(current.quote)}</span>
+                        {current.quote?.changePct != null && (
+                          <ToneBadge tone={current.quote.changePct > 0 ? 'gain' : current.quote.changePct < 0 ? 'loss' : 'neutral'}>{fmtPct(current.quote.changePct, 2)} today</ToneBadge>
+                        )}
+                      </p>
+                    </div>}
+                    {report?.priceAtReport && (
+                      <div>
+                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>At the report, {fmtWhen(report.createdAt)}</p>
+                        <p className="text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{report.priceAtReport}</p>
+                      </div>
+                    )}
+                    {peak && (
+                      <div className="flex-1 min-w-[14rem] max-w-md">
+                        <Tooltip text="Price at the report against the highest price of the past year (Finnhub). Shown for US shares only.">
+                          <p className="text-xs inline-block" style={{ color: 'var(--color-muted)' }}>
+                            {fmtPct(peak.fromHighPct)} from the 1-year high of {fmtMoney(structured.price.yearHigh, structured.price.currency)}{structured.price.yearHighDate ? ` (${fmtWhen(structured.price.yearHighDate)})` : ''}
+                          </p>
+                        </Tooltip>
+                        <div className="h-2 mt-1.5 rounded-full" style={{ background: 'var(--chart-grid)' }} role="img" aria-label={`Price at the report is ${fmtPct(peak.fromHighPct)} from the 1-year high`}>
+                          <div className="h-2 rounded-full" style={{ width: `${peak.fillPct}%`, background: 'var(--chart-1)' }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl p-3" style={{ background: 'var(--color-bg)' }}>
+                    <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Your research question</p>
+                    {editNote == null ? (
+                      <p className="text-sm" style={{ color: current.note ? 'var(--color-text)' : 'var(--color-muted)' }}>
+                        {current.note || 'No note on why you are looking at it.'}{' '}
+                        <Tooltip text="Edit why you are looking at this company. The next report reads it."><button type="button" onClick={() => setEditNote(current.note || '')} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>Edit</button></Tooltip>
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <VoiceInput type="textarea" append rows={2} value={editNote} onChange={setEditNote} label="Why you are looking at it" />
+                        <div className="flex gap-2">
+                          <Tooltip text="Save the question. The next report reads it."><button type="button" onClick={saveNote} className={btnCls} style={btnPrimary}>Save</button></Tooltip>
+                          <Tooltip text="Keep the question as it was."><button type="button" onClick={() => setEditNote(null)} className={`${btnCls} border`} style={btnGhost}>Cancel</button></Tooltip>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {reportsLoading && <div className="space-y-3" aria-busy="true">{[0, 1].map((i) => <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: 'var(--color-surface)' }} />)}</div>}
+
+                {!reportsLoading && report && (structured ? (
+                  <SharesWatchlistReport s={structured} sources={report.sources || []} picker={picker}>
+                    <details className="rounded-2xl border p-5" style={card} open>
+                      <summary className="text-sm font-semibold cursor-pointer hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>Full written report</summary>
+                      <div className="prose max-w-none text-sm mt-3">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{report.markdown}</ReactMarkdown>
+                      </div>
+                    </details>
+                    {sourcesBlock}
+                  </SharesWatchlistReport>
+                ) : (
+                  <div className="rounded-2xl border p-5" style={card}>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                       <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Report · {fmtWhen(report.createdAt)}{report.priceAtReport ? ` · price then ${report.priceAtReport}` : ''}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {reports.length > 1 && (
-                          <Tooltip text="Read an earlier report.">
-                            <select value={reportIdx} onChange={(e) => setReportIdx(Number(e.target.value))} aria-label="Pick a report" className="text-xs px-2 py-1 rounded-md border" style={field}>
-                              {reports.map((r, i) => <option key={r.id} value={i}>{fmtWhen(r.createdAt)}{i === 0 ? ' (latest)' : ''}</option>)}
-                            </select>
-                          </Tooltip>
-                        )}
-                        <Tooltip text="Copy this report, with its sources, as Markdown.">
-                          <button type="button" onClick={copyReport} className="text-xs px-2 py-1 rounded-md border hover:opacity-70 transition-opacity duration-200 inline-flex items-center gap-1" style={btnGhost}>{getIcon('copy', { size: 12 })} Copy</button>
-                        </Tooltip>
-                        <Tooltip text="Download this report, with its sources, as a Markdown (.md) file.">
-                          <button type="button" onClick={downloadReport} className="text-xs px-2 py-1 rounded-md border hover:opacity-70 transition-opacity duration-200 inline-flex items-center gap-1" style={btnGhost}>{getIcon('download', { size: 12 })} Download</button>
-                        </Tooltip>
-                      </div>
+                      {picker}
                     </div>
                     <div className="prose max-w-none text-sm">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{report.markdown}</ReactMarkdown>
                     </div>
-                    {report.sources?.length > 0 && (
-                      <details className="mt-4 rounded-lg p-3" style={{ background: 'var(--color-bg)' }}>
-                        <summary className="text-xs font-medium cursor-pointer hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Sources ({report.sources.length})</summary>
-                        <ol className="mt-2 space-y-1 text-xs list-decimal pl-5" style={{ color: 'var(--color-text)' }}>
-                          {report.sources.map((s, i) => <li key={i}><a href={s.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-70 transition-opacity duration-200">{s.title || s.url}</a> <span style={{ color: 'var(--color-muted)' }}>{s.source}</span></li>)}
-                        </ol>
-                      </details>
-                    )}
-                    <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{DISCLAIMER}</p>
+                    {sourcesBlock}
                   </div>
-                ) : (
-                  <p className="text-sm px-1" style={{ color: 'var(--color-muted)' }}>No report yet. Press Research to write the first one. For a report that fits you, fill in your investor profile in Settings → Shares.</p>
+                ))}
+                {!reportsLoading && !report && (
+                  <EmptyState
+                    icon="info" title="No report yet"
+                    body="Press Research to write the first one. For a report that fits you, fill in your investor profile in Settings → Shares."
+                  />
                 )}
               </div>
             )}
