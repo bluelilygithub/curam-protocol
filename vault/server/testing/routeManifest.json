@@ -94,6 +94,12 @@
   "POST /api/auth/login": {
    "class": "public"
   },
+  "POST /api/auth/challenge/verify": {
+   "class": "public"
+  },
+  "POST /api/auth/challenge/resend": {
+   "class": "public"
+  },
   "POST /api/auth/logout": {
    "class": "public"
   },

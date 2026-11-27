@@ -83,7 +83,7 @@ Core files:
 
 ## Auth
 
-Token-based, not JWT. 32-byte random hex in `auth_sessions`; one DB lookup per request (instant invalidation). `requireAuth` protects all `/api/*` except `/api/auth/*`, `/api/health`, `/api/shared/*`. Shared routes **must** be registered before `requireAuth` in `server/index.js`; `SharedTaskPage` (`/shared/task/:token`) sits outside `AuthGuard` in `App.jsx`. `/api/admin/*` uses `requireAdmin` (`users."isAdmin"`); first user is admin.
+Token-based, not JWT. 32-byte random hex in `auth_sessions`; one DB lookup per request (instant invalidation). `requireAuth` protects all `/api/*` except `/api/auth/*`, `/api/health`, `/api/shared/*`. Shared routes **must** be registered before `requireAuth` in `server/index.js`; `SharedTaskPage` (`/shared/task/:token`) sits outside `AuthGuard` in `App.jsx`. `/api/admin/*` uses `requireAdmin` (`users."isAdmin"`); first user is admin. Two-step login (emailed codes, admin TOTP, trusted devices; needs `AUTH_ENCRYPTION_KEY`): `docs/two-step-login.md`. Sessions are made only by `createSession()` in `server/routes/auth.js`.
 
 **Never use raw `fetch('/api/...')` in the frontend. Always use `apiClient`.**
 

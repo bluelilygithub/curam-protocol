@@ -399,6 +399,7 @@ async function start() {
   await ensureShoppingSearchModelInVault().catch((err) => console.warn('[boot] shopping model backfill:', err.message));
   const { runStartupChecks } = require('./services/SuggestionService');
   runStartupChecks().catch(err => console.warn('[startup] suggestion checks:', err.message));
+  require('./services/loginChallenge').checkAuthKeyAtBoot();
 
   startFitnessTasksSync(); // sends nothing, so it runs on staging too
   startRecycleBinPurge(); // removes bin items older than 30 days; sends nothing, so it runs everywhere

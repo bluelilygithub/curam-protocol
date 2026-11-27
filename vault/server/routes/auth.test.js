@@ -15,6 +15,7 @@ if (!process.env.DATABASE_URL) {
 }
 // A valid invite code is configured on purpose: sign-up must stay closed anyway.
 process.env.INVITE_CODE = 'test-invite-code-123';
+process.env.AUTH_ENCRYPTION_KEY = require('crypto').randomBytes(32).toString('base64');
 
 const assert = require('assert');
 const http = require('http');
@@ -41,6 +42,13 @@ async function call(method, url, body, headers = {}) {
   const res = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   let json = null; try { json = await res.json(); } catch { /* empty */ }
   return { status: res.status, json };
+}
+// A member's password step now returns a challenge; finish it with the emailed code (docs/two-step-login.md).
+async function signIn(email, password) {
+  const r = await call('POST', '/api/auth/login', { email, password });
+  if (r.status !== 200 || !r.json.challengeId) return r;
+  const code = sent[sent.length - 1].subject.slice(0, 6);
+  return call('POST', '/api/auth/challenge/verify', { challengeId: r.json.challengeId, code });
 }
 const userCount = async (email) => (await pool.query('SELECT COUNT(*)::int n FROM users WHERE email=$1', [email])).rows[0].n;
 
@@ -78,7 +86,7 @@ test('signing in still works for an existing account; a wrong password is refuse
   const email = mail('existing');
   const bcrypt = require('bcryptjs');
   await pool.query(`INSERT INTO users (email,"passwordHash") VALUES ($1,$2)`, [email, await bcrypt.hash('existing-password-1', 4)]);
-  const ok = await call('POST', '/api/auth/login', { email, password: 'existing-password-1' });
+  const ok = await signIn(email, 'existing-password-1');
   assert.strictEqual(ok.status, 200);
   assert.ok(ok.json.token && ok.json.user.email === email);
   assert.strictEqual((await call('POST', '/api/auth/login', { email, password: 'nope-nope-nope' })).status, 401);
@@ -89,7 +97,7 @@ test('an administrator can create an account, and its owner can then sign in', a
   const made = await call('POST', '/api/admin/users', { email, password: 'admin-made-pass-1' });
   assert.strictEqual(made.status, 201, JSON.stringify(made.json));
   assert.strictEqual(made.json.user.isAdmin, false);
-  const login = await call('POST', '/api/auth/login', { email, password: 'admin-made-pass-1' });
+  const login = await signIn(email, 'admin-made-pass-1');
   assert.strictEqual(login.status, 200);
   const me = await call('GET', '/api/auth/me', undefined, { Authorization: `Bearer ${login.json.token}` });
   assert.strictEqual(me.json.user.email, email);
@@ -120,7 +128,7 @@ test('a Wellbeing invite still works end to end: account created, setup link sen
   assert.ok(String(inv.json.link).includes(token), 'the emailed link carries the setup token');
   const set = await call('POST', '/api/auth/reset-password-confirm', { token, password: 'my-new-password-1' });
   assert.strictEqual(set.status, 200, JSON.stringify(set.json));
-  const login = await call('POST', '/api/auth/login', { email, password: 'my-new-password-1' });
+  const login = await signIn(email, 'my-new-password-1');
   assert.strictEqual(login.status, 200, JSON.stringify(login.json));
   assert.strictEqual((await pool.query('SELECT "mustChangePassword" m FROM users WHERE email=$1', [email])).rows[0].m, false);
 });

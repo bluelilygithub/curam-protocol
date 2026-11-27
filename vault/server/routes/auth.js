@@ -9,6 +9,7 @@ const { pool } = require('../db');
 const { getAppUrl } = require('../utils/appUrl');
 const { logLogin, accessEnded, ownerEmailOf } = require('../services/accountantAccess');
 const { landingFor } = require('../utils/landing');
+const challenge = require('../services/loginChallenge');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -27,8 +28,36 @@ const resetLimiter = rateLimit({
   message: { error: 'Too many password reset attempts, please try again later.' },
 });
 
+// Code steps are limited by IP here and per account in loginChallenge.js (5 per challenge, 10 an hour).
+const codeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many attempts, please try again later.' },
+});
+const resendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many attempts, please try again later.' },
+});
+
 function makeToken() {
   return crypto.randomBytes(32).toString('hex');
+}
+
+/** The one place a session is made. `db` is the pool, or a transaction's client. */
+async function createSession(db, user) {
+  const token = makeToken();
+  await db.query(
+    'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
+    [token, user.id, makeExpiry()]
+  );
+  return token;
+}
+
+async function signedIn(req, user, token) {
+  await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [user.id]);
+  await logLogin(req, user);
+  return { token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin, isAccountant: !!user.accountantOfUserId, ownerEmail: await ownerEmailOf(user), landing: await landingFor(user) } };
 }
 
 function makeExpiry() {
@@ -72,16 +101,37 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Account disabled' });
     }
 
-    const token = makeToken();
-    await pool.query(
-      'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
-      [token, user.id, makeExpiry()]
-    );
-    await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [user.id]);
-    await logLogin(req, user);
-    res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin, isAccountant: !!user.accountantOfUserId, ownerEmail: await ownerEmailOf(user), landing: await landingFor(user) } });
+    if (challenge.needsEmailCode(user)) {
+      const r = await challenge.startEmailChallenge(user, req);
+      return res.status(r.status).json(r.body);
+    }
+
+    const token = await createSession(pool, user);
+    res.json(await signedIn(req, user, token));
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/challenge/verify { challengeId, code } -> session
+router.post('/challenge/verify', codeLimiter, async (req, res) => {
+  try {
+    const { challengeId, code } = req.body || {};
+    const r = await challenge.verifyCode(challengeId, code, (client, user) => createSession(client, user));
+    if (r.status !== 200) return res.status(r.status).json(r.body);
+    res.json(await signedIn(req, r.user, r.body));
+  } catch (err) {
+    res.status(500).json({ error: 'Sign-in failed. Try again.' });
+  }
+});
+
+// POST /api/auth/challenge/resend { challengeId }
+router.post('/challenge/resend', resendLimiter, async (req, res) => {
+  try {
+    const r = await challenge.resendCode((req.body || {}).challengeId);
+    res.status(r.status).json(r.body);
+  } catch (err) {
+    res.status(500).json({ error: 'Sign-in failed. Try again.' });
   }
 });
 

@@ -164,6 +164,26 @@ async function initSchema() {
       )
     `);
 
+    // Two-step login: a right password makes one of these, not a session (docs/two-step-login.md).
+    // Security records: no recycle bin.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS auth_login_challenges (
+        id            TEXT PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        method        TEXT NOT NULL,
+        "codeHash"    TEXT,
+        attempts      INTEGER NOT NULL DEFAULT 0,
+        "resendCount" INTEGER NOT NULL DEFAULT 0,
+        "lastSentAt"  TIMESTAMPTZ,
+        "expiresAt"   TIMESTAMPTZ NOT NULL,
+        "usedAt"      TIMESTAMPTZ,
+        ip            TEXT,
+        "userAgent"   TEXT,
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_auth_challenges_user ON auth_login_challenges("userId")`);
+
     // ── Organisation ──────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS folders (

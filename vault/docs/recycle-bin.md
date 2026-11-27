@@ -70,6 +70,10 @@ If the thing has files (or anything else outside the snapshot), register `discar
 - One item is limited to 5 MB of payload; a bigger one is refused (`moveToBin` throws an error with `code: 'TOO_LARGE'`) rather than silently dropped, so do not put file contents in a payload. A kind that is naturally big can pass `maxBytes` and decide what to do on `TOO_LARGE` (chats: 25 MB, then the old Deleted list).
 - Never put anything in a payload the person could not already see.
 
+## Not used by
+
+- **Two-step login records** (`auth_login_challenges`, and from later milestones `auth_trusted_devices`, `auth_totp`, `auth_backup_codes`): security records, not user content. They are deleted outright (expired ones by a cron), never put in the bin. See `docs/two-step-login.md`.
+
 ## Used by
 
 - **Notes**: `note` (with its tags), `note-template` and `note-view` (a saved view). Delete a note or a template and it lands here. See `docs/notes.md`.

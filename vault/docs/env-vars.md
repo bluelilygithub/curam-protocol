@@ -11,6 +11,7 @@ Moved out of CLAUDE.md.
 | `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` | Gmail, Calendar, Drive OAuth |
 | `OCR_WORKERS` | OCR (tesseract.js) workers for Translate and for Contract Review (`services/contractReview/ocrScheduler.js`, English only; was a fixed 4), 1 to 8, default 2. The pool starts on the first scanned page and shuts down after 5 minutes idle (`services/translateOcrPool.js`); it used to be 4 workers built at boot and kept forever (~575 MB of resting memory, measured 7 Nov 2026) |
 | `ENCRYPTION_KEY` | Encrypts stored OAuth tokens — **do not lose** |
+| `AUTH_ENCRYPTION_KEY` | Two-step login (`docs/two-step-login.md`): 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Hashes emailed sign-in codes and backup codes, and encrypts admins' authenticator secrets (AES-256-GCM, Milestone 3). Missing or wrong length: boot logs an error and members and accountants cannot finish signing in. **Do not lose or change it** once admins have enrolled: their authenticator secrets could no longer be read, and every admin would need `server/scripts/reset-2fa.js`. Set in Railway 2026-11-27. Separate from `ENCRYPTION_KEY`. |
 | `DATABASE_URL` | PostgreSQL connection |
 | `UPLOAD_DIR` | Railway volume mount path |
 | `ATTACHMENT_QUOTA_MB` | Per-user total storage cap for touchpoint/task attachments (default 500) — `server/utils/attachments.js` |

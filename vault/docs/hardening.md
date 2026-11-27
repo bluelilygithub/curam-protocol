@@ -35,11 +35,14 @@ Log lines to look for after a deploy: `[cron-lock] <name>: another instance is r
 6. **Deploy rollback note.** Done 2026-10-31, in `BACKUP.md` ("Rolling back a bad deploy").
 7. **New-feature gate** as a short PR template: done 2026-10-31, `.github/pull_request_template.md` (checklist below).
 
+**Login (2026-11-27):** two-step login is being built in four milestones: emailed codes for members and accountants, an authenticator app for admins, trusted devices, per-IP limits on every login step and per-account limits on the code steps (never on the password step). See `docs/two-step-login.md`.
+
 ## Only when something forces it
 
 - **Migration baseline.** Boot-time idempotent DDL in `server/db.js` (about 208 tables, about 4,750 lines) works for additive change. It cannot express drop, rename or type change, and the `DO $$ ... EXCEPTION WHEN OTHERS THEN NULL` blocks hide real failures. Build the baseline **from a production schema dump, not from reading `db.js`**, at the first destructive schema change. Keep boot DDL as a no-op safety net for one release, measure boot time before and after, test the migration and its rollback in staging.
 - **Logging.** New and touched code uses `getLogger()`; `console.*` is retired file by file as files are opened, not in a sweep.
 - **Large files** (`FinancePage.jsx`, `VideosPage.jsx`, `PropertyScenarioPage.jsx`, `finance.js`). Split along existing seams (Finance into invoices/expenses/reports/journal; Video into per-tool modules), only when a feature already forces a change in that file.
+- **Session token in an httpOnly cookie.** The session token is a `Bearer` token kept in `localStorage` (`vault-auth`, `client/src/store/authStore.js`), so any script that runs on the page can read it. Moving it to an httpOnly, Secure, SameSite cookie would stop that, but every `/api/` call, `apiClient`, the Room Planner (reads `localStorage['vault-auth']`) and CSRF protection would need changing. Noted 2026-11-27 during two-step login (`docs/two-step-login.md`); not scheduled.
 - **Naming and entry points** before any merging of Projects / Client Projects / Pipeline: terminology, where do I start, a one-page workspace map.
 
 ## Avoid
