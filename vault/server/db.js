@@ -183,6 +183,19 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_auth_challenges_user ON auth_login_challenges("userId")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS auth_trusted_devices (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "tokenHash"   TEXT NOT NULL UNIQUE,
+        label         TEXT,
+        "lastIp"      TEXT,
+        "lastUsedAt"  TIMESTAMPTZ,
+        "expiresAt"   TIMESTAMPTZ NOT NULL,
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_auth_devices_user ON auth_trusted_devices("userId")`);
 
     // ── Organisation ──────────────────────────────────────────────────────────
     await client.query(`

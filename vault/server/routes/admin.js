@@ -231,6 +231,7 @@ router.put('/users/:id/password', async (req, res) => {
     const update = await pool.query('UPDATE users SET "passwordHash"=$1 WHERE id=$2 RETURNING id', [hash, userId]);
     if (!update.rows[0]) return res.status(404).json({ error: 'User not found' });
     await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [userId]);
+    await require('../services/trustedDevices').forgetAllDevices(pool, userId);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -10,6 +10,7 @@ const { getAppUrl } = require('../utils/appUrl');
 const { logLogin, accessEnded, ownerEmailOf } = require('../services/accountantAccess');
 const { landingFor } = require('../utils/landing');
 const challenge = require('../services/loginChallenge');
+const devices = require('../services/trustedDevices');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -101,8 +102,9 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Account disabled' });
     }
 
-    if (challenge.needsEmailCode(user)) {
+    if (challenge.needsEmailCode(user) && !(await devices.isTrusted(req, user.id))) {
       const r = await challenge.startEmailChallenge(user, req);
+      if (r.body.challengeId) r.body.rememberDays = devices.deviceDays(user);
       return res.status(r.status).json(r.body);
     }
 
@@ -113,13 +115,17 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
-// POST /api/auth/challenge/verify { challengeId, code } -> session
+// POST /api/auth/challenge/verify { challengeId, code, rememberDevice } -> session (+ device cookie)
 router.post('/challenge/verify', codeLimiter, async (req, res) => {
   try {
-    const { challengeId, code } = req.body || {};
-    const r = await challenge.verifyCode(challengeId, code, (client, user) => createSession(client, user));
+    const { challengeId, code, rememberDevice } = req.body || {};
+    const r = await challenge.verifyCode(challengeId, code, async (client, user) => ({
+      token: await createSession(client, user),
+      cookie: rememberDevice === true ? await devices.trustDevice(client, req, user) : null,
+    }));
     if (r.status !== 200) return res.status(r.status).json(r.body);
-    res.json(await signedIn(req, r.user, r.body));
+    if (r.body.cookie) res.setHeader('Set-Cookie', r.body.cookie);
+    res.json(await signedIn(req, r.user, r.body.token));
   } catch (err) {
     res.status(500).json({ error: 'Sign-in failed. Try again.' });
   }
@@ -208,7 +214,10 @@ router.post('/reset-password-confirm', resetLimiter, async (req, res) => {
     await pool.query('UPDATE users SET "passwordHash"=$1, "mustChangePassword"=FALSE WHERE email=$2', [hash, reset.email]);
     await pool.query('DELETE FROM password_resets WHERE token=$1', [token]);
     const { rows: users } = await pool.query('SELECT id FROM users WHERE email=$1', [reset.email]);
-    if (users[0]) await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [users[0].id]);
+    if (users[0]) {
+      await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [users[0].id]);
+      await devices.forgetAllDevices(pool, users[0].id);
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

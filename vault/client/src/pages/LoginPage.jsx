@@ -27,6 +27,7 @@ function LoginPage() {
   // Two-step login (docs/two-step-login.md): set when the password was right and a code is needed
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState('');
+  const [remember, setRemember] = useState(true);
   const [resendAt, setResendAt] = useState(0);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -83,7 +84,7 @@ function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const { ok, data } = await postJson('/api/auth/challenge/verify', { challengeId: challenge.challengeId, code });
+      const { ok, data } = await postJson('/api/auth/challenge/verify', { challengeId: challenge.challengeId, code, rememberDevice: remember });
       if (ok) { setAuth(data.token, data.user); navigate(nextPath, { replace: true }); return; }
       if (data.code === 'challenge_dead') return startOver(data.error);
       setError(data.error || "That code didn't work.");
@@ -227,6 +228,13 @@ function LoginPage() {
                 />
               </Tooltip>
             </div>
+
+            <Tooltip text="Untick on a shared or public computer. A new password forgets every remembered device.">
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ accentColor: 'var(--color-primary)' }} />
+                Remember this device for {challenge.rememberDays || 30} days
+              </label>
+            </Tooltip>
 
             {error && <p className="text-xs" role="alert" style={{ color: '#ef4444' }}>{error}</p>}
 

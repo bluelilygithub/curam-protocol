@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
+const { forgetAllDevices } = require('../services/trustedDevices');
 
 const SALT_ROUNDS = 12;
 
@@ -23,6 +24,10 @@ router.post('/change-password', async (req, res) => {
 
     const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await pool.query('UPDATE users SET "passwordHash"=$1 WHERE id=$2', [newHash, user.id]);
+    // A new password ends every other session and forgets remembered devices; this session stays (docs/two-step-login.md).
+    const current = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1 AND token<>$2', [user.id, current]);
+    await forgetAllDevices(pool, user.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
