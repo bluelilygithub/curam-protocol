@@ -2,6 +2,24 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0f60626d",
+   "fullHash": "0f60626de8d10cf1158b4f46445f046a1075a44e",
+   "committedAt": "2026-11-27T15:10:47+10:00",
+   "author": "mrb",
+   "area": "Login",
+   "subject": "Docs: two-step login Milestone 3 confirmed live",
+   "filesChanged": 1,
+   "insertions": 1,
+   "deletions": 1,
+   "goal": "Record that admin two-step login was checked on the live site, not only locally.",
+   "whatChanged": "docs/two-step-login.md: Milestone 3 marked live, with what the owner confirmed on 2026-11-27: enrolment with Google Authenticator, backup codes saved, and a later sign-in from a fresh private window in Edge with an authenticator code. The Milestone 3 Changelog entry's concerns were corrected to match (in the Changelog commit that carries this entry).",
+   "filesImpacted": [
+    "vault/docs/two-step-login.md"
+   ],
+   "benefit": "The docs and the Changelog say plainly what has been seen working on the live site.",
+   "concerns": "A backup-code sign-in was not tried on the live site, on purpose (each code works once); it was tested locally only."
+  },
+  {
    "commit": "7b283723",
    "fullHash": "7b2837230e6d2ce98c4bebcb4dee6aea383cc49f",
    "committedAt": "2026-11-27T14:39:54+10:00",
@@ -33,7 +51,10 @@
     "vault/docs/key-files.md"
    ],
    "benefit": "A stolen admin password is no longer enough to get into the admin account. Lost phones have a way back in (backup codes, another admin's reset, or the Railway script).",
-   "concerns": "Every admin must set up an authenticator at their next sign-in after this deploy; until they do, whoever has their password can set one up (the forced-enrolment design accepted in the brief). If AUTH_ENCRYPTION_KEY breaks, admins cannot sign in either; the fix is in Railway, and changing the key after enrolment makes every authenticator unreadable (reset-2fa.js needed for each admin). Backup codes cannot be regenerated until Milestone 4 (Settings); the Dashboard reset button is also Milestone 4, so until then reset is through the API or the script. Tested locally: totp.test.js (RFC 6238 vectors), authenticator.db.test.js 11/11, loginChallenge 14/14, trustedDevices 10/10, auth 7/7; browser run of the full enrolment, authenticator sign-in, backup-code sign-in and reuse refused; reset-2fa.js run on local user 1. The QR was checked to encode the server's otpauth link but was not scanned with a phone; that happens on the first live enrolment."
+   "concerns": "Every admin must set up an authenticator at their next sign-in after this deploy; until they do, whoever has their password can set one up (the forced-enrolment design accepted in the brief). If AUTH_ENCRYPTION_KEY breaks, admins cannot sign in either; the fix is in Railway, and changing the key after enrolment makes every authenticator unreadable (reset-2fa.js needed for each admin). Backup codes cannot be regenerated until Milestone 4 (Settings); the Dashboard reset button is also Milestone 4, so until then reset is through the API or the script. Tested locally: totp.test.js (RFC 6238 vectors), authenticator.db.test.js 11/11, loginChallenge 14/14, trustedDevices 10/10, auth 7/7; browser run of the full enrolment, authenticator sign-in, backup-code sign-in and reuse refused; reset-2fa.js run on local user 1. Confirmed live on 2026-11-27 by the owner (the only admin): the QR was scanned with Google Authenticator, the first code switched it on, the backup codes were saved, and a later sign-in from a fresh private window in Edge worked with an authenticator code. A backup-code sign-in was not tried live, on purpose (each code works once); it was tested locally.",
+   "replacesText": {
+    "concerns": "Every admin must set up an authenticator at their next sign-in after this deploy; until they do, whoever has their password can set one up (the forced-enrolment design accepted in the brief). If AUTH_ENCRYPTION_KEY breaks, admins cannot sign in either; the fix is in Railway, and changing the key after enrolment makes every authenticator unreadable (reset-2fa.js needed for each admin). Backup codes cannot be regenerated until Milestone 4 (Settings); the Dashboard reset button is also Milestone 4, so until then reset is through the API or the script. Tested locally: totp.test.js (RFC 6238 vectors), authenticator.db.test.js 11/11, loginChallenge 14/14, trustedDevices 10/10, auth 7/7; browser run of the full enrolment, authenticator sign-in, backup-code sign-in and reuse refused; reset-2fa.js run on local user 1. The QR was checked to encode the server's otpauth link but was not scanned with a phone; that happens on the first live enrolment."
+   }
   },
   {
    "commit": "a1a98c41",
