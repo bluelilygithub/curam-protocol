@@ -2,6 +2,38 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "f96069ca",
+   "fullHash": "f96069ca37ccd8f92316690de809ee4f09837c49",
+   "committedAt": "2026-11-28T07:27:29+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts redesign M3: Holdings, Calendar, Metals, Dividends",
+   "filesChanged": 15,
+   "insertions": 334,
+   "deletions": 548,
+   "goal": "Milestone 3 of 4 of the Shares Charts redesign brief: rebuild the remaining Charts panels on the shared kit, with no change to the API.",
+   "whatChanged": "Holdings: DonutChart for allocation (holding count in the middle, bucket % and symbols in the legend); Total return vs cost and P&L by stock merged into Return by holding with a \"% vs cost\" / \"A$ open + closed\" toggle, the A$ rows built in SharesChartsTab.jsx (pnlRows) from positions and realized; SharesPage.jsx no longer passes PortfolioPnlBarChart, which was deleted with compactAud. Calendar & patterns: EarningsTimeline as date chips grouped by week (filled within 7 days); MoveHeatmap spanning both columns on a --chart-loss to surface to --chart-gain scale (heatCell) with signed figures, a legend and the --chart-warn outline; pattern hints as a list with icons (trending-down added to iconMap.js). Metals: StatTiles for book move, spot move and unrealised; AreaTrend for spot history. Dividends: HorizontalBars in --chart-1 by holding, ColumnChart by month. Kit: DonutChart, AreaTrend, ColumnChart, heatCell and weekStart (+ tests). Deleted AllocationPie and MultiLineChart. Docs: client/DESIGN.md, docs/shares-charts.md.",
+   "filesImpacted": [
+    "vault/client/src/components/shares/SharesChartsTab.jsx",
+    "vault/client/src/pages/SharesPage.jsx",
+    "vault/client/src/components/shares/EarningsTimeline.jsx",
+    "vault/client/src/components/shares/MoveHeatmap.jsx",
+    "vault/client/src/components/shares/HorizontalBars.jsx",
+    "vault/client/src/components/charts/DonutChart.jsx",
+    "vault/client/src/components/charts/AreaTrend.jsx",
+    "vault/client/src/components/charts/ColumnChart.jsx",
+    "vault/client/src/components/charts/chartMath.mjs",
+    "vault/client/src/components/charts/chartMath.test.mjs",
+    "vault/client/src/providers/iconMap.js",
+    "vault/client/src/components/shares/AllocationPie.jsx",
+    "vault/client/src/components/shares/MultiLineChart.jsx",
+    "vault/client/DESIGN.md",
+    "vault/docs/shares-charts.md"
+   ],
+   "benefit": "Every Charts sub-tab now uses the same kit and theme colours; one Return by holding card replaces two overlapping ones, and the heatmap and earnings read at a glance. The commit removes more code than it adds.",
+   "concerns": "The A$ view of Return by holding was rebuilt, not moved: the old P&L by stock chart had a click-to-see-details panel (quantity, value, cost basis per bar) and four summary tiles, which are not carried over; the new card shows a one-line count and the % vs cost under each open row. Checked only with a sample payload in a headless browser (Holdings, Calendar, Metals and Dividends in all five themes at 1440 px, warm-sand and dark-slate at 390 px, plus the A$ toggle), not against real Shares data; the only console warning came from the test data (fake sales without tradeId in the Portfolio table). Hover tooltips on the new Recharts charts were not exercised. The heatmap colours use CSS color-mix, which needs a 2023-or-later browser."
+  },
+  {
    "commit": "494887f4",
    "fullHash": "494887f47bf80b2599aff274b0f6112f05a6d35e",
    "committedAt": "2026-11-28T07:16:33+10:00",
