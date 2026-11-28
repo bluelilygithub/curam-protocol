@@ -4122,6 +4122,34 @@ async function initSchema() {
       ON share_research_reports ("watchId", "createdAt" DESC)
   `);
 
+  // US shares booked as NYSE before NASDAQ was an option (seen 2026-11-28: AAPL, ASML, EQIX, GOOG, NVDA, INTC), relabelled
+  // NASDAQ in every table that stores the exchange and in the high-water-mark keys ("SYM:EX"). Idempotent; a row that would
+  // collide with an existing NASDAQ row is left as it is. Quotes are unaffected (Finnhub takes the symbol alone).
+  await pool.query(`
+    DO $$
+    DECLARE
+      syms TEXT[] := ARRAY['AAPL','ASML','EQIX','GOOG','GOOGL','NVDA','INTC','MSFT','AMZN','META','TSLA','AVGO','AMD','QCOM','NFLX','ADBE','CSCO','COST','PEP','AMAT','MU','LRCX','KLAC'];
+      s TEXT;
+    BEGIN
+      UPDATE share_trades SET exchange = 'NASDAQ' WHERE exchange = 'NYSE' AND symbol = ANY(syms);
+      UPDATE share_signal_calls t SET exchange = 'NASDAQ' WHERE exchange = 'NYSE' AND symbol = ANY(syms)
+        AND NOT EXISTS (SELECT 1 FROM share_signal_calls o WHERE o."userId" = t."userId" AND o.source = t.source
+          AND o.symbol = t.symbol AND o.exchange = 'NASDAQ' AND o."calledOn" = t."calledOn");
+      UPDATE share_news_briefings t SET exchange = 'NASDAQ' WHERE exchange = 'NYSE' AND symbol = ANY(syms)
+        AND NOT EXISTS (SELECT 1 FROM share_news_briefings o WHERE o."userId" = t."userId" AND o.date = t.date
+          AND o.symbol = t.symbol AND o.exchange = 'NASDAQ' AND o.type = t.type);
+      UPDATE share_theses t SET exchange = 'NASDAQ' WHERE exchange = 'NYSE' AND symbol = ANY(syms)
+        AND NOT EXISTS (SELECT 1 FROM share_theses o WHERE o."userId" = t."userId" AND o.symbol = t.symbol AND o.exchange = 'NASDAQ');
+      UPDATE share_watchlist t SET exchange = 'NASDAQ' WHERE exchange = 'NYSE' AND symbol = ANY(syms)
+        AND NOT EXISTS (SELECT 1 FROM share_watchlist o WHERE o."userId" = t."userId" AND o.symbol = t.symbol AND o.exchange = 'NASDAQ');
+      FOREACH s IN ARRAY syms LOOP
+        UPDATE settings SET value = replace(value, '"' || s || ':NYSE"', '"' || s || ':NASDAQ"')
+          WHERE key = 'shares_high_water_marks' AND value LIKE '%"' || s || ':NYSE"%' AND value NOT LIKE '%"' || s || ':NASDAQ"%';
+      END LOOP;
+    EXCEPTION WHEN OTHERS THEN RAISE WARNING 'NYSE to NASDAQ relabel skipped: %', SQLERRM;
+    END $$
+  `);
+
   // ── Precious metals ───────────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS metal_purchases (
