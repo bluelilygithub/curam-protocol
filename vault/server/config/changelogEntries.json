@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "b1a22243",
+   "fullHash": "b1a22243aee8db3bef8347b76ee32a21896e2bd4",
+   "committedAt": "2026-11-28T12:28:00+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares: relabel Nasdaq-listed shares stored as NYSE",
+   "filesChanged": 2,
+   "insertions": 29,
+   "deletions": 0,
+   "goal": "GOOG, AAPL, NVDA, ASML and EQIX (and the sold INTC) showed as NYSE although they trade on Nasdaq; they were booked before NASDAQ was an exchange option.",
+   "whatChanged": "An idempotent block in db.js, run on every boot, relabels NYSE to NASDAQ for a fixed list of Nasdaq-listed symbols in share_trades, share_signal_calls, share_news_briefings, share_theses, share_watchlist and the shares_high_water_marks keys (\"AAPL:NYSE\" becomes \"AAPL:NASDAQ\"). A row that would collide with an existing NASDAQ row is left as NYSE. TSM stays NYSE.",
+   "filesImpacted": [
+    "vault/server/db.js",
+    "vault/docs/schema-notes.md"
+   ],
+   "benefit": "Holdings, alerts, briefings and the signal scorecard show the right exchange, and peaks carry over under the new key. Quotes are unaffected (Finnhub uses the symbol alone).",
+   "concerns": "This writes to production data on the next boot. Tested on the local database (relabel, the collision rule, the high-water-mark key, and a second run changing nothing), not on production. Two old news briefings (AAPL and GOOG on a date that already has a NASDAQ row) stay NYSE. The symbol list is fixed: another mislabelled symbol needs adding by hand."
+  },
+  {
    "commit": "cd43fe24",
    "fullHash": "cd43fe24dac6dd606ec8043b385daabc9e20d3e0",
    "committedAt": "2026-11-28T12:18:24+10:00",
