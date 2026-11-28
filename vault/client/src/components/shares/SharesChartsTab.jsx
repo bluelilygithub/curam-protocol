@@ -194,12 +194,20 @@ export default function SharesChartsTab({
         info={today
           ? "Holdings day move (cash excluded) compared to Nasdaq, SOX, and ASX 200 ETF proxies — same basis as the Portfolio Note header. The dollar figure is your holdings' move in AUD. Nasdaq and SOX are USD-priced ETFs; your holdings are in AUD."
           : bp?.available
-            ? `Return over ${fullDay(bp.from)} to ${fullDay(bp.to)}, holdings only, cash excluded. This card covers only the days with a daily Portfolio Note (they are kept for the number of days set in Settings → Shares), so it can be shorter than the range chosen above. Your holdings' % and dollar figure are one calculation: the price change on the units you hold today, from their stored price on ${fullDay(bp.from)} to today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''}; buys and sells inside the range aren't adjusted for. The index figures compound the daily moves in the daily Portfolio Notes (${bp.observationCount} notes); Sunday and Monday notes are skipped, because the market has not traded since the Saturday note. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
+            ? `Return over ${fullDay(bp.from)} to ${fullDay(bp.to)}, holdings only, cash excluded. This card covers only the days with a daily Portfolio Note (they are kept for the number of days set in Settings → Shares), so it can be shorter than the range chosen above. Your holdings' % and dollar figure are one calculation: the price change on the units you hold today, from their stored price on ${fullDay(bp.from)} to today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''}; buys and sells inside the range aren't adjusted for. "Against what you paid" is today's value of your holdings minus what you paid for them, the same figure as the Portfolio view; it differs when your holdings were already up or down on what you paid at the start of the range. The index figures compound the daily moves in the daily Portfolio Notes (${bp.observationCount} notes); Sunday and Monday notes are skipped, because the market has not traded since the Saturday note. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD. An index with no recorded move is left out.`
             : 'Not enough daily Portfolio Notes recorded for this range yet.'}
       >
         {benchItems.length ? (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-            {mine && <StatTile primary label="Your holdings" value={fmtPct(mine.pct, 2)} sub={mine.changeAud != null ? fmtAud(mine.changeAud) : 'Holdings only, cash excluded'} />}
+            {mine && (
+              <StatTile
+                primary
+                label={today || !bp?.from ? 'Your holdings' : `Change since ${fullDay(bp.from).replace(/ \d{4}$/, '')}`}
+                value={fmtPct(mine.pct, 2)}
+                sub={[mine.changeAud != null ? fmtAud(mine.changeAud) : 'Holdings only, cash excluded',
+                  !today && bp?.unrealizedPnlAud != null ? `Against what you paid: ${fmtAud(bp.unrealizedPnlAud)}` : null].filter(Boolean).join(' · ')}
+              />
+            )}
             {indexes.map((it) => {
               const diff = mine ? Number(mine.pct) - Number(it.pct) : null;
               return (

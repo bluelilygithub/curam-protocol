@@ -691,6 +691,8 @@ async function getChartData(userId, rawRange = '30d') {
   const normalizedPerformance = buildNormalizedPerformance(observationHistory, holdingsSeries);
   const benchmarksPeriod = buildBenchmarksPeriod(normalizedPerformance, observationHistory, holdingsSeries);
   const periodMovers = isToday ? [] : buildPeriodMovers(enriched, trailingReturns, benchmarksPeriod);
+  // Shown under the window figure so it is not mistaken for the gain or loss against what was paid (the Portfolio view's figure).
+  if (benchmarksPeriod.available && dash.unrealizedPnlAud != null) benchmarksPeriod.unrealizedPnlAud = round2(dash.unrealizedPnlAud);
   const firstSnapshotAt = firstSnapRes.rows[0]?.first || null;
   const history = {
     firstSnapshotAt,
