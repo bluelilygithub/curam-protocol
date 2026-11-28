@@ -15,7 +15,7 @@ Default `days=30`. Returns structured chart payloads (not raw DB rows).
 | `benchmarksToday` | Holdings day % vs Nasdaq / SOX / ASX 200 ETF proxies |
 | `portfolioMove` | Holdings-only day move (cash excluded) |
 | `dayMovers` | Enriched holdings with `dayChangePct`, `vsSectorPct`, `relativeToSector`, sector benchmark |
-| `alertRows` | % off peak HWM, % off avg cost, ⚠️/🔴 flags (read-only — does not persist HWM) |
+| `alertRows` | % off peak HWM, % off avg cost, ⚠️/🔴 flags (read-only — does not persist HWM). Shares only since 2026-11-28; metals rows are in `metals.alertRows` (Metals drawdown card) |
 | `trailingReturns` | ~5-day price return from `share_symbol_snapshots` |
 | `allocation` / `allocationByBenchmark` | Weight by ticker vs benchmark bucket (Nasdaq / SOX / ASX 200) |
 | `holdingPnl` | Total unrealised return vs cost |

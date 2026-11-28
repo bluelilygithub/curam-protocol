@@ -672,10 +672,8 @@ async function getChartData(userId, rawRange = '30d') {
     today,
     peakContext
   );
-  const alertRows = [
-    ...buildShareAlertRows(dash.positions, highWaterMarks),
-    ...buildMetalsAlertRows(metalsDash.positions, highWaterMarks, metalsDash.spot?.audPerOz ?? null),
-  ].sort((a, b) => (a.pctOffPeak ?? 0) - (b.pctOffPeak ?? 0));
+  // Shares only: metals have their own drawdown card (metals.alertRows below) and are not in the holdings table or value.
+  const alertRows = buildShareAlertRows(dash.positions, highWaterMarks).sort((a, b) => (a.pctOffPeak ?? 0) - (b.pctOffPeak ?? 0));
 
   // Today keeps the original 5-day trailing metric; any longer range uses exactly that range.
   const trailingWindowDays = isToday ? 5 : days;
