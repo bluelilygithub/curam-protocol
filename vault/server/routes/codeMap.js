@@ -164,6 +164,16 @@ function createCodeMapRouter({ jobs, explain, limiter, briefing, aiReview, liveC
     } catch (err) { fail(res, err, 'briefing list'); }
   });
 
+  router.delete('/briefings', async (req, res) => {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 50 || !ids.every((x) => Number.isInteger(x) && x > 0 && x < 1e9)) {
+      return res.status(400).json({ error: 'ids must be a list of briefing ids.' });
+    }
+    try {
+      res.json({ deleted: await B().remove(req.user.id, ids) });
+    } catch (err) { fail(res, err, 'briefing delete'); }
+  });
+
   router.get('/briefings/:id', async (req, res) => {
     if (!/^\d{1,9}$/.test(req.params.id)) return res.status(400).json({ error: 'Briefing id must be a number.' });
     try {

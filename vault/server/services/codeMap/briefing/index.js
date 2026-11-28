@@ -47,6 +47,12 @@ function createBriefingService({ pool, jobs, root = VAULT_ROOT } = {}) {
     return rows[0] ? { ...meta(rows[0]), markdown: rows[0].markdown } : null;
   }
 
+  /** Deletes the given briefings (own only). Hard delete: they are rebuildable snapshots, already pruned past 10 without the bin. */
+  async function remove(userId, ids) {
+    const { rowCount } = await db().query('DELETE FROM code_map_briefings WHERE "userId"=$1 AND id = ANY($2::int[])', [userId, ids]);
+    return rowCount;
+  }
+
   async function getNotes(userId) {
     const { rows } = await db().query('SELECT value FROM settings WHERE "userId"=$1 AND key=$2', [userId, NOTES_KEY]);
     return rows[0]?.value || '';
@@ -112,7 +118,7 @@ function createBriefingService({ pool, jobs, root = VAULT_ROOT } = {}) {
     return { included: selected, leftOut: catalog.docs.filter((d) => !selected.includes(d.path)) };
   }
 
-  return { build, list, get, getNotes, saveNotes, claudeMd, saveDocs, resetDocs, docsCopy, briefingDocs };
+  return { build, list, get, remove, getNotes, saveNotes, claudeMd, saveDocs, resetDocs, docsCopy, briefingDocs };
 }
 
 module.exports = { createBriefingService, KEEP, MAX_NOTES };

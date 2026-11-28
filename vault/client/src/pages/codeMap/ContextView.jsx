@@ -302,6 +302,25 @@ export default function ContextView({ hasRun, onRunAnalysis, busy }) {
     } catch (err) { toast(err.message); }
   };
 
+  const [picked, setPicked] = useState(() => new Set());
+  const [confirming, setConfirming] = useState(null); // array of ids awaiting "Yes"
+  const togglePick = (id) => setPicked((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x; });
+  const removeBriefings = async (ids) => {
+    try {
+      await json(await api.delete('/api/code-map/briefings', { ids }), 'Could not delete');
+      setPicked((s) => new Set([...s].filter((id) => !ids.includes(id))));
+      toast(`${ids.length} briefing${ids.length === 1 ? '' : 's'} deleted`, 'success');
+      loadList();
+    } catch (err) { toast(err.message); } finally { setConfirming(null); }
+  };
+  const confirmBox = (ids) => (
+    <span className="text-xs flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+      Delete{ids.length > 1 ? ` ${ids.length}` : ''}?
+      <button type="button" onClick={() => removeBriefings(ids)} className="font-medium hover:opacity-70 transition-opacity duration-200" style={{ color: '#ef4444' }}>Yes</button>
+      <button type="button" onClick={() => setConfirming(null)} className="hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>No</button>
+    </span>
+  );
+
   const stale = (built?.rulesStale?.length ? built.rulesStale : claude?.rulesStale) || [];
   const md = built?.briefing?.markdown;
 
@@ -366,21 +385,42 @@ export default function ContextView({ hasRun, onRunAnalysis, busy }) {
                 </>
               )}
             </Section>
-            <Section title="Earlier briefings" tip="The last 10 briefings you built, to copy or download again exactly as they were.">
+            <Section title="Earlier briefings" tip="The last 10 briefings you built, to copy or download again exactly as they were. Tick some to delete them together.">
               {list === null ? <Skeleton lines={3} label="Loading earlier briefings" /> : !list.length ? (
                 <p className="text-sm" style={{ color: 'var(--color-muted)' }}>None yet. Build one above.</p>
               ) : (
+                <>
+                {list.length > 1 && (
+                  <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    <Tooltip text="Tick or untick every briefing in the list.">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={picked.size === list.length} onChange={() => setPicked(picked.size === list.length ? new Set() : new Set(list.map((b) => b.id)))} style={{ accentColor: 'var(--color-primary)' }} />
+                        Select all
+                      </label>
+                    </Tooltip>
+                    {picked.size > 0 && (confirming && confirming.length === picked.size && confirming.every((id) => picked.has(id)) ? confirmBox(confirming) : (
+                      <Tooltip text="Delete the ticked briefings. This cannot be undone.">
+                        <button type="button" onClick={() => setConfirming([...picked])} className="flex items-center gap-1 hover:opacity-70 transition-opacity duration-200" style={{ color: '#ef4444' }}>{getIcon('trash', { size: 12 })}Delete selected ({picked.size})</button>
+                      </Tooltip>
+                    ))}
+                  </div>
+                )}
                 <ul className="space-y-1.5">
                   {list.map((b) => (
                     <li key={b.id} className="flex items-center gap-3 text-sm rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      <input type="checkbox" checked={picked.has(b.id)} onChange={() => togglePick(b.id)} aria-label="Select this briefing" style={{ accentColor: 'var(--color-primary)' }} />
                       <span className="flex-1 min-w-0" style={{ color: 'var(--color-text)' }}>
                         {fmtWhen(b.generatedAt)} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>· {fmt(b.chars)} characters{b.commitHint ? ` · ${String(b.commitHint).slice(0, 8)}` : ''}</span>
                       </span>
                       <Tooltip text="Copy this briefing again."><button type="button" onClick={() => reCopy(b, 'copy')} aria-label="Copy this briefing" className="hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>{getIcon('copy', { size: 14 })}</button></Tooltip>
                       <Tooltip text="Download this briefing as a .md file."><button type="button" onClick={() => reCopy(b, 'download')} aria-label="Download this briefing" className="hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>{getIcon('download', { size: 14 })}</button></Tooltip>
+                      {confirming?.length === 1 && confirming[0] === b.id ? confirmBox([b.id]) : (
+                        <Tooltip text="Delete this briefing. This cannot be undone."><button type="button" onClick={() => setConfirming([b.id])} aria-label="Delete this briefing" className="hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>{getIcon('trash', { size: 14 })}</button></Tooltip>
+                      )}
                     </li>
                   ))}
                 </ul>
+                </>
               )}
             </Section>
           </div>

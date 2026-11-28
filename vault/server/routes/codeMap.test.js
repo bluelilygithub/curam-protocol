@@ -68,6 +68,8 @@ async function serve(jobs) {
     async build(userId) { this.built.push(userId); return { briefing: { id: 7, chars: 10, markdown: '<vault_briefing>x</vault_briefing>' }, sections: [], stats: { chars: 10, tokens: 3 }, rulesStale: [] }; },
     async list() { return [{ id: 7, chars: 10 }]; },
     async get(userId, id) { return id === 7 ? { id: 7, markdown: 'x' } : null; },
+    removed: [],
+    async remove(userId, ids) { this.removed.push([userId, ids]); return ids.length; },
     async getNotes() { return this.notes; },
     async saveNotes(userId, text) { if (text.length > 5) throw Object.assign(new Error('Notes can be up to 5 characters.'), { status: 400 }); this.notes = text; return text; },
     claudeMd: (userId) => real.claudeMd(userId),
@@ -305,6 +307,10 @@ async function serve(jobs) {
       assert.strictEqual((await s.call('GET', '/api/code-map/briefings/7')).status, 200);
       assert.strictEqual((await s.call('GET', '/api/code-map/briefings/8')).status, 404);
       assert.strictEqual((await s.call('GET', '/api/code-map/briefings/x')).status, 400);
+      assert.strictEqual((await s.call('DELETE', '/api/code-map/briefings', { ids: [7, 8] })).body.deleted, 2);
+      assert.deepStrictEqual(serve.briefing.removed, [[3, [7, 8]]], 'deleted for the signed-in admin');
+      assert.strictEqual((await s.call('DELETE', '/api/code-map/briefings', { ids: ['7'] })).status, 400);
+      assert.strictEqual((await s.call('DELETE', '/api/code-map/briefings', {})).status, 400);
       assert.strictEqual((await s.call('PUT', '/api/code-map/briefing/notes', { notes: 'hi' })).body.notes, 'hi');
       assert.strictEqual((await s.call('GET', '/api/code-map/briefing/notes')).body.notes, 'hi');
       assert.strictEqual((await s.call('PUT', '/api/code-map/briefing/notes', { notes: 42 })).status, 400);
