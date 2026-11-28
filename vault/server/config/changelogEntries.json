@@ -2,6 +2,30 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "3bd133aa",
+   "fullHash": "3bd133aa910f2697179fbee2bbf344a3631711e4",
+   "committedAt": "2026-11-28T13:42:54+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Remove unused backup and orphan files found by Code Map review",
+   "filesChanged": 7,
+   "insertions": 0,
+   "deletions": 401,
+   "goal": "A Code Map AI review flagged two backup-named server files and six files with no importers; remove the ones that are truly unused.",
+   "whatChanged": "Deleted seven files that no import, require, lazy import, route config, package script or build script loads. noReadability.mjs, the eighth candidate, is kept because scripts/buildHtmlContentCheckLib.js uses it as the Readability stand-in in the bundle.",
+   "filesImpacted": [
+    "vault/server/db_bk.js",
+    "vault/server/index_bk.js",
+    "vault/client/src/components/shares/SimpleLineChart.jsx",
+    "vault/client/src/components/BranchSuggestions.jsx",
+    "vault/client/src/pages/StudentAgentPage.jsx",
+    "vault/client/src/hooks/useSystemPrompt.js",
+    "vault/server/services/productScoutBudget.js"
+   ],
+   "benefit": "Less duplicate code and search noise; the old backup server file no longer sits next to the real one.",
+   "concerns": "The names still appear in the Code Map test snapshot (sample-data.json) and in old CHANGELOG.md / MEMORY.md notes, which load nothing. The client build and Code Map tests pass; the server was not started, but no server file requires the deleted ones."
+  },
+  {
    "commit": "0ca89337",
    "fullHash": "0ca89337c357615f7573a60250da6c07b5683e82",
    "committedAt": "2026-11-28T12:53:17+10:00",
