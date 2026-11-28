@@ -2,6 +2,27 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "0ca89337",
+   "fullHash": "0ca89337c357615f7573a60250da6c07b5683e82",
+   "committedAt": "2026-11-28T12:53:17+10:00",
+   "author": "mrb",
+   "area": "Code Map",
+   "subject": "Code Map: delete one or several earlier briefings",
+   "filesChanged": 4,
+   "insertions": 64,
+   "deletions": 2,
+   "goal": "The owner wanted to delete one or several briefings from the Earlier briefings list on the Code Map Context tab.",
+   "whatChanged": "Each row in Earlier briefings has a trash button and a tick box. There is a Select all box and a Delete selected (n) button. Both ways ask Delete? Yes / No inline. New route DELETE /api/code-map/briefings takes { ids } (1 to 50 whole numbers) and deletes only the signed-in admin's own briefings.",
+   "filesImpacted": [
+    "vault/client/src/pages/codeMap/ContextView.jsx",
+    "vault/server/routes/codeMap.js",
+    "vault/server/routes/codeMap.test.js",
+    "vault/server/services/codeMap/briefing/index.js"
+   ],
+   "benefit": "Old or unwanted briefings can be cleared without waiting for them to fall off the last-10 list.",
+   "concerns": "Hard delete, not the recycle bin: briefings can be rebuilt with one click, and the last-10 pruning already deletes without the bin. Not seen on screen; the route tests pass and the client builds."
+  },
+  {
    "commit": "b1a22243",
    "fullHash": "b1a22243aee8db3bef8347b76ee32a21896e2bd4",
    "committedAt": "2026-11-28T12:28:00+10:00",
