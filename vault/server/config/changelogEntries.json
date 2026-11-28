@@ -2,6 +2,26 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "81f7ae0d",
+   "fullHash": "81f7ae0d0d026f3ee58860fd7660302128b6bc50",
+   "committedAt": "2026-11-28T12:15:43+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts: label the holdings tile as the change since the first note, add the figure against what was paid",
+   "filesChanged": 3,
+   "insertions": 13,
+   "deletions": 3,
+   "goal": "Stop the Portfolio vs benchmarks tile (-A$33,925 since 14 Oct) being read as the loss against what was paid (-A$23K on the Portfolio view).",
+   "whatChanged": "The tile label is now 'Change since <first note date>' (for example 'Change since 14 Oct') instead of 'Your holdings'. Its sub-line adds 'Against what you paid: <A$>', the dashboard's unrealised gain or loss (today's value minus cost), sent as benchmarksPeriod.unrealizedPnlAud. The (i) text explains why the two differ.",
+   "filesImpacted": [
+    "vault/server/services/sharesChartData.js",
+    "vault/client/src/components/shares/SharesChartsTab.jsx",
+    "vault/docs/shares-charts.md"
+   ],
+   "benefit": "Both figures sit side by side with plain labels, so the window change and the cost-based loss are not confused.",
+   "concerns": "Not seen on screen: the local server could not reach its database, so this was checked only by the chart tests (23 pass) and a JSX parse. The cost-based figure covers all holdings and does not depend on the range."
+  },
+  {
    "commit": "b093b304",
    "fullHash": "b093b3048ec84d1072ced77a15caca54503f1278",
    "committedAt": "2026-11-28T09:37:35+10:00",
