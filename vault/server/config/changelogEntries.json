@@ -2,6 +2,25 @@
  "_note": "Admin changelog entries. Written by Claude from each commit's message, file list and size (git supplies the date, author and size). Add new entries at the top; the server inserts any new commit hash on boot and never overwrites an existing row. See docs/changelog.md.",
  "entries": [
   {
+   "commit": "cd43fe24",
+   "fullHash": "cd43fe24dac6dd606ec8043b385daabc9e20d3e0",
+   "committedAt": "2026-11-28T12:18:24+10:00",
+   "author": "mrb",
+   "area": "Shares",
+   "subject": "Shares Charts: keep metals out of the shares drawdown card",
+   "filesChanged": 2,
+   "insertions": 3,
+   "deletions": 5,
+   "goal": "The 1/4oz gold coin showed in the shares Drawdown & alert status card although it is not in the holdings table or the holdings value.",
+   "whatChanged": "The top-level alertRows in the chart data are now shares only. Metals rows were already sent separately as metals.alertRows and drawn in the Metals drawdown card, which is unchanged.",
+   "filesImpacted": [
+    "vault/server/services/sharesChartData.js",
+    "vault/docs/shares-charts.md"
+   ],
+   "benefit": "The shares drawdown card lists only shares, matching the holdings table and value; the coin still shows in the Metals drawdown card.",
+   "concerns": "Not seen on screen (the local app has no database right now); the chart tests pass. Alert emails and inbox alerts come from portfolioAlerts.js and are not changed."
+  },
+  {
    "commit": "81f7ae0d",
    "fullHash": "81f7ae0d0d026f3ee58860fd7660302128b6bc50",
    "committedAt": "2026-11-28T12:15:43+10:00",
